@@ -3,57 +3,72 @@ package com.github.krpkbhdn.ccmanager.ui.terminal
 import com.jediterm.terminal.TerminalColor
 import com.jediterm.terminal.TextStyle
 import com.jediterm.terminal.emulator.ColorPalette
-import com.jediterm.terminal.emulator.ColorPaletteImpl
 import com.jediterm.terminal.ui.settings.DefaultSettingsProvider
 import java.awt.Font
-import java.awt.GraphicsEnvironment
 import java.awt.Color as AwtColor
 
-private const val FONT_SIZE = 13f
+private const val JETBRAINS_MONO_ADVANCE = 0.6f
+
+/** JetBrains Mono advances 0.6 em, so sizing by whole-pixel cell width keeps glyphs exactly one cell wide and block characters seamless. */
+internal fun fontSizeForCellWidth(pixels: Int): Float = pixels / JETBRAINS_MONO_ADVANCE
+
+internal val DEFAULT_FONT_SIZE = fontSizeForCellWidth(8)
+internal val MIN_FONT_SIZE = fontSizeForCellWidth(6)
+internal val MAX_FONT_SIZE = fontSizeForCellWidth(20)
 private const val SCROLLBACK_LINES = 10_000
-private const val FALLBACK_FONT = Font.MONOSPACED
 
-private val DARK_BACKGROUND = AwtColor(0x1E1F22)
-private val DARK_FOREGROUND = AwtColor(0xDFE1E5)
-private val LIGHT_BACKGROUND = AwtColor(0xFFFFFF)
-private val LIGHT_FOREGROUND = AwtColor(0x080808)
-private val DARK_SELECTION = AwtColor(0x2E436E)
-private val LIGHT_SELECTION = AwtColor(0xA6D2FF)
+private fun jediColor(color: AwtColor) = com.jediterm.core.Color(color.rgb and 0xFFFFFF)
 
-private val PREFERRED_FONTS = listOf(
-    "JetBrains Mono", "Cascadia Mono", "Consolas", "Menlo", "DejaVu Sans Mono", "Liberation Mono",
-)
-
-internal fun pickFontFamily(installed: Set<String>, preferred: List<String> = PREFERRED_FONTS): String =
-    preferred.firstOrNull { it in installed } ?: FALLBACK_FONT
-
-private val fontFamily: String by lazy {
-    pickFontFamily(GraphicsEnvironment.getLocalGraphicsEnvironment().availableFontFamilyNames.toSet())
-}
-
-private fun terminalColor(color: AwtColor) = TerminalColor.rgb(color.red, color.green, color.blue)
-
-/** JediTerm look: colors follow [dark] (switchable at runtime), no blinking, long scrollback, no bell. */
+/**
+ * JediTerm look: colors follow [dark] and the optional overrides (switchable at runtime), per-glyph font fallback,
+ * no blinking, long scrollback, no bell. Shift+Enter sends ESC CR, which Claude reads as a newline.
+ */
 internal class TerminalSettings(dark: Boolean) : DefaultSettingsProvider() {
     @Volatile
     var dark: Boolean = dark
 
-    override fun getDefaultForeground(): TerminalColor =
-        terminalColor(if (dark) DARK_FOREGROUND else LIGHT_FOREGROUND)
+    @Volatile
+    var backgroundOverride: AwtColor? = null
 
-    override fun getDefaultBackground(): TerminalColor =
-        terminalColor(if (dark) DARK_BACKGROUND else LIGHT_BACKGROUND)
+    @Volatile
+    var foregroundOverride: AwtColor? = null
+
+    @Volatile
+    var fontSize: Float = DEFAULT_FONT_SIZE
+        set(value) {
+            field = value.coerceIn(MIN_FONT_SIZE, MAX_FONT_SIZE)
+            fonts = GlyphFontChain(field)
+        }
+
+    @Volatile
+    var fonts: GlyphFontChain = GlyphFontChain(DEFAULT_FONT_SIZE)
+        private set
+
+    val background: AwtColor get() = backgroundOverride ?: if (dark) DARK_BACKGROUND else LIGHT_BACKGROUND
+
+    val foreground: AwtColor get() = foregroundOverride ?: if (dark) DARK_FOREGROUND else LIGHT_FOREGROUND
+
+    private val dynamicForeground = TerminalColor { jediColor(foreground) }
+    private val dynamicBackground = TerminalColor { jediColor(background) }
+
+    override fun getDefaultStyle(): TextStyle = TextStyle(dynamicForeground, dynamicBackground)
+
+    override fun getDefaultForeground(): TerminalColor = dynamicForeground
+
+    override fun getDefaultBackground(): TerminalColor = dynamicBackground
 
     override fun getSelectionColor(): TextStyle = TextStyle(
         defaultForeground,
-        terminalColor(if (dark) DARK_SELECTION else LIGHT_SELECTION),
+        TerminalColor { jediColor(if (dark) DARK_SELECTION else LIGHT_SELECTION) },
     )
 
-    override fun getTerminalColorPalette(): ColorPalette = ColorPaletteImpl.XTERM_PALETTE
+    override fun useInverseSelectionColor(): Boolean = false
 
-    override fun getTerminalFont(): Font = Font(fontFamily, Font.PLAIN, terminalFontSize.toInt())
+    override fun getTerminalColorPalette(): ColorPalette = if (dark) AnsiColorPalette.DARK else AnsiColorPalette.LIGHT
 
-    override fun getTerminalFontSize(): Float = FONT_SIZE
+    override fun getTerminalFont(): Font = fonts.regular
+
+    override fun getTerminalFontSize(): Float = fontSize
 
     override fun getBufferMaxLinesCount(): Int = SCROLLBACK_LINES
 
@@ -62,4 +77,8 @@ internal class TerminalSettings(dark: Boolean) : DefaultSettingsProvider() {
     override fun audibleBell(): Boolean = false
 
     override fun copyOnSelect(): Boolean = false
+
+    override fun shiftEnterSendsEscCR(): Boolean = true
+
+    override fun DECCompatibilityMode(): Boolean = false
 }

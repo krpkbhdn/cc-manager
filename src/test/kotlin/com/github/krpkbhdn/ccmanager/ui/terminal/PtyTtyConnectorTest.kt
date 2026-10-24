@@ -17,10 +17,4 @@ class PtyTtyConnectorTest {
         assertThat(isLoneEscape(byteArrayOf('a'.code.toByte()))).isFalse()
         assertThat(isLoneEscape(byteArrayOf())).isFalse()
     }
-
-    @Test
-    fun fontPrefersFirstInstalledPreferredFamily() {
-        assertThat(pickFontFamily(setOf("Consolas", "Arial"), listOf("JetBrains Mono", "Consolas"))).isEqualTo("Consolas")
-        assertThat(pickFontFamily(setOf("Arial"), listOf("Consolas"))).isEqualTo("Monospaced")
-    }
 }

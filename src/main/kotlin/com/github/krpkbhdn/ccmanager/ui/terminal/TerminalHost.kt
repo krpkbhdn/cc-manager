@@ -68,7 +68,7 @@ object TerminalHost {
 
     private fun createTerminal(session: LaunchedSession): OpenTerminal {
         val settings = TerminalSettings(dark = true)
-        val widget = JediTermWidget(INITIAL_COLUMNS, INITIAL_ROWS, settings)
+        val widget = CcTerminalWidget(INITIAL_COLUMNS, INITIAL_ROWS, settings)
         val id = session.ccmSessionId()
         widget.addListener(exitNotice(session))
         widget.ttyConnector = PtyTtyConnector(session.process(), session.label()) {
