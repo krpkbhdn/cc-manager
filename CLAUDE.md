@@ -24,6 +24,21 @@ Direction (not built yet): one coordinating Claude that routes user requests to 
 - Single module for now: `src/main/java` (Spring, domain logic) and `src/main/kotlin` (Compose UI). Package root `com.github.krpkbhdn.ccmanager`; UI in `.ui`.
 - Spring runs **in-process without a web server** (`WebApplicationType.NONE`, `headless(false)`); the UI is started from `ui/Main.kt` and calls Spring beans directly.
 
+
+## Architecture
+
+Packages under `com.github.krpkbhdn.ccmanager` (Java, Spring beans) and `.ui` (Kotlin, Compose):
+- `project` — registered project directories (SQLite). `claude.install` — finds the native `claude`, version, login state.
+- `claude.hook` — loopback `HookServer` receives Claude Code hooks; `HookSettingsWriter` writes the per-session `--settings` file (all hook events except Setup, Worktree*, MessageDisplay); `HookEventStore` keeps an event log (V2 migration).
+- `claude.session` — `StatusReducer` (pure) + `SessionRegistry`: per-session status OFFLINE/IDLE(green)/WORKING(yellow)/NEEDS_ACTION(red), subagents. `notification` — status transitions to notifications.
+- `claude.launch` — `ClaudeLauncher` starts `claude` in a pty4j PTY with `CCM_SESSION` env and injected hooks; `BackgroundAgentService` wraps `claude agents --json`.
+- `workspace` — open folder, open in IntelliJ IDEA, `git diff` parsing.
+- `ui` — `Main.kt` → `AppWindow`; `state/Backend` + `AppState` bridge Spring beans to Compose; `ui/terminal` = JediTerm widget per session (`TerminalHost`), survives navigation.
+
+Hooks are observe-only: the server always answers 200 with an empty body, so the integration never changes Claude's behaviour. Claude fires no `Stop` on Esc, so the terminal reports lone-Esc to `SessionRegistry.markInterrupted`. Reference for all events and payloads: `docs/claude-code-protocol.md` (read it before touching hooks).
+
+Dev checks: `./gradlew runPreview` (UI with fake services; `--args="--shots --out=<dir>"` saves screenshots); `CCM_REAL_CLAUDE=1 ./gradlew test --tests '*RealClaudeLaunchTest'` (real claude through the whole stack, no prompt sent); `CCM_SMOKE=true` runs the hook smoke test (calls the model twice, haiku).
+
 ## Commands
 
 Run from repo root (use `./gradlew`; Git Bash or PowerShell `.\gradlew.bat`).
