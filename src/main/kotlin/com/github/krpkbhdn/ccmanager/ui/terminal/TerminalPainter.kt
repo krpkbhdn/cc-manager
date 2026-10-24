@@ -21,7 +21,7 @@ private val PRINTABLE_ASCII = 0x20..0x7E
 private const val BMP_LIMIT = 0x10000
 private val VARIATION_SELECTORS = 0xFE00..0xFE0F
 
-/** Draws the visible part of a session onto a Skia canvas: rows, selection, cursor, all snapped to the cell grid. */
+/** Draws the visible part of a session onto a Skia canvas: rows, selection, cursor, all snapped to the cell grid. The view paints its own background, nothing outside the view bounds is touched. */
 internal class TerminalPainter(val fonts: TerminalFonts, private val paddingX: Int, private val paddingY: Int) {
     private val fill = Paint().apply { isAntiAlias = false }
     private val text = Paint().apply { isAntiAlias = true }
@@ -32,7 +32,6 @@ internal class TerminalPainter(val fonts: TerminalFonts, private val paddingX: I
 
     fun paint(canvas: Canvas, width: Int, height: Int, session: TerminalSession, cursorFilled: Boolean) {
         val theme = session.theme
-        canvas.clear(theme.background.toArgb())
         val scroll = session.scrollShown
         val firstLine = -ceil(scroll).toInt()
         val lastLine = session.rows - 1 - floor(scroll).toInt()

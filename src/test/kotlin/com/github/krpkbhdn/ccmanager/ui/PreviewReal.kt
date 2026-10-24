@@ -85,6 +85,11 @@ private suspend fun realTour(capture: Capture, state: AppState, prompts: Boolean
     state.launch(api.id, LaunchMode.NEW)
     delay(CLAUDE_BOOT_MILLIS)
     capture.take("3-demo-api-terminal")
+    val typedSession = state.live.of(api.id).first().ccmSessionId
+    state.send(typedSession, "typed via the terminal host ✓ ї")
+    delay(QUICK_SHOT_MILLIS)
+    capture.take("3b-typed-echo")
+    state.send(typedSession, CLEAR_INPUT_LINE)
     state.launch(web.id, LaunchMode.NEW)
     delay(CLAUDE_BOOT_MILLIS)
     capture.take("4-demo-web-terminal")
@@ -130,6 +135,7 @@ private suspend fun realTour(capture: Capture, state: AppState, prompts: Boolean
 
 private const val SHIFT_TAB = "\u001b[Z"
 private const val QUICK_SHOT_MILLIS = 250L
+private const val CLEAR_INPUT_LINE = "\u0015"
 
 /** One trusted session, plan mode via Shift+Tab, one prompt: shows working (yellow), then the plan approval (red). */
 private suspend fun attentionTour(capture: Capture, state: AppState) {

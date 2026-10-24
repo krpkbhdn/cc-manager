@@ -81,6 +81,20 @@ class TerminalRenderingTest {
     }
 
     @Test
+    fun theViewNeverPaintsOutsideItsOwnBounds() {
+        val boundedConnector = ScriptedConnector()
+        val boundedSession = TerminalSession(boundedConnector)
+        TerminalScene(boundedSession, boundedConnector, WIDTH, HEIGHT, headerPixels = 60).use { bounded ->
+            val image = bounded.play(GLYPH_SHEET.joinToString("\r\n"))
+            image.save(File(shotDirectory(), "bounded-by-header.png"))
+            val bitmap = image.toBitmap()
+            assertThat(bitmap.count(HEADER_COLOR.toRgb(), 0 until WIDTH, 0 until 60)).isEqualTo(WIDTH * 60)
+            assertThat(bitmap.count(CLAUDE_ORANGE)).isGreaterThan(400)
+        }
+        boundedSession.close()
+    }
+
+    @Test
     fun stackedBlocksJoinWithoutSeams() {
         val image = scene.play("${ESC}[2J${ESC}[H${ESC}[38;2;215;119;87m" + (1..4).joinToString("\r\n") { "██████████" })
         image.save(File(shotDirectory(), "blocks.png"))
