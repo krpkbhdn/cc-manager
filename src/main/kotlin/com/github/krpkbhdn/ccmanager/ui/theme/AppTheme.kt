@@ -20,7 +20,7 @@ fun AppTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> U
     } else {
         JewelTheme.lightThemeDefinition(defaultTextStyle = body, editorTextStyle = Type.monoBody, consoleTextStyle = Type.monoBody)
     }
-    IntUiTheme(theme = definition, styling = ComponentStyling.default()) {
+    IntUiTheme(theme = definition, styling = ComponentStyling.default().withAppWindow(palette)) {
         CompositionLocalProvider(LocalAppColors provides palette, content = content)
     }
 }

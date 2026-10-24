@@ -12,14 +12,13 @@ import androidx.compose.ui.window.application
 import com.github.krpkbhdn.ccmanager.CcManagerApplication
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
-import com.github.krpkbhdn.ccmanager.ui.chrome.AppFrame
+import com.github.krpkbhdn.ccmanager.ui.chrome.MainWindow
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.Backend
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
 import com.github.krpkbhdn.ccmanager.ui.state.ThemeMode
 import com.github.krpkbhdn.ccmanager.ui.state.UiSettingsStore
 import com.github.krpkbhdn.ccmanager.ui.terminal.TerminalHost
-import java.awt.Dimension
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlinx.coroutines.CoroutineScope
@@ -39,7 +38,7 @@ private const val TRUST_FOLDER_KEYS = "\u001b[B\r"
  * directory, adds the sandbox projects, launches real Claude sessions and captures the UI. At most two tiny prompts are sent.
  */
 internal fun runReal(args: Array<String>) {
-    System.setProperty("compose.interop.blending", "true")
+    if (System.getProperty("compose.interop.blending") == null) System.setProperty("compose.interop.blending", "true")
     val dark = "--light" !in args
     val size = args.firstOrNull { it.startsWith("--size=") }?.removePrefix("--size=")?.split('x')?.map { it.toInt() } ?: listOf(1280, 820)
     val out = Path.of(args.firstOrNull { it.startsWith("--out=") }?.removePrefix("--out=") ?: "build/real")
@@ -54,9 +53,7 @@ internal fun runReal(args: Array<String>) {
         }
         val windowState = remember { WindowState(size = DpSize(size[0].dp, size[1].dp)) }
         val icon = remember { BitmapPainter(drawAppIcon(256).toComposeImageBitmap()) }
-        Window(onCloseRequest = ::exitApplication, state = windowState, title = "Claude Code Manager (real)", icon = icon) {
-            window.minimumSize = Dimension(960, 600)
-            AppFrame(state, windowState)
+        MainWindow(state, windowState, "Claude Code Manager (real)", icon, ::exitApplication) {
             LaunchedEffect(Unit) {
                 window.isAlwaysOnTop = true
                 val capture = Capture(window, out, "real-${if (dark) "dark" else "light"}-${size[0]}")

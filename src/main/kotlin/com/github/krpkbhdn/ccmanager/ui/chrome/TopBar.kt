@@ -33,19 +33,19 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Radius
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
+import com.github.krpkbhdn.ccmanager.ui.theme.titleBarHeight
 
-val topBarHeight = 40.dp
 private val searchWidth = 380.dp
 private val badgeOffsetX = 9.dp
 private val badgeOffsetY = (-7).dp
 private const val SEARCH_FRACTION = 0.9f
 private const val MAX_BADGE = 99
 
-/** Slim in-app bar under the native title bar: centred search pill, theme toggle and notifications. */
+/** Fallback bar under the native OS title bar (no JetBrainsRuntime): centred search pill, theme toggle and notifications. */
 @Composable
 fun TopBar(state: AppState, modifier: Modifier = Modifier) {
     Column(modifier.background(colors.sidebar)) {
-        Row(Modifier.fillMaxWidth().height(topBarHeight), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(titleBarHeight), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f))
             SearchPill({ state.paletteOpen = true })
             Row(Modifier.weight(1f).padding(end = Spacing.sm), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
@@ -58,8 +58,8 @@ fun TopBar(state: AppState, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun SearchPill(onClick: () -> Unit) {
-    Pressable(onClick, Modifier.widthIn(max = searchWidth).fillMaxWidth(SEARCH_FRACTION).height(28.dp), shape = RoundedCornerShape(Radius.md), base = colors.hoverOverlay) {
+internal fun SearchPill(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Pressable(onClick, modifier.widthIn(max = searchWidth).fillMaxWidth(SEARCH_FRACTION).height(28.dp), shape = RoundedCornerShape(Radius.md), base = colors.hoverOverlay) {
         Row(Modifier.fillMaxWidth().fillMaxHeight().padding(horizontal = Spacing.md), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             Glyph(Icons.Search, colors.textTertiary, size = IconSize.medium)
             Label("Search or jump to", Modifier.weight(1f), color = colors.textTertiary, style = Type.small)
@@ -69,7 +69,7 @@ private fun SearchPill(onClick: () -> Unit) {
 }
 
 @Composable
-private fun ThemeToggle(state: AppState) {
+internal fun ThemeToggle(state: AppState) {
     val dark = colors.dark
     IconButton(
         if (dark) Icons.Sun else Icons.Moon,
@@ -80,7 +80,7 @@ private fun ThemeToggle(state: AppState) {
 }
 
 @Composable
-private fun NotificationBell(state: AppState) {
+internal fun NotificationBell(state: AppState) {
     Box {
         IconButton(Icons.Bell, { state.notificationsOpen = !state.notificationsOpen }, tooltip = "Notifications", hint = AppShortcut.NOTIFICATIONS.hint(), active = state.notificationsOpen)
         if (state.unreadCount > 0) {

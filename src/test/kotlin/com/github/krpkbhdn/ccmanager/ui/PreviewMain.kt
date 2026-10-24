@@ -11,13 +11,12 @@ import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
 import com.github.krpkbhdn.ccmanager.notification.AppNotification
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
-import com.github.krpkbhdn.ccmanager.ui.chrome.AppFrame
+import com.github.krpkbhdn.ccmanager.ui.chrome.MainWindow
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
 import com.github.krpkbhdn.ccmanager.ui.state.Route
 import com.github.krpkbhdn.ccmanager.ui.state.ThemeMode
 import com.github.krpkbhdn.ccmanager.ui.state.UiSettingsStore
-import java.awt.Dimension
 import java.awt.Robot
 import java.nio.file.Files
 import java.nio.file.Path
@@ -38,7 +37,7 @@ private const val SETTLE_MILLIS = 1_600L
  */
 fun main(args: Array<String>) {
     if ("--real" in args) return runReal(args)
-    System.setProperty("compose.interop.blending", "true")
+    if (System.getProperty("compose.interop.blending") == null) System.setProperty("compose.interop.blending", "true")
     val flags = PreviewFlags.parse(args)
     val world = PreviewWorld(many = flags.many, empty = flags.empty)
     application {
@@ -48,9 +47,7 @@ fun main(args: Array<String>) {
         }
         val windowState = remember { WindowState(size = DpSize(flags.width.dp, flags.height.dp)) }
         val icon = remember { BitmapPainter(drawAppIcon(256).toComposeImageBitmap()) }
-        Window(onCloseRequest = ::exitApplication, state = windowState, title = "Claude Code Manager (preview)", icon = icon) {
-            window.minimumSize = Dimension(960, 600)
-            AppFrame(state, windowState)
+        MainWindow(state, windowState, "Claude Code Manager (preview)", icon, ::exitApplication) {
             if (flags.snap) LaunchedEffect(Unit) {
                 window.isAlwaysOnTop = true
                 windowProbe(window, windowState, Capture(window, flags.out, "native"), flags.out.resolve("window.txt"))

@@ -19,24 +19,18 @@ import com.github.krpkbhdn.ccmanager.ui.screens.AppRoot
 import com.github.krpkbhdn.ccmanager.ui.shortcuts.ShortcutActions
 import com.github.krpkbhdn.ccmanager.ui.shortcuts.ShortcutDispatcher
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
-import com.github.krpkbhdn.ccmanager.ui.state.ThemeMode
 import com.github.krpkbhdn.ccmanager.ui.state.WindowBounds
 import com.github.krpkbhdn.ccmanager.ui.terminal.terminalHasFocus
-import com.github.krpkbhdn.ccmanager.ui.theme.AppTheme
+import org.jetbrains.jewel.window.DecoratedWindowScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 
 private const val BOUNDS_SAVE_DELAY_MILLIS = 500L
 
-/** Content of the native window: themed title bar, global shortcuts, remembered bounds, top bar and the app itself. */
+/** Content of the main window: global shortcuts, remembered bounds, title bar (or top bar on the native frame) and the app itself. */
 @Composable
 fun FrameWindowScope.AppFrame(state: AppState, windowState: WindowState) {
     val systemDark = isSystemInDarkTheme()
-    val dark = when (state.settings.themeMode) {
-        ThemeMode.SYSTEM -> systemDark
-        ThemeMode.DARK -> true
-        ThemeMode.LIGHT -> false
-    }
     val currentSystemDark by rememberUpdatedState(systemDark)
     DisposableEffect(window, state) {
         val actions = ShortcutActions(state) { currentSystemDark }
@@ -44,12 +38,10 @@ fun FrameWindowScope.AppFrame(state: AppState, windowState: WindowState) {
         onDispose { installed.close() }
     }
     PersistWindowBounds(state, windowState)
-    NativeTitleBarTheme(window, dark)
-    AppTheme(dark) {
-        Column(Modifier.fillMaxSize()) {
-            TopBar(state)
-            AppRoot(state, modifier = Modifier.weight(1f))
-        }
+    Column(Modifier.fillMaxSize()) {
+        val frame = this@AppFrame
+        if (frame is DecoratedWindowScope) frame.AppTitleBar(state) else TopBar(state)
+        AppRoot(state, modifier = Modifier.weight(1f))
     }
 }
 

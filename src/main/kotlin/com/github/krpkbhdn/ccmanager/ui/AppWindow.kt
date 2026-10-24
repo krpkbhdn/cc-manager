@@ -12,7 +12,6 @@ import androidx.compose.ui.window.ApplicationScope
 import androidx.compose.ui.window.Notification
 import androidx.compose.ui.window.Tray
 import androidx.compose.ui.window.TrayState
-import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.WindowState
@@ -20,13 +19,12 @@ import androidx.compose.ui.window.isTraySupported
 import androidx.compose.ui.window.rememberTrayState
 import com.github.krpkbhdn.ccmanager.notification.AppNotification
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
-import com.github.krpkbhdn.ccmanager.ui.chrome.AppFrame
+import com.github.krpkbhdn.ccmanager.ui.chrome.MainWindow
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.Backend
 import com.github.krpkbhdn.ccmanager.ui.state.ScreenArea
 import com.github.krpkbhdn.ccmanager.ui.state.UiSettingsStore
 import com.github.krpkbhdn.ccmanager.ui.state.fitToScreens
-import java.awt.Dimension
 import java.awt.GraphicsEnvironment
 import java.awt.Toolkit
 import kotlinx.coroutines.CoroutineScope
@@ -35,8 +33,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 
 private const val WINDOW_TITLE = "Claude Code Manager"
-private const val MIN_WIDTH = 960
-private const val MIN_HEIGHT = 600
 private const val TRAY_ICON_SIZE = 64
 private const val WINDOW_ICON_SIZE = 256
 
@@ -58,10 +54,7 @@ fun ApplicationScope.AppWindow(backend: Backend, onShutdown: () -> Unit, setting
         )
     }
     val quit = { state.requestQuit { onShutdown(); exitApplication() } }
-    Window(onCloseRequest = quit, state = windowState, title = WINDOW_TITLE, icon = icon) {
-        window.minimumSize = Dimension(MIN_WIDTH, MIN_HEIGHT)
-        AppFrame(state, windowState)
-    }
+    MainWindow(state, windowState, WINDOW_TITLE, icon, quit)
 }
 
 private fun visibleScreens(): List<ScreenArea> =
