@@ -12,6 +12,7 @@ import com.github.krpkbhdn.ccmanager.notification.NotificationService
 import com.github.krpkbhdn.ccmanager.project.ProjectService
 import com.github.krpkbhdn.ccmanager.ui.terminal.TerminalHost
 import com.github.krpkbhdn.ccmanager.ui.terminal.TerminalView
+import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import com.github.krpkbhdn.ccmanager.workspace.DirectoryOpener
 import com.github.krpkbhdn.ccmanager.workspace.GitDiffService
 import com.github.krpkbhdn.ccmanager.workspace.IdeLauncher
@@ -33,7 +34,7 @@ object HostTerminalPort : TerminalPort {
     override fun close(ccmSessionId: String) = TerminalHost.close(ccmSessionId)
 
     @Composable
-    override fun View(ccmSessionId: String, modifier: Modifier) = TerminalView(ccmSessionId, modifier)
+    override fun View(ccmSessionId: String, modifier: Modifier) = TerminalView(ccmSessionId, modifier, dark = colors.dark, background = colors.terminal)
 }
 
 /** Every backend collaborator the UI talks to. */
