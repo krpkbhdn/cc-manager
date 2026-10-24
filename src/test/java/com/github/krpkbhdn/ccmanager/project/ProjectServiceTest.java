@@ -1,0 +1,93 @@
+package com.github.krpkbhdn.ccmanager.project;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+
+class ProjectServiceTest {
+
+    @TempDir
+    Path temp;
+
+    ProjectService service;
+
+    @BeforeEach
+    void setUp() {
+        var dataSource = new DriverManagerDataSource("jdbc:sqlite:" + temp.resolve("test.db"));
+        Flyway.configure().dataSource(dataSource).load().migrate();
+        service = new ProjectService(JdbcClient.create(dataSource));
+    }
+
+    private Path directory(String name) throws IOException {
+        return Files.createDirectory(temp.resolve(name));
+    }
+
+    @Test
+    void addStoresRealPathWithDirectoryNameAsDefaultName() throws IOException {
+        var project = service.add(directory("alpha"));
+
+        assertThat(project.name()).isEqualTo("alpha");
+        assertThat(project.path()).isEqualTo(temp.resolve("alpha").toRealPath());
+        assertThat(service.find(project.id())).contains(project);
+        assertThat(service.list()).containsExactly(project);
+    }
+
+    @Test
+    void addRejectsMissingDirectoryFileAndDuplicate() throws IOException {
+        var dir = directory("alpha");
+        var file = Files.createFile(temp.resolve("file.txt"));
+        service.add(dir);
+
+        assertThatThrownBy(() -> service.add(temp.resolve("missing"))).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("does not exist");
+        assertThatThrownBy(() -> service.add(file)).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Not a directory");
+        assertThatThrownBy(() -> service.add(dir.resolve("..").resolve("alpha"))).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("already added");
+    }
+
+    @Test
+    void renameAndRemoveUpdateStorage() throws IOException {
+        var project = service.add(directory("alpha"));
+
+        assertThat(service.rename(project.id(), "  Beta ").name()).isEqualTo("Beta");
+        assertThatThrownBy(() -> service.rename(project.id(), " ")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.rename(999, "x")).isInstanceOf(IllegalArgumentException.class);
+
+        service.remove(project.id());
+        assertThat(service.list()).isEmpty();
+    }
+
+    @Test
+    void subscribersAreNotifiedUntilUnsubscribed() throws IOException {
+        var calls = new AtomicInteger();
+        var unsubscribe = service.subscribe(calls::incrementAndGet);
+
+        var project = service.add(directory("alpha"));
+        service.rename(project.id(), "b");
+        service.remove(project.id());
+        assertThat(calls).hasValue(3);
+
+        unsubscribe.run();
+        service.add(directory("gamma"));
+        assertThat(calls).hasValue(3);
+    }
+
+    @Test
+    void failingListenerDoesNotBreakOthers() throws IOException {
+        var calls = new AtomicInteger();
+        service.subscribe(() -> { throw new IllegalStateException("boom"); });
+        service.subscribe(calls::incrementAndGet);
+
+        service.add(directory("alpha"));
+
+        assertThat(calls).hasValue(1);
+    }
+}
