@@ -1,7 +1,9 @@
 package com.github.krpkbhdn.ccmanager.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
@@ -17,62 +20,110 @@ import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.input.selectAll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.state.ConfirmRequest
 import com.github.krpkbhdn.ccmanager.ui.state.RenameRequest
+import com.github.krpkbhdn.ccmanager.ui.theme.Alpha
+import com.github.krpkbhdn.ccmanager.ui.theme.Motion
 import com.github.krpkbhdn.ccmanager.ui.theme.Radius
+import com.github.krpkbhdn.ccmanager.ui.theme.IconSize
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
+import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
-import org.jetbrains.jewel.ui.component.TextField
 
 private val dialogWidth = 420.dp
+private val dialogIconBox = 40.dp
+private const val MESSAGE_LINES = 5
 
+/** Scrim plus a centred, animated surface; Esc and clicks outside the card call [onDismiss]. */
 @Composable
-private fun ModalCard(onDismiss: () -> Unit, content: @Composable () -> Unit) {
+fun ModalHost(
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+    width: Dp = dialogWidth,
+    takeFocus: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    val focus = remember { FocusRequester() }
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { shown = true; if (takeFocus) focus.requestFocus() }
+    val fade by animateFloatAsState(if (shown) 1f else 0f, Motion.base(), label = "scrim")
     Box(
-        Modifier.fillMaxSize().background(colors.scrim)
+        modifier.fillMaxSize()
+            .background(colors.scrim.copy(alpha = colors.scrim.alpha * fade))
+            .onPreviewKeyEvent { event ->
+                (event.type == KeyEventType.KeyDown && event.key == Key.Escape).also { if (it) onDismiss() }
+            }
+            .focusRequester(focus).focusable()
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
         contentAlignment = Alignment.Center,
     ) {
-        Column(
-            Modifier.width(dialogWidth).cardSurface(RoundedCornerShape(Radius.lg))
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
-                .padding(Spacing.xl),
-            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
+        Box(
+            Modifier.popIn().width(width).card(RoundedCornerShape(Radius.xl), colors.surfaceRaised, raised = true)
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
         ) { content() }
     }
 }
 
 @Composable
-private fun DialogActions(confirmLabel: String, confirmEnabled: Boolean, onConfirm: () -> Unit, onCancel: () -> Unit) {
+private fun DialogBody(title: String, icon: ImageVector, tint: Color, content: @Composable () -> Unit) {
+    Column(Modifier.padding(Spacing.xl), verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(dialogIconBox).clip(RoundedCornerShape(Radius.md)).background(tint.copy(alpha = Alpha.SOFT)), contentAlignment = Alignment.Center) {
+                Glyph(icon, tint, size = IconSize.xlarge)
+            }
+            Label(title, style = Type.subtitle)
+        }
+        content()
+    }
+}
+
+@Composable
+private fun DialogActions(confirmLabel: String, confirmEnabled: Boolean, destructive: Boolean, onConfirm: () -> Unit, onCancel: () -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm, Alignment.End)) {
-        SecondaryButton("Cancel", onCancel)
-        PrimaryButton(confirmLabel, onConfirm, enabled = confirmEnabled)
+        AppButton("Cancel", onCancel)
+        AppButton(confirmLabel, onConfirm, variant = if (destructive) ButtonVariant.DANGER else ButtonVariant.PRIMARY, enabled = confirmEnabled)
     }
 }
 
 @Composable
 fun ConfirmDialog(request: ConfirmRequest, onDismiss: () -> Unit) {
-    ModalCard(onDismiss) {
-        Label(request.title, size = FontSize.heading, weight = FontWeight.SemiBold)
-        Label(request.message, color = colors.textSecondary, maxLines = MESSAGE_LINES)
-        DialogActions(request.confirmLabel, true, { onDismiss(); request.onConfirm() }, onDismiss)
+    ModalHost(onDismiss) {
+        DialogBody(request.title, Icons.Alert, if (request.destructive) colors.danger else colors.accent) {
+            Label(request.message, color = colors.textSecondary, maxLines = MESSAGE_LINES)
+            DialogActions(request.confirmLabel, true, request.destructive, { onDismiss(); request.onConfirm() }, onDismiss)
+        }
     }
 }
 
 @Composable
 fun RenameDialog(request: RenameRequest, onRename: (String) -> Unit, onDismiss: () -> Unit) {
     val name: TextFieldState = rememberTextFieldState(request.project.name)
-    LaunchedEffect(Unit) { name.edit { selectAll() } }
-    ModalCard(onDismiss) {
-        Label("Rename project", size = FontSize.heading, weight = FontWeight.SemiBold)
-        TextField(name, Modifier.fillMaxWidth())
-        DialogActions("Rename", name.text.isNotBlank(), { onRename(name.text.toString()) }, onDismiss)
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus(); name.edit { selectAll() } }
+    val submit = { if (name.text.isNotBlank()) onRename(name.text.toString()) }
+    ModalHost(onDismiss, takeFocus = false) {
+        DialogBody("Rename project", Icons.Edit, colors.accent) {
+            AppTextField(name, Modifier.fillMaxWidth(), placeholder = "Project name", focusRequester = focus, onSubmit = submit)
+            DialogActions("Rename", name.text.isNotBlank(), false, submit, onDismiss)
+        }
     }
 }
-
-private const val MESSAGE_LINES = 4
