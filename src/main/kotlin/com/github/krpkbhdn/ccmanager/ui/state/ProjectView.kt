@@ -31,6 +31,16 @@ data class ProjectView(
         else -> copy(selected = tab)
     }
 
+    /** Session tabs in strip order, then Diff and Activity. */
+    fun tabs(): List<ProjectTab> = openSessions.map { ProjectTab.Session(it) } + ProjectTab.Diff + ProjectTab.Activity
+
+    /** Selects the tab [step] places away, wrapping around the strip. */
+    fun cycle(step: Int): ProjectView {
+        val tabs = tabs()
+        val current = tabs.indexOf(selected).coerceAtLeast(0)
+        return select(tabs[Math.floorMod(current + step, tabs.size)])
+    }
+
     fun closeSession(ccmSessionId: String): ProjectView {
         val index = openSessions.indexOf(ccmSessionId)
         if (index < 0) return this

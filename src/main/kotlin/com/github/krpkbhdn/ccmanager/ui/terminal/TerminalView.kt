@@ -7,7 +7,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import com.jediterm.terminal.ui.JediTermWidget
 import java.awt.BorderLayout
+import java.awt.KeyboardFocusManager
 import javax.swing.BorderFactory
 import javax.swing.JPanel
 import javax.swing.SwingUtilities
@@ -57,3 +59,7 @@ private fun applyTheme(terminal: OpenTerminal, host: JPanel, dark: Boolean, back
     terminal.widget.background = settings.background
     if (changed) terminal.widget.terminalPanel.repaint()
 }
+
+/** True while the keyboard focus sits inside any session terminal. */
+fun terminalHasFocus(): Boolean =
+    SwingUtilities.getAncestorOfClass(JediTermWidget::class.java, KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner) != null

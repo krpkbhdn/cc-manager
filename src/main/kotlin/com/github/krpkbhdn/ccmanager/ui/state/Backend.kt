@@ -24,6 +24,9 @@ interface TerminalPort {
     fun send(ccmSessionId: String, text: String)
     fun close(ccmSessionId: String)
 
+    /** Moves the keyboard focus into the session's terminal, if it has one. */
+    fun focus(ccmSessionId: String) {}
+
     @Composable
     fun View(ccmSessionId: String, modifier: Modifier)
 }
@@ -32,6 +35,7 @@ object HostTerminalPort : TerminalPort {
     override fun open(session: LaunchedSession) = TerminalHost.open(session)
     override fun send(ccmSessionId: String, text: String) = TerminalHost.send(ccmSessionId, text)
     override fun close(ccmSessionId: String) = TerminalHost.close(ccmSessionId)
+    override fun focus(ccmSessionId: String) = TerminalHost.focus(ccmSessionId)
 
     @Composable
     override fun View(ccmSessionId: String, modifier: Modifier) = TerminalView(ccmSessionId, modifier, dark = colors.dark, background = colors.terminal)

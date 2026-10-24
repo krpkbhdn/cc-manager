@@ -28,6 +28,16 @@ class ProjectViewTest {
     }
 
     @Test
+    fun `cycling walks sessions then diff and activity and wraps`() {
+        val view = ProjectView().openSession("a").openSession("b")
+
+        assertThat(view.tabs()).containsExactly(ProjectTab.Session("a"), ProjectTab.Session("b"), ProjectTab.Diff, ProjectTab.Activity)
+        assertThat(view.cycle(1).selected).isEqualTo(ProjectTab.Diff)
+        assertThat(view.cycle(-1).selected).isEqualTo(ProjectTab.Session("a"))
+        assertThat(view.select(ProjectTab.Activity).cycle(1).selected).isEqualTo(ProjectTab.Session("a"))
+    }
+
+    @Test
     fun `closing the selected tab selects its neighbour`() {
         val view = ProjectView().openSession("a").openSession("b").openSession("c").select(ProjectTab.Session("b")).closeSession("b")
 

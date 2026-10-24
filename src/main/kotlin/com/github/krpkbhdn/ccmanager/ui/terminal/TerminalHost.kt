@@ -46,6 +46,10 @@ object TerminalHost {
         connector.write(text.toByteArray(Charsets.UTF_8))
     }
 
+    fun focus(ccmSessionId: String) {
+        terminals[ccmSessionId]?.widget?.terminalPanel?.requestFocusInWindow()
+    }
+
     /** Disposes the widget and kills the process if still running. */
     fun close(ccmSessionId: String) {
         val terminal = terminals.remove(ccmSessionId) ?: return

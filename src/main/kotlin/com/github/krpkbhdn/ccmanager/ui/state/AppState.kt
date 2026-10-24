@@ -45,6 +45,7 @@ class AppState(
         private set
     var paletteOpen by mutableStateOf(false)
     var pickerOpen by mutableStateOf(false)
+    var shortcutsOpen by mutableStateOf(false)
 
     var installation by mutableStateOf<ClaudeInstallation?>(null)
         private set
