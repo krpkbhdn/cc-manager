@@ -68,17 +68,17 @@ fun Label(
     tooltipWhenTruncated: Boolean = false,
 ) {
     var truncated by remember(text) { mutableStateOf(false) }
-    val content: @Composable () -> Unit = {
+    val content: @Composable (Modifier) -> Unit = { textModifier ->
         BasicText(
             text = text,
-            modifier = modifier,
+            modifier = textModifier,
             style = style.copy(color = color, textAlign = align),
             maxLines = maxLines,
             overflow = TextOverflow.Ellipsis,
             onTextLayout = { truncated = it.hasVisualOverflow },
         )
     }
-    if (tooltipWhenTruncated) WithTooltip(text.takeIf { truncated }, content = content) else content()
+    if (tooltipWhenTruncated) Box(modifier) { WithTooltip(text.takeIf { truncated }) { content(Modifier) } } else content(modifier)
 }
 
 @Composable

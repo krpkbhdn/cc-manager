@@ -82,8 +82,9 @@ fun AppButton(
             enabled = enabled && !loading,
             pressScale = PRESS_SCALE,
         ) {
+            Box(Modifier.matchParentSize().then(look.fill?.let { Modifier.background(it) } ?: Modifier).then(if (look.border != Color.Transparent) Modifier.border(1.dp, look.border, shape) else Modifier))
             Row(
-                Modifier.then(look.fill?.let { Modifier.background(it) } ?: Modifier).then(if (look.border != Color.Transparent) Modifier.border(1.dp, look.border, shape) else Modifier)
+                Modifier.align(Alignment.Center)
                     .height(if (compact) compactHeight else buttonHeight)
                     .padding(horizontal = if (compact) Spacing.md else Spacing.lg - 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
