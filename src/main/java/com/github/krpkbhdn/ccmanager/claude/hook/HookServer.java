@@ -30,6 +30,7 @@ public class HookServer implements SmartLifecycle {
 
     private static final Logger log = LoggerFactory.getLogger(HookServer.class);
     private static final String CONTEXT_PATH = "/hook/";
+    private static final String STATUS_LINE_CONTEXT_PATH = "/statusline/";
     private static final int SECRET_BYTES = 32;
     private static final int OK = 200;
     private static final int NOT_FOUND = 404;
@@ -64,6 +65,11 @@ public class HookServer implements SmartLifecycle {
         return "http://127.0.0.1:" + port() + CONTEXT_PATH + new String(secret, StandardCharsets.US_ASCII) + "/" + ccmSessionId;
     }
 
+    /** URL a session's statusLine command posts to; same secret, own path because the payload is no hook event. */
+    public String statusLineUrl(String ccmSessionId) {
+        return hookUrl(ccmSessionId).replace(CONTEXT_PATH, STATUS_LINE_CONTEXT_PATH);
+    }
+
     @Override
     public synchronized void start() {
         if (server != null) {
@@ -74,7 +80,8 @@ public class HookServer implements SmartLifecycle {
         } catch (IOException e) {
             throw new IllegalStateException("Cannot start hook server", e);
         }
-        server.createContext(CONTEXT_PATH, this::handle);
+        server.createContext(CONTEXT_PATH, exchange -> handle(exchange, CONTEXT_PATH, this::acceptHook));
+        server.createContext(STATUS_LINE_CONTEXT_PATH, exchange -> handle(exchange, STATUS_LINE_CONTEXT_PATH, this::acceptStatusLine));
         server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
         server.start();
         log.info("Hook server listening on 127.0.0.1:{}", server.getAddress().getPort());
@@ -94,9 +101,9 @@ public class HookServer implements SmartLifecycle {
         return server != null;
     }
 
-    private void handle(HttpExchange exchange) throws IOException {
+    private void handle(HttpExchange exchange, String contextPath, BodyConsumer consumer) throws IOException {
         try (exchange) {
-            var parts = exchange.getRequestURI().getPath().substring(CONTEXT_PATH.length()).split("/", -1);
+            var parts = exchange.getRequestURI().getPath().substring(contextPath.length()).split("/", -1);
             if (parts.length != PATH_PARTS || !secretMatches(parts[0])) {
                 exchange.sendResponseHeaders(NOT_FOUND, NO_RESPONSE_BODY);
             } else if (!"POST".equals(exchange.getRequestMethod())) {
@@ -104,34 +111,41 @@ public class HookServer implements SmartLifecycle {
             } else {
                 var body = exchange.getRequestBody().readNBytes(properties.maxBodyBytes() + 1);
                 exchange.sendResponseHeaders(OK, NO_RESPONSE_BODY);
-                accept(parts[1], body);
+                accept(parts[1], body, consumer);
             }
         }
     }
 
-    private void accept(String ccmSessionId, byte[] body) {
+    private void accept(String ccmSessionId, byte[] body, BodyConsumer consumer) {
         if (body.length > properties.maxBodyBytes()) {
             log.debug("Dropped oversized hook body for session {}", ccmSessionId);
             return;
         }
         var receivedAt = Instant.now();
-        worker.execute(() -> process(ccmSessionId, body, receivedAt));
+        worker.execute(() -> process(ccmSessionId, body, receivedAt, consumer));
     }
 
-    private void process(String ccmSessionId, byte[] body, Instant receivedAt) {
+    private void process(String ccmSessionId, byte[] body, Instant receivedAt, BodyConsumer consumer) {
         try {
             JsonNode payload = mapper.readTree(body);
-            if (!payload.isObject()) {
-                return;
+            if (payload.isObject()) {
+                consumer.accept(ccmSessionId, payload, receivedAt);
             }
-            var rawName = payload.path("hook_event_name").asString("");
-            var event = new HookEvent(ccmSessionId, HookEventType.of(rawName), rawName, payload, receivedAt);
-            log.debug("Hook event {} for session {}", rawName, ccmSessionId);
-            persist(event);
-            publisher.publishEvent(event);
         } catch (RuntimeException e) {
             log.debug("Ignored unusable hook call for session {}: {}", ccmSessionId, e.toString());
         }
+    }
+
+    private void acceptHook(String ccmSessionId, JsonNode payload, Instant receivedAt) {
+        var rawName = payload.path("hook_event_name").asString("");
+        var event = new HookEvent(ccmSessionId, HookEventType.of(rawName), rawName, payload, receivedAt);
+        log.debug("Hook event {} for session {}", rawName, ccmSessionId);
+        persist(event);
+        publisher.publishEvent(event);
+    }
+
+    private void acceptStatusLine(String ccmSessionId, JsonNode payload, Instant receivedAt) {
+        publisher.publishEvent(new StatusLineReport(ccmSessionId, payload, receivedAt));
     }
 
     private void persist(HookEvent event) {
@@ -144,6 +158,11 @@ public class HookServer implements SmartLifecycle {
 
     private boolean secretMatches(String candidate) {
         return MessageDigest.isEqual(candidate.getBytes(StandardCharsets.UTF_8), secret);
+    }
+
+    @FunctionalInterface
+    private interface BodyConsumer {
+        void accept(String ccmSessionId, JsonNode payload, Instant receivedAt);
     }
 
     private static byte[] secret() {

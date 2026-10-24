@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-/** Writes the per-session settings file passed as claude --settings FILE; hooks only, nothing else. */
+/** Writes the per-session settings file passed as claude --settings FILE: the hooks and a statusLine that reports rate limits. */
 @Component
 public class HookSettingsWriter {
 
@@ -76,7 +76,10 @@ public class HookSettingsWriter {
         Arrays.stream(HookEventType.values())
                 .filter(type -> !NOT_SUBSCRIBED.contains(type))
                 .forEach(type -> hooks.putArray(type.wireName()).addObject().putArray("hooks").add(handler(type, url)));
-        return mapper.createObjectNode().set("hooks", hooks);
+        var settings = mapper.createObjectNode();
+        settings.set("hooks", hooks);
+        settings.set("statusLine", statusLine(server.statusLineUrl(ccmSessionId)));
+        return settings;
     }
 
     private ObjectNode handler(HookEventType type, String url) {
@@ -90,10 +93,23 @@ public class HookSettingsWriter {
     /** SessionStart does not accept http handlers; async so a stalled curl can never delay startup. */
     private ObjectNode curlHandler(String url) {
         var handler = mapper.createObjectNode().put("type", "command").put("command", curlExecutable());
-        var args = handler.putArray("args");
-        List.of("-s", "-m", String.valueOf(CURL_MAX_SECONDS), "-X", "POST", "-H", "Content-Type: application/json",
-                "--data-binary", "@-", url).forEach(args::add);
+        curlArgs(url).forEach(handler.putArray("args")::add);
         return handler.put("async", true).put("timeout", HOOK_TIMEOUT_SECONDS);
+    }
+
+    /**
+     * The statusLine payload is the only carrier of rate_limits. The command is one shell string (statusLine has no args form)
+     * and prints nothing, so the status line stays empty. shortcut: a user's own statusLine is replaced in our sessions, chain it when asked.
+     */
+    private ObjectNode statusLine(String url) {
+        var quoted = curlArgs(url).stream().map(arg -> "\"" + arg + "\"").toList();
+        var command = curlExecutable() + " " + String.join(" ", quoted);
+        return mapper.createObjectNode().put("type", "command").put("command", command);
+    }
+
+    private static List<String> curlArgs(String url) {
+        return List.of("-s", "-m", String.valueOf(CURL_MAX_SECONDS), "-X", "POST", "-H", "Content-Type: application/json",
+                "--data-binary", "@-", url);
     }
 
     private static String curlExecutable() {

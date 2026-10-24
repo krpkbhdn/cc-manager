@@ -4,6 +4,8 @@ import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
 import com.github.krpkbhdn.ccmanager.git.GitException
 import com.github.krpkbhdn.ccmanager.ui.PreviewTerminal
+import com.github.krpkbhdn.ccmanager.ui.limitsAt
+import com.github.krpkbhdn.ccmanager.usage.RateLimitSnapshot
 import com.github.krpkbhdn.ccmanager.ui.PreviewWorld
 import com.github.krpkbhdn.ccmanager.ui.git.model.ChangeRef
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitDialog
@@ -31,7 +33,7 @@ private const val POLL_MILLIS = 20L
 private const val WAIT_MILLIS = 8_000L
 private val defaultOut = "C:/Users/Bohdan/Work/Code/Personal/ccm-shots/git"
 
-private class Shot(val name: String, val view: GitSubView = GitSubView.CHANGES, val data: () -> FakeRepoData = SampleRepos::busy, val prepare: (AppState, GitState, FakeRepoData) -> Unit = { _, _, _ -> })
+private class Shot(val name: String, val view: GitSubView = GitSubView.CHANGES, val data: () -> FakeRepoData = SampleRepos::busy, val prepare: (AppState, GitState, FakeRepoData) -> Unit = { _, _, _ -> }, val limits: RateLimitSnapshot? = limitsAt(23.5, 41.2))
 
 private fun selectFile(path: String, staged: Boolean) = { _: AppState, git: GitState, _: FakeRepoData -> git.selected = ChangeRef(path, staged) }
 
@@ -57,6 +59,8 @@ private val shots = listOf(
     Shot("dialog-reset", GitSubView.LOG, prepare = { _, git, data -> git.dialog = GitDialog.Reset(data.rows[2].commit().hash(), "${data.rows[2].commit().shortHash()} ${data.rows[2].commit().subject()}") }),
     Shot("dialog-hook", prepare = { _, git, _ -> git.dialog = GitDialog.Output("Commit hook failed", "pre-commit: lint failed\n  src/Main.java:12 unused import\n  src/Main.java:40 missing semicolon") }),
     Shot("overview", prepare = { state, _, _ -> state.navigate(Route.Overview) }),
+    Shot("usage-high", limits = limitsAt(72.0, 93.4), prepare = { state, _, _ -> state.navigate(Route.Overview) }),
+    Shot("usage-none", limits = null, prepare = { state, _, _ -> state.navigate(Route.Overview) }),
     Shot("shortcuts",prepare = { state, _, _ -> state.shortcutsOpen = true }),
     Shot("palette", prepare = { state, _, _ -> state.paletteOpen = true }),
     Shot("progress",prepare = { _, git, data -> data.progressDelayMillis = 4_000; git.fetchNow() }),
@@ -90,7 +94,7 @@ fun main(args: Array<String>) {
 
 private fun render(shot: Shot, dark: Boolean, width: Int, height: Int, out: Path) {
     val data = shot.data()
-    val world = PreviewWorld(git = data)
+    val world = PreviewWorld(git = data, rateLimits = shot.limits)
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val state = AppState(world.backend(PreviewTerminal), scope, UiSettingsStore(null)).also {
         it.start()

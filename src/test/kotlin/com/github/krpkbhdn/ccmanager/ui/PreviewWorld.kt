@@ -22,6 +22,9 @@ import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry
+import com.github.krpkbhdn.ccmanager.usage.RateLimitService
+import com.github.krpkbhdn.ccmanager.usage.RateLimitSnapshot
+import com.github.krpkbhdn.ccmanager.usage.RateLimitWindow
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import com.github.krpkbhdn.ccmanager.claude.session.SubagentSnapshot
 import com.github.krpkbhdn.ccmanager.notification.AppNotification
@@ -51,8 +54,18 @@ import org.mockito.Mockito.`when`
 
 private fun ago(seconds: Long): Instant = Instant.now().minusSeconds(seconds)
 
+private const val FIVE_HOUR_RESET_SECONDS = 8_040L
+private const val SEVEN_DAY_RESET_SECONDS = 3 * 86_400L + 4 * 3_600L
+
+/** Usage limits as Claude would report them right now, for previews. */
+fun limitsAt(fiveHourPercent: Double, sevenDayPercent: Double) = RateLimitSnapshot(
+    RateLimitWindow(fiveHourPercent, Instant.now().plusSeconds(FIVE_HOUR_RESET_SECONDS)),
+    RateLimitWindow(sevenDayPercent, Instant.now().plusSeconds(SEVEN_DAY_RESET_SECONDS)),
+    Instant.now(),
+)
+
 /** In-memory backend data for the dev preview; Mockito keeps it independent of the real services' constructors. */
-class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeRepoData = SampleRepos.busy()) {
+class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeRepoData = SampleRepos.busy(), val rateLimits: RateLimitSnapshot? = limitsAt(23.5, 41.2)) {
     @Volatile var claudeInstalled = true
     private val changeListeners = mutableListOf<Runnable>()
     private val notificationListeners = mutableListOf<Consumer<AppNotification>>()
@@ -162,7 +175,11 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         val ide = mock(IdeLauncher::class.java)
         `when`(ide.available()).thenReturn(true)
 
-        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, terminal)
+        val limits = mock(RateLimitService::class.java)
+        `when`(limits.current()).thenAnswer { Optional.ofNullable(rateLimits) }
+        `when`(limits.subscribe(any())).thenAnswer { Runnable { } }
+
+        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, terminal)
     }
 
     private fun installationNow() = if (claudeInstalled) {

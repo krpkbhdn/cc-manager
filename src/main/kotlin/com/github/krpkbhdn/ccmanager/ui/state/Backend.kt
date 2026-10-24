@@ -13,6 +13,7 @@ import com.github.krpkbhdn.ccmanager.project.ProjectService
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitBackend
 import com.github.krpkbhdn.ccmanager.ui.terminal.TerminalHost
 import com.github.krpkbhdn.ccmanager.ui.terminal.TerminalView
+import com.github.krpkbhdn.ccmanager.usage.RateLimitService
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import com.github.krpkbhdn.ccmanager.workspace.DirectoryOpener
 import com.github.krpkbhdn.ccmanager.workspace.IdeLauncher
@@ -53,6 +54,7 @@ class Backend(
     val directories: DirectoryOpener,
     val ide: IdeLauncher,
     val git: GitBackend,
+    val rateLimits: RateLimitService,
     val terminal: TerminalPort = HostTerminalPort,
 ) {
     companion object {
@@ -67,6 +69,7 @@ class Backend(
             directories = context.getBean(DirectoryOpener::class.java),
             ide = context.getBean(IdeLauncher::class.java),
             git = GitBackend.from(context),
+            rateLimits = context.getBean(RateLimitService::class.java),
         )
     }
 }

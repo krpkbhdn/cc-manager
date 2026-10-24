@@ -14,6 +14,7 @@ import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import com.github.krpkbhdn.ccmanager.notification.AppNotification
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.project.Project
+import com.github.krpkbhdn.ccmanager.usage.RateLimitSnapshot
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitHost
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitState
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitSummary
@@ -59,6 +60,8 @@ class AppState(
         private set
     var projects by mutableStateOf<List<Project>>(emptyList())
         private set
+    var rateLimits by mutableStateOf<RateLimitSnapshot?>(null)
+        private set
     var live by mutableStateOf(LiveSessions())
         private set
     var notifications by mutableStateOf<List<AppNotification>>(emptyList())
@@ -99,9 +102,11 @@ class AppState(
     fun start() {
         unsubscribers += backend.projects.subscribe { projectReload.request() }
         unsubscribers += backend.sessions.subscribe { sessionReload.request() }
+        unsubscribers += backend.rateLimits.subscribe { scope.launch { rateLimits = backend.rateLimits.current().orElse(null) } }
         unsubscribers += backend.notifications.subscribe { notification -> scope.launch { receive(notification) } }
         projectReload.request()
         sessionReload.request()
+        scope.launch { rateLimits = backend.rateLimits.current().orElse(null) }
         scope.launch { guarded { notifications = io { backend.notifications.history() }.takeLast(NOTIFICATION_CAP) } }
         scope.launch { guarded { installation = io { backend.installation.current() } } }
         scope.launch { guarded { ideAvailable = io { backend.ide.available() } } }

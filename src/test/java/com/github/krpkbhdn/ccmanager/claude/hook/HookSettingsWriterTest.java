@@ -16,6 +16,7 @@ import tools.jackson.databind.json.JsonMapper;
 class HookSettingsWriterTest {
 
     private static final String URL = "http://127.0.0.1:5555/hook/secret/abc-1";
+    private static final String STATUS_LINE_URL = "http://127.0.0.1:5555/statusline/secret/abc-1";
 
     private final JsonMapper mapper = JsonMapper.builder().build();
     private HookSettingsWriter writer;
@@ -27,16 +28,17 @@ class HookSettingsWriterTest {
     void setUp() {
         var server = mock(HookServer.class);
         when(server.hookUrl("abc-1")).thenReturn(URL);
+        when(server.statusLineUrl("abc-1")).thenReturn(STATUS_LINE_URL);
         writer = new HookSettingsWriter(server, new AppProperties(dataDir), mapper);
     }
 
     @Test
-    void writesOnlyAHooksObject() throws Exception {
+    void writesHooksAndStatusLineOnly() throws Exception {
         var file = writer.write("abc-1");
 
         var json = mapper.readTree(Files.readString(file));
         assertThat(file).isEqualTo(dataDir.resolve("hooks").resolve("abc-1.json"));
-        assertThat(json.propertyNames()).containsExactly("hooks");
+        assertThat(json.propertyNames()).containsExactlyInAnyOrder("hooks", "statusLine");
     }
 
     @Test
@@ -69,6 +71,15 @@ class HookSettingsWriterTest {
         assertThat(handler.path("async").asBoolean()).isTrue();
         assertThat(handler.path("args").get(handler.path("args").size() - 1).asString()).isEqualTo(URL);
         assertThat(handler.path("args").toString()).contains("--data-binary", "@-");
+    }
+
+    @Test
+    void statusLineCommandPostsItsStdinToTheStatusLineEndpoint() throws Exception {
+        var statusLine = mapper.readTree(Files.readString(writer.write("abc-1"))).path("statusLine");
+
+        assertThat(statusLine.path("type").asString()).isEqualTo("command");
+        assertThat(statusLine.path("command").asString()).startsWith("curl").contains("\"--data-binary\" \"@-\"")
+                .endsWith("\"" + STATUS_LINE_URL + "\"");
     }
 
     @Test

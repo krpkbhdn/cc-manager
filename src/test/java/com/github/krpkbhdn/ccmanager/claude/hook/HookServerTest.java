@@ -99,4 +99,24 @@ class HookServerTest {
 
         assertThat(client.send(request, HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(405);
     }
+
+    @Test
+    void statusLinePostIsPublishedAsReportWithEmptyOk() throws Exception {
+        var response = post(server.statusLineUrl("sess-1"), "{\"rate_limits\":{}}");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isEmpty();
+        var captor = ArgumentCaptor.forClass(StatusLineReport.class);
+        verify(publisher, timeout(VERIFY_TIMEOUT_MS)).publishEvent(captor.capture());
+        assertThat(captor.getValue().ccmSessionId()).isEqualTo("sess-1");
+        verifyNoInteractions(store);
+    }
+
+    @Test
+    void statusLineRejectsWrongSecret() throws Exception {
+        var url = server.statusLineUrl("sess-1").replace("/statusline/", "/statusline/wrong");
+
+        assertThat(post(url, "{}").statusCode()).isEqualTo(404);
+        verifyNoInteractions(publisher);
+    }
 }
