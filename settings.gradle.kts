@@ -1,5 +1,3 @@
-rootProject.name = "cc-manager"
-
 pluginManagement {
     repositories {
         gradlePluginPortal()
@@ -7,3 +5,9 @@ pluginManagement {
         google()
     }
 }
+
+plugins {
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+}
+
+rootProject.name = "cc-manager"

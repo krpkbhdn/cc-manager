@@ -10,10 +10,13 @@ plugins {
 }
 
 group = "com.github.krpkbhdn"
-version = "1.0.33"
+version = "1.0.34"
 
 java {
-    toolchain.languageVersion = JavaLanguageVersion.of(25)
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+        vendor = JvmVendorSpec.JETBRAINS
+    }
 }
 
 repositories {
@@ -34,6 +37,8 @@ dependencies {
     implementation(compose.desktop.currentOs)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing")
     implementation("org.jetbrains.jewel:jewel-int-ui-standalone:0.41.0-262.10968.63")
+    implementation("org.jetbrains.jewel:jewel-int-ui-decorated-window:0.41.0-262.10968.63")
+    implementation("org.jetbrains.runtime:jbr-api:1.9.0")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
