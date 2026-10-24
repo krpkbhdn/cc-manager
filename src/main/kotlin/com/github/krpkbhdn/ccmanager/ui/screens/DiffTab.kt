@@ -1,6 +1,5 @@
 package com.github.krpkbhdn.ccmanager.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,11 +8,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -23,36 +23,37 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import com.github.krpkbhdn.ccmanager.ui.components.AppIcon
 import com.github.krpkbhdn.ccmanager.ui.components.EmptyState
-import com.github.krpkbhdn.ccmanager.ui.components.FontSize
+import com.github.krpkbhdn.ccmanager.ui.components.Glyph
 import com.github.krpkbhdn.ccmanager.ui.components.HorizontalRule
-import com.github.krpkbhdn.ccmanager.ui.components.IconAction
+import com.github.krpkbhdn.ccmanager.ui.components.IconButton
 import com.github.krpkbhdn.ccmanager.ui.components.Label
 import com.github.krpkbhdn.ccmanager.ui.components.Pressable
+import com.github.krpkbhdn.ccmanager.ui.components.SkeletonBlock
+import com.github.krpkbhdn.ccmanager.ui.components.Spinner
+import com.github.krpkbhdn.ccmanager.ui.components.ThinScrollbar
 import com.github.krpkbhdn.ccmanager.ui.components.VerticalRule
+import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.state.DiffState
-import com.github.krpkbhdn.ccmanager.ui.state.changeLetter
+import com.github.krpkbhdn.ccmanager.ui.state.FileTreeEntry
 import com.github.krpkbhdn.ccmanager.ui.state.fileName
-import com.github.krpkbhdn.ccmanager.ui.state.lineMarker
-import com.github.krpkbhdn.ccmanager.ui.state.lineNumberText
-import com.github.krpkbhdn.ccmanager.ui.state.parentDirectory
-import com.github.krpkbhdn.ccmanager.ui.state.renameLabel
+import com.github.krpkbhdn.ccmanager.ui.state.fileTree
 import com.github.krpkbhdn.ccmanager.ui.state.selectedFile
 import com.github.krpkbhdn.ccmanager.ui.state.totalAdditions
 import com.github.krpkbhdn.ccmanager.ui.state.totalDeletions
 import com.github.krpkbhdn.ccmanager.ui.theme.Radius
+import com.github.krpkbhdn.ccmanager.ui.theme.IconSize
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
+import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import com.github.krpkbhdn.ccmanager.workspace.GitDiff
 
-private val fileListWidth = 300.dp
-private val gutterWidth = 48.dp
-private val markerWidth = 20.dp
+private val fileListWidth = 296.dp
+private const val SKELETON_FILES = 6
 
+/** Full-height review: changed-file tree on the left, the selected file's unified diff on the right. */
 @Composable
 fun DiffTab(state: DiffState, onRefresh: () -> Unit, modifier: Modifier = Modifier) {
     Column(modifier.fillMaxSize()) {
@@ -65,16 +66,16 @@ fun DiffTab(state: DiffState, onRefresh: () -> Unit, modifier: Modifier = Modifi
 @Composable
 private fun DiffToolbar(state: DiffState, onRefresh: () -> Unit) {
     val diff = state.diff
-    Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.sm), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
-        Label("Changes", weight = FontWeight.SemiBold)
+    Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.xl, vertical = Spacing.sm), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+        Label("Changes", style = Type.heading)
         if (diff != null && diff.gitRepository && diff.files.isNotEmpty()) {
-            Label("${diff.files.size} files", color = colors.textSecondary, size = FontSize.small)
-            Label("+${totalAdditions(diff)}", color = colors.success, size = FontSize.small, mono = true)
-            Label("-${totalDeletions(diff)}", color = colors.danger, size = FontSize.small, mono = true)
+            Label("${diff.files.size} ${if (diff.files.size == 1) "file" else "files"}", color = colors.textSecondary, style = Type.small)
+            Label("+${totalAdditions(diff)}", color = colors.success, style = Type.numeric)
+            Label("-${totalDeletions(diff)}", color = colors.danger, style = Type.numeric)
         }
         Box(Modifier.weight(1f))
-        if (state.loading) Label("Refreshing...", color = colors.textTertiary, size = FontSize.small)
-        IconAction(AppIcon.Refresh, onRefresh, enabled = !state.loading)
+        if (state.loading) Spinner(size = 14.dp)
+        IconButton(Icons.Refresh, onRefresh, tooltip = "Refresh changes", enabled = !state.loading)
     }
 }
 
@@ -82,11 +83,24 @@ private fun DiffToolbar(state: DiffState, onRefresh: () -> Unit) {
 private fun DiffBody(state: DiffState) {
     val diff = state.diff
     when {
-        state.error != null -> EmptyState(AppIcon.Alert, "Could not read the changes", state.error)
-        diff == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Label("Loading changes...", color = colors.textTertiary) }
-        !diff.gitRepository -> EmptyState(AppIcon.Folder, "Not a git repository", "Initialise git in this folder to see what the agents changed.")
-        diff.files.isEmpty() -> EmptyState(AppIcon.Check, "No changes", "The working tree matches HEAD.")
+        state.error != null -> EmptyState(Icons.Alert, "Could not read the changes", state.error, tint = colors.danger)
+        diff == null -> DiffSkeleton()
+        !diff.gitRepository -> EmptyState(Icons.Branch, "Not a git repository", "Run git init in this folder to see what the agents changed.")
+        diff.files.isEmpty() -> EmptyState(Icons.CircleCheck, "Working tree is clean", "Nothing differs from HEAD yet. Changes show up here as agents edit files.", tint = colors.success)
         else -> DiffContent(diff.files)
+    }
+}
+
+@Composable
+private fun DiffSkeleton() {
+    Row(Modifier.fillMaxSize()) {
+        Column(Modifier.width(fileListWidth).padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            repeat(SKELETON_FILES) { SkeletonBlock(Modifier.fillMaxWidth().padding(end = (it % 3 * 24).dp).height(26.dp), RoundedCornerShape(Radius.sm)) }
+        }
+        VerticalRule()
+        Column(Modifier.weight(1f).padding(Spacing.xl), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            repeat(SKELETON_FILES + 2) { SkeletonBlock(Modifier.fillMaxWidth(0.4f + (it % 4) * 0.15f).height(16.dp), RoundedCornerShape(Radius.xs)) }
+        }
     }
 }
 
@@ -94,9 +108,19 @@ private fun DiffBody(state: DiffState) {
 private fun DiffContent(files: List<GitDiff.FileDiff>) {
     var selectedPath by remember { mutableStateOf<String?>(null) }
     val selected = selectedFile(files, selectedPath)
+    val tree = remember(files) { fileTree(files) }
+    val listState = rememberLazyListState()
     Row(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.width(fileListWidth).fillMaxHeight(), contentPadding = PaddingValues(Spacing.sm)) {
-            items(files, key = { it.path }) { file -> FileRow(file, file == selected) { selectedPath = file.path } }
+        Box(Modifier.width(fileListWidth).fillMaxHeight()) {
+            LazyColumn(Modifier.fillMaxSize(), listState, contentPadding = PaddingValues(Spacing.sm)) {
+                items(tree.size) { index ->
+                    when (val entry = tree[index]) {
+                        is FileTreeEntry.Directory -> DirectoryHeading(entry.path)
+                        is FileTreeEntry.File -> FileRow(entry.file, entry.file == selected) { selectedPath = entry.file.path }
+                    }
+                }
+            }
+            ThinScrollbar(listState)
         }
         VerticalRule()
         selected?.let { FileDiffView(it, Modifier.weight(1f)) }
@@ -104,67 +128,37 @@ private fun DiffContent(files: List<GitDiff.FileDiff>) {
 }
 
 @Composable
-private fun changeTint(change: GitDiff.ChangeType): Color = when (change) {
+private fun DirectoryHeading(path: String) {
+    Row(Modifier.fillMaxWidth().padding(start = Spacing.sm, end = Spacing.sm, top = Spacing.md, bottom = Spacing.xs), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs + 2.dp)) {
+        Glyph(Icons.FolderOpen, colors.textTertiary, size = IconSize.small)
+        Label(path, color = colors.textTertiary, style = Type.monoSmall, tooltipWhenTruncated = true)
+    }
+}
+
+@Composable
+internal fun changeTint(change: GitDiff.ChangeType): Color = when (change) {
     GitDiff.ChangeType.ADDED, GitDiff.ChangeType.UNTRACKED -> colors.success
     GitDiff.ChangeType.MODIFIED -> colors.warning
     GitDiff.ChangeType.DELETED -> colors.danger
     GitDiff.ChangeType.RENAMED -> colors.accent
 }
 
+internal fun changeIcon(change: GitDiff.ChangeType): ImageVector = when (change) {
+    GitDiff.ChangeType.ADDED, GitDiff.ChangeType.UNTRACKED -> Icons.FilePlus
+    GitDiff.ChangeType.DELETED -> Icons.FileMinus
+    else -> Icons.FileEdit
+}
+
 @Composable
 private fun FileRow(file: GitDiff.FileDiff, selected: Boolean, onClick: () -> Unit) {
-    Pressable(onClick, Modifier.fillMaxWidth(), base = if (selected) colors.surfaceSelected else Color.Transparent) {
+    Pressable(onClick, Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm), base = if (selected) colors.accentSoft else Color.Transparent) {
         Row(Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs + 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-            Label(changeLetter(file.change), Modifier.width(markerWidth), color = changeTint(file.change), weight = FontWeight.Bold, mono = true, size = FontSize.small)
-            Column(Modifier.weight(1f)) {
-                Label(fileName(file.path), size = FontSize.small, weight = FontWeight.Medium)
-                parentDirectory(file.path).takeIf { it.isNotEmpty() }?.let { Label(it, color = colors.textTertiary, size = FontSize.caption) }
-            }
+            Glyph(changeIcon(file.change), changeTint(file.change), size = IconSize.medium)
+            Label(fileName(file.path), Modifier.weight(1f), color = if (selected) colors.textPrimary else colors.textSecondary, style = Type.smallMedium, tooltipWhenTruncated = true)
             if (!file.binary) {
-                Label("+${file.additions}", color = colors.success, size = FontSize.caption, mono = true)
-                Label("-${file.deletions}", color = colors.danger, size = FontSize.caption, mono = true)
+                if (file.additions > 0) Label("+${file.additions}", color = colors.success, style = Type.numericCaption)
+                if (file.deletions > 0) Label("-${file.deletions}", color = colors.danger, style = Type.numericCaption)
             }
         }
     }
-}
-
-@Composable
-private fun FileDiffView(file: GitDiff.FileDiff, modifier: Modifier) {
-    Column(modifier.fillMaxHeight()) {
-        Label(renameLabel(file), Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.sm), size = FontSize.small, weight = FontWeight.Medium, mono = true)
-        HorizontalRule()
-        when {
-            file.binary -> EmptyState(AppIcon.Diff, "Binary file", "This file cannot be shown as text.")
-            file.lines.isEmpty() -> EmptyState(AppIcon.Diff, "No textual changes", "Only the file mode or name changed.")
-            else -> LazyColumn(Modifier.fillMaxSize().background(colors.surface)) {
-                itemsIndexed(file.lines) { _, line -> DiffLine(line) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun DiffLine(line: GitDiff.Line) {
-    val background = when (line.kind) {
-        GitDiff.LineKind.ADDED -> colors.diffAdded
-        GitDiff.LineKind.REMOVED -> colors.diffRemoved
-        GitDiff.LineKind.HUNK -> colors.diffHunk
-        else -> Color.Transparent
-    }
-    val textColor = when (line.kind) {
-        GitDiff.LineKind.HUNK -> colors.accent
-        GitDiff.LineKind.META -> colors.textTertiary
-        else -> colors.textPrimary
-    }
-    Row(Modifier.fillMaxWidth().background(background)) {
-        Gutter(line.oldNumber)
-        Gutter(line.newNumber)
-        Label(lineMarker(line.kind), Modifier.width(markerWidth), color = textColor, size = FontSize.small, mono = true)
-        Label(line.text, Modifier.weight(1f), color = textColor, size = FontSize.small, mono = true)
-    }
-}
-
-@Composable
-private fun Gutter(number: Int?) {
-    Label(lineNumberText(number), Modifier.width(gutterWidth).padding(end = Spacing.sm), color = colors.textTertiary, size = FontSize.small, mono = true, align = TextAlign.End)
 }

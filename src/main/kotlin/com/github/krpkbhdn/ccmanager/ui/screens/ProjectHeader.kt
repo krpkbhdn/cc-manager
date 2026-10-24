@@ -1,40 +1,32 @@
 package com.github.krpkbhdn.ccmanager.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.project.Project
-import com.github.krpkbhdn.ccmanager.ui.components.AppIcon
-import com.github.krpkbhdn.ccmanager.ui.components.FontSize
-import com.github.krpkbhdn.ccmanager.ui.components.Glyph
+import com.github.krpkbhdn.ccmanager.ui.components.CopyChip
 import com.github.krpkbhdn.ccmanager.ui.components.HorizontalRule
+import com.github.krpkbhdn.ccmanager.ui.components.IconButton
 import com.github.krpkbhdn.ccmanager.ui.components.Label
 import com.github.krpkbhdn.ccmanager.ui.components.MenuEntry
-import com.github.krpkbhdn.ccmanager.ui.components.PopupMenu
-import com.github.krpkbhdn.ccmanager.ui.components.PrimaryButton
-import com.github.krpkbhdn.ccmanager.ui.components.SecondaryButton
+import com.github.krpkbhdn.ccmanager.ui.components.ProjectAvatar
+import com.github.krpkbhdn.ccmanager.ui.components.SplitButton
 import com.github.krpkbhdn.ccmanager.ui.components.StatusChip
+import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
+import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
-import org.jetbrains.jewel.ui.component.DefaultButton
 
 private const val IDE_UNAVAILABLE_HINT = "IntelliJ IDEA was not found on this machine"
+private const val IDE_HINT = "Open in IntelliJ IDEA"
 
 class ProjectHeaderActions(
     val onLaunch: (LaunchMode) -> Unit,
@@ -43,50 +35,40 @@ class ProjectHeaderActions(
     val onShowDiff: () -> Unit,
 )
 
+/** Compact project header: identity and copyable path on the left, icon actions and the launch split button on the right. */
 @Composable
 fun ProjectHeader(project: Project, status: AgentStatus, ideAvailable: Boolean, launching: Boolean, actions: ProjectHeaderActions, modifier: Modifier = Modifier) {
     Column(modifier) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.xl, vertical = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = Spacing.xl, vertical = Spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+        ) {
+            ProjectAvatar(project.name, size = 38.dp, status = status, cutout = colors.background)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                    Label(project.name, size = FontSize.title, weight = FontWeight.SemiBold)
+                    Label(project.name, Modifier.weight(1f, fill = false), style = Type.title, tooltipWhenTruncated = true)
                     StatusChip(status)
                 }
-                Label(project.path.toString(), color = colors.textTertiary, size = FontSize.small)
+                CopyChip(project.path.toString(), label = "Copy path")
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
-                SecondaryButton("Open folder", actions.onOpenFolder, icon = AppIcon.Folder)
-                SecondaryButton(
-                    "Open in IntelliJ IDEA", actions.onOpenIde, icon = AppIcon.Code, enabled = ideAvailable,
-                    tooltip = IDE_UNAVAILABLE_HINT.takeUnless { ideAvailable },
-                )
-                SecondaryButton("Diff", actions.onShowDiff, icon = AppIcon.Diff)
-                LaunchSplitButton(launching, actions.onLaunch)
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(Icons.FolderOpen, actions.onOpenFolder, tooltip = "Open folder")
+                IconButton(Icons.Code, actions.onOpenIde, tooltip = if (ideAvailable) IDE_HINT else IDE_UNAVAILABLE_HINT, enabled = ideAvailable)
+                IconButton(Icons.Diff, actions.onShowDiff, tooltip = "Review changes")
             }
+            SplitButton(
+                text = "Launch Claude",
+                icon = Icons.Play,
+                onClick = { actions.onLaunch(LaunchMode.NEW) },
+                menu = listOf(
+                    MenuEntry("New session", Icons.Plus) { actions.onLaunch(LaunchMode.NEW) },
+                    MenuEntry("Continue last", Icons.ArrowRight) { actions.onLaunch(LaunchMode.CONTINUE) },
+                    MenuEntry("Resume...", Icons.Rewind) { actions.onLaunch(LaunchMode.RESUME_PICKER) },
+                ),
+                loading = launching,
+            )
         }
         HorizontalRule()
-    }
-}
-
-@Composable
-private fun LaunchSplitButton(launching: Boolean, onLaunch: (LaunchMode) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        PrimaryButton(if (launching) "Launching..." else "Launch Claude", { onLaunch(LaunchMode.NEW) }, icon = AppIcon.Play, enabled = !launching)
-        Spacer(Modifier.width(2.dp))
-        Box {
-            DefaultButton(onClick = { expanded = true }, enabled = !launching) { Glyph(AppIcon.ChevronDown, colors.onAccent, size = 14.dp) }
-            if (expanded) {
-                PopupMenu(
-                    entries = listOf(
-                        MenuEntry("New session") { onLaunch(LaunchMode.NEW) },
-                        MenuEntry("Continue last") { onLaunch(LaunchMode.CONTINUE) },
-                        MenuEntry("Resume...") { onLaunch(LaunchMode.RESUME_PICKER) },
-                    ),
-                    onDismiss = { expanded = false },
-                    alignEnd = true,
-                )
-            }
-        }
     }
 }

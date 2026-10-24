@@ -1,69 +1,91 @@
 package com.github.krpkbhdn.ccmanager.ui.screens
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
-import com.github.krpkbhdn.ccmanager.ui.components.AppIcon
-import com.github.krpkbhdn.ccmanager.ui.components.FontSize
 import com.github.krpkbhdn.ccmanager.ui.components.Glyph
-import com.github.krpkbhdn.ccmanager.ui.components.HorizontalRule
-import com.github.krpkbhdn.ccmanager.ui.components.IconAction
+import com.github.krpkbhdn.ccmanager.ui.components.IconButton
 import com.github.krpkbhdn.ccmanager.ui.components.Label
 import com.github.krpkbhdn.ccmanager.ui.components.Pressable
 import com.github.krpkbhdn.ccmanager.ui.components.StatusDot
+import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
+import com.github.krpkbhdn.ccmanager.ui.theme.Radius
+import com.github.krpkbhdn.ccmanager.ui.theme.IconSize
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
+import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
+import androidx.compose.ui.graphics.Color
 
 /** One entry of the tab strip; [status] is null for tabs without a traffic light. */
-data class TabSpec(val tab: ProjectTab, val label: String, val status: AgentStatus?, val icon: AppIcon?, val closable: Boolean)
+data class TabSpec(val tab: ProjectTab, val label: String, val status: AgentStatus?, val icon: ImageVector?, val closable: Boolean)
 
-private val tabHeight = 38.dp
-private val indicatorHeight = 2.dp
+private val pillHeight = 30.dp
+private val pillMaxWidth = 220.dp
+private val closeSize = 20.dp
 
+/** Pill tabs for sessions, diff and activity; [trailing] holds panel toggles on the right. */
 @Composable
-fun ProjectTabStrip(tabs: List<TabSpec>, selected: ProjectTab, onSelect: (ProjectTab) -> Unit, onClose: (ProjectTab) -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier.background(colors.sidebar)) {
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = Spacing.sm)) {
-            tabs.forEach { spec -> TabItem(spec, spec.tab == selected, { onSelect(spec.tab) }, { onClose(spec.tab) }) }
+fun ProjectTabStrip(
+    tabs: List<TabSpec>,
+    selected: ProjectTab,
+    onSelect: (ProjectTab) -> Unit,
+    onClose: (ProjectTab) -> Unit,
+    onNewSession: () -> Unit,
+    modifier: Modifier = Modifier,
+    trailing: @Composable RowScope.() -> Unit = {},
+) {
+    Row(modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+                tabs.filter { it.closable }.forEach { spec -> TabPill(spec, spec.tab == selected, { onSelect(spec.tab) }, { onClose(spec.tab) }) }
+            }
+            IconButton(Icons.Plus, onNewSession, Modifier.padding(horizontal = Spacing.xs), tooltip = "Start another session")
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                tabs.filterNot { it.closable }.forEach { spec -> TabPill(spec, spec.tab == selected, { onSelect(spec.tab) }, { onClose(spec.tab) }) }
+            }
         }
-        HorizontalRule()
+        trailing()
     }
 }
 
 @Composable
-private fun TabItem(spec: TabSpec, selected: Boolean, onSelect: () -> Unit, onClose: () -> Unit) {
+private fun TabPill(spec: TabSpec, selected: Boolean, onSelect: () -> Unit, onClose: () -> Unit) {
+    val shape = RoundedCornerShape(Radius.md)
     val tint = if (selected) colors.textPrimary else colors.textSecondary
-    Column(Modifier.width(IntrinsicSize.Max)) {
-        Pressable(onSelect, Modifier.height(tabHeight - indicatorHeight), RoundedCornerShape(Spacing.xs)) { hovered ->
-            Row(Modifier.fillMaxHeight().padding(horizontal = Spacing.md), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                spec.status?.let { StatusDot(it) }
-                spec.icon?.let { Glyph(it, tint, size = 14.dp) }
-                Label(spec.label, color = tint, weight = if (selected) FontWeight.SemiBold else FontWeight.Normal, size = FontSize.small)
-                if (spec.closable) {
-                    if (hovered || selected) IconAction(AppIcon.Close, onClose, Modifier.size(20.dp), tint = colors.textTertiary) else Box(Modifier.size(20.dp))
-                }
+    Pressable(
+        onSelect,
+        Modifier.height(pillHeight).then(if (selected) Modifier.border(1.dp, colors.borderStrong, shape) else Modifier),
+        shape,
+        base = if (selected) colors.surfaceRaised else Color.Transparent,
+    ) { hovered ->
+        Row(
+            Modifier.padding(start = Spacing.md - 2.dp, end = if (spec.closable) Spacing.xs else Spacing.md - 2.dp).height(pillHeight),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm - 1.dp),
+        ) {
+            spec.status?.let { StatusDot(it, size = 7.dp) }
+            spec.icon?.let { Glyph(it, tint, size = IconSize.medium) }
+            Label(spec.label, Modifier.widthIn(max = pillMaxWidth), color = tint, style = if (selected) Type.smallMedium else Type.small, tooltipWhenTruncated = true)
+            if (spec.closable) {
+                if (hovered || selected) IconButton(Icons.Close, onClose, tint = colors.textTertiary, size = closeSize, tooltip = "Close session") else Box(Modifier.size(closeSize))
             }
         }
-        Box(Modifier.fillMaxWidth().height(indicatorHeight).background(if (selected) colors.accent else Color.Transparent))
     }
 }

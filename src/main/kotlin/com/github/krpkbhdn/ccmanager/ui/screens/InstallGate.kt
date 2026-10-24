@@ -16,60 +16,71 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.github.krpkbhdn.ccmanager.ui.components.AppIcon
-import com.github.krpkbhdn.ccmanager.ui.components.FontSize
+import com.github.krpkbhdn.ccmanager.ui.components.AppButton
+import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant
+import com.github.krpkbhdn.ccmanager.ui.components.CopyChip
 import com.github.krpkbhdn.ccmanager.ui.components.Glyph
-import com.github.krpkbhdn.ccmanager.ui.components.IconAction
 import com.github.krpkbhdn.ccmanager.ui.components.Label
-import com.github.krpkbhdn.ccmanager.ui.components.PrimaryButton
-import com.github.krpkbhdn.ccmanager.ui.components.cardSurface
+import com.github.krpkbhdn.ccmanager.ui.components.card
+import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.state.installCommands
-import com.github.krpkbhdn.ccmanager.ui.theme.Alpha
 import com.github.krpkbhdn.ccmanager.ui.theme.Radius
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
+import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
-import java.awt.Toolkit
-import java.awt.datatransfer.StringSelection
 
 private val gateWidth = 560.dp
-private val gateIconBox = 64.dp
+private val markSize = 56.dp
+private val stepBadge = 24.dp
 private const val DEFAULT_PROBLEM = "The claude command was not found on this machine."
 
-fun copyToClipboard(text: String) = Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null)
-
-/** Full-window screen shown until the Claude Code CLI is found. */
+/** Full-window onboarding shown until the Claude Code CLI is found: install, sign in, check again. */
 @Composable
 fun InstallGate(problem: String?, checking: Boolean, onCheckAgain: () -> Unit, osName: String, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxSize().background(colors.background), contentAlignment = Alignment.Center) {
-        Column(
-            Modifier.width(gateWidth).cardSurface(RoundedCornerShape(Radius.lg)).padding(Spacing.xxl),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
-        ) {
-            Box(Modifier.size(gateIconBox).clip(CircleShape).background(colors.warning.copy(alpha = Alpha.SOFT)), contentAlignment = Alignment.Center) {
-                Glyph(AppIcon.Alert, colors.warning, size = 30.dp)
+        Column(Modifier.width(gateWidth).padding(Spacing.xl), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
+            Box(
+                Modifier.size(markSize).clip(RoundedCornerShape(Radius.xl)).background(Brush.verticalGradient(listOf(colors.accentHover, colors.accent))),
+                contentAlignment = Alignment.Center,
+            ) { Glyph(Icons.Terminal, colors.onAccent, size = 28.dp) }
+            Label("Install Claude Code to get started", style = Type.title, align = TextAlign.Center)
+            Label(problem?.takeIf { it.isNotBlank() } ?: DEFAULT_PROBLEM, color = colors.textSecondary, maxLines = 3, align = TextAlign.Center)
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                StepCard(1, "Install the CLI", "Run the command for your system in a terminal.") {
+                    installCommands(osName).forEachIndexed { index, (platform, command) -> CommandBlock(platform, command, primary = index == 0) }
+                }
+                StepCard(2, "Sign in once", "Run claude in any folder and follow the prompts. The manager reuses that login.") {
+                    CommandBlock(null, "claude", primary = true)
+                }
+                StepCard(3, "Come back here", "Check again and your projects will be waiting.") {
+                    Row { AppButton(if (checking) "Checking..." else "Check again", onCheckAgain, variant = ButtonVariant.PRIMARY, icon = Icons.Refresh, loading = checking) }
+                }
             }
-            Label("Claude Code is not installed", size = FontSize.title,weight = FontWeight.SemiBold)
-            Label(problem?.takeIf { it.isNotBlank() } ?: DEFAULT_PROBLEM, color = colors.textSecondary, maxLines = 3)
-            Label("Install it with one of these commands, then check again:", color = colors.textSecondary, size = FontSize.small)
-            installCommands(osName).forEach { (platform, command) -> CommandRow(platform, command) }
-            PrimaryButton(if (checking) "Checking..." else "Check again", onCheckAgain, enabled = !checking, icon = AppIcon.Refresh)
         }
     }
 }
 
 @Composable
-private fun CommandRow(platform: String, command: String) {
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-        Label(platform, color = colors.textTertiary, size = FontSize.caption, weight = FontWeight.SemiBold)
-        Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.sm)).background(colors.background).padding(start = Spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Label(command, Modifier.weight(1f), size = FontSize.small, mono = true)
-            IconAction(AppIcon.Copy, { copyToClipboard(command) })
+private fun StepCard(number: Int, title: String, hint: String, content: @Composable () -> Unit) {
+    Row(Modifier.fillMaxWidth().card(RoundedCornerShape(Radius.lg)).padding(Spacing.lg), horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+        Box(Modifier.size(stepBadge).clip(CircleShape).background(colors.accentSoft), contentAlignment = Alignment.Center) {
+            Label(number.toString(), color = colors.accent, style = Type.numeric)
         }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            Label(title, style = Type.heading)
+            Label(hint, color = colors.textSecondary, style = Type.small, maxLines = 2)
+            content()
+        }
+    }
+}
+
+@Composable
+private fun CommandBlock(platform: String?, command: String, primary: Boolean) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        platform?.let { Label(it, color = if (primary) colors.textSecondary else colors.textTertiary, style = Type.captionMedium) }
+        CopyChip(command, Modifier.fillMaxWidth(), style = Type.monoBody, label = "Copy command")
     }
 }
