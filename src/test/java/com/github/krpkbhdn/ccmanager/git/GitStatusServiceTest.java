@@ -20,6 +20,19 @@ class GitStatusServiceTest {
         return new GitStatusService(sandbox.runner);
     }
 
+    private GitCliSandbox divergedOnSameFile() {
+        var sandbox = GitCliSandbox.create(root);
+        sandbox.write("a.txt", "base\n");
+        sandbox.commitAll("base");
+        sandbox.git("checkout", "-b", "other");
+        sandbox.write("a.txt", "other\n");
+        sandbox.commitAll("other");
+        sandbox.git("checkout", "main");
+        sandbox.write("a.txt", "main\n");
+        sandbox.commitAll("main");
+        return sandbox;
+    }
+
     private static Change change(GitStatus status, String path) {
         return status.changes().stream().filter(c -> c.path().equals(path)).findFirst().orElseThrow();
     }
@@ -100,15 +113,7 @@ class GitStatusServiceTest {
 
     @Test
     void mergeConflictIsAnUnmergedChangeWithOperation() {
-        var sandbox = GitCliSandbox.create(root);
-        sandbox.write("a.txt", "base\n");
-        sandbox.commitAll("base");
-        sandbox.git("checkout", "-b", "other");
-        sandbox.write("a.txt", "other\n");
-        sandbox.commitAll("other");
-        sandbox.git("checkout", "main");
-        sandbox.write("a.txt", "main\n");
-        sandbox.commitAll("main");
+        var sandbox = divergedOnSameFile();
         sandbox.runner.tryRun(sandbox.repo, "merge", "other");
 
         var status = serviceFor(sandbox).status(sandbox.repo);
@@ -119,15 +124,7 @@ class GitStatusServiceTest {
 
     @Test
     void stoppedRebaseIsDetectedAndStashesAreCounted() {
-        var sandbox = GitCliSandbox.create(root);
-        sandbox.write("a.txt", "base\n");
-        sandbox.commitAll("base");
-        sandbox.git("checkout", "-b", "other");
-        sandbox.write("a.txt", "other\n");
-        sandbox.commitAll("other");
-        sandbox.git("checkout", "main");
-        sandbox.write("a.txt", "main\n");
-        sandbox.commitAll("main");
+        var sandbox = divergedOnSameFile();
         sandbox.write("b.txt", "b\n");
         sandbox.git("add", "b.txt");
         sandbox.git("stash");
