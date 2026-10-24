@@ -38,7 +38,6 @@ private const val TRUST_FOLDER_KEYS = "\u001b[B\r"
  * directory, adds the sandbox projects, launches real Claude sessions and captures the UI. At most two tiny prompts are sent.
  */
 internal fun runReal(args: Array<String>) {
-    if (System.getProperty("compose.interop.blending") == null) System.setProperty("compose.interop.blending", "true")
     val dark = "--light" !in args
     val size = args.firstOrNull { it.startsWith("--size=") }?.removePrefix("--size=")?.split('x')?.map { it.toInt() } ?: listOf(1280, 820)
     val out = Path.of(args.firstOrNull { it.startsWith("--out=") }?.removePrefix("--out=") ?: "build/real")

@@ -10,7 +10,7 @@ plugins {
 }
 
 group = "com.github.krpkbhdn"
-version = "1.0.35"
+version = "1.0.36"
 
 java {
     toolchain {
@@ -44,9 +44,21 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
+/** Jewel's decorated window reaches into AWT internals; without these the custom title bar does not drag or resize. */
+val awtOpens: List<String> = buildList {
+    add("--add-opens=java.desktop/sun.awt=ALL-UNNAMED")
+    add("--add-opens=java.desktop/java.awt.peer=ALL-UNNAMED")
+    val os = System.getProperty("os.name").lowercase()
+    when {
+        "win" in os -> add("--add-opens=java.desktop/sun.awt.windows=ALL-UNNAMED")
+        "mac" in os -> { add("--add-opens=java.desktop/sun.lwawt=ALL-UNNAMED"); add("--add-opens=java.desktop/sun.lwawt.macosx=ALL-UNNAMED") }
+        else -> add("--add-opens=java.desktop/sun.awt.X11=ALL-UNNAMED")
+    }
+}
+
 tasks.test {
     useJUnitPlatform()
-    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    jvmArgs("--enable-native-access=ALL-UNNAMED", *awtOpens.toTypedArray())
 }
 
 tasks.register<JavaExec>("runPreview") {
@@ -55,14 +67,14 @@ tasks.register<JavaExec>("runPreview") {
     mainClass = "com.github.krpkbhdn.ccmanager.ui.PreviewMainKt"
     classpath = sourceSets["test"].runtimeClasspath
     javaLauncher = javaToolchains.launcherFor(java.toolchain)
-    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    jvmArgs("--enable-native-access=ALL-UNNAMED", *awtOpens.toTypedArray())
 }
 
 compose.desktop {
     application {
         mainClass = "com.github.krpkbhdn.ccmanager.ui.MainKt"
         javaHome = javaToolchains.launcherFor(java.toolchain).get().metadata.installationPath.asFile.absolutePath
-        jvmArgs += "--enable-native-access=ALL-UNNAMED"
+        jvmArgs += listOf("--enable-native-access=ALL-UNNAMED") + awtOpens
         nativeDistributions {
             targetFormats(TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Dmg)
             packageName = "Claude Code Manager"

@@ -37,7 +37,6 @@ private const val SETTLE_MILLIS = 1_600L
  */
 fun main(args: Array<String>) {
     if ("--real" in args) return runReal(args)
-    if (System.getProperty("compose.interop.blending") == null) System.setProperty("compose.interop.blending", "true")
     val flags = PreviewFlags.parse(args)
     val world = PreviewWorld(many = flags.many, empty = flags.empty)
     application {
