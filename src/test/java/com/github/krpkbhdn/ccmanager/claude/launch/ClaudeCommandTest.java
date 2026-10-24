@@ -3,7 +3,12 @@ package com.github.krpkbhdn.ccmanager.claude.launch;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.krpkbhdn.ccmanager.project.ModelSelection;
+import com.github.krpkbhdn.ccmanager.team.RoleDraft;
+import com.github.krpkbhdn.ccmanager.team.Team;
+import com.github.krpkbhdn.ccmanager.team.TeamAgentsJson;
+import com.github.krpkbhdn.ccmanager.team.TeamRole;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -50,6 +55,19 @@ class ClaudeCommandTest {
     void selectionFlagsComeBeforeTheModeFlagSoResumeKeepsItsOptionalValueFree() {
         assertThat(ClaudeCommand.launchArguments(EXE, SETTINGS, LaunchMode.RESUME_PICKER, new ModelSelection("sonnet", "low")))
                 .containsExactly(EXE.toString(), "--settings", SETTINGS.toString(), "--model", "sonnet", "--effort", "low", "--resume");
+    }
+
+    @Test
+    void teamLaunchUsesLeadSelectionAgentsAddendumAndTaskAfterDoubleDash() {
+        var lead = new RoleDraft("boss", "d", "Lead it.", "opus", "high", null, true);
+        var tester = new RoleDraft("tester", "Checks.", "Test it.", "haiku", "low", null, false);
+        var team = new Team(1, "T", List.of(new TeamRole(1, lead, 0), new TeamRole(2, tester, 1)));
+
+        var command = ClaudeCommand.teamArguments(EXE, SETTINGS, team, "-fix it");
+
+        assertThat(command).containsSubsequence("--settings", SETTINGS.toString(), "--model", "opus", "--effort", "high", "--agents")
+                .contains(TeamAgentsJson.agents(team), TeamAgentsJson.leadAddendum(team))
+                .endsWith("--append-system-prompt", TeamAgentsJson.leadAddendum(team), "--", "-fix it");
     }
 
     @Test

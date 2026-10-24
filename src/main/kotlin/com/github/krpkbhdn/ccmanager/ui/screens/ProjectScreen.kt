@@ -38,6 +38,8 @@ import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectView
 import com.github.krpkbhdn.ccmanager.ui.state.byUrgency
 import com.github.krpkbhdn.ccmanager.ui.state.sessionTitle
+import com.github.krpkbhdn.ccmanager.ui.teams.TeamRoleStrip
+import com.github.krpkbhdn.ccmanager.ui.teams.runningAgentTypes
 import com.github.krpkbhdn.ccmanager.ui.theme.Motion
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
@@ -65,6 +67,7 @@ fun ProjectScreen(state: AppState, project: Project, modifier: Modifier = Modifi
             gitSummary = gitState?.summary,
             actions = ProjectHeaderActions(
                 onLaunch = { state.launch(project.id, it) },
+                onStartTask = { state.taskDialogProjectId = project.id },
                 onOpenFolder = { state.openFolder(project) },
                 onOpenIde = { state.openIde(project) },
                 onShowGit = { state.openGit(project.id) },
@@ -80,6 +83,7 @@ fun ProjectScreen(state: AppState, project: Project, modifier: Modifier = Modifi
             ) {
                 AgentsPanel(
                     sessions = byUrgency(state.live.of(project.id)),
+                    teams = state.sessionTeams,
                     selectedSessionId = (view.selected as? ProjectTab.Session)?.ccmSessionId,
                     now = state.now,
                     background = state.backgroundAgents[project.id],
@@ -152,6 +156,7 @@ private fun tabSpecs(state: AppState, view: ProjectView): List<TabSpec> {
 @Composable
 private fun SessionTab(state: AppState, ccmSessionId: String) {
     Column(Modifier.fillMaxSize()) {
+        state.sessionTeams[ccmSessionId]?.let { TeamRoleStrip(it, state.live.find(ccmSessionId).runningAgentTypes()) }
         QuickActionsBar(state.settings.quickBarOpen, enabled = state.live.find(ccmSessionId) != null, onSend = { state.send(ccmSessionId, it) })
         Box(Modifier.fillMaxSize().background(colors.terminal).padding(start = TERMINAL_INSET, top = TERMINAL_INSET)) {
             state.terminal.View(ccmSessionId, Modifier.fillMaxSize())

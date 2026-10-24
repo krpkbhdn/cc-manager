@@ -56,6 +56,7 @@ fun Sidebar(state: AppState, modifier: Modifier = Modifier, forceCollapsed: Bool
         Column(Modifier.width(width).fillMaxHeight().background(colors.sidebar).padding(horizontal = if (collapsed) Spacing.sm else Spacing.md)) {
             SidebarHeader(collapsed, forceCollapsed, state)
             NavItem(Icons.Grid, "Overview", state.route == Route.Overview, collapsed, state.live.sessions.size) { state.navigate(Route.Overview) }
+            NavItem(Icons.Users, "Teams", state.route == Route.Teams, collapsed, 0) { state.navigate(Route.Teams) }
             ProjectsSection(state, collapsed, Modifier.weight(1f))
         }
         VerticalRule()

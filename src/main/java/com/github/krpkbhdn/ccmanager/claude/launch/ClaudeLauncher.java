@@ -7,6 +7,7 @@ import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
 import com.github.krpkbhdn.ccmanager.project.Project;
 import com.github.krpkbhdn.ccmanager.project.ModelSelection;
 import com.github.krpkbhdn.ccmanager.project.ProjectService;
+import com.github.krpkbhdn.ccmanager.team.Team;
 import com.pty4j.PtyProcess;
 import com.pty4j.PtyProcessBuilder;
 import java.io.IOException;
@@ -46,6 +47,12 @@ public class ClaudeLauncher {
     public LaunchedSession launch(long projectId, LaunchMode mode) {
         return start(projectId, ClaudeCommand.label(mode),
                 (settings, exe, selection) -> ClaudeCommand.launchArguments(exe, settings, mode, selection));
+    }
+
+    /** A lead session with the team's roles as subagents; the task is its first prompt. */
+    public LaunchedSession launchTeam(long projectId, Team team, String task) {
+        return start(projectId, "claude (" + team.name() + ")",
+                (settings, exe, selection) -> ClaudeCommand.teamArguments(exe, settings, team, task));
     }
 
     /** claude attach ID for a background agent. */
@@ -91,13 +98,18 @@ public class ClaudeLauncher {
     }
 
     private PtyProcess spawn(List<String> command, Path directory, String ccmSessionId) throws IOException {
-        return new PtyProcessBuilder(command.toArray(String[]::new))
+        return new PtyProcessBuilder(platformArguments(command))
                 .setDirectory(directory.toString())
                 .setUseWinConPty(true)
                 .setEnvironment(ClaudeCommand.environment(System.getenv(), ccmSessionId))
                 .setInitialColumns(INITIAL_COLUMNS)
                 .setInitialRows(INITIAL_ROWS)
                 .start();
+    }
+
+    private static String[] platformArguments(List<String> command) {
+        var windows = System.getProperty("os.name").startsWith("Windows");
+        return command.stream().map(argument -> windows ? WindowsArgument.quote(argument) : argument).toArray(String[]::new);
     }
 
     private void watchExit(String ccmSessionId, PtyProcess process) {

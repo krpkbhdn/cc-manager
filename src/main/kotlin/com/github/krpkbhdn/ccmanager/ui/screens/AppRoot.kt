@@ -32,6 +32,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation
 import com.github.krpkbhdn.ccmanager.claude.install.LoginState
+import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.ui.chrome.StatusBar
 import com.github.krpkbhdn.ccmanager.ui.components.Banner
 import com.github.krpkbhdn.ccmanager.ui.components.ConfirmDialog
@@ -48,6 +49,10 @@ import com.github.krpkbhdn.ccmanager.ui.palette.paletteItems
 import com.github.krpkbhdn.ccmanager.ui.picker.FolderPickerDialog
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.Route
+import com.github.krpkbhdn.ccmanager.ui.teams.RoleDialog
+import com.github.krpkbhdn.ccmanager.ui.teams.StartTaskDialog
+import com.github.krpkbhdn.ccmanager.ui.teams.StartTaskActions
+import com.github.krpkbhdn.ccmanager.ui.teams.TeamsScreen
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import java.net.URI
@@ -80,6 +85,8 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
         if (state.paletteOpen) CommandPalette(paletteItems(state, colors.dark)) { state.paletteOpen = false }
         if (state.shortcutsOpen) ShortcutSheet { state.shortcutsOpen = false }
         (state.route as? Route.Project)?.let { state.gitOf(it.id) }?.let { GitDialogHost(it) }
+        state.taskDialogProjectId?.let { id -> state.projects.firstOrNull { it.id == id } }?.let { StartTaskDialog(it, state.teams, startTaskActions(state, it)) }
+        state.teams.dialog?.let { open -> state.teams.find(open.teamId)?.let { RoleDialog(it, open, state.teams) } }
         state.confirm?.let { ConfirmDialog(it) { state.confirm = null } }
         state.renaming?.let { RenameDialog(it, { name -> state.renameProject(it.project, name) }, { state.renaming = null }) }
         if (state.pickerOpen) FolderPickerDialog(initial = null, onDismiss = { state.pickerOpen = false }, onPicked = state::addProjectAt)
@@ -133,6 +140,7 @@ private fun MainLayout(state: AppState, installation: ClaudeInstallation) = BoxW
 @Composable
 private fun RouteContent(state: AppState) {
     val route = state.route
+    if (route == Route.Teams) return TeamsScreen(state.teams, state.projects)
     val project = (route as? Route.Project)?.let { target -> state.projects.firstOrNull { it.id == target.id } }
     Crossfade(project?.id, label = "route") { shown ->
         val current = state.projects.firstOrNull { it.id == shown }
@@ -154,3 +162,9 @@ private fun AppSkeleton() {
 
 private const val SKELETON_ROWS = 6
 private const val SKELETON_CARDS = 6
+
+private fun startTaskActions(state: AppState, project: Project) = StartTaskActions(
+    onStart = { team, task, makeDefault -> state.startTask(project, team, task, makeDefault) },
+    onManageTeams = { state.navigate(Route.Teams) },
+    onDismiss = { state.taskDialogProjectId = null },
+)

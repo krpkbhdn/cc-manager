@@ -31,10 +31,10 @@ private const val DOT_OFFSET_RATIO = 0.08f
 private const val RING_RATIO = 0.07f
 private const val INNER_LIGHT = 0.28f
 
-/** Rounded-square letter avatar tinted from the project name; [status] adds a traffic-light dot on the corner. */
+/** Rounded-square letter avatar tinted from the project name, or from [gradient] when given; [status] adds a traffic-light dot on the corner. */
 @Composable
-fun ProjectAvatar(name: String, modifier: Modifier = Modifier, size: Dp = 32.dp, status: AgentStatus? = null, cutout: Color = colors.sidebar) {
-    val (top, bottom) = remember(name) { avatarGradient(name) }
+fun ProjectAvatar(name: String, modifier: Modifier = Modifier, size: Dp = 32.dp, status: AgentStatus? = null, cutout: Color = colors.sidebar, gradient: Pair<Long, Long>? = null) {
+    val (top, bottom) = gradient ?: remember(name) { avatarGradient(name) }
     val initials = remember(name) { avatarInitials(name) }
     val shape = RoundedCornerShape(size * CORNER_RATIO)
     Box(modifier.size(size)) {

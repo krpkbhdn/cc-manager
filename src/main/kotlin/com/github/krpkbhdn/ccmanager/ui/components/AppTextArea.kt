@@ -31,8 +31,8 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
-private const val MIN_LINES = 2
-private const val MAX_LINES = 8
+private const val DEFAULT_MIN_LINES = 2
+private const val DEFAULT_MAX_LINES = 8
 
 /** Multi-line field with the app's focus ring; Ctrl/Cmd+Enter calls [onSubmit]. */
 @Composable
@@ -42,6 +42,8 @@ fun AppTextArea(
     placeholder: String = "",
     focusRequester: FocusRequester? = null,
     mono: Boolean = false,
+    minLines: Int = DEFAULT_MIN_LINES,
+    maxLines: Int = DEFAULT_MAX_LINES,
     onSubmit: () -> Unit = {},
 ) {
     val source = remember { MutableInteractionSource() }
@@ -60,7 +62,7 @@ fun AppTextArea(
             },
         textStyle = style,
         cursorBrush = SolidColor(colors.accent),
-        lineLimits = TextFieldLineLimits.MultiLine(minHeightInLines = MIN_LINES, maxHeightInLines = MAX_LINES),
+        lineLimits = TextFieldLineLimits.MultiLine(minHeightInLines = minLines, maxHeightInLines = maxLines),
         interactionSource = source,
         decorator = { inner ->
             Box(Modifier.background(colors.background, shape).border(1.dp, borderColor, shape).padding(horizontal = Spacing.md, vertical = Spacing.sm)) {

@@ -28,6 +28,12 @@ import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgent
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import com.github.krpkbhdn.ccmanager.claude.session.SubagentSnapshot
+import com.github.krpkbhdn.ccmanager.team.Team
+import com.github.krpkbhdn.ccmanager.team.TeamRole
+import com.github.krpkbhdn.ccmanager.ui.teams.RoleAvatar
+import com.github.krpkbhdn.ccmanager.ui.teams.RoleChip
+import com.github.krpkbhdn.ccmanager.ui.teams.slotOf
+import com.github.krpkbhdn.ccmanager.ui.teams.subagentRole
 import com.github.krpkbhdn.ccmanager.ui.components.AppButton
 import com.github.krpkbhdn.ccmanager.ui.components.Chip
 import com.github.krpkbhdn.ccmanager.ui.components.CountBadge
@@ -65,6 +71,7 @@ class AgentsPanelActions(val onOpenSession: (String) -> Unit, val onRefreshBackg
 @Composable
 fun AgentsPanel(
     sessions: List<SessionSnapshot>,
+    teams: Map<String, Team>,
     selectedSessionId: String?,
     now: Instant,
     background: List<BackgroundAgent>?,
@@ -79,7 +86,7 @@ fun AgentsPanel(
                 item(key = "agents-header") { PanelTitle("Agents", sessions.size) }
                 if (sessions.isEmpty()) item(key = "agents-empty") { Label("No live sessions yet. Launch Claude to start one.", color = colors.textTertiary, style = Type.small, maxLines = 3) }
                 items(sessions, key = { it.ccmSessionId }) { session ->
-                    SessionCard(session, session.ccmSessionId == selectedSessionId, now, Modifier.animateItem()) { actions.onOpenSession(session.ccmSessionId) }
+                    SessionCard(session, teams[session.ccmSessionId], session.ccmSessionId == selectedSessionId, now, Modifier.animateItem()) { actions.onOpenSession(session.ccmSessionId) }
                 }
                 item(key = "background-header") { PanelTitle("Background agents", background?.size, Modifier.padding(top = Spacing.md), actions.onRefreshBackground) }
                 backgroundItems(background, actions.onAttach)
@@ -108,7 +115,7 @@ private fun PanelTitle(title: String, count: Int?, modifier: Modifier = Modifier
 }
 
 @Composable
-private fun SessionCard(session: SessionSnapshot, selected: Boolean, now: Instant, modifier: Modifier, onClick: () -> Unit) {
+private fun SessionCard(session: SessionSnapshot, team: Team?, selected: Boolean, now: Instant, modifier: Modifier, onClick: () -> Unit) {
     val shape = RoundedCornerShape(Radius.lg)
     val tint = colors.status(session.status)
     val edge = when {
@@ -127,7 +134,7 @@ private fun SessionCard(session: SessionSnapshot, selected: Boolean, now: Instan
             session.activity?.let { Label(it, color = colors.textSecondary, style = Type.small, maxLines = 2) }
             session.error?.let { Label(it, color = colors.danger, style = Type.small, maxLines = 2) }
             if (session.backgroundTasks > 0) Chip(backgroundTasksLabel(session.backgroundTasks), colors.accent)
-            if (session.subagents.isNotEmpty()) SubagentTree(session.subagents)
+            if (session.subagents.isNotEmpty()) SubagentTree(session.subagents, team)
         }
     }
 }
@@ -145,30 +152,33 @@ private fun metaLine(session: SessionSnapshot, now: Instant): String {
 }
 
 @Composable
-private fun SubagentTree(subagents: List<SubagentSnapshot>) {
+private fun SubagentTree(subagents: List<SubagentSnapshot>, team: Team?) {
     val rail = colors.borderStrong
     Column(Modifier.padding(start = Spacing.sm, top = Spacing.xs), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         subagents.forEach { subagent ->
             Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Box(Modifier.width(1.dp).fillMaxHeight().background(rail))
-                SubagentRow(subagent, Modifier.weight(1f))
+                val role = team?.subagentRole(subagent.agentType)
+                SubagentRow(subagent, role, role?.let { team.slotOf(it) } ?: 0, Modifier.weight(1f))
             }
         }
     }
 }
 
 @Composable
-private fun SubagentRow(subagent: SubagentSnapshot, modifier: Modifier) {
+private fun SubagentRow(subagent: SubagentSnapshot, role: TeamRole?, slot: Int, modifier: Modifier) {
     Row(
         modifier.clip(RoundedCornerShape(Radius.sm)).background(colors.hoverOverlay).padding(horizontal = Spacing.sm, vertical = Spacing.xs + 1.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
+        if (role != null) RoleAvatar(role.name(), slot, 18.dp)
         if (subagent.running) Spinner(size = 12.dp, tint = colors.warning) else Glyph(Icons.Check, colors.textTertiary, size = IconSize.small)
         Column(Modifier.weight(1f)) {
             Label(subagent.agentType.ifBlank { "agent" }, style = Type.smallMedium, color = if (subagent.running) colors.textPrimary else colors.textSecondary)
             subagent.activity?.let { Label(it, color = colors.textTertiary, style = Type.caption, maxLines = 1, tooltipWhenTruncated = true) }
         }
+        role?.let { RoleChip(it, slot) }
     }
 }
 

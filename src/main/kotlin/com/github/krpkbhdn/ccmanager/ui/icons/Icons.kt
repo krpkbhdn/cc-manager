@@ -107,4 +107,6 @@ object Icons {
     val Globe = lucide("globe")
     val Hash = lucide("hash")
     val Link = lucide("link")
+    val Users = lucide("users")
+    val Crown = lucide("crown")
 }

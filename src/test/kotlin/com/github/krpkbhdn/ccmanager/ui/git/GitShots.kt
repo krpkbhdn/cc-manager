@@ -22,6 +22,9 @@ import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.Route
 import com.github.krpkbhdn.ccmanager.ui.state.ThemeMode
 import com.github.krpkbhdn.ccmanager.ui.state.UiSettingsStore
+import com.github.krpkbhdn.ccmanager.team.Team
+import com.github.krpkbhdn.ccmanager.ui.teams.RoleForm
+import com.github.krpkbhdn.ccmanager.ui.teams.ToolSelection
 import com.github.krpkbhdn.ccmanager.ui.theme.AppTheme
 import java.nio.file.Files
 import java.nio.file.Path
@@ -78,6 +81,20 @@ private val shots = listOf(
     Shot("session-model", prepare = { state, _, _ -> state.openSession("s-working") }),
     Shot("shortcuts",prepare = { state, _, _ -> state.shortcutsOpen = true }),
     Shot("palette", prepare = { state, _, _ -> state.paletteOpen = true }),
+    Shot("teams", prepare = { state, _, _ -> openTeams(state) }),
+    Shot("teams-many", prepare = { state, _, _ -> addRoles(state, 9) }),
+    Shot("teams-only-lead", prepare = { state, _, _ -> openTeams(state); state.teams.newTeam(); waitFor { state.teams.selected?.name == "New team" } }),
+    Shot("teams-none", prepare = { state, _, _ -> openTeams(state); state.teams.teams.forEach { state.teams.requestDeleteTeam(it); state.confirm?.onConfirm?.invoke() }; state.confirm = null; waitFor { state.teams.teams.isEmpty() } }),
+    Shot("role-edit", prepare = { state, _, _ -> editRole(state, 1) }),
+    Shot("role-edit-lead", prepare = { state, _, _ -> editRole(state, 0) }),
+    Shot("role-edit-tools", prepare = { state, _, _ -> editRole(state, 2) }),
+    Shot("role-new", prepare = { state, _, _ -> newRole(state) }),
+    Shot("role-invalid", prepare = { state, _, _ -> newRole(state) { it.model = "-evil"; it.tools = ToolSelection(emptyList()); it.name.edit { replace(0, length, "Bad Name") } } }),
+    Shot("role-tools-custom", prepare = { state, _, _ -> editRole(state, 1) { it.tools = ToolSelection.parse("Read, Grep, Glob, Edit, mcp__github__*, mcp__db__query") } }),
+    Shot("task-dialog", prepare = { state, _, _ -> waitFor { state.teams.teams.isNotEmpty() }; state.taskDialogProjectId = 1 }),
+    Shot("task-dialog-no-teams", prepare = { state, _, _ -> waitFor { state.teams.teams.isNotEmpty() }; state.teams.teams.forEach { state.teams.requestDeleteTeam(it); state.confirm?.onConfirm?.invoke() }; state.confirm = null; waitFor { state.teams.teams.isEmpty() }; state.taskDialogProjectId = 1 }),
+    Shot("session-team", prepare = { state, _, _ -> waitFor { state.teams.teams.isNotEmpty() }; state.sessionTeams["s-working"] = state.teams.teams.first(); state.openSession("s-working") }),
+    Shot("agents-roles", prepare = { state, _, _ -> waitFor { state.teams.teams.isNotEmpty() }; state.sessionTeams["s-working"] = state.teams.teams.first() }),
     Shot("progress",prepare = { _, git, data -> data.progressDelayMillis = 4_000; git.fetchNow() }),
 )
 
@@ -134,5 +151,38 @@ private fun render(shot: Shot, dark: Boolean, width: Int, height: Int, out: Path
     } finally {
         scene.close()
         scope.cancel()
+    }
+}
+
+private fun openTeams(state: AppState): Team {
+    state.navigate(Route.Teams)
+    waitFor { state.teams.selected != null }
+    return state.teams.selected!!
+}
+
+private fun editRole(state: AppState, index: Int, adjust: (RoleForm) -> Unit = {}) {
+    val team = openTeams(state)
+    state.teams.editRole(team, team.roles[index])
+    adjust(state.teams.dialog!!.form)
+}
+
+private fun newRole(state: AppState, adjust: (RoleForm) -> Unit = {}) {
+    state.teams.newRole(openTeams(state))
+    adjust(state.teams.dialog!!.form)
+}
+
+private fun addRoles(state: AppState, count: Int) {
+    repeat(count) { index ->
+        val team = openTeams(state)
+        state.teams.newRole(team)
+        val form = state.teams.dialog!!.form
+        form.name.edit { replace(0, length, "agent-${index + 1}") }
+        form.description.edit { replace(0, length, "Handles work package ${index + 1} when the lead splits a large task.") }
+        form.prompt.edit { replace(0, length, "You handle work package ${index + 1}.") }
+        form.model = listOf("sonnet", "haiku", null, "opus")[index % 4]
+        form.effort = listOf("low", null, "medium", "high")[index % 4]
+        form.tools = ToolSelection.parse(listOf("Read, Grep, Glob", null, "Read, Write, Edit, Bash, mcp__github__*", "Read")[index % 4])
+        state.teams.saveRole(state.teams.dialog!!) { }
+        waitFor { state.teams.dialog == null && state.teams.selected!!.roles.size == team.roles.size + 1 }
     }
 }

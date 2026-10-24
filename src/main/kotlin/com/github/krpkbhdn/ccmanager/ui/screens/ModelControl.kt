@@ -150,7 +150,7 @@ private fun ModelOptions(
     }
 }
 
-private fun effortSegments(): List<Segment<String?>> =
+internal fun effortSegments(): List<Segment<String?>> =
     listOf(Segment<String?>(null, DEFAULT_EFFORT_LABEL)) + ModelSelection.EFFORT_LEVELS.map { Segment<String?>(it, it.replaceFirstChar(Char::titlecase)) }
 
 @Composable

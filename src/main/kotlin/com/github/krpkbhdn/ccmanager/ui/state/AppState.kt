@@ -9,12 +9,15 @@ import com.github.krpkbhdn.ccmanager.claude.hook.ActivityEntry
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation
 import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgent
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
+import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import com.github.krpkbhdn.ccmanager.notification.AppNotification
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.project.ModelSelection
 import com.github.krpkbhdn.ccmanager.project.Project
+import com.github.krpkbhdn.ccmanager.team.Team
+import com.github.krpkbhdn.ccmanager.ui.teams.TeamsState
 import com.github.krpkbhdn.ccmanager.usage.RateLimitSnapshot
 import com.github.krpkbhdn.ccmanager.usage.SessionUsage
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitHost
@@ -90,12 +93,15 @@ class AppState(
     var modelApplying by mutableStateOf(false)
         private set
     var loginBannerDismissed by mutableStateOf(false)
+    var taskDialogProjectId by mutableStateOf<Long?>(null)
 
     val views = mutableStateMapOf<Long, ProjectView>()
+    val sessionTeams = mutableStateMapOf<String, Team>()
     val backgroundAgents = mutableStateMapOf<Long, List<BackgroundAgent>>()
     val notificationEvents: SharedFlow<AppNotification> get() = events
 
     private val events = MutableSharedFlow<AppNotification>(extraBufferCapacity = NOTIFICATION_CAP)
+    val teams = TeamsState(backend.teams, scope, { confirm = it }, { reportError(it) })
     private val commandWriter = SessionCommandWriter(backend.terminal)
     private val unsubscribers = mutableListOf<Runnable>()
     private val gitStates = mutableMapOf<Long, GitState>()
@@ -116,6 +122,7 @@ class AppState(
         unsubscribers += backend.rateLimits.subscribe { scope.launch { rateLimits = backend.rateLimits.current().orElse(null) } }
         unsubscribers += backend.sessionUsage.subscribe { scope.launch { sessionUsage = backend.sessionUsage.all() } }
         unsubscribers += backend.notifications.subscribe { notification -> scope.launch { receive(notification) } }
+        teams.start()
         projectReload.request()
         sessionReload.request()
         scope.launch { rateLimits = backend.rateLimits.current().orElse(null) }
@@ -127,6 +134,7 @@ class AppState(
     }
 
     fun dispose() {
+        teams.dispose()
         unsubscribers.forEach { it.run() }
         unsubscribers.clear()
     }
@@ -255,12 +263,22 @@ class AppState(
 
     fun openInIde(target: Path) = scope.launch { guarded { io { backend.ide.open(target) } } }
 
-    fun launch(projectId: Long, mode: LaunchMode) {
+    fun launch(projectId: Long, mode: LaunchMode) = launchSession(projectId) { backend.launcher.launch(projectId, mode) }
+
+    /** Starts a lead session for [team] with [task] as its first prompt and opens its terminal. */
+    fun startTask(project: Project, team: Team, task: String, makeDefault: Boolean) {
+        taskDialogProjectId = null
+        if (makeDefault) teams.setProjectDefault(project.id, team.id)
+        launchSession(project.id, team) { backend.launcher.launchTeam(project.id, team, task) }
+    }
+
+    private fun launchSession(projectId: Long, team: Team? = null, start: () -> LaunchedSession) {
         if (launching) return
         launching = true
         scope.launch {
             guarded {
-                val session = io { backend.launcher.launch(projectId, mode) }
+                val session = io(start)
+                team?.let { sessionTeams[session.ccmSessionId()] = it }
                 backend.terminal.open(session)
                 views[projectId] = viewOf(projectId).openSession(session.ccmSessionId)
                 navigate(Route.Project(projectId))

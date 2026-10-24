@@ -10,6 +10,7 @@ import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry
 import com.github.krpkbhdn.ccmanager.notification.NotificationService
 import com.github.krpkbhdn.ccmanager.project.ProjectService
+import com.github.krpkbhdn.ccmanager.team.TeamService
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitBackend
 import com.github.krpkbhdn.ccmanager.ui.terminal.TerminalHost
 import com.github.krpkbhdn.ccmanager.ui.terminal.TerminalView
@@ -57,6 +58,7 @@ class Backend(
     val git: GitBackend,
     val rateLimits: RateLimitService,
     val sessionUsage: SessionUsageService,
+    val teams: TeamService,
     val terminal: TerminalPort = HostTerminalPort,
 ) {
     companion object {
@@ -73,6 +75,7 @@ class Backend(
             git = GitBackend.from(context),
             rateLimits = context.getBean(RateLimitService::class.java),
             sessionUsage = context.getBean(SessionUsageService::class.java),
+            teams = context.getBean(TeamService::class.java),
         )
     }
 }

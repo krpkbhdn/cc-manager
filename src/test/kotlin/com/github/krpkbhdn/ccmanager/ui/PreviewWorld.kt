@@ -107,6 +107,8 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
             listOf(
                 SubagentSnapshot("a1", "code-reviewer", "Reading SessionRegistry.java", true, ago(60)),
                 SubagentSnapshot("a2", "Explore", "Found 12 usages of AgentStatus", false, ago(300)),
+                SubagentSnapshot("a3", "developer", "Editing SessionRegistry.java", true, ago(40)),
+                SubagentSnapshot("a4", "tester", "Ran ./gradlew test, 212 passed", false, ago(200)),
             ),
             1, null,
         ),
@@ -173,6 +175,7 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
 
         val launcher = mock(ClaudeLauncher::class.java)
         `when`(launcher.launch(anyLong(), any())).thenThrow(IllegalStateException("Preview mode: Claude cannot be launched here."))
+        `when`(launcher.launchTeam(anyLong(), any(), anyString())).thenThrow(IllegalStateException("Preview mode: Claude cannot be launched here."))
         `when`(launcher.attach(anyLong(), anyString())).thenThrow(IllegalStateException("Preview mode: nothing to attach to."))
 
         val background = mock(BackgroundAgentService::class.java)
@@ -192,7 +195,7 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         `when`(usage.all()).thenAnswer { sessionUsage }
         `when`(usage.subscribe(any())).thenAnswer { Runnable { } }
 
-        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, terminal)
+        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), terminal)
     }
 
     private fun installationNow() = if (claudeInstalled) {

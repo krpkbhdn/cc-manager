@@ -58,6 +58,7 @@ private fun projectItems(state: AppState): List<PaletteItem> =
 private fun globalActions(state: AppState, systemDark: Boolean): List<PaletteItem> = listOf(
     PaletteItem("add-project", "Add project", PaletteGroup.ACTIONS, "Pick a folder to manage", Icons.FolderPlus, shortcut = AppShortcut.ADD_PROJECT, run = state::requestAddProject),
     PaletteItem("overview", "Go to overview", PaletteGroup.ACTIONS, icon = Icons.Grid, shortcut = AppShortcut.OVERVIEW) { state.navigate(Route.Overview) },
+    PaletteItem("teams", "Manage teams", PaletteGroup.ACTIONS, "Roles and models of your agent teams", Icons.Users) { state.navigate(Route.Teams) },
     PaletteItem("notifications", "Show notifications", PaletteGroup.ACTIONS, icon = Icons.Bell, shortcut = AppShortcut.NOTIFICATIONS) { state.notificationsOpen = true },
     PaletteItem("usage", "Show usage", PaletteGroup.ACTIONS, "Limits, context and cost", Icons.Gauge, shortcut = AppShortcut.USAGE) { state.usageOpen = true },
     PaletteItem("toggle-theme", "Toggle light and dark theme", PaletteGroup.ACTIONS, icon = Icons.Sun, shortcut = AppShortcut.TOGGLE_THEME) { state.toggleTheme(systemDark) },
@@ -72,6 +73,7 @@ private fun projectActions(state: AppState): List<PaletteItem> {
     val here = "in ${project.name}"
     return listOfNotNull(
         PaletteItem("launch", "Launch Claude", PaletteGroup.ACTIONS, here, Icons.Play, shortcut = AppShortcut.NEW_SESSION) { state.launch(project.id, LaunchMode.NEW) },
+        PaletteItem("start-task", "Start task with team", PaletteGroup.ACTIONS, here, Icons.Users) { state.taskDialogProjectId = project.id },
         PaletteItem("continue", "Continue last session", PaletteGroup.ACTIONS, here, Icons.ArrowRight) { state.launch(project.id, LaunchMode.CONTINUE) },
         PaletteItem("resume", "Resume a session", PaletteGroup.ACTIONS, here, Icons.Rewind) { state.launch(project.id, LaunchMode.RESUME_PICKER) },
         PaletteItem("open-folder", "Open folder", PaletteGroup.ACTIONS, here, Icons.FolderOpen) { state.openFolder(project) },

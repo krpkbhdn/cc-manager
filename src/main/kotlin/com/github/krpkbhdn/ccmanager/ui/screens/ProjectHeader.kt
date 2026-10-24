@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.project.Project
+import com.github.krpkbhdn.ccmanager.ui.components.AppButton
 import com.github.krpkbhdn.ccmanager.ui.components.CopyChip
 import com.github.krpkbhdn.ccmanager.ui.components.HorizontalRule
 import com.github.krpkbhdn.ccmanager.ui.components.IconButton
@@ -33,6 +34,7 @@ private const val IDE_HINT = "Open in IntelliJ IDEA"
 
 class ProjectHeaderActions(
     val onLaunch: (LaunchMode) -> Unit,
+    val onStartTask: () -> Unit,
     val onOpenFolder: () -> Unit,
     val onOpenIde: () -> Unit,
     val onShowGit: () -> Unit,
@@ -62,6 +64,7 @@ fun ProjectHeader(project: Project, status: AgentStatus, ideAvailable: Boolean, 
                 IconButton(Icons.Code, actions.onOpenIde, tooltip = if (ideAvailable) IDE_HINT else IDE_UNAVAILABLE_HINT, enabled = ideAvailable)
                 IconButton(Icons.Diff, actions.onShowChanges, tooltip = "Review changes", hint = AppShortcut.GIT_CHANGES.hint())
             }
+            AppButton("Start task", actions.onStartTask, icon = Icons.Users, tooltip = "Run a lead session with one of your agent teams")
             SplitButton(
                 text = "Launch Claude",
                 icon = Icons.Play,
