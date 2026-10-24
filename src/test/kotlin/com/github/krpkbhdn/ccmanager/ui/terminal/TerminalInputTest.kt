@@ -152,4 +152,18 @@ class TerminalInputTest {
     fun bracketedPasteWrapsTheTextAndStripsEscapes() {
         assertThat(String(pasteBytes("x${ESC}[201~y\n", bracketed = true))).isEqualTo("$ESC[200~x[201~y\r$ESC[201~")
     }
+
+    @Test
+    fun altPReachesClaudeAsEscapeP() {
+        assertThat(bytes(press(KeyEvent.VK_P, ALT_DOWN_MASK, 'p'))).isEqualTo("${ESC}p")
+    }
+
+    @Test
+    fun optionLettersOnMacBecomeMetaLettersFromTheKeyCode() {
+        assertThat(optionLetterBytes(press(KeyEvent.VK_P, ALT_DOWN_MASK, 'π'), mac = true)?.toString(Charsets.ISO_8859_1)).isEqualTo("${ESC}p")
+        assertThat(optionLetterBytes(press(KeyEvent.VK_P, ALT_DOWN_MASK or SHIFT_DOWN_MASK, '∏'), mac = true)?.toString(Charsets.ISO_8859_1)).isEqualTo("${ESC}P")
+        assertThat(optionLetterBytes(press(KeyEvent.VK_P, ALT_DOWN_MASK, 'p'), mac = false)).isNull()
+        assertThat(optionLetterBytes(press(KeyEvent.VK_P, 0, 'p'), mac = true)).isNull()
+        assertThat(optionLetterBytes(press(KeyEvent.VK_1, ALT_DOWN_MASK, '1'), mac = true)).isNull()
+    }
 }

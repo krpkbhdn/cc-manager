@@ -34,6 +34,8 @@ import kotlinx.coroutines.withContext
 
 private const val NOTIFICATION_CAP = 100
 private const val TICK_MILLIS = 1_000L
+private const val APPLY_TIMEOUT_MILLIS = 6_000L
+private const val APPLY_POLL_MILLIS = 200L
 private const val ACTIVITY_LIMIT = 300
 private const val UNEXPECTED_ERROR = "Something went wrong"
 private const val ACTION_FAILED_TITLE = "Action failed"
@@ -85,7 +87,7 @@ class AppState(
     var notificationsOpen by mutableStateOf(false)
     var usageOpen by mutableStateOf(false)
     var modelPickerOpen by mutableStateOf(false)
-    var modelSwitching by mutableStateOf(false)
+    var modelApplying by mutableStateOf(false)
         private set
     var loginBannerDismissed by mutableStateOf(false)
 
@@ -94,6 +96,7 @@ class AppState(
     val notificationEvents: SharedFlow<AppNotification> get() = events
 
     private val events = MutableSharedFlow<AppNotification>(extraBufferCapacity = NOTIFICATION_CAP)
+    private val commandWriter = SessionCommandWriter(backend.terminal)
     private val unsubscribers = mutableListOf<Runnable>()
     private val gitStates = mutableMapOf<Long, GitState>()
     private val gitHost = GitHost({ settings.git }, { change -> updateSettings { it.copy(git = change(it.git)) } }, ::toast)
@@ -266,18 +269,31 @@ class AppState(
         }
     }
 
-    /** Resumes the session's conversation with [selection]; only for a free session, see [modelTarget]. */
-    fun restartSession(session: SessionSnapshot, selection: ModelSelection) {
-        if ((modelTarget(session, modelSwitching) as? ModelTarget.Running)?.blockedReason != null) return
-        modelSwitching = true
+    /**
+     * Types [command] into the running [session] and shows "applying" until the statusLine reports [reached] or a few seconds
+     * pass; claude refreshes the statusLine on its own after /model and /effort, but not always visibly different.
+     */
+    fun applyToSession(session: SessionSnapshot, command: String, reached: (SessionUsage?) -> Boolean) {
+        if ((modelTarget(session, modelApplying) as? ModelTarget.Running)?.blockedReason != null) return
+        modelApplying = true
         scope.launch {
             guarded {
-                val restarted = SessionRestarter(backend) { live.find(it) != null }.restart(session, selection)
-                backend.terminal.open(restarted)
-                views[session.projectId] = viewOf(session.projectId).closeSession(session.ccmSessionId).openSession(restarted.ccmSessionId)
+                commandWriter.run(session.ccmSessionId, command)
+                var waited = 0L
+                while (!reached(sessionUsage[session.ccmSessionId]) && waited < APPLY_TIMEOUT_MILLIS) {
+                    delay(APPLY_POLL_MILLIS)
+                    waited += APPLY_POLL_MILLIS
+                }
             }
-            modelSwitching = false
+            modelApplying = false
         }
+    }
+
+    /** Opens Claude's own model switcher (Alt+P) inside the session's terminal and moves the keyboard there. */
+    fun openClaudeModelPicker(session: SessionSnapshot) {
+        if ((modelTarget(session, modelApplying) as? ModelTarget.Running)?.blockedReason != null) return
+        commandWriter.openModelPicker(session.ccmSessionId)
+        backend.terminal.focus(session.ccmSessionId)
     }
 
     fun attach(projectId: Long, backgroundId: String) {

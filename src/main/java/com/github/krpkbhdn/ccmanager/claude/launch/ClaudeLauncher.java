@@ -13,7 +13,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -25,7 +24,6 @@ import org.springframework.stereotype.Service;
 @Service
 public class ClaudeLauncher {
 
-    private static final Pattern SESSION_ID = Pattern.compile("[A-Za-z0-9-]+");
     static final int INITIAL_COLUMNS = 120;
     static final int INITIAL_ROWS = 32;
     private static final int SPAWN_FAILED_EXIT_CODE = -1;
@@ -48,15 +46,6 @@ public class ClaudeLauncher {
     public LaunchedSession launch(long projectId, LaunchMode mode) {
         return start(projectId, ClaudeCommand.label(mode),
                 (settings, exe, selection) -> ClaudeCommand.launchArguments(exe, settings, mode, selection));
-    }
-
-    /** Resumes a conversation with {@code selection}: a running session switches model this way, as typing /model would overwrite the user's saved defaults. */
-    public LaunchedSession restart(long projectId, String claudeSessionId, ModelSelection selection) {
-        if (claudeSessionId == null || !SESSION_ID.matcher(claudeSessionId).matches()) {
-            throw new IllegalStateException("This session has no conversation to resume yet.");
-        }
-        return start(projectId, ClaudeCommand.RESUMED_LABEL,
-                (settings, exe, projectSelection) -> ClaudeCommand.resumeArguments(exe, settings, claudeSessionId, selection));
     }
 
     /** claude attach ID for a background agent. */

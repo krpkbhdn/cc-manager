@@ -5,6 +5,7 @@ import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import com.github.krpkbhdn.ccmanager.project.ModelSelection
 import java.time.Instant
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 
 class ModelChoicesTest {
@@ -30,8 +31,8 @@ class ModelChoicesTest {
         assertThat(effectiveModelLabel(null, null)).isNull()
     }
 
-    private fun session(status: AgentStatus, claudeId: String? = "c1") =
-        SessionSnapshot("s1", 1, claudeId, status, "", "default", null, null, Instant.EPOCH, Instant.EPOCH, emptyList(), 0, null)
+    private fun session(status: AgentStatus) =
+        SessionSnapshot("s1", 1, "c1", status, "", "default", null, null, Instant.EPOCH, Instant.EPOCH, emptyList(), 0, null)
 
     @Test
     fun noSessionMeansOnlyTheNextLaunchDefaultChanges() {
@@ -39,16 +40,15 @@ class ModelChoicesTest {
     }
 
     @Test
-    fun aFreeSessionWithAConversationCanSwitch() {
-        assertThat(modelTarget(session(AgentStatus.IDLE), false)).isEqualTo(ModelTarget.Running("s1", "c1", null))
+    fun aFreeSessionCanTakeCommands() {
+        assertThat(modelTarget(session(AgentStatus.IDLE), false)).isEqualTo(ModelTarget.Running("s1", null))
     }
 
     @Test
-    fun busyWaitingUnstartedAndSwitchingSessionsAreBlockedWithAReason() {
+    fun busyWaitingAndApplyingSessionsAreBlockedWithAReason() {
         assertThat((modelTarget(session(AgentStatus.WORKING), false) as ModelTarget.Running).blockedReason).contains("working")
         assertThat((modelTarget(session(AgentStatus.NEEDS_ACTION), false) as ModelTarget.Running).blockedReason).contains("waiting")
-        assertThat((modelTarget(session(AgentStatus.IDLE, claudeId = null), false) as ModelTarget.Running).blockedReason).contains("no conversation")
-        assertThat((modelTarget(session(AgentStatus.IDLE), true) as ModelTarget.Running).blockedReason).contains("Switching")
+        assertThat((modelTarget(session(AgentStatus.IDLE), true) as ModelTarget.Running).blockedReason).contains("Applying")
     }
 
     @Test
@@ -56,5 +56,29 @@ class ModelChoicesTest {
         assertThat(knownEffort("xhigh")).isEqualTo("xhigh")
         assertThat(knownEffort("auto")).isNull()
         assertThat(knownEffort(null)).isNull()
+    }
+
+    @Test
+    fun slashCommandsUseAliasesIdsAndTheDefaultWords() {
+        assertThat(modelCommand("sonnet")).isEqualTo("/model sonnet")
+        assertThat(modelCommand("opus[1m]")).isEqualTo("/model opus[1m]")
+        assertThat(modelCommand(null)).isEqualTo("/model default")
+        assertThat(effortCommand("high")).isEqualTo("/effort high")
+        assertThat(effortCommand(null)).isEqualTo("/effort auto")
+    }
+
+    @Test
+    fun commandsRefuseNamesAndLevelsThatCouldInjectInput() {
+        assertThatThrownBy { modelCommand("x\r/exit") }.isInstanceOf(IllegalArgumentException::class.java)
+        assertThatThrownBy { effortCommand("ultra") }.isInstanceOf(IllegalArgumentException::class.java)
+    }
+
+    @Test
+    fun reportedDisplayNamesMatchAliasesAndIds() {
+        assertThat(modelReported("Sonnet 5.5", "sonnet")).isTrue()
+        assertThat(modelReported("Sonnet 5.5", "claude-sonnet-5-5")).isTrue()
+        assertThat(modelReported("Haiku 5.5", "sonnet")).isFalse()
+        assertThat(modelReported(null, "sonnet")).isFalse()
+        assertThat(modelReported("Sonnet 5.5", null)).isFalse()
     }
 }

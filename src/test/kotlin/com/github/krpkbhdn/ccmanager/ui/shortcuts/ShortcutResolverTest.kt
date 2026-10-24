@@ -82,4 +82,11 @@ class ShortcutResolverTest {
         assertThat(AppShortcut.OVERVIEW.keys(mac = false)).containsExactly("Alt", "0")
         assertThat(AppShortcut.FOCUS_TERMINAL.hint(mac = false)).isEqualTo("Ctrl+Shift+`")
     }
+
+    @Test
+    fun `alt p is left to claude for its model picker`() {
+        val altP = KeyChord(VK_P, ctrl = false, shift = false, alt = true, meta = false)
+        assertThat(windows(altP, terminal = true)).isNull()
+        assertThat(windows(altP, terminal = false)).isNull()
+    }
 }

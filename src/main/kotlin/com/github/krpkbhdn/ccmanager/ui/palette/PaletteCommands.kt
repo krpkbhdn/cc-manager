@@ -70,7 +70,7 @@ private fun projectActions(state: AppState): List<PaletteItem> {
     val route = state.route as? Route.Project ?: return emptyList()
     val project = state.projects.firstOrNull { it.id == route.id } ?: return emptyList()
     val here = "in ${project.name}"
-    return listOf(
+    return listOfNotNull(
         PaletteItem("launch", "Launch Claude", PaletteGroup.ACTIONS, here, Icons.Play, shortcut = AppShortcut.NEW_SESSION) { state.launch(project.id, LaunchMode.NEW) },
         PaletteItem("continue", "Continue last session", PaletteGroup.ACTIONS, here, Icons.ArrowRight) { state.launch(project.id, LaunchMode.CONTINUE) },
         PaletteItem("resume", "Resume a session", PaletteGroup.ACTIONS, here, Icons.Rewind) { state.launch(project.id, LaunchMode.RESUME_PICKER) },
@@ -78,5 +78,8 @@ private fun projectActions(state: AppState): List<PaletteItem> {
         PaletteItem("open-ide", "Open in IntelliJ IDEA", PaletteGroup.ACTIONS, here, Icons.Code) { state.openIde(project) },
         PaletteItem("show-activity", "Show activity", PaletteGroup.ACTIONS, here, Icons.Activity, shortcut = AppShortcut.ACTIVITY_TAB) { state.select(project.id, ProjectTab.Activity) },
         PaletteItem("toggle-agents", "Toggle agents panel", PaletteGroup.ACTIONS, here, Icons.PanelRightClose, shortcut = AppShortcut.TOGGLE_AGENTS, run = state::toggleAgents),
+        state.viewOf(project.id).focusedSession?.let { state.live.find(it) }?.let { session ->
+            PaletteItem("switch-model", "Switch model", PaletteGroup.ACTIONS, "$here, opens Claude's picker (Alt+P)", Icons.Cpu) { state.openClaudeModelPicker(session) }
+        },
     )
 }

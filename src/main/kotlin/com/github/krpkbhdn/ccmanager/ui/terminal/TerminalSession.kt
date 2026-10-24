@@ -110,7 +110,7 @@ internal class TerminalSession(connector: TtyConnector) {
             return true
         }
         if (event.type == KeyInputEvent.Type.PRESSED) suppressTyped = false
-        val bytes = typedPair(event) ?: keyBytes(event, emulator.terminal) ?: return false
+        val bytes = typedPair(event) ?: optionLetterBytes(event)?.also { suppressTyped = true } ?: keyBytes(event, emulator.terminal) ?: return false
         selection = null
         scrollToBottom()
         emulator.write(bytes)

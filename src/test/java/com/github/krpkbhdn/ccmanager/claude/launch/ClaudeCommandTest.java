@@ -53,12 +53,6 @@ class ClaudeCommandTest {
     }
 
     @Test
-    void resumeKeepsTheConversationAndPutsSelectionFirst() {
-        assertThat(ClaudeCommand.resumeArguments(EXE, SETTINGS, "ab-12", new ModelSelection("sonnet", "high")))
-                .containsExactly(EXE.toString(), "--settings", SETTINGS.toString(), "--model", "sonnet", "--effort", "high", "--resume", "ab-12");
-    }
-
-    @Test
     void labelsAreShort() {
         assertThat(ClaudeCommand.label(LaunchMode.NEW)).isEqualTo("claude");
         assertThat(ClaudeCommand.label(LaunchMode.CONTINUE)).isEqualTo("claude (continue)");

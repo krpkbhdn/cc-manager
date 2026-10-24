@@ -35,21 +35,38 @@ fun effectiveModelLabel(modelName: String?, effort: String?): String? =
 sealed interface ModelTarget {
     data object NextLaunch : ModelTarget
 
-    /** [blockedReason] is why switching is not possible right now, null when it is. */
-    data class Running(val ccmSessionId: String, val claudeSessionId: String?, val blockedReason: String?) : ModelTarget
+    /** [blockedReason] is why a command cannot be typed into the session right now, null when it can. */
+    data class Running(val ccmSessionId: String, val blockedReason: String?) : ModelTarget
 }
 
-fun modelTarget(session: SessionSnapshot?, switching: Boolean): ModelTarget {
+fun modelTarget(session: SessionSnapshot?, applying: Boolean): ModelTarget {
     if (session == null) return ModelTarget.NextLaunch
     val reason = when {
-        switching -> "Switching the model…"
-        session.status == AgentStatus.WORKING -> "Claude is working. Switch when the session is free."
-        session.status == AgentStatus.NEEDS_ACTION -> "Claude is waiting for you. Answer first, then switch."
-        session.claudeSessionId == null -> "The session has no conversation to resume yet."
+        applying -> "Applying the change…"
+        session.status == AgentStatus.WORKING -> "Claude is working. Change the model when the session is free."
+        session.status == AgentStatus.NEEDS_ACTION -> "Claude is waiting for you. Answer first, then change the model."
         else -> null
     }
-    return ModelTarget.Running(session.ccmSessionId, session.claudeSessionId, reason)
+    return ModelTarget.Running(session.ccmSessionId, reason)
 }
 
 /** The effort levels a running session reported that the picker knows; anything else selects nothing. */
 fun knownEffort(effort: String?): String? = effort?.takeIf { it in ModelSelection.EFFORT_LEVELS }
+
+/** `/model <alias or id>`; no model means claude's own default. @throws IllegalArgumentException for a name claude would not take */
+fun modelCommand(model: String?): String = "/model " + (ModelSelection(model, null).model() ?: DEFAULT_MODEL_ARGUMENT)
+
+/** `/effort <level>`; no level means claude's automatic choice. @throws IllegalArgumentException for an unknown level */
+fun effortCommand(effort: String?): String = "/effort " + (ModelSelection(null, effort).effort() ?: DEFAULT_EFFORT_ARGUMENT)
+
+/** True once a statusLine model name such as "Sonnet 5.5" belongs to the requested alias or id such as "sonnet" or "claude-sonnet-5-5". */
+fun modelReported(reportedName: String?, requested: String?): Boolean {
+    val reported = reportedName?.let(::letters)?.takeIf { it.isNotEmpty() } ?: return false
+    val wanted = requested?.let(::letters)?.takeIf { it.isNotEmpty() } ?: return false
+    return reported.contains(wanted) || wanted.contains(reported)
+}
+
+private fun letters(text: String) = text.lowercase().filter { it.isLetterOrDigit() }
+
+private const val DEFAULT_MODEL_ARGUMENT = "default"
+private const val DEFAULT_EFFORT_ARGUMENT = "auto"

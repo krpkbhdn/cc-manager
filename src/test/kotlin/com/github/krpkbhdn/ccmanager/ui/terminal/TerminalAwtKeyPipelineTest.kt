@@ -72,13 +72,15 @@ class TerminalAwtKeyPipelineTest {
         pressed(KeyEvent.VK_C, '\u0003', InputEvent.CTRL_DOWN_MASK)
         pressed(KeyEvent.VK_B, 'b', InputEvent.ALT_DOWN_MASK)
         typed('b', InputEvent.ALT_DOWN_MASK)
+        pressed(KeyEvent.VK_P, 'p', InputEvent.ALT_DOWN_MASK)
+        typed('p', InputEvent.ALT_DOWN_MASK)
         pressed(KeyEvent.VK_ENTER, '\n', InputEvent.SHIFT_DOWN_MASK)
         pressed(KeyEvent.VK_UP)
         pressed(KeyEvent.VK_TAB, '\t', InputEvent.SHIFT_DOWN_MASK)
         typed('@', InputEvent.CTRL_DOWN_MASK or InputEvent.ALT_DOWN_MASK)
         typed('\uD83D')
         typed('\uDE00')
-        val expected = "Ñ\u0097a\u0003${ESC}b$ESC\r$ESC[A$ESC[Z@" + String("😀".toByteArray(), Charsets.ISO_8859_1)
+        val expected = "Ñ\u0097a\u0003${ESC}b${ESC}p$ESC\r$ESC[A$ESC[Z@" + String("😀".toByteArray(), Charsets.ISO_8859_1)
         assertThat(written()).isEqualTo(expected)
     }
 }

@@ -10,7 +10,6 @@ import java.util.Map;
 /** Pure builders for the claude command line and the child environment. */
 final class ClaudeCommand {
 
-    static final String RESUMED_LABEL = "claude (resumed)";
     static final String ENV_TERM = "TERM";
     static final String ENV_COLORTERM = "COLORTERM";
     static final String ENV_SESSION = "CCM_SESSION";
@@ -32,15 +31,6 @@ final class ClaudeCommand {
             case CONTINUE -> command.add("--continue");
             case RESUME_PICKER -> command.add("--resume");
         }
-        return command;
-    }
-
-    /** The same conversation in a new process; the flags apply to that session only. */
-    static List<String> resumeArguments(Path executable, Path settingsFile, String claudeSessionId, ModelSelection selection) {
-        List<String> command = base(executable, settingsFile);
-        command.addAll(selection.arguments());
-        command.add("--resume");
-        command.add(claudeSessionId);
         return command;
     }
 

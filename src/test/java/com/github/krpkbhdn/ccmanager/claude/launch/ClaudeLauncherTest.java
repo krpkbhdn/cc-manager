@@ -55,13 +55,6 @@ class ClaudeLauncherTest {
     }
 
     @Test
-    void restartRejectsMissingOrUnsafeConversationIds() {
-        assertThatThrownBy(() -> launcher.restart(1, null, ModelSelection.DEFAULT)).hasMessageContaining("no conversation");
-        assertThatThrownBy(() -> launcher.restart(1, "a b;c", ModelSelection.DEFAULT)).isInstanceOf(IllegalStateException.class);
-        verify(sessions, never()).register(anyLong());
-    }
-
-    @Test
     void spawnFailureEndsSessionAndDeletesSettings() throws Exception {
         Path notExecutable = Files.createFile(directory.resolve("claude-fake"));
         when(installation.current()).thenReturn(new ClaudeInstallation(true, notExecutable, "1", null, null));

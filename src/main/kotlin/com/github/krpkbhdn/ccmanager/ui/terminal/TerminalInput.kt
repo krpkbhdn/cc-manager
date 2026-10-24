@@ -69,3 +69,12 @@ internal fun pasteBytes(text: String, bracketed: Boolean): ByteArray {
     val payload = if (bracketed) PASTE_START + normalized.replace(ESC, "") + PASTE_END else normalized
     return payload.toByteArray(Charsets.UTF_8)
 }
+
+/** macOS Option+letter types a symbol such as π; claude expects Meta+letter (ESC letter, e.g. Alt+P opens its model picker), so it is built from the key code. */
+internal fun optionLetterBytes(event: KeyInputEvent, mac: Boolean = Platform.isMac): ByteArray? {
+    val modifiers = event.modifiersEx
+    if (!mac || event.type != KeyInputEvent.Type.PRESSED || modifiers and ALT == 0 || modifiers and (CTRL or META) != 0) return null
+    if (event.keyCode !in KeyEvent.VK_A..KeyEvent.VK_Z) return null
+    val letter = event.keyCode.toChar().let { if (modifiers and SHIFT != 0) it else it.lowercaseChar() }
+    return (ESC + letter).toByteArray()
+}
