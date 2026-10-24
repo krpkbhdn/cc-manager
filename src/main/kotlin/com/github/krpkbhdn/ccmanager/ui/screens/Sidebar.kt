@@ -134,6 +134,7 @@ private fun ProjectsSection(state: AppState, collapsed: Boolean, modifier: Modif
                         sessions = sessions,
                         selected = state.route == Route.Project(project.id),
                         collapsed = collapsed,
+                        gitSummary = state.gitSummaryOf(project.id),
                         actions = ProjectActions(
                             onOpen = { state.navigate(Route.Project(project.id)) },
                             onRename = { state.renaming = RenameRequest(project) },

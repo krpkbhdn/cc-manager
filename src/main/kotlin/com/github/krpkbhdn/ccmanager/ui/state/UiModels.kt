@@ -4,7 +4,6 @@ import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.project.Project
-import com.github.krpkbhdn.ccmanager.workspace.GitDiff
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
@@ -18,8 +17,6 @@ data class LiveSessions(
     fun statusOf(projectId: Long): AgentStatus = projectStatus[projectId] ?: AgentStatus.OFFLINE
     fun find(ccmSessionId: String): SessionSnapshot? = sessions.firstOrNull { it.ccmSessionId == ccmSessionId }
 }
-
-data class DiffState(val diff: GitDiff? = null, val loading: Boolean = false, val error: String? = null)
 
 data class ToastItem(
     val id: Long,

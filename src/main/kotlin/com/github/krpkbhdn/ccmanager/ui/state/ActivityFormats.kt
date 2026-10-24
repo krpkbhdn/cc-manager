@@ -31,9 +31,5 @@ fun lineMarker(kind: GitDiff.LineKind): String = when (kind) {
 
 fun lineNumberText(number: Int?): String = number?.toString() ?: ""
 
-/** The file for [path], or the first one when nothing (or something stale) is selected. */
-fun selectedFile(files: List<GitDiff.FileDiff>, path: String?): GitDiff.FileDiff? =
-    files.firstOrNull { it.path == path } ?: files.firstOrNull()
-
 fun renameLabel(file: GitDiff.FileDiff): String =
     if (file.change == GitDiff.ChangeType.RENAMED && file.oldPath != null) "${file.oldPath} -> ${file.path}" else file.path

@@ -14,6 +14,10 @@ import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import com.github.krpkbhdn.ccmanager.notification.AppNotification
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.project.Project
+import com.github.krpkbhdn.ccmanager.ui.git.model.GitHost
+import com.github.krpkbhdn.ccmanager.ui.git.model.GitState
+import com.github.krpkbhdn.ccmanager.ui.git.model.GitSummary
+import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
 import java.nio.file.Path
 import java.time.Instant
 import kotlinx.coroutines.CancellationException
@@ -75,12 +79,13 @@ class AppState(
     var loginBannerDismissed by mutableStateOf(false)
 
     val views = mutableStateMapOf<Long, ProjectView>()
-    val diffs = mutableStateMapOf<Long, DiffState>()
     val backgroundAgents = mutableStateMapOf<Long, List<BackgroundAgent>>()
     val notificationEvents: SharedFlow<AppNotification> get() = events
 
     private val events = MutableSharedFlow<AppNotification>(extraBufferCapacity = NOTIFICATION_CAP)
     private val unsubscribers = mutableListOf<Runnable>()
+    private val gitStates = mutableMapOf<Long, GitState>()
+    private val gitHost = GitHost({ settings.git }, { change -> updateSettings { it.copy(git = change(it.git)) } }, ::toast)
     private var toastCounter = 0L
     private val projectReload = Refresher(scope) { guarded { loadProjects() } }
     private val sessionReload = Refresher(scope) { guarded { loadSessions() } }
@@ -127,6 +132,12 @@ class AppState(
 
     fun select(projectId: Long, tab: ProjectTab) {
         views[projectId] = viewOf(projectId).select(tab)
+    }
+
+    /** Opens the project's Git tab, on [view] when given, and returns its state. */
+    fun openGit(projectId: Long, view: GitSubView? = null): GitState? {
+        select(projectId, ProjectTab.Git)
+        return gitOf(projectId)?.also { git -> view?.let(git::show) }
     }
 
     fun openNotification(target: AppNotification) {
@@ -212,9 +223,13 @@ class AppState(
         }
     }
 
-    fun openFolder(project: Project) = scope.launch { guarded { io { backend.directories.open(project.path) } } }
+    fun openFolder(project: Project) = openDirectory(project.path)
 
-    fun openIde(project: Project) = scope.launch { guarded { io { backend.ide.open(project.path) } } }
+    fun openDirectory(directory: Path) = scope.launch { guarded { io { backend.directories.open(directory) } } }
+
+    fun openIde(project: Project) = openInIde(project.path)
+
+    fun openInIde(target: Path) = scope.launch { guarded { io { backend.ide.open(target) } } }
 
     fun launch(projectId: Long, mode: LaunchMode) {
         if (launching) return
@@ -258,20 +273,16 @@ class AppState(
         scope.launch { guarded { backend.terminal.send(ccmSessionId, keys) } }
     }
 
-    fun refreshDiff(projectId: Long) {
-        val project = projects.firstOrNull { it.id == projectId } ?: return
-        diffs[projectId] = (diffs[projectId] ?: DiffState()).copy(loading = true, error = null)
-        scope.launch {
-            val result = try {
-                DiffState(diff = io { backend.diffs.diff(project.path) })
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: RuntimeException) {
-                DiffState(error = e.message ?: UNEXPECTED_ERROR)
-            }
-            diffs[projectId] = result
-        }
+    /** Git state of a project, created on first use; null for an unknown project. */
+    fun gitOf(projectId: Long): GitState? {
+        gitStates[projectId]?.let { return it }
+        val project = projects.firstOrNull { it.id == projectId } ?: return null
+        return GitState(projectId, project.path, backend.git, scope, gitHost).also { gitStates[projectId] = it }
     }
+
+    fun toast(kind: NotificationKind, title: String, body: String) = pushToast(ToastItem(nextToastId(), kind, title, body))
+
+    fun gitSummaryOf(projectId: Long): GitSummary? = gitStates[projectId]?.summary
 
     fun refreshBackgroundAgents(projectId: Long) {
         val path: Path = projects.firstOrNull { it.id == projectId }?.path ?: return
@@ -329,6 +340,7 @@ class AppState(
         val loaded = io { backend.projects.list() }
         projects = loaded
         views.keys.retainAll(loaded.map { it.id }.toSet())
+        gitStates.keys.retainAll(loaded.map { it.id }.toSet())
         (route as? Route.Project)?.takeIf { current -> loaded.none { it.id == current.id } }?.let { route = Route.Overview }
         sessionReload.request()
     }
@@ -339,7 +351,7 @@ class AppState(
         }
         val previous = live.sessions.associate { it.ccmSessionId to it.status }
         live = LiveSessions(sessions, statuses)
-        projectsBecameIdle(previous, sessions).filter { it in diffs }.forEach(::refreshDiff)
+        projectsBecameIdle(previous, sessions).forEach { gitStates[it]?.refresh() }
     }
 
     /** A toast asking for the user is stale once its session left NEEDS_ACTION, whoever answered. */

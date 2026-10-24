@@ -10,11 +10,11 @@ import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry
 import com.github.krpkbhdn.ccmanager.notification.NotificationService
 import com.github.krpkbhdn.ccmanager.project.ProjectService
+import com.github.krpkbhdn.ccmanager.ui.git.model.GitBackend
 import com.github.krpkbhdn.ccmanager.ui.terminal.TerminalHost
 import com.github.krpkbhdn.ccmanager.ui.terminal.TerminalView
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import com.github.krpkbhdn.ccmanager.workspace.DirectoryOpener
-import com.github.krpkbhdn.ccmanager.workspace.GitDiffService
 import com.github.krpkbhdn.ccmanager.workspace.IdeLauncher
 import org.springframework.context.ConfigurableApplicationContext
 
@@ -50,9 +50,9 @@ class Backend(
     val launcher: ClaudeLauncher,
     val backgroundAgents: BackgroundAgentService,
     val hooks: HookEventStore,
-    val diffs: GitDiffService,
     val directories: DirectoryOpener,
     val ide: IdeLauncher,
+    val git: GitBackend,
     val terminal: TerminalPort = HostTerminalPort,
 ) {
     companion object {
@@ -64,9 +64,9 @@ class Backend(
             launcher = context.getBean(ClaudeLauncher::class.java),
             backgroundAgents = context.getBean(BackgroundAgentService::class.java),
             hooks = context.getBean(HookEventStore::class.java),
-            diffs = context.getBean(GitDiffService::class.java),
             directories = context.getBean(DirectoryOpener::class.java),
             ide = context.getBean(IdeLauncher::class.java),
+            git = GitBackend.from(context),
         )
     }
 }

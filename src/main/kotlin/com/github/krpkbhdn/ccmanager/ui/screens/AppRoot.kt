@@ -41,6 +41,7 @@ import com.github.krpkbhdn.ccmanager.ui.components.RenameDialog
 import com.github.krpkbhdn.ccmanager.ui.components.SkeletonBlock
 import com.github.krpkbhdn.ccmanager.ui.components.ToastHost
 import com.github.krpkbhdn.ccmanager.ui.components.trackInputModality
+import com.github.krpkbhdn.ccmanager.ui.git.dialog.GitDialogHost
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.palette.CommandPalette
 import com.github.krpkbhdn.ccmanager.ui.palette.paletteItems
@@ -78,6 +79,7 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
         ToastHost(state.toasts, state::openToast, state::dismissToast, Modifier.align(Alignment.BottomEnd).padding(bottom = 26.dp))
         if (state.paletteOpen) CommandPalette(paletteItems(state, colors.dark)) { state.paletteOpen = false }
         if (state.shortcutsOpen) ShortcutSheet { state.shortcutsOpen = false }
+        (state.route as? Route.Project)?.let { state.gitOf(it.id) }?.let { GitDialogHost(it) }
         state.confirm?.let { ConfirmDialog(it) { state.confirm = null } }
         state.renaming?.let { RenameDialog(it, { name -> state.renameProject(it.project, name) }, { state.renaming = null }) }
         if (state.pickerOpen) FolderPickerDialog(initial = null, onDismiss = { state.pickerOpen = false }, onPicked = state::addProjectAt)

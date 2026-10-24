@@ -2,6 +2,8 @@ package com.github.krpkbhdn.ccmanager.ui.shortcuts
 
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
 import com.github.krpkbhdn.ccmanager.project.Project
+import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
+import com.github.krpkbhdn.ccmanager.ui.git.model.push
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
 import com.github.krpkbhdn.ccmanager.ui.state.Route
@@ -36,7 +38,11 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
             AppShortcut.CLOSE_SESSION -> session != null && handled { state.requestCloseSession(project.id, session) }
             AppShortcut.NEXT_TAB -> handled { state.select(project.id, view.cycle(1).selected) }
             AppShortcut.PREVIOUS_TAB -> handled { state.select(project.id, view.cycle(-1).selected) }
-            AppShortcut.DIFF_TAB -> handled { state.select(project.id, ProjectTab.Diff) }
+            AppShortcut.GIT_TAB -> handled { state.openGit(project.id) }
+            AppShortcut.GIT_CHANGES -> handled { state.openGit(project.id, GitSubView.CHANGES) }
+            AppShortcut.GIT_COMMIT -> handled { state.openGit(project.id)?.requestCommitFocus() }
+            AppShortcut.GIT_BRANCHES -> handled { state.openGit(project.id)?.branchPopupOpen = true }
+            AppShortcut.GIT_PUSH -> handled { state.gitOf(project.id)?.push() }
             AppShortcut.ACTIVITY_TAB -> handled { state.select(project.id, ProjectTab.Activity) }
             AppShortcut.FOCUS_TERMINAL -> session != null && handled { state.terminal.focus(session) }
             else -> false

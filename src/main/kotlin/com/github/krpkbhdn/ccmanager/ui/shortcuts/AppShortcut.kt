@@ -16,6 +16,8 @@ import java.awt.event.KeyEvent.VK_BACK_QUOTE
 import java.awt.event.KeyEvent.VK_D
 import java.awt.event.KeyEvent.VK_ESCAPE
 import java.awt.event.KeyEvent.VK_F1
+import java.awt.event.KeyEvent.VK_G
+import java.awt.event.KeyEvent.VK_H
 import java.awt.event.KeyEvent.VK_J
 import java.awt.event.KeyEvent.VK_K
 import java.awt.event.KeyEvent.VK_L
@@ -55,7 +57,11 @@ enum class AppShortcut(val label: String, private val windows: List<KeyChord>, p
     PROJECT_7("Project 7", listOf(alt(VK_7)), listOf(cmd(VK_7))),
     PROJECT_8("Project 8", listOf(alt(VK_8)), listOf(cmd(VK_8))),
     PROJECT_9("Project 9", listOf(alt(VK_9)), listOf(cmd(VK_9))),
-    DIFF_TAB("Diff tab", listOf(ctrlShift(VK_D)), listOf(cmdShift(VK_D))),
+    GIT_TAB("Git tab", listOf(ctrlShift(VK_G)), listOf(cmdShift(VK_G))),
+    GIT_CHANGES("Git changes", listOf(ctrlShift(VK_D)), listOf(cmdShift(VK_D))),
+    GIT_COMMIT("Commit changes", listOf(ctrlShift(VK_K)), listOf(cmdShift(VK_K))),
+    GIT_BRANCHES("Switch branch", listOf(ctrlShift(VK_H)), listOf(cmdShift(VK_H))),
+    GIT_PUSH("Push", listOf(ctrlShift(VK_U)), listOf(cmdShift(VK_U))),
     ACTIVITY_TAB("Activity tab", listOf(ctrlShift(VK_A)), listOf(cmdShift(VK_A))),
     NOTIFICATIONS("Notifications", listOf(ctrlShift(VK_M)), listOf(cmdShift(VK_M))),
     FOCUS_TERMINAL("Focus terminal", listOf(ctrlShift(VK_BACK_QUOTE)), listOf(ctrl(VK_BACK_QUOTE))),

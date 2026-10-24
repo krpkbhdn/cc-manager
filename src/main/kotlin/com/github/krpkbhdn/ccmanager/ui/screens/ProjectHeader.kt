@@ -16,6 +16,8 @@ import com.github.krpkbhdn.ccmanager.ui.components.CopyChip
 import com.github.krpkbhdn.ccmanager.ui.components.HorizontalRule
 import com.github.krpkbhdn.ccmanager.ui.components.IconButton
 import com.github.krpkbhdn.ccmanager.ui.components.Label
+import com.github.krpkbhdn.ccmanager.ui.git.GitSummaryChip
+import com.github.krpkbhdn.ccmanager.ui.git.model.GitSummary
 import com.github.krpkbhdn.ccmanager.ui.components.MenuEntry
 import com.github.krpkbhdn.ccmanager.ui.components.ProjectAvatar
 import com.github.krpkbhdn.ccmanager.ui.components.SplitButton
@@ -33,12 +35,13 @@ class ProjectHeaderActions(
     val onLaunch: (LaunchMode) -> Unit,
     val onOpenFolder: () -> Unit,
     val onOpenIde: () -> Unit,
-    val onShowDiff: () -> Unit,
+    val onShowGit: () -> Unit,
+    val onShowChanges: () -> Unit,
 )
 
 /** Compact project header: identity and copyable path on the left, icon actions and the launch split button on the right. */
 @Composable
-fun ProjectHeader(project: Project, status: AgentStatus, ideAvailable: Boolean, launching: Boolean, actions: ProjectHeaderActions, modifier: Modifier = Modifier) {
+fun ProjectHeader(project: Project, status: AgentStatus, ideAvailable: Boolean, launching: Boolean, gitSummary: GitSummary?, actions: ProjectHeaderActions, modifier: Modifier = Modifier) {
     Column(modifier) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = Spacing.xl, vertical = Spacing.md),
@@ -50,13 +53,14 @@ fun ProjectHeader(project: Project, status: AgentStatus, ideAvailable: Boolean, 
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                     Label(project.name, Modifier.weight(1f, fill = false), style = Type.title, tooltipWhenTruncated = true)
                     StatusChip(status)
+                    gitSummary?.let { GitSummaryChip(it, actions.onShowGit) }
                 }
                 CopyChip(project.path.toString(), label = "Copy path")
             }
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(Icons.FolderOpen, actions.onOpenFolder, tooltip = "Open folder")
                 IconButton(Icons.Code, actions.onOpenIde, tooltip = if (ideAvailable) IDE_HINT else IDE_UNAVAILABLE_HINT, enabled = ideAvailable)
-                IconButton(Icons.Diff, actions.onShowDiff, tooltip = "Review changes", hint = AppShortcut.DIFF_TAB.hint())
+                IconButton(Icons.Diff, actions.onShowChanges, tooltip = "Review changes", hint = AppShortcut.GIT_CHANGES.hint())
             }
             SplitButton(
                 text = "Launch Claude",

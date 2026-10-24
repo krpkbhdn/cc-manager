@@ -5,12 +5,6 @@ import com.github.krpkbhdn.ccmanager.workspace.GitDiff
 /** One rendered diff line; [highlight] marks the changed middle of a paired removed/added line. */
 data class DiffRow(val line: GitDiff.Line, val highlight: IntRange? = null)
 
-/** Entry of the changed-files tree: a directory heading or a file under it. */
-sealed interface FileTreeEntry {
-    data class Directory(val path: String) : FileTreeEntry
-    data class File(val file: GitDiff.FileDiff) : FileTreeEntry
-}
-
 /** Range of [text] that differs from [other] once the shared prefix and suffix are removed; null when nothing differs. */
 fun changedMiddle(text: String, other: String): IntRange? {
     var prefix = 0
@@ -45,19 +39,6 @@ private fun runEnd(lines: List<GitDiff.Line>, from: Int, kind: GitDiff.LineKind)
     var end = from
     while (end < lines.size && lines[end].kind == kind) end++
     return end
-}
-
-/** Files sorted by path with a directory heading before the first file of each directory. */
-fun fileTree(files: List<GitDiff.FileDiff>): List<FileTreeEntry> {
-    val entries = mutableListOf<FileTreeEntry>()
-    var current: String? = null
-    files.sortedBy { it.path }.forEach { file ->
-        val directory = parentDirectory(file.path)
-        if (directory != current && directory.isNotEmpty()) entries += FileTreeEntry.Directory(directory)
-        current = directory
-        entries += FileTreeEntry.File(file)
-    }
-    return entries
 }
 
 private const val BAR_SEGMENTS = 5

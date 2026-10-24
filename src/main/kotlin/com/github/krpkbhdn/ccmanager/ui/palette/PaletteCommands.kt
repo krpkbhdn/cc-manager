@@ -29,7 +29,7 @@ data class PaletteItem(
 
 /** Everything the palette can jump to or do right now, derived from the live app state. */
 fun paletteItems(state: AppState, systemDark: Boolean): List<PaletteItem> =
-    sessionItems(state) + projectItems(state) + globalActions(state, systemDark) + projectActions(state)
+    sessionItems(state) + projectItems(state) + globalActions(state, systemDark) + projectActions(state) + gitActions(state)
 
 private fun sessionItems(state: AppState): List<PaletteItem> =
     byUrgency(state.live.sessions).map { session ->
@@ -75,7 +75,6 @@ private fun projectActions(state: AppState): List<PaletteItem> {
         PaletteItem("resume", "Resume a session", PaletteGroup.ACTIONS, here, Icons.Rewind) { state.launch(project.id, LaunchMode.RESUME_PICKER) },
         PaletteItem("open-folder", "Open folder", PaletteGroup.ACTIONS, here, Icons.FolderOpen) { state.openFolder(project) },
         PaletteItem("open-ide", "Open in IntelliJ IDEA", PaletteGroup.ACTIONS, here, Icons.Code) { state.openIde(project) },
-        PaletteItem("show-diff", "Show diff", PaletteGroup.ACTIONS, here, Icons.Diff, shortcut = AppShortcut.DIFF_TAB) { state.select(project.id, ProjectTab.Diff) },
         PaletteItem("show-activity", "Show activity", PaletteGroup.ACTIONS, here, Icons.Activity, shortcut = AppShortcut.ACTIVITY_TAB) { state.select(project.id, ProjectTab.Activity) },
         PaletteItem("toggle-agents", "Toggle agents panel", PaletteGroup.ACTIONS, here, Icons.PanelRightClose, shortcut = AppShortcut.TOGGLE_AGENTS, run = state::toggleAgents),
     )

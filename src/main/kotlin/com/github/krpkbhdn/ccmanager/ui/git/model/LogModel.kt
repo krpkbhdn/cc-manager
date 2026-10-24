@@ -1,0 +1,116 @@
+package com.github.krpkbhdn.ccmanager.ui.git.model
+
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.github.krpkbhdn.ccmanager.git.GitException
+import com.github.krpkbhdn.ccmanager.git.GitLog
+import com.github.krpkbhdn.ccmanager.ui.git.log.LogFilter
+import java.nio.file.Path
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/** Paged commit history with filter and the selected commit's details; stale responses are dropped by [generation]. */
+class LogModel(
+    private val repo: Path,
+    private val git: GitBackend,
+    private val scope: CoroutineScope,
+    private val onError: (GitException) -> Unit,
+) {
+    var rows by mutableStateOf<List<GitLog.Row>>(emptyList())
+        private set
+    var hasMore by mutableStateOf(false)
+        private set
+    var loading by mutableStateOf(false)
+        private set
+    var filter by mutableStateOf(LogFilter())
+        private set
+    var selected by mutableStateOf<String?>(null)
+        private set
+    var details by mutableStateOf<GitLog.Details?>(null)
+        private set
+    var selectedFile by mutableStateOf<String?>(null)
+
+    var loaded = false
+        private set
+    private var generation = 0
+
+    fun reload() {
+        loaded = true
+        val ticket = ++generation
+        loading = true
+        scope.launch {
+            val page = fetch(0) ?: return@launch finish(ticket)
+            if (ticket == generation) {
+                rows = page.rows()
+                hasMore = page.hasMore()
+                if (selected != null && rows.none { it.commit().hash() == selected }) clearSelection()
+            }
+            finish(ticket)
+        }
+    }
+
+    fun loadMore() {
+        if (loading || !hasMore) return
+        val ticket = generation
+        loading = true
+        scope.launch {
+            val page = fetch(rows.size)
+            if (page != null && ticket == generation) {
+                rows = rows + page.rows()
+                hasMore = page.hasMore()
+            }
+            finish(ticket)
+        }
+    }
+
+    fun update(change: (LogFilter) -> LogFilter) {
+        val next = change(filter)
+        if (next == filter) return
+        filter = next
+        reload()
+    }
+
+    fun select(hash: String?) {
+        if (hash == null) return clearSelection()
+        selected = hash
+        selectedFile = null
+        scope.launch {
+            val loadedDetails = try {
+                withContext(Dispatchers.IO) { git.log.details(repo, hash) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: RuntimeException) {
+                onError(asGitException(e))
+                null
+            }
+            if (selected == hash) {
+                details = loadedDetails
+                selectedFile = loadedDetails?.files()?.firstOrNull()?.path
+            }
+        }
+    }
+
+    private fun clearSelection() {
+        selected = null
+        details = null
+        selectedFile = null
+    }
+
+    private suspend fun fetch(skip: Int): GitLog.Page? =
+        try {
+            withContext(Dispatchers.IO) { git.log.log(repo, filter.toQuery(skip)) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: RuntimeException) {
+            onError(asGitException(e))
+            null
+        }
+
+    private fun finish(ticket: Int) {
+        if (ticket == generation) loading = false
+    }
+}

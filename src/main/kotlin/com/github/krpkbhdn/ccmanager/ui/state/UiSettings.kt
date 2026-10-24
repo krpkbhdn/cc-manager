@@ -1,5 +1,8 @@
 package com.github.krpkbhdn.ccmanager.ui.state
 
+import com.github.krpkbhdn.ccmanager.git.GitMisc.PullMode
+import com.github.krpkbhdn.ccmanager.ui.git.model.GitPrefs
+import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -17,6 +20,7 @@ data class UiSettings(
     val agentsOpen: Boolean = true,
     val quickBarOpen: Boolean = true,
     val window: WindowBounds = WindowBounds(DEFAULT_WIDTH, DEFAULT_HEIGHT),
+    val git: GitPrefs = GitPrefs(),
 ) {
     companion object {
         const val DEFAULT_WIDTH = 1280
@@ -33,6 +37,9 @@ private const val KEY_HEIGHT = "window.height"
 private const val KEY_X = "window.x"
 private const val KEY_Y = "window.y"
 private const val KEY_MAXIMIZED = "window.maximized"
+private const val KEY_GIT_VIEW = "git.view."
+private const val KEY_PULL_MODE = "git.pull"
+private const val KEY_FLAT_CHANGES = "git.changes.flat"
 private const val FILE_COMMENT = "Claude Code Manager UI settings"
 
 /** Reads and writes [UiSettings] as a small properties file; a null [file] keeps everything in memory. */
@@ -60,6 +67,9 @@ class UiSettingsStore(private val file: Path?) {
             settings.window.x?.let { setProperty(KEY_X, it.toString()) }
             settings.window.y?.let { setProperty(KEY_Y, it.toString()) }
             setProperty(KEY_MAXIMIZED, settings.window.maximized.toString())
+            setProperty(KEY_PULL_MODE, settings.git.pullMode.name)
+            setProperty(KEY_FLAT_CHANGES, settings.git.flatChanges.toString())
+            settings.git.views.forEach { (projectId, view) -> setProperty(KEY_GIT_VIEW + projectId, view.name) }
         }
         try {
             target.parent?.let(Files::createDirectories)
@@ -83,7 +93,18 @@ class UiSettingsStore(private val file: Path?) {
                 y = props.getProperty(KEY_Y)?.toIntOrNull(),
                 maximized = props.flag(KEY_MAXIMIZED, false),
             ),
+            git = parseGitPrefs(props),
         )
+    }
+
+    private fun parseGitPrefs(props: Properties): GitPrefs {
+        val views = props.stringPropertyNames().filter { it.startsWith(KEY_GIT_VIEW) }.mapNotNull { key ->
+            val projectId = key.removePrefix(KEY_GIT_VIEW).toLongOrNull()
+            val view = GitSubView.entries.firstOrNull { it.name == props.getProperty(key) }
+            if (projectId != null && view != null) projectId to view else null
+        }.toMap()
+        val pull = PullMode.entries.firstOrNull { it.name == props.getProperty(KEY_PULL_MODE) } ?: PullMode.MERGE
+        return GitPrefs(views, pull, props.flag(KEY_FLAT_CHANGES, false))
     }
 
     private fun Properties.flag(key: String, default: Boolean): Boolean = getProperty(key)?.toBooleanStrictOrNull() ?: default

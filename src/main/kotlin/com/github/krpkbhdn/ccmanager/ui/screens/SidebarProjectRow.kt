@@ -35,6 +35,8 @@ import com.github.krpkbhdn.ccmanager.ui.components.PopupMenu
 import com.github.krpkbhdn.ccmanager.ui.components.Pressable
 import com.github.krpkbhdn.ccmanager.ui.components.ProjectAvatar
 import com.github.krpkbhdn.ccmanager.ui.components.WithTooltip
+import com.github.krpkbhdn.ccmanager.ui.git.GitSummaryLine
+import com.github.krpkbhdn.ccmanager.ui.git.model.GitSummary
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.state.mostUrgent
 import com.github.krpkbhdn.ccmanager.ui.state.pathTail
@@ -61,6 +63,7 @@ fun ProjectRow(
     collapsed: Boolean,
     actions: ProjectActions,
     modifier: Modifier = Modifier,
+    gitSummary: GitSummary? = null,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val marker by animateFloatAsState(if (selected) 1f else 0f, Motion.base(), label = "rowMarker")
@@ -72,7 +75,7 @@ fun ProjectRow(
                 shape = RoundedCornerShape(Radius.md),
                 base = if (selected) colors.accentSoft else Color.Transparent,
             ) { hovered ->
-                if (collapsed) CollapsedRow(project, status) else ExpandedRow(project, status, sessions, hovered, selected) { menuOpen = true }
+                if (collapsed) CollapsedRow(project, status) else ExpandedRow(project, status, sessions, gitSummary, hovered, selected) { menuOpen = true }
             }
         }
         Box(
@@ -100,7 +103,7 @@ private fun CollapsedRow(project: Project, status: AgentStatus) {
 }
 
 @Composable
-private fun ExpandedRow(project: Project, status: AgentStatus, sessions: List<SessionSnapshot>, hovered: Boolean, selected: Boolean, onMenu: () -> Unit) {
+private fun ExpandedRow(project: Project, status: AgentStatus, sessions: List<SessionSnapshot>, gitSummary: GitSummary?, hovered: Boolean, selected: Boolean, onMenu: () -> Unit) {
     val ticker = mostUrgent(sessions)?.activity?.takeIf { hovered || selected }
     Row(
         Modifier.height(rowHeight).padding(start = Spacing.md - 2.dp, end = Spacing.sm),
@@ -112,6 +115,8 @@ private fun ExpandedRow(project: Project, status: AgentStatus, sessions: List<Se
             Label(project.name, color = colors.textPrimary, style = Type.bodyMedium, tooltipWhenTruncated = true)
             if (ticker != null) {
                 Label(ticker, color = colors.status(status), style = Type.caption)
+            } else if (gitSummary != null) {
+                GitSummaryLine(gitSummary)
             } else {
                 Label(pathTail(project.path), color = colors.textTertiary, style = Type.monoSmall.copy(fontSize = Type.caption.fontSize))
             }
