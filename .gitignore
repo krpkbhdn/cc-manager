@@ -45,3 +45,4 @@ build/
 graphify-out/
 .graphify_python
 jscpd-report/
+.claude/worktrees/
