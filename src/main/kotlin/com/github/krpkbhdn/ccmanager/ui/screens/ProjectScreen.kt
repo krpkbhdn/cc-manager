@@ -25,6 +25,7 @@ import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.ui.components.HorizontalRule
 import com.github.krpkbhdn.ccmanager.ui.components.IconButton
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
+import com.github.krpkbhdn.ccmanager.ui.shortcuts.AppShortcut
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.DiffState
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
@@ -90,14 +91,14 @@ private fun ProjectMainArea(state: AppState, project: Project, view: ProjectView
             onNewSession = { state.launch(project.id, LaunchMode.NEW) },
         ) {
             if (onSession) {
-                IconButton(Icons.Zap, state::toggleQuickBar, tooltip = "Quick actions", active = state.settings.quickBarOpen)
+                IconButton(Icons.Zap, state::toggleQuickBar, tooltip = "Quick actions", hint = AppShortcut.TOGGLE_QUICK_ACTIONS.hint(), active = state.settings.quickBarOpen)
             }
             IconButton(
                 if (state.settings.agentsOpen) Icons.PanelRightClose else Icons.PanelRightOpen,
                 state::toggleAgents,
                 Modifier.padding(start = Spacing.xs),
                 tooltip = if (state.settings.agentsOpen) "Hide agents" else "Show agents",
-                hint = "Ctrl+J",
+                hint = AppShortcut.TOGGLE_AGENTS.hint(),
             )
         }
         HorizontalRule()

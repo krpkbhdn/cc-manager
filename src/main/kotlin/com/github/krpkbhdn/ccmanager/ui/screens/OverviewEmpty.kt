@@ -44,6 +44,7 @@ import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.theme.Alpha
 import com.github.krpkbhdn.ccmanager.ui.theme.Radius
 import com.github.krpkbhdn.ccmanager.ui.theme.IconSize
+import com.github.krpkbhdn.ccmanager.ui.shortcuts.AppShortcut
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
@@ -70,7 +71,7 @@ fun OverviewEmpty(onAddProject: () -> Unit, modifier: Modifier = Modifier) {
             )
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md), verticalAlignment = Alignment.CenterVertically) {
                 AppButton("Add project", onAddProject, variant = ButtonVariant.PRIMARY, icon = Icons.FolderPlus)
-                Shortcut("Ctrl", "N")
+                Shortcut(AppShortcut.ADD_PROJECT)
             }
             Label("or drop a folder anywhere in this window", color = colors.textTertiary, style = Type.small)
         }

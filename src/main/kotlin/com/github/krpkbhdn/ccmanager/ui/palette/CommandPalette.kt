@@ -72,7 +72,7 @@ private fun rowsOf(items: List<PaletteItem>): List<PaletteRow> =
         if (inGroup.isEmpty()) emptyList() else listOf<PaletteRow>(PaletteRow.Heading(group)) + inGroup.map { PaletteRow.Entry(it) }
     }
 
-/** Ctrl+K quick switcher: fuzzy jump to sessions and projects, or run an action; arrows move, Enter runs, Esc closes. */
+/** Command palette: fuzzy jump to sessions and projects, or run an action; arrows move, Enter runs, Esc closes. */
 @Composable
 fun CommandPalette(items: List<PaletteItem>, onDismiss: () -> Unit) {
     val query: TextFieldState = rememberTextFieldState()
@@ -160,7 +160,7 @@ private fun ResultRow(item: PaletteItem, selected: Boolean, onHover: () -> Unit,
             }
             Label(item.title, color = colors.textPrimary, style = Type.bodyMedium, modifier = Modifier.weight(1f, fill = false))
             if (item.subtitle.isNotEmpty()) Label(item.subtitle, Modifier.weight(1f), color = colors.textTertiary, style = Type.small, tooltipWhenTruncated = false)
-            item.shortcut?.let { Shortcut(*it.split(' ').toTypedArray()) }
+            item.shortcut?.let { Shortcut(it) }
         }
     }
 }

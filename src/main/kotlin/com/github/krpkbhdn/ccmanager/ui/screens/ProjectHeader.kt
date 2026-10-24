@@ -21,6 +21,7 @@ import com.github.krpkbhdn.ccmanager.ui.components.ProjectAvatar
 import com.github.krpkbhdn.ccmanager.ui.components.SplitButton
 import com.github.krpkbhdn.ccmanager.ui.components.StatusChip
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
+import com.github.krpkbhdn.ccmanager.ui.shortcuts.AppShortcut
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
@@ -55,7 +56,7 @@ fun ProjectHeader(project: Project, status: AgentStatus, ideAvailable: Boolean, 
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(Icons.FolderOpen, actions.onOpenFolder, tooltip = "Open folder")
                 IconButton(Icons.Code, actions.onOpenIde, tooltip = if (ideAvailable) IDE_HINT else IDE_UNAVAILABLE_HINT, enabled = ideAvailable)
-                IconButton(Icons.Diff, actions.onShowDiff, tooltip = "Review changes")
+                IconButton(Icons.Diff, actions.onShowDiff, tooltip = "Review changes", hint = AppShortcut.DIFF_TAB.hint())
             }
             SplitButton(
                 text = "Launch Claude",

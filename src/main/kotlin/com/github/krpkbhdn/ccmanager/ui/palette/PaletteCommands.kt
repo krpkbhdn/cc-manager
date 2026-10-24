@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
+import com.github.krpkbhdn.ccmanager.ui.shortcuts.AppShortcut
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
 import com.github.krpkbhdn.ccmanager.ui.state.Route
@@ -22,7 +23,7 @@ data class PaletteItem(
     val icon: ImageVector? = null,
     val avatarOf: String? = null,
     val status: AgentStatus? = null,
-    val shortcut: String? = null,
+    val shortcut: AppShortcut? = null,
     val run: () -> Unit,
 )
 
@@ -55,12 +56,13 @@ private fun projectItems(state: AppState): List<PaletteItem> =
     }
 
 private fun globalActions(state: AppState, systemDark: Boolean): List<PaletteItem> = listOf(
-    PaletteItem("add-project", "Add project", PaletteGroup.ACTIONS, "Pick a folder to manage", Icons.FolderPlus, shortcut = "Ctrl N", run = state::requestAddProject),
-    PaletteItem("overview", "Go to overview", PaletteGroup.ACTIONS, icon = Icons.Grid) { state.navigate(Route.Overview) },
-    PaletteItem("notifications", "Show notifications", PaletteGroup.ACTIONS, icon = Icons.Bell) { state.notificationsOpen = true },
-    PaletteItem("toggle-theme", "Toggle light and dark theme", PaletteGroup.ACTIONS, icon = Icons.Sun) { state.toggleTheme(systemDark) },
+    PaletteItem("add-project", "Add project", PaletteGroup.ACTIONS, "Pick a folder to manage", Icons.FolderPlus, shortcut = AppShortcut.ADD_PROJECT, run = state::requestAddProject),
+    PaletteItem("overview", "Go to overview", PaletteGroup.ACTIONS, icon = Icons.Grid, shortcut = AppShortcut.OVERVIEW) { state.navigate(Route.Overview) },
+    PaletteItem("notifications", "Show notifications", PaletteGroup.ACTIONS, icon = Icons.Bell, shortcut = AppShortcut.NOTIFICATIONS) { state.notificationsOpen = true },
+    PaletteItem("toggle-theme", "Toggle light and dark theme", PaletteGroup.ACTIONS, icon = Icons.Sun, shortcut = AppShortcut.TOGGLE_THEME) { state.toggleTheme(systemDark) },
     PaletteItem("system-theme", "Use the system theme", PaletteGroup.ACTIONS, icon = Icons.Monitor) { state.setThemeMode(ThemeMode.SYSTEM) },
-    PaletteItem("toggle-sidebar", "Toggle sidebar", PaletteGroup.ACTIONS, icon = Icons.PanelLeftClose, shortcut = "Ctrl B", run = state::toggleSidebar),
+    PaletteItem("shortcuts", "Keyboard shortcuts", PaletteGroup.ACTIONS, icon = Icons.Command, shortcut = AppShortcut.SHORTCUT_SHEET) { state.shortcutsOpen = true },
+    PaletteItem("toggle-sidebar", "Toggle sidebar", PaletteGroup.ACTIONS, icon = Icons.PanelLeftClose, shortcut = AppShortcut.TOGGLE_SIDEBAR, run = state::toggleSidebar),
 )
 
 private fun projectActions(state: AppState): List<PaletteItem> {
@@ -68,13 +70,13 @@ private fun projectActions(state: AppState): List<PaletteItem> {
     val project = state.projects.firstOrNull { it.id == route.id } ?: return emptyList()
     val here = "in ${project.name}"
     return listOf(
-        PaletteItem("launch", "Launch Claude", PaletteGroup.ACTIONS, here, Icons.Play) { state.launch(project.id, LaunchMode.NEW) },
+        PaletteItem("launch", "Launch Claude", PaletteGroup.ACTIONS, here, Icons.Play, shortcut = AppShortcut.NEW_SESSION) { state.launch(project.id, LaunchMode.NEW) },
         PaletteItem("continue", "Continue last session", PaletteGroup.ACTIONS, here, Icons.ArrowRight) { state.launch(project.id, LaunchMode.CONTINUE) },
         PaletteItem("resume", "Resume a session", PaletteGroup.ACTIONS, here, Icons.Rewind) { state.launch(project.id, LaunchMode.RESUME_PICKER) },
         PaletteItem("open-folder", "Open folder", PaletteGroup.ACTIONS, here, Icons.FolderOpen) { state.openFolder(project) },
         PaletteItem("open-ide", "Open in IntelliJ IDEA", PaletteGroup.ACTIONS, here, Icons.Code) { state.openIde(project) },
-        PaletteItem("show-diff", "Show diff", PaletteGroup.ACTIONS, here, Icons.Diff) { state.select(project.id, ProjectTab.Diff) },
-        PaletteItem("show-activity", "Show activity", PaletteGroup.ACTIONS, here, Icons.Activity) { state.select(project.id, ProjectTab.Activity) },
-        PaletteItem("toggle-agents", "Toggle agents panel", PaletteGroup.ACTIONS, here, Icons.PanelRightClose, shortcut = "Ctrl J", run = state::toggleAgents),
+        PaletteItem("show-diff", "Show diff", PaletteGroup.ACTIONS, here, Icons.Diff, shortcut = AppShortcut.DIFF_TAB) { state.select(project.id, ProjectTab.Diff) },
+        PaletteItem("show-activity", "Show activity", PaletteGroup.ACTIONS, here, Icons.Activity, shortcut = AppShortcut.ACTIVITY_TAB) { state.select(project.id, ProjectTab.Activity) },
+        PaletteItem("toggle-agents", "Toggle agents panel", PaletteGroup.ACTIONS, here, Icons.PanelRightClose, shortcut = AppShortcut.TOGGLE_AGENTS, run = state::toggleAgents),
     )
 }

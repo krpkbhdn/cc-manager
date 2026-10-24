@@ -15,7 +15,7 @@ class UiSettingsStoreTest {
     @Test
     fun `saved settings round trip`(@TempDir dir: Path) {
         val store = UiSettingsStore(dir.resolve("nested/ui.properties"))
-        val settings = UiSettings(ThemeMode.LIGHT, sidebarCollapsed = true, agentsOpen = false, quickBarOpen = false, window = WindowBounds(1500, 900, 40, 60))
+        val settings = UiSettings(ThemeMode.LIGHT, sidebarCollapsed = true, agentsOpen = false, quickBarOpen = false, window = WindowBounds(1500, 900, 40, 60, maximized = true))
         store.save(settings)
         assertThat(store.load()).isEqualTo(settings)
     }

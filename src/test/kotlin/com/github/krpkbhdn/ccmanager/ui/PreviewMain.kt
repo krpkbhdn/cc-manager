@@ -48,9 +48,14 @@ fun main(args: Array<String>) {
         }
         val windowState = remember { WindowState(size = DpSize(flags.width.dp, flags.height.dp)) }
         val icon = remember { BitmapPainter(drawAppIcon(256).toComposeImageBitmap()) }
-        Window(onCloseRequest = ::exitApplication, state = windowState, title = "Claude Code Manager (preview)", icon = icon, undecorated = true) {
+        Window(onCloseRequest = ::exitApplication, state = windowState, title = "Claude Code Manager (preview)", icon = icon) {
             window.minimumSize = Dimension(960, 600)
-            AppFrame(state, windowState, onClose = ::exitApplication)
+            AppFrame(state, windowState)
+            if (flags.snap) LaunchedEffect(Unit) {
+                window.isAlwaysOnTop = true
+                windowProbe(window, windowState, Capture(window, flags.out, "native"), flags.out.resolve("window.txt"))
+                exitApplication()
+            }
             if (flags.shots) {
                 LaunchedEffect(Unit) {
                     window.isAlwaysOnTop = true
@@ -62,13 +67,14 @@ fun main(args: Array<String>) {
     }
 }
 
-private class PreviewFlags(val dark: Boolean, val shots: Boolean, val many: Boolean, val empty: Boolean, val width: Int, val height: Int, val out: Path) {
+private class PreviewFlags(val dark: Boolean, val shots: Boolean, val snap: Boolean, val many: Boolean, val empty: Boolean, val width: Int, val height: Int, val out: Path) {
     companion object {
         fun parse(args: Array<String>): PreviewFlags {
             val size = args.firstOrNull { it.startsWith("--size=") }?.removePrefix("--size=")?.split('x')?.map { it.toInt() } ?: listOf(1280, 820)
             return PreviewFlags(
                 dark = "--light" !in args,
                 shots = "--shots" in args,
+                snap = "--snap" in args,
                 many = "--many" in args,
                 empty = "--empty" in args,
                 width = size[0],

@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.github.krpkbhdn.ccmanager.ui.shortcuts.AppShortcut
 import com.github.krpkbhdn.ccmanager.ui.theme.Alpha
 import com.github.krpkbhdn.ccmanager.ui.theme.Motion
 import com.github.krpkbhdn.ccmanager.ui.theme.Radius
@@ -133,6 +134,9 @@ fun Shortcut(vararg keys: String, modifier: Modifier = Modifier) {
         keys.forEach { Kbd(it) }
     }
 }
+
+@Composable
+fun Shortcut(shortcut: AppShortcut, modifier: Modifier = Modifier) = Shortcut(*shortcut.keys().toTypedArray(), modifier = modifier)
 
 @Composable
 fun Spinner(modifier: Modifier = Modifier, size: Dp = 14.dp, tint: Color = colors.accent) {

@@ -29,12 +29,6 @@ import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.DragData
 import androidx.compose.ui.draganddrop.dragData
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation
 import com.github.krpkbhdn.ccmanager.claude.install.LoginState
@@ -69,7 +63,7 @@ private val NARROW_WIDTH = 1040.dp
 fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), modifier: Modifier = Modifier) {
     val dropTarget = remember { FolderDropTarget(state) }
     Box(
-        modifier.fillMaxSize().background(colors.background).trackInputModality().onPreviewKeyEvent { shortcut(state, it) }
+        modifier.fillMaxSize().background(colors.background).trackInputModality()
             .dragAndDropTarget(shouldStartDragAndDrop = { it.dragData() is DragData.FilesList }, target = dropTarget),
     ) {
         val installation = state.installation
@@ -83,23 +77,11 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
         NotificationPanel(state)
         ToastHost(state.toasts, state::openToast, state::dismissToast, Modifier.align(Alignment.BottomEnd).padding(bottom = 26.dp))
         if (state.paletteOpen) CommandPalette(paletteItems(state, colors.dark)) { state.paletteOpen = false }
+        if (state.shortcutsOpen) ShortcutSheet { state.shortcutsOpen = false }
         state.confirm?.let { ConfirmDialog(it) { state.confirm = null } }
         state.renaming?.let { RenameDialog(it, { name -> state.renameProject(it.project, name) }, { state.renaming = null }) }
         if (state.pickerOpen) FolderPickerDialog(initial = null, onDismiss = { state.pickerOpen = false }, onPicked = state::addProjectAt)
         if (dropTarget.hovering) DropOverlay()
-    }
-}
-
-private fun shortcut(state: AppState, event: androidx.compose.ui.input.key.KeyEvent): Boolean {
-    if (event.type != KeyEventType.KeyDown) return false
-    if (event.key == Key.Escape && state.notificationsOpen) { state.notificationsOpen = false; return true }
-    if (!event.isCtrlPressed) return false
-    return when (event.key) {
-        Key.K -> { state.paletteOpen = !state.paletteOpen; true }
-        Key.N -> { state.requestAddProject(); true }
-        Key.B -> { state.toggleSidebar(); true }
-        Key.J -> { state.toggleAgents(); true }
-        else -> false
     }
 }
 

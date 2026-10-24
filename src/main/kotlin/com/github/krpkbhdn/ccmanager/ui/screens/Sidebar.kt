@@ -33,6 +33,7 @@ import com.github.krpkbhdn.ccmanager.ui.components.Shortcut
 import com.github.krpkbhdn.ccmanager.ui.components.ThinScrollbar
 import com.github.krpkbhdn.ccmanager.ui.components.VerticalRule
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
+import com.github.krpkbhdn.ccmanager.ui.shortcuts.AppShortcut
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.Route
 import com.github.krpkbhdn.ccmanager.ui.state.RenameRequest
@@ -67,16 +68,16 @@ private fun SidebarHeader(collapsed: Boolean, locked: Boolean, state: AppState) 
         if (collapsed) {
             if (!locked) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    IconButton(Icons.PanelLeftOpen, state::toggleSidebar, tooltip = "Expand sidebar", hint = "Ctrl+B")
+                    IconButton(Icons.PanelLeftOpen, state::toggleSidebar, tooltip = "Expand sidebar", hint = AppShortcut.TOGGLE_SIDEBAR.hint())
                 }
             }
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                IconButton(Icons.Search, { state.paletteOpen = true }, tooltip = "Search or jump to", hint = "Ctrl+K")
+                IconButton(Icons.Search, { state.paletteOpen = true }, tooltip = "Search or jump to", hint = AppShortcut.PALETTE.hint())
             }
         } else {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 SearchTrigger({ state.paletteOpen = true }, Modifier.weight(1f))
-                IconButton(Icons.PanelLeftClose, state::toggleSidebar, tooltip = "Collapse sidebar", hint = "Ctrl+B")
+                IconButton(Icons.PanelLeftClose, state::toggleSidebar, tooltip = "Collapse sidebar", hint = AppShortcut.TOGGLE_SIDEBAR.hint())
             }
         }
     }
@@ -88,7 +89,7 @@ private fun SearchTrigger(onClick: () -> Unit, modifier: Modifier) {
         Row(Modifier.padding(horizontal = Spacing.md - 2.dp, vertical = Spacing.sm - 1.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             Glyph(Icons.Search, colors.textTertiary)
             Label("Search or jump to", Modifier.weight(1f), color = colors.textTertiary, style = Type.small)
-            Shortcut("Ctrl", "K")
+            Shortcut(AppShortcut.PALETTE)
         }
     }
 }
@@ -160,7 +161,7 @@ private fun AddProjectRow(collapsed: Boolean, onClick: () -> Unit, modifier: Mod
             Glyph(Icons.Plus, colors.textSecondary, size = IconSize.large)
             if (!collapsed) {
                 Label("Add project", Modifier.weight(1f), color = colors.textSecondary, style = Type.bodyMedium)
-                Shortcut("Ctrl", "N")
+                Shortcut(AppShortcut.ADD_PROJECT)
             }
         }
     }

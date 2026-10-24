@@ -54,13 +54,13 @@ internal fun runReal(args: Array<String>) {
         }
         val windowState = remember { WindowState(size = DpSize(size[0].dp, size[1].dp)) }
         val icon = remember { BitmapPainter(drawAppIcon(256).toComposeImageBitmap()) }
-        Window(onCloseRequest = ::exitApplication, state = windowState, title = "Claude Code Manager (real)", icon = icon, undecorated = true) {
+        Window(onCloseRequest = ::exitApplication, state = windowState, title = "Claude Code Manager (real)", icon = icon) {
             window.minimumSize = Dimension(960, 600)
-            AppFrame(state, windowState, onClose = ::exitApplication)
+            AppFrame(state, windowState)
             LaunchedEffect(Unit) {
                 window.isAlwaysOnTop = true
                 val capture = Capture(window, out, "real-${if (dark) "dark" else "light"}-${size[0]}")
-                if ("--attention" in args) attentionTour(capture, state) else realTour(capture, state, prompts = "--noprompt" !in args)
+                if ("--shortcuts" in args) shortcutProbe(capture, state, out.resolve("shortcuts.txt")) else if ("--attention" in args) attentionTour(capture, state) else realTour(capture, state, prompts = "--noprompt" !in args)
                 backend.sessions.sessions().forEach { TerminalHost.close(it.ccmSessionId()) }
                 context.close()
                 exitApplication()

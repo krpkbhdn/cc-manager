@@ -7,8 +7,8 @@ import java.util.Properties
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
-/** Window bounds in dp; a null position lets the OS place the window. */
-data class WindowBounds(val width: Int, val height: Int, val x: Int? = null, val y: Int? = null)
+/** Window bounds in dp (of the floating window when [maximized]); a null position lets the OS place the window. */
+data class WindowBounds(val width: Int, val height: Int, val x: Int? = null, val y: Int? = null, val maximized: Boolean = false)
 
 /** View preferences that survive restarts. */
 data class UiSettings(
@@ -32,6 +32,7 @@ private const val KEY_WIDTH = "window.width"
 private const val KEY_HEIGHT = "window.height"
 private const val KEY_X = "window.x"
 private const val KEY_Y = "window.y"
+private const val KEY_MAXIMIZED = "window.maximized"
 private const val FILE_COMMENT = "Claude Code Manager UI settings"
 
 /** Reads and writes [UiSettings] as a small properties file; a null [file] keeps everything in memory. */
@@ -58,6 +59,7 @@ class UiSettingsStore(private val file: Path?) {
             setProperty(KEY_HEIGHT, settings.window.height.toString())
             settings.window.x?.let { setProperty(KEY_X, it.toString()) }
             settings.window.y?.let { setProperty(KEY_Y, it.toString()) }
+            setProperty(KEY_MAXIMIZED, settings.window.maximized.toString())
         }
         try {
             target.parent?.let(Files::createDirectories)
@@ -79,6 +81,7 @@ class UiSettingsStore(private val file: Path?) {
                 height = props.getProperty(KEY_HEIGHT)?.toIntOrNull() ?: defaults.window.height,
                 x = props.getProperty(KEY_X)?.toIntOrNull(),
                 y = props.getProperty(KEY_Y)?.toIntOrNull(),
+                maximized = props.flag(KEY_MAXIMIZED, false),
             ),
         )
     }

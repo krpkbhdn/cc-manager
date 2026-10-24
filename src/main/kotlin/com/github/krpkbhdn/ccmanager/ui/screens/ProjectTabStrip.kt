@@ -25,6 +25,7 @@ import com.github.krpkbhdn.ccmanager.ui.components.Label
 import com.github.krpkbhdn.ccmanager.ui.components.Pressable
 import com.github.krpkbhdn.ccmanager.ui.components.StatusDot
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
+import com.github.krpkbhdn.ccmanager.ui.shortcuts.AppShortcut
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
 import com.github.krpkbhdn.ccmanager.ui.theme.Radius
 import com.github.krpkbhdn.ccmanager.ui.theme.IconSize
@@ -56,7 +57,7 @@ fun ProjectTabStrip(
             Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
                 tabs.filter { it.closable }.forEach { spec -> TabPill(spec, spec.tab == selected, { onSelect(spec.tab) }, { onClose(spec.tab) }) }
             }
-            IconButton(Icons.Plus, onNewSession, Modifier.padding(horizontal = Spacing.xs), tooltip = "Start another session")
+            IconButton(Icons.Plus, onNewSession, Modifier.padding(horizontal = Spacing.xs), tooltip = "Start another session", hint = AppShortcut.NEW_SESSION.hint())
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 tabs.filterNot { it.closable }.forEach { spec -> TabPill(spec, spec.tab == selected, { onSelect(spec.tab) }, { onClose(spec.tab) }) }
             }
@@ -84,7 +85,7 @@ private fun TabPill(spec: TabSpec, selected: Boolean, onSelect: () -> Unit, onCl
             spec.icon?.let { Glyph(it, tint, size = IconSize.medium) }
             Label(spec.label, Modifier.widthIn(max = pillMaxWidth), color = tint, style = if (selected) Type.smallMedium else Type.small, tooltipWhenTruncated = true)
             if (spec.closable) {
-                if (hovered || selected) IconButton(Icons.Close, onClose, tint = colors.textTertiary, size = closeSize, tooltip = "Close session") else Box(Modifier.size(closeSize))
+                if (hovered || selected) IconButton(Icons.Close, onClose, tint = colors.textTertiary, size = closeSize, tooltip = "Close session", hint = AppShortcut.CLOSE_SESSION.hint()) else Box(Modifier.size(closeSize))
             }
         }
     }

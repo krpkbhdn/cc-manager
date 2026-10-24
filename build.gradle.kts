@@ -10,7 +10,7 @@ plugins {
 }
 
 group = "com.github.krpkbhdn"
-version = "1.0.31"
+version = "1.0.32"
 
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(25)
