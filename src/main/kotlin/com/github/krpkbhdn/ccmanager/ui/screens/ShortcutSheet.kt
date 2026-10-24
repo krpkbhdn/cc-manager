@@ -4,7 +4,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,6 +23,7 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
 private val sheetWidth = 460.dp
+private val sheetMaxHeight = 560.dp
 private const val PROJECT_RANGE_LABEL = "Project 1-9"
 private const val TERMINAL_NOTE = "Plain Ctrl+K and Ctrl+N work outside the terminal; inside it they stay with Claude."
 
@@ -27,7 +31,7 @@ private const val TERMINAL_NOTE = "Plain Ctrl+K and Ctrl+N work outside the term
 @Composable
 fun ShortcutSheet(onDismiss: () -> Unit) {
     ModalHost(onDismiss, width = sheetWidth) {
-        Column(Modifier.padding(Spacing.xl), verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+        Column(Modifier.heightIn(max = sheetMaxHeight).verticalScroll(rememberScrollState()).padding(Spacing.xl), verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
             Label("Keyboard shortcuts", style = Type.subtitle)
             HorizontalRule()
             sheetEntries().forEach { (label, shortcut) -> SheetRow(label, shortcut) }

@@ -84,7 +84,7 @@ fun ModalHost(
 }
 
 @Composable
-private fun DialogBody(title: String, icon: ImageVector, tint: Color, content: @Composable () -> Unit) {
+fun DialogBody(title: String, icon: ImageVector, tint: Color, content: @Composable () -> Unit) {
     Column(Modifier.padding(Spacing.xl), verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(dialogIconBox).clip(RoundedCornerShape(Radius.md)).background(tint.copy(alpha = Alpha.SOFT)), contentAlignment = Alignment.Center) {
@@ -97,7 +97,7 @@ private fun DialogBody(title: String, icon: ImageVector, tint: Color, content: @
 }
 
 @Composable
-private fun DialogActions(confirmLabel: String, confirmEnabled: Boolean, destructive: Boolean, onConfirm: () -> Unit, onCancel: () -> Unit) {
+fun DialogActions(confirmLabel: String, confirmEnabled: Boolean, destructive: Boolean, onConfirm: () -> Unit, onCancel: () -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm, Alignment.End)) {
         AppButton("Cancel", onCancel)
         AppButton(confirmLabel, onConfirm, variant = if (destructive) ButtonVariant.DANGER else ButtonVariant.PRIMARY, enabled = confirmEnabled)

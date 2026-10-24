@@ -23,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -123,6 +124,8 @@ data class MenuEntry(
     val icon: ImageVector? = null,
     val hint: String? = null,
     val danger: Boolean = false,
+    val enabled: Boolean = true,
+    val dividerAbove: Boolean = false,
     val onSelect: () -> Unit,
 )
 
@@ -139,22 +142,29 @@ private class BelowAnchor(private val alignEnd: Boolean) : PopupPositionProvider
 /** Dropdown menu anchored to its parent composable; Esc or an outside click dismisses it. */
 @Composable
 fun PopupMenu(entries: List<MenuEntry>, onDismiss: () -> Unit, alignEnd: Boolean = false) {
+    AnchoredPopup(onDismiss, alignEnd, Modifier.widthIn(min = menuWidth).width(IntrinsicSize.Max)) {
+        Column(Modifier.padding(Spacing.xs)) { entries.forEach { MenuItem(it, onDismiss) } }
+    }
+}
+
+/** Raised floating card anchored below its parent composable; [modifier] sizes it, Esc or an outside click dismisses it. */
+@Composable
+fun AnchoredPopup(onDismiss: () -> Unit, alignEnd: Boolean = false, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Popup(popupPositionProvider = remember(alignEnd) { BelowAnchor(alignEnd) }, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
         val shape = RoundedCornerShape(Radius.md)
-        Column(
+        Box(
             Modifier.popIn(TransformOrigin(if (alignEnd) 1f else 0f, 0f))
                 .shadow(menuElevation, shape, ambientColor = colors.shadow, spotColor = colors.shadow)
-                .widthIn(min = menuWidth).width(IntrinsicSize.Max).card(shape, colors.surfaceRaised).padding(Spacing.xs),
-        ) {
-            entries.forEach { MenuItem(it, onDismiss) }
-        }
+                .then(modifier).card(shape, colors.surfaceRaised),
+        ) { content() }
     }
 }
 
 @Composable
 private fun MenuItem(entry: MenuEntry, onDismiss: () -> Unit) {
     val tint = if (entry.danger) colors.danger else colors.textPrimary
-    Pressable({ onDismiss(); entry.onSelect() }, Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm)) {
+    if (entry.dividerAbove) HorizontalRule(Modifier.padding(vertical = Spacing.xs))
+    Pressable({ onDismiss(); entry.onSelect() }, Modifier.fillMaxWidth().alpha(if (entry.enabled) 1f else Alpha.DISABLED), shape = RoundedCornerShape(Radius.sm), enabled = entry.enabled) {
         Row(Modifier.padding(horizontal = Spacing.md - 2.dp, vertical = Spacing.sm - 1.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md - 2.dp)) {
             entry.icon?.let { Glyph(it, if (entry.danger) colors.danger else colors.textSecondary) }
             Label(entry.label, Modifier.weight(1f), color = tint, style = Type.body)
