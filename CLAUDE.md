@@ -83,7 +83,7 @@ Git:
 - Commit only when asked.
 - Branches: `main` is stable; all development and testing happens on `develop`.
 - Commit message is a single line: `<type>(ver. X.Y.Z): <description>`. Types, first match wins: `fix` (bug fix, error handling, race/order/state problems, guards against wrong behavior; async/sync rewrites that change execution flow) → `feature` (new user-visible capability, component, guard, endpoint, behavior) → `refactor` (restructure with provably identical behavior) → `chore` (dependencies, configs, env, manifests) → `ci` (pipelines, build/deploy scripts). Unsure fix vs refactor → `fix`; unsure feature vs refactor → `feature`.
-- Version: the new version if the diff changes it (`version` in `build.gradle.kts`), otherwise reuse the latest from commit history. Never invent one.
+- Version: every commit raises the PATCH in `version` of `build.gradle.kts` (X.Y.Z → X.Y.Z+1) and uses the new value in its message; MINOR and MAJOR are raised only when the user says so (then patch resets to 0). Never invent a version.
 - Description: English, imperative, no trailing period, max ~80 chars, describes the behavioral/structural change, not code mechanics. 1 change = 1 clause; 2–3 related changes comma-separated. Preferred verbs: add, remove, fix, prevent, ensure, guard, await, sequence, replace, extract, rename, migrate, introduce, drop, restore, handle, wrap, unify, split, merge.
 - Forbidden in description: improve, enhance, adjust, tweak, modify, change, optimize, better, cleanup, misc, various, several, some; bare "update" as the main verb; version bump / release X.Y.Z / file names like package.json; meta-mentions of imports, types, signatures.
 - Example: `feature(ver. 1.0.0): add home view with project overview`
