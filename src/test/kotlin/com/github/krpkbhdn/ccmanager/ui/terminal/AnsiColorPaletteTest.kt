@@ -1,5 +1,7 @@
 package com.github.krpkbhdn.ccmanager.ui.terminal
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import com.jediterm.terminal.TerminalColor
 import com.jediterm.terminal.emulator.ColorPalette
 import org.assertj.core.api.Assertions.assertThat
@@ -8,6 +10,8 @@ import org.junit.jupiter.api.Test
 class AnsiColorPaletteTest {
 
     private fun rgb(color: com.jediterm.core.Color) = (color.red shl 16) or (color.green shl 8) or color.blue
+
+    private fun rgb(color: Color) = color.toArgb() and 0xFFFFFF
 
     @Test
     fun redAndYellowAreDistinctInBothSchemes() {
@@ -49,12 +53,10 @@ class AnsiColorPaletteTest {
 
     @Test
     fun overridesReplaceSchemeDefaultColors() {
-        val settings = TerminalSettings(dark = true)
-        assertThat(settings.background).isEqualTo(DARK_BACKGROUND)
-        settings.backgroundOverride = java.awt.Color(0x101820)
-        settings.dark = false
-        assertThat(settings.background).isEqualTo(java.awt.Color(0x101820))
-        assertThat(settings.foreground).isEqualTo(LIGHT_FOREGROUND)
-        assertThat(rgb(settings.defaultBackground.toColor())).isEqualTo(0x101820)
+        val override = Color(0xFF101820)
+        val theme = TerminalTheme(dark = false, backgroundOverride = override)
+        assertThat(theme.background).isEqualTo(override)
+        assertThat(theme.foreground).isEqualTo(LIGHT_FOREGROUND)
+        assertThat(TerminalTheme(dark = true).background).isEqualTo(DARK_BACKGROUND)
     }
 }

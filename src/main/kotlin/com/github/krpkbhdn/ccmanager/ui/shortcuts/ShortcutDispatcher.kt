@@ -6,7 +6,7 @@ import java.awt.Window
 import java.awt.event.KeyEvent
 
 /**
- * Sees every key event before the focused component, which is what makes shortcuts work while the Swing terminal
+ * Sees every key event before the focused component, which is what makes shortcuts work while the terminal
  * owns the keyboard focus. Consumes only the presses [perform] accepted, plus the typed/released events that follow.
  */
 class ShortcutDispatcher(

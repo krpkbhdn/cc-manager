@@ -161,7 +161,7 @@ private class ShortcutProbe(private val capture: Capture, private val state: App
         state.pickerOpen = false
     }
 
-    private fun screen(): String = TerminalHost.widgetOf(firstSession)?.widget?.terminalTextBuffer?.getScreenLines().orEmpty()
+    private fun screen(): String = TerminalHost.sessionOf(firstSession)?.screenText().orEmpty()
 
     private suspend fun typeText(text: String) {
         state.send(firstSession, text)
