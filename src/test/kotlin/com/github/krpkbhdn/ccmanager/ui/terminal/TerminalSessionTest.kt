@@ -92,6 +92,14 @@ class TerminalSessionTest {
     }
 
     @Test
+    fun theEscapeKeyReachesTheConnectorAsOneLoneByte() {
+        session.onKey(com.jediterm.core.input.KeyInputEvent(com.jediterm.core.input.KeyInputEvent.Type.PRESSED, java.awt.event.KeyEvent.VK_ESCAPE, '\u001b', 0))
+        settle(connector, session)
+        assertThat(connector.written).hasSize(1)
+        assertThat(isLoneEscape(connector.written.single())).isTrue()
+    }
+
+    @Test
     fun resizeReflowsTheBufferAndTellsTheProcess() {
         session.fit(100, 30)
         settle(connector, session)

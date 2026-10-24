@@ -61,7 +61,8 @@ internal class TerminalScene(
     fun sendKey(event: KeyEvent): Boolean = scene.sendKeyEvent(event)
 
     fun sendPointer(type: PointerEventType, at: Offset, timeMillis: Long, button: PointerButton?, scroll: Offset) {
-        val buttons = PointerButtons(isPrimaryPressed = button == PointerButton.Primary && type != PointerEventType.Release)
+        val down = type != PointerEventType.Release
+        val buttons = PointerButtons(isPrimaryPressed = down && button == PointerButton.Primary, isSecondaryPressed = down && button == PointerButton.Secondary)
         scene.sendPointerEvent(type, at, scroll, timeMillis, buttons = buttons, button = button)
     }
 

@@ -11,6 +11,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import java.awt.event.InputEvent
+import java.io.File
 import java.awt.event.KeyEvent as AwtKeyEvent
 
 private const val ESC = "\u001b"
@@ -134,6 +135,28 @@ class TerminalInteractionTest {
         assertThat(session.selection).isNull()
         pointer(PointerEventType.Scroll, point(4, 2), scroll = Offset(0f, 1f))
         assertThat(written()).endsWith("$ESC[<65;5;3M")
+    }
+
+    @Test
+    fun rightClickOpensTheClipboardMenuAndScrollingShowsTheScrollbar() {
+        scene.play((1..80).joinToString("\r\n") { "row $it" })
+        session.select(CellSelection(Cell(0, 23), Cell(4, 23)))
+        pointer(PointerEventType.Move, point(10, 5))
+        pointer(PointerEventType.Press, point(10, 5), PointerButton.Secondary)
+        pointer(PointerEventType.Release, point(10, 5), PointerButton.Secondary)
+        repeat(5) { scene.frame() }
+        scene.image().save(File(shotDirectory(), "context-menu.png"))
+        click(60, 20)
+        repeat(5) { scene.frame() }
+        val dismissed = scene.image()
+        dismissed.save(File(shotDirectory(), "context-menu-dismissed.png"))
+        assertThat(dismissed.toBitmap().rgbAt(150, 148)).isEqualTo(0x0F1115)
+        pointer(PointerEventType.Scroll, point(30, 5), scroll = Offset(0f, -3f))
+        repeat(40) {
+            scene.frame()
+            Thread.sleep(8)
+        }
+        scene.image().save(File(shotDirectory(), "scrollbar-scrolled.png"))
     }
 
     @Test
