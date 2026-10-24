@@ -23,7 +23,6 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.ui.components.Glyph
 import com.github.krpkbhdn.ccmanager.ui.components.HorizontalRule
-import com.github.krpkbhdn.ccmanager.ui.components.IconButton
 import com.github.krpkbhdn.ccmanager.ui.components.Kbd
 import com.github.krpkbhdn.ccmanager.ui.components.Label
 import com.github.krpkbhdn.ccmanager.ui.components.PrimaryButton
@@ -40,7 +39,7 @@ private val headerBadgeSize = 40.dp
 private val shortcutHints = listOf(listOf("↑", "↓") to "browse", listOf("Enter") to "open", listOf("Ctrl", "Enter") to "add", listOf("Esc") to "close")
 
 @Composable
-fun PickerHeader(onClose: () -> Unit, modifier: Modifier = Modifier) {
+fun PickerHeader(modifier: Modifier = Modifier) {
     Row(
         modifier.fillMaxWidth().padding(start = Spacing.xl, end = Spacing.md, top = Spacing.lg, bottom = Spacing.lg),
         verticalAlignment = Alignment.CenterVertically,
@@ -53,7 +52,6 @@ fun PickerHeader(onClose: () -> Unit, modifier: Modifier = Modifier) {
             Label("Add project", style = Type.subtitle)
             Label("Choose the folder Claude Code should work in", color = colors.textSecondary, style = Type.small)
         }
-        IconButton(Icons.Close, onClose, tooltip = "Close", hint = "Esc")
     }
 }
 
