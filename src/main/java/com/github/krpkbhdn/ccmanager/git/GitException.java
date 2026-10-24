@@ -5,7 +5,7 @@ public class GitException extends RuntimeException {
 
     public enum Kind {
         NOT_A_REPOSITORY, AUTH, CONFLICT, DIRTY_TREE, NOT_FOUND, HOOK_FAILED, NOTHING_TO_COMMIT, NO_UPSTREAM,
-        NON_FAST_FORWARD, LOCKED, TIMEOUT, GIT_MISSING, OTHER
+        NON_FAST_FORWARD, LOCKED, TIMEOUT, GIT_MISSING, OTHER, IDENTITY_UNKNOWN
     }
 
     private final Kind kind;
