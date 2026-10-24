@@ -5,6 +5,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -36,20 +44,27 @@ import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import com.github.krpkbhdn.ccmanager.ui.theme.titleBarHeight
 
 private val searchWidth = 380.dp
-private val badgeOffsetX = 9.dp
-private val badgeOffsetY = (-7).dp
+private val badgeOffsetX = 2.dp
+private val badgeOffsetY = (-2).dp
 private const val SEARCH_FRACTION = 0.9f
 private const val MAX_BADGE = 99
 
-/** Fallback bar under the native OS title bar (no JetBrainsRuntime): centred search pill, theme toggle and notifications. */
+/** Fallback bar under the native OS title bar (no JetBrainsRuntime): search pill centred while it fits, theme toggle, usage and notifications. */
 @Composable
 fun TopBar(state: AppState, modifier: Modifier = Modifier) {
+    var actionsWidth by remember { mutableStateOf(0.dp) }
+    val density = LocalDensity.current
     Column(modifier.background(colors.sidebar)) {
         Row(Modifier.fillMaxWidth().height(titleBarHeight), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f))
-            SearchPill({ state.paletteOpen = true })
-            Row(Modifier.weight(1f).padding(end = Spacing.sm), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            Spacer(Modifier.width(actionsWidth))
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { SearchPill({ state.paletteOpen = true }) }
+            Row(
+                Modifier.padding(end = Spacing.sm).onSizeChanged { actionsWidth = with(density) { (it.width.toDp() + Spacing.sm) } },
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 ThemeToggle(state)
+                UsageIndicator(state)
                 NotificationBell(state)
             }
         }

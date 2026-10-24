@@ -24,6 +24,7 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
             AppShortcut.TOGGLE_THEME -> handled { state.toggleTheme(systemDark()) }
             AppShortcut.OVERVIEW -> handled { state.navigate(Route.Overview) }
             AppShortcut.NOTIFICATIONS -> handled { state.notificationsOpen = !state.notificationsOpen }
+            AppShortcut.USAGE -> handled { state.usageOpen = !state.usageOpen }
             AppShortcut.SHORTCUT_SHEET -> handled { state.shortcutsOpen = !state.shortcutsOpen }
             else -> performInProject(shortcut)
         }
@@ -56,7 +57,7 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
     }
 
     private fun closeOverlay(): Boolean {
-        val open = listOf(state::shortcutsOpen, state::paletteOpen, state::notificationsOpen).firstOrNull { it.get() } ?: return false
+        val open = listOf(state::shortcutsOpen, state::paletteOpen, state::notificationsOpen, state::usageOpen).firstOrNull { it.get() } ?: return false
         open.set(false)
         return true
     }

@@ -59,6 +59,7 @@ private fun globalActions(state: AppState, systemDark: Boolean): List<PaletteIte
     PaletteItem("add-project", "Add project", PaletteGroup.ACTIONS, "Pick a folder to manage", Icons.FolderPlus, shortcut = AppShortcut.ADD_PROJECT, run = state::requestAddProject),
     PaletteItem("overview", "Go to overview", PaletteGroup.ACTIONS, icon = Icons.Grid, shortcut = AppShortcut.OVERVIEW) { state.navigate(Route.Overview) },
     PaletteItem("notifications", "Show notifications", PaletteGroup.ACTIONS, icon = Icons.Bell, shortcut = AppShortcut.NOTIFICATIONS) { state.notificationsOpen = true },
+    PaletteItem("usage", "Show usage", PaletteGroup.ACTIONS, "Limits, context and cost", Icons.Gauge, shortcut = AppShortcut.USAGE) { state.usageOpen = true },
     PaletteItem("toggle-theme", "Toggle light and dark theme", PaletteGroup.ACTIONS, icon = Icons.Sun, shortcut = AppShortcut.TOGGLE_THEME) { state.toggleTheme(systemDark) },
     PaletteItem("system-theme", "Use the system theme", PaletteGroup.ACTIONS, icon = Icons.Monitor) { state.setThemeMode(ThemeMode.SYSTEM) },
     PaletteItem("shortcuts", "Keyboard shortcuts", PaletteGroup.ACTIONS, icon = Icons.Command, shortcut = AppShortcut.SHORTCUT_SHEET) { state.shortcutsOpen = true },

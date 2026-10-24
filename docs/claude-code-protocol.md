@@ -238,3 +238,13 @@ Arrived, in order: InstructionsLoaded, SessionStart, UserPromptSubmit, (PreToolU
 - PostToolUse carries the whole `tool_response` (stdout, stderr, flags) and `duration_ms`; PostToolBatch repeats tool inputs/outputs. Payloads can be large: the store truncates every string to 500 chars and the server drops bodies over 1 MiB.
 - Stop carries `last_assistant_message`, `background_tasks: []`, `session_crons: []`; SessionEnd reason was `other` at normal `-p` exit.
 - `claude -p` does not exercise: permission prompts (PermissionRequest/Notification), AskUserQuestion/ExitPlanMode, subagents (SubagentStart/Stop), compaction, StopFailure, Esc interrupt, /clear. Their handling is implemented from the documented payloads and covered by unit tests only.
+
+## 8. Model and effort selection (claude 2.1.310)
+
+Researched from `claude --help`, https://code.claude.com/docs/en/model-config and cli-reference:
+- Flags: `--model <alias|full name>` (aliases per docs: `default`, `best`, `fable`, `sonnet`, `opus`, `haiku`, `sonnet[1m]`, `opus[1m]`, `opusplan`) and `--effort <level>` (`low`, `medium`, `high`, `xhigh`, `max`).
+- Other carriers: in-session `/model <x>` and `/effort <x>`; env `ANTHROPIC_MODEL`, `CLAUDE_CODE_EFFORT_LEVEL`; settings `model`, `effortLevel` (accepts low/medium/high/xhigh, NOT max), `modelSettings` per model. Precedence: explicit choice (`/effort`, `--effort`, env) over saved settings over the model default. A level the model lacks falls back to the highest supported one at or below it.
+- Chosen design: flags. `ModelSelection.arguments()` yields `--model X --effort Y` (nothing for the default), `ClaudeCommand` puts them before `--continue`/`--resume` (that one takes an optional value). The selection is per project (`project.model`, `project.effort`, migration V3) and applies to sessions started afterwards. Writing it into the per-session `--settings` file was not needed.
+- Verified for real (`RealModelEffortTest`, one "say hi in two words" prompt): a project stored with model `haiku`, effort `low` launched a session whose statusLine payload reported `model.display_name` "Haiku 5.5" and `effort.level` "low". The payload field `effort` is `{level}`; `model` is `{id, display_name}`.
+- NOT verified, therefore not offered: applying a change to a running session by typing `/model sonnet` plus Enter into the PTY. Tried twice (with and without a follow-up prompt); the statusLine never showed the new model within two minutes, so the app has no "apply to running session". `--model` aliases other than `haiku` are taken from the docs and were not launched.
+- The app shows the effective model and effort of a running session (statusLine `model.display_name`, `effort.level`) in the session tab strip and in the usage panel.

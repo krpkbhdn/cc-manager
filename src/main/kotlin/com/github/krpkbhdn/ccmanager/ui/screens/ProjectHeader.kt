@@ -41,7 +41,7 @@ class ProjectHeaderActions(
 
 /** Compact project header: identity and copyable path on the left, icon actions and the launch split button on the right. */
 @Composable
-fun ProjectHeader(project: Project, status: AgentStatus, ideAvailable: Boolean, launching: Boolean, gitSummary: GitSummary?, actions: ProjectHeaderActions, modifier: Modifier = Modifier) {
+fun ProjectHeader(project: Project, status: AgentStatus, ideAvailable: Boolean, launching: Boolean, gitSummary: GitSummary?, actions: ProjectHeaderActions, modelPicker: @Composable () -> Unit, modifier: Modifier = Modifier) {
     Column(modifier) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = Spacing.xl, vertical = Spacing.md),
@@ -62,6 +62,7 @@ fun ProjectHeader(project: Project, status: AgentStatus, ideAvailable: Boolean, 
                 IconButton(Icons.Code, actions.onOpenIde, tooltip = if (ideAvailable) IDE_HINT else IDE_UNAVAILABLE_HINT, enabled = ideAvailable)
                 IconButton(Icons.Diff, actions.onShowChanges, tooltip = "Review changes", hint = AppShortcut.GIT_CHANGES.hint())
             }
+            modelPicker()
             SplitButton(
                 text = "Launch Claude",
                 icon = Icons.Play,

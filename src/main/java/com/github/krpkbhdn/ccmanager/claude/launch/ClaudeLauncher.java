@@ -5,6 +5,7 @@ import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation;
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
 import com.github.krpkbhdn.ccmanager.project.Project;
+import com.github.krpkbhdn.ccmanager.project.ModelSelection;
 import com.github.krpkbhdn.ccmanager.project.ProjectService;
 import com.pty4j.PtyProcess;
 import com.pty4j.PtyProcessBuilder;
@@ -44,22 +45,23 @@ public class ClaudeLauncher {
     /** @throws IllegalStateException with a user-readable message (Claude missing, project gone, spawn failed) */
     public LaunchedSession launch(long projectId, LaunchMode mode) {
         return start(projectId, ClaudeCommand.label(mode),
-                (settings, exe) -> ClaudeCommand.launchArguments(exe, settings, mode));
+                (settings, exe, selection) -> ClaudeCommand.launchArguments(exe, settings, mode, selection));
     }
 
     /** claude attach ID for a background agent. */
     public LaunchedSession attach(long projectId, String backgroundSessionId) {
         return start(projectId, "attach " + backgroundSessionId,
-                (settings, exe) -> ClaudeCommand.attachArguments(exe, settings, backgroundSessionId));
+                (settings, exe, selection) -> ClaudeCommand.attachArguments(exe, settings, backgroundSessionId));
     }
 
     private LaunchedSession start(long projectId, String label, CommandFactory commandFactory) {
-        Path directory = projectDirectory(projectId);
+        Project project = project(projectId);
+        Path directory = project.path();
         Path executable = executable();
         String ccmSessionId = sessions.register(projectId);
         try {
             Path settings = hookSettings.write(ccmSessionId);
-            List<String> command = commandFactory.build(settings, executable);
+            List<String> command = commandFactory.build(settings, executable, project.modelSelection());
             PtyProcess process = spawn(command, directory, ccmSessionId);
             watchExit(ccmSessionId, process);
             return new LaunchedSession(ccmSessionId, projectId, label, process);
@@ -70,13 +72,13 @@ public class ClaudeLauncher {
         }
     }
 
-    private Path projectDirectory(long projectId) {
+    private Project project(long projectId) {
         Project project = projects.find(projectId)
                 .orElseThrow(() -> new IllegalStateException("The project no longer exists."));
         if (!Files.isDirectory(project.path())) {
             throw new IllegalStateException("The project folder is missing: " + project.path());
         }
-        return project.path();
+        return project;
     }
 
     private Path executable() {
@@ -132,6 +134,6 @@ public class ClaudeLauncher {
 
     @FunctionalInterface
     private interface CommandFactory {
-        List<String> build(Path settings, Path executable);
+        List<String> build(Path settings, Path executable, ModelSelection selection);
     }
 }

@@ -25,11 +25,14 @@ import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry
 import com.github.krpkbhdn.ccmanager.usage.RateLimitService
 import com.github.krpkbhdn.ccmanager.usage.RateLimitSnapshot
 import com.github.krpkbhdn.ccmanager.usage.RateLimitWindow
+import com.github.krpkbhdn.ccmanager.usage.SessionUsage
+import com.github.krpkbhdn.ccmanager.usage.SessionUsageService
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import com.github.krpkbhdn.ccmanager.claude.session.SubagentSnapshot
 import com.github.krpkbhdn.ccmanager.notification.AppNotification
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.notification.NotificationService
+import com.github.krpkbhdn.ccmanager.project.ModelSelection
 import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.project.ProjectService
 import com.github.krpkbhdn.ccmanager.ui.git.FakeGit
@@ -65,7 +68,12 @@ fun limitsAt(fiveHourPercent: Double, sevenDayPercent: Double) = RateLimitSnapsh
 )
 
 /** In-memory backend data for the dev preview; Mockito keeps it independent of the real services' constructors. */
-class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeRepoData = SampleRepos.busy(), val rateLimits: RateLimitSnapshot? = limitsAt(23.5, 41.2)) {
+class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeRepoData = SampleRepos.busy(), val rateLimits: RateLimitSnapshot? = limitsAt(23.5, 41.2), selection: ModelSelection = ModelSelection("opus", "high")) {
+    val sessionUsage = mapOf(
+        "s-working" to SessionUsage("s-working", "Opus 4.7", "xhigh", 62.0, 4.38, 2_400_000L, Instant.now()),
+        "s-needs" to SessionUsage("s-needs", "Sonnet 5.5", "medium", 18.5, 0.42, 1_200_000L, Instant.now()),
+        "s-idle" to SessionUsage("s-idle", "Opus 4.7", null, 91.0, 12.07, 5_000_000L, Instant.now()),
+    )
     @Volatile var claudeInstalled = true
     private val changeListeners = mutableListOf<Runnable>()
     private val notificationListeners = mutableListOf<Consumer<AppNotification>>()
@@ -76,7 +84,7 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
     )
 
     val projects: List<Project> = if (empty) emptyList() else listOf(
-        Project(1, "cc-manager", Path.of("C:/Users/dev/Work/cc-manager"), ago(9000)),
+        Project(1, "cc-manager", Path.of("C:/Users/dev/Work/cc-manager"), ago(9000), selection),
         Project(2, "billing-api", Path.of("C:/Users/dev/Work/billing-api"), ago(8000)),
         Project(3, "docs-site", Path.of("C:/Users/dev/Work/docs-site"), ago(7000)),
         Project(4, "infra-terraform", Path.of("C:/Users/dev/Work/infra-terraform"), ago(6000)),
@@ -145,6 +153,7 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         `when`(projectService.list()).thenReturn(projects)
         `when`(projectService.find(anyLong())).thenAnswer { Optional.ofNullable(projects.firstOrNull { p -> p.id == it.getArgument<Long>(0) }) }
         `when`(projectService.subscribe(any())).thenAnswer { Runnable { } }
+        `when`(projectService.selectModel(anyLong(), any())).thenAnswer { projects.first { p -> p.id == it.getArgument<Long>(0) } }
 
         val registry = mock(SessionRegistry::class.java)
         `when`(registry.sessions()).thenAnswer { sessions }
@@ -179,7 +188,11 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         `when`(limits.current()).thenAnswer { Optional.ofNullable(rateLimits) }
         `when`(limits.subscribe(any())).thenAnswer { Runnable { } }
 
-        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, terminal)
+        val usage = mock(SessionUsageService::class.java)
+        `when`(usage.all()).thenAnswer { sessionUsage }
+        `when`(usage.subscribe(any())).thenAnswer { Runnable { } }
+
+        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, terminal)
     }
 
     private fun installationNow() = if (claudeInstalled) {

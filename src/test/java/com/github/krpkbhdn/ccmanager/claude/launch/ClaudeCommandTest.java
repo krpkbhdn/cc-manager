@@ -2,6 +2,7 @@ package com.github.krpkbhdn.ccmanager.claude.launch;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.github.krpkbhdn.ccmanager.project.ModelSelection;
 import java.nio.file.Path;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -13,14 +14,14 @@ class ClaudeCommandTest {
 
     @Test
     void newSessionHasOnlySettings() {
-        assertThat(ClaudeCommand.launchArguments(EXE, SETTINGS, LaunchMode.NEW))
+        assertThat(ClaudeCommand.launchArguments(EXE, SETTINGS, LaunchMode.NEW, ModelSelection.DEFAULT))
                 .containsExactly(EXE.toString(), "--settings", SETTINGS.toString());
     }
 
     @Test
     void continueAndResumeAddTheirFlag() {
-        assertThat(ClaudeCommand.launchArguments(EXE, SETTINGS, LaunchMode.CONTINUE)).endsWith("--continue");
-        assertThat(ClaudeCommand.launchArguments(EXE, SETTINGS, LaunchMode.RESUME_PICKER)).endsWith("--resume");
+        assertThat(ClaudeCommand.launchArguments(EXE, SETTINGS, LaunchMode.CONTINUE, ModelSelection.DEFAULT)).endsWith("--continue");
+        assertThat(ClaudeCommand.launchArguments(EXE, SETTINGS, LaunchMode.RESUME_PICKER, ModelSelection.DEFAULT)).endsWith("--resume");
     }
 
     @Test
@@ -43,6 +44,12 @@ class ClaudeCommandTest {
         Map<String, String> env = ClaudeCommand.environment(Map.of("NO_COLOR", "1", "CLAUDECODE", "1", "CLAUDE_CONFIG_DIR", "d"), "ccm-1");
 
         assertThat(env).doesNotContainKeys("NO_COLOR", "CLAUDECODE").containsEntry("CLAUDE_CONFIG_DIR", "d");
+    }
+
+    @Test
+    void selectionFlagsComeBeforeTheModeFlagSoResumeKeepsItsOptionalValueFree() {
+        assertThat(ClaudeCommand.launchArguments(EXE, SETTINGS, LaunchMode.RESUME_PICKER, new ModelSelection("sonnet", "low")))
+                .containsExactly(EXE.toString(), "--settings", SETTINGS.toString(), "--model", "sonnet", "--effort", "low", "--resume");
     }
 
     @Test

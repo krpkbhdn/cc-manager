@@ -34,6 +34,7 @@ object Icons {
     val FolderOpen = lucide("folder-open")
     val FolderPlus = lucide("folder-plus")
     val Bell = lucide("bell")
+    val Gauge = lucide("gauge")
     val Refresh = lucide("refresh-cw")
     val Edit = lucide("pencil")
     val Trash = lucide("trash")

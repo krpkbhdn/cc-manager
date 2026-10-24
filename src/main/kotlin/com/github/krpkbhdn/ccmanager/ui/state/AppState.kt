@@ -13,8 +13,10 @@ import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import com.github.krpkbhdn.ccmanager.notification.AppNotification
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
+import com.github.krpkbhdn.ccmanager.project.ModelSelection
 import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.usage.RateLimitSnapshot
+import com.github.krpkbhdn.ccmanager.usage.SessionUsage
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitHost
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitState
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitSummary
@@ -78,7 +80,11 @@ class AppState(
     var renaming by mutableStateOf<RenameRequest?>(null)
     var launching by mutableStateOf(false)
         private set
+    var sessionUsage by mutableStateOf<Map<String, SessionUsage>>(emptyMap())
+        private set
     var notificationsOpen by mutableStateOf(false)
+    var usageOpen by mutableStateOf(false)
+    var modelPickerOpen by mutableStateOf(false)
     var loginBannerDismissed by mutableStateOf(false)
 
     val views = mutableStateMapOf<Long, ProjectView>()
@@ -103,10 +109,12 @@ class AppState(
         unsubscribers += backend.projects.subscribe { projectReload.request() }
         unsubscribers += backend.sessions.subscribe { sessionReload.request() }
         unsubscribers += backend.rateLimits.subscribe { scope.launch { rateLimits = backend.rateLimits.current().orElse(null) } }
+        unsubscribers += backend.sessionUsage.subscribe { scope.launch { sessionUsage = backend.sessionUsage.all() } }
         unsubscribers += backend.notifications.subscribe { notification -> scope.launch { receive(notification) } }
         projectReload.request()
         sessionReload.request()
         scope.launch { rateLimits = backend.rateLimits.current().orElse(null) }
+        scope.launch { sessionUsage = backend.sessionUsage.all() }
         scope.launch { guarded { notifications = io { backend.notifications.history() }.takeLast(NOTIFICATION_CAP) } }
         scope.launch { guarded { installation = io { backend.installation.current() } } }
         scope.launch { guarded { ideAvailable = io { backend.ide.available() } } }
@@ -127,6 +135,8 @@ class AppState(
     fun navigate(target: Route) {
         route = target
         notificationsOpen = false
+        usageOpen = false
+        modelPickerOpen = false
     }
 
     fun openSession(ccmSessionId: String) {
@@ -210,6 +220,10 @@ class AppState(
     fun renameProject(project: Project, name: String) {
         renaming = null
         scope.launch { guarded { io { backend.projects.rename(project.id, name.trim()) }; loadProjects() } }
+    }
+
+    fun selectModel(project: Project, selection: ModelSelection) {
+        scope.launch { guarded { io { backend.projects.selectModel(project.id, selection) }; loadProjects() } }
     }
 
     fun requestRemove(project: Project) {

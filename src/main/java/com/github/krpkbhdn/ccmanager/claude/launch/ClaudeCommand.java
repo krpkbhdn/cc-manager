@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.claude.launch;
 
+import com.github.krpkbhdn.ccmanager.project.ModelSelection;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -20,8 +21,9 @@ final class ClaudeCommand {
 
     private ClaudeCommand() {}
 
-    static List<String> launchArguments(Path executable, Path settingsFile, LaunchMode mode) {
+    static List<String> launchArguments(Path executable, Path settingsFile, LaunchMode mode, ModelSelection selection) {
         List<String> command = base(executable, settingsFile);
+        command.addAll(selection.arguments());
         switch (mode) {
             case NEW -> { }
             case CONTINUE -> command.add("--continue");

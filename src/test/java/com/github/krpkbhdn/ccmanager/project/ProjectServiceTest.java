@@ -66,6 +66,18 @@ class ProjectServiceTest {
     }
 
     @Test
+    void modelSelectionIsStoredPerProjectAndClearable() throws IOException {
+        var project = service.add(directory("alpha"));
+        assertThat(project.modelSelection()).isEqualTo(ModelSelection.DEFAULT);
+
+        var chosen = service.selectModel(project.id(), new ModelSelection("opus", "xhigh"));
+        assertThat(service.find(project.id()).orElseThrow().modelSelection()).isEqualTo(new ModelSelection("opus", "xhigh")).isEqualTo(chosen.modelSelection());
+
+        assertThat(service.selectModel(project.id(), ModelSelection.DEFAULT).modelSelection()).isEqualTo(ModelSelection.DEFAULT);
+        assertThatThrownBy(() -> service.selectModel(999, ModelSelection.DEFAULT)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void subscribersAreNotifiedUntilUnsubscribed() throws IOException {
         var calls = new AtomicInteger();
         var unsubscribe = service.subscribe(calls::incrementAndGet);

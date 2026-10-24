@@ -46,6 +46,9 @@ fun usageMeters(snapshot: RateLimitSnapshot?, now: Instant): List<UsageMeter> = 
 private fun meter(label: String, name: String, window: RateLimitWindow, now: Instant): UsageMeter? {
     if (!window.resetsAt().isAfter(now)) return null
     val percent = window.usedPercent().coerceIn(0.0, MAX_PERCENT)
-    val exact = if (percent % 1.0 == 0.0) percent.roundToInt().toString() else "%.1f".format(Locale.ROOT, percent)
-    return UsageMeter(label, "${percent.roundToInt()}%", (percent / MAX_PERCENT).toFloat(), usageLevel(percent), "$name: $exact% used, ${resetsInText(window.resetsAt(), now)}")
+    return UsageMeter(label, "${percent.roundToInt()}%", (percent / MAX_PERCENT).toFloat(), usageLevel(percent), "$name: ${exactPercent(percent)} used, ${resetsInText(window.resetsAt(), now)}")
 }
+
+/** "41%" for whole numbers, "23.5%" otherwise. */
+internal fun exactPercent(percent: Double): String =
+    (if (percent % 1.0 == 0.0) percent.roundToInt().toString() else "%.1f".format(Locale.ROOT, percent)) + "%"

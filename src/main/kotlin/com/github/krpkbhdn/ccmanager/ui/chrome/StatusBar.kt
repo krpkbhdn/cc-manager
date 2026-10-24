@@ -24,7 +24,6 @@ import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.Route
 import com.github.krpkbhdn.ccmanager.ui.state.sessionTitle
-import com.github.krpkbhdn.ccmanager.ui.state.usageMeters
 import com.github.krpkbhdn.ccmanager.ui.theme.Radius
 import com.github.krpkbhdn.ccmanager.ui.theme.IconSize
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
@@ -45,7 +44,6 @@ fun StatusBar(state: AppState, modifier: Modifier = Modifier) {
         ) {
             Breadcrumb(state, Modifier.weight(1f))
             SessionCounters(state)
-            UsageSegment(usageMeters(state.rateLimits, state.now))
             state.installation?.let { ClaudeSegment(it) }
         }
     }

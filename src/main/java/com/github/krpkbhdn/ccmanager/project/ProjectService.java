@@ -22,7 +22,7 @@ import org.springframework.stereotype.Service;
 public class ProjectService {
 
     private static final Logger log = LoggerFactory.getLogger(ProjectService.class);
-    private static final String SELECT = "SELECT id, name, path, created_at FROM project";
+    private static final String SELECT = "SELECT id, name, path, created_at, model, effort FROM project";
 
     private final JdbcClient jdbc;
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
@@ -62,6 +62,17 @@ public class ProjectService {
             throw new IllegalArgumentException("Project name must not be empty");
         }
         var updated = jdbc.sql("UPDATE project SET name = ? WHERE id = ?").param(name.strip()).param(id).update();
+        if (updated == 0) {
+            throw new IllegalArgumentException("Project not found: " + id);
+        }
+        fireChanged();
+        return find(id).orElseThrow();
+    }
+
+    /** Stores the model and effort new sessions of the project start with. */
+    public Project selectModel(long id, ModelSelection selection) {
+        var updated = jdbc.sql("UPDATE project SET model = ?, effort = ? WHERE id = ?")
+                .param(selection.model()).param(selection.effort()).param(id).update();
         if (updated == 0) {
             throw new IllegalArgumentException("Project not found: " + id);
         }
@@ -119,6 +130,6 @@ public class ProjectService {
 
     private static Project mapRow(ResultSet rs, int rowNum) throws SQLException {
         return new Project(rs.getLong("id"), rs.getString("name"), Path.of(rs.getString("path")),
-                Instant.parse(rs.getString("created_at")));
+                Instant.parse(rs.getString("created_at")), new ModelSelection(rs.getString("model"), rs.getString("effort")));
     }
 }

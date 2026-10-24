@@ -30,6 +30,7 @@ fun DecoratedWindowScope.AppTitleBar(state: AppState) {
         SearchPill({ state.paletteOpen = true }, Modifier.align(Alignment.CenterHorizontally))
         Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
             ThemeToggle(state)
+            UsageIndicator(state)
             NotificationBell(state)
         }
     }
