@@ -1,0 +1,18 @@
+{
+  "format": ["java", "kotlin"],
+  "minLines": 6,
+  "minTokens": 60,
+  "gitignore": true,
+  "ignore": [
+    "**/build/**",
+    "**/.gradle/**",
+    "**/graphify-out/**",
+    "**/jscpd-report/**"
+  ],
+  "ignorePattern": [
+    "^\\s*package\\s+[\\w.]+;?",
+    "^\\s*import\\s+(static\\s+)?[\\w.]+(\\.\\*)?;?"
+  ],
+  "reporters": ["console", "html"],
+  "output": "./jscpd-report"
+}
