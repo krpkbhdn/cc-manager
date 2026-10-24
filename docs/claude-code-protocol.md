@@ -220,3 +220,18 @@ State machine (main agent only: IGNORE events where agent_id is present for stat
 - /terminal-config, /agent-sdk/typescript (exact stream-json schemas, control requests incl. canUseTool), /agent-view (background sessions: `claude --bg`, jobs/daemon state) - agent view is a competing native "dashboard" feature; `claude agents --json` is the supported machine-readable listing.
 - Second half of /env-vars (chars 100000+), tail of /sub-agents, hooks page tail after prompt-hook section (hook debugging details, plugin hooks).
 - Whether --settings hooks merge additively with user hooks (strongly implied, not shown by example), http hook `async`, PermissionRequest for ExitPlanMode/AskUserQuestion, `sessions/` file format, interrupt marker in transcript.
+
+---------------------------------------------------------------------------
+## 10. Verified by smoke test (claude 2.1.310, Windows 11, 2026-10-24)
+
+Test: `ClaudeHookSmokeTest` (env `CCM_SMOKE=true`, 2 real `claude -p ... --model haiku --settings <file>` runs: a plain "ok" prompt and a prompt that runs `echo hi` through Bash). The settings file was produced by `HookSettingsWriter` (http handlers, timeout 5; SessionStart = async exec-form `curl.exe`), the receiver was `HookServer` answering 200 with an empty body.
+
+Arrived, in order: InstructionsLoaded, SessionStart, UserPromptSubmit, (PreToolUse, PostToolUse, PostToolBatch for the Bash run), Stop, SessionEnd.
+- SessionStart via async exec-form `curl` command handler works (http is documented as rejected for it; not tried). The posted body is the full hook JSON (curl `--data-binary @-` reads stdin). In `-p` the payload had only `session_id, transcript_path, cwd, hook_event_name, source` - no `model`, no `session_title`.
+- http hooks on all other events work with an empty 200; Claude printed nothing extra and the result was unchanged. Hooks never blocked or delayed the run (a few seconds total).
+- `--settings` hooks are ADDITIVE: a hook in the project's `.claude/settings.json` (UserPromptSubmit, shell form) still fired (marker file written) while the `--settings` hooks fired. The user-level `~/.claude/settings.json` of the test machine has no hooks, so user-level additivity was not exercised directly (same merge rule, expected to behave the same).
+- `permission_mode` was `auto` in `-p` on this machine; `effort` appears only on tool/Stop events; `prompt_id` is present from UserPromptSubmit on, absent on SessionStart and InstructionsLoaded.
+- InstructionsLoaded fires before SessionStart (the user's global CLAUDE.md), so a session can see events before its SessionStart.
+- PostToolUse carries the whole `tool_response` (stdout, stderr, flags) and `duration_ms`; PostToolBatch repeats tool inputs/outputs. Payloads can be large: the store truncates every string to 500 chars and the server drops bodies over 1 MiB.
+- Stop carries `last_assistant_message`, `background_tasks: []`, `session_crons: []`; SessionEnd reason was `other` at normal `-p` exit.
+- `claude -p` does not exercise: permission prompts (PermissionRequest/Notification), AskUserQuestion/ExitPlanMode, subagents (SubagentStart/Stop), compaction, StopFailure, Esc interrupt, /clear. Their handling is implemented from the documented payloads and covered by unit tests only.
