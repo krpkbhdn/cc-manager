@@ -10,11 +10,17 @@ import org.jetbrains.jewel.intui.standalone.theme.default
 import org.jetbrains.jewel.intui.standalone.theme.lightThemeDefinition
 import org.jetbrains.jewel.ui.ComponentStyling
 
-/** Jewel theme plus our own tokens, following the system theme unless [dark] forces one. */
+/** Jewel theme (with Inter as its default text style) plus our own tokens; [dark] picks the palette. */
 @Composable
 fun AppTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    val definition = if (dark) JewelTheme.darkThemeDefinition() else JewelTheme.lightThemeDefinition()
+    val palette = if (dark) Palette.dark else Palette.light
+    val body = Type.body.copy(color = palette.textPrimary)
+    val definition = if (dark) {
+        JewelTheme.darkThemeDefinition(defaultTextStyle = body, editorTextStyle = Type.monoBody, consoleTextStyle = Type.monoBody)
+    } else {
+        JewelTheme.lightThemeDefinition(defaultTextStyle = body, editorTextStyle = Type.monoBody, consoleTextStyle = Type.monoBody)
+    }
     IntUiTheme(theme = definition, styling = ComponentStyling.default()) {
-        CompositionLocalProvider(LocalAppColors provides if (dark) Palette.dark else Palette.light, content = content)
+        CompositionLocalProvider(LocalAppColors provides palette, content = content)
     }
 }
