@@ -21,9 +21,9 @@ class ProjectViewTest {
 
     @Test
     fun `selecting diff keeps open sessions`() {
-        val view = ProjectView().openSession("a").select(ProjectTab.Diff)
+        val view = ProjectView().openSession("a").select(ProjectTab.Git)
 
-        assertThat(view.selected).isEqualTo(ProjectTab.Diff)
+        assertThat(view.selected).isEqualTo(ProjectTab.Git)
         assertThat(view.openSessions).containsExactly("a")
     }
 
@@ -31,8 +31,8 @@ class ProjectViewTest {
     fun `cycling walks sessions then diff and activity and wraps`() {
         val view = ProjectView().openSession("a").openSession("b")
 
-        assertThat(view.tabs()).containsExactly(ProjectTab.Session("a"), ProjectTab.Session("b"), ProjectTab.Diff, ProjectTab.Activity)
-        assertThat(view.cycle(1).selected).isEqualTo(ProjectTab.Diff)
+        assertThat(view.tabs()).containsExactly(ProjectTab.Session("a"), ProjectTab.Session("b"), ProjectTab.Git, ProjectTab.Activity)
+        assertThat(view.cycle(1).selected).isEqualTo(ProjectTab.Git)
         assertThat(view.cycle(-1).selected).isEqualTo(ProjectTab.Session("a"))
         assertThat(view.select(ProjectTab.Activity).cycle(1).selected).isEqualTo(ProjectTab.Session("a"))
     }

@@ -10,7 +10,7 @@ plugins {
 }
 
 group = "com.github.krpkbhdn"
-version = "1.0.51"
+version = "1.0.52"
 
 java {
     toolchain {
@@ -65,6 +65,15 @@ tasks.register<JavaExec>("runPreview") {
     group = "application"
     description = "Boots the UI with fake services (flags: --light, --shots, --out=<dir>)"
     mainClass = "com.github.krpkbhdn.ccmanager.ui.PreviewMainKt"
+    classpath = sourceSets["test"].runtimeClasspath
+    javaLauncher = javaToolchains.launcherFor(java.toolchain)
+    jvmArgs("--enable-native-access=ALL-UNNAMED", *awtOpens.toTypedArray())
+}
+
+tasks.register<JavaExec>("gitShots") {
+    group = "application"
+    description = "Renders the Git tab offscreen to PNGs (flags: --out=<dir> --only=<names> --dark|--light --size=WxH)"
+    mainClass = "com.github.krpkbhdn.ccmanager.ui.git.GitShotsKt"
     classpath = sourceSets["test"].runtimeClasspath
     javaLauncher = javaToolchains.launcherFor(java.toolchain)
     jvmArgs("--enable-native-access=ALL-UNNAMED", *awtOpens.toTypedArray())

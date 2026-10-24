@@ -29,11 +29,12 @@ import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.notification.NotificationService
 import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.project.ProjectService
+import com.github.krpkbhdn.ccmanager.ui.git.FakeGit
+import com.github.krpkbhdn.ccmanager.ui.git.FakeRepoData
+import com.github.krpkbhdn.ccmanager.ui.git.SampleRepos
 import com.github.krpkbhdn.ccmanager.ui.state.Backend
 import com.github.krpkbhdn.ccmanager.ui.state.TerminalPort
 import com.github.krpkbhdn.ccmanager.workspace.DirectoryOpener
-import com.github.krpkbhdn.ccmanager.workspace.GitDiff
-import com.github.krpkbhdn.ccmanager.workspace.GitDiffService
 import com.github.krpkbhdn.ccmanager.workspace.IdeLauncher
 import java.nio.file.Path
 import java.time.Instant
@@ -51,7 +52,7 @@ import org.mockito.Mockito.`when`
 private fun ago(seconds: Long): Instant = Instant.now().minusSeconds(seconds)
 
 /** In-memory backend data for the dev preview; Mockito keeps it independent of the real services' constructors. */
-class PreviewWorld(many: Boolean = false, empty: Boolean = false) {
+class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeRepoData = SampleRepos.busy()) {
     @Volatile var claudeInstalled = true
     private val changeListeners = mutableListOf<Runnable>()
     private val notificationListeners = mutableListOf<Consumer<AppNotification>>()
@@ -124,38 +125,6 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false) {
         ActivityEntry(ago(4), HookEventType.STOP, null, "Turn finished"),
     )
 
-    private val diff = GitDiff(
-        true,
-        listOf(
-            fileDiff("src/main/java/com/acme/SessionRegistry.java", GitDiff.ChangeType.MODIFIED, 6, 3, sampleLines()),
-            fileDiff("src/main/java/com/acme/SessionSnapshot.java", GitDiff.ChangeType.ADDED, 12, 0, emptyList()),
-            fileDiff("src/test/java/com/acme/OldRegistryTest.java", GitDiff.ChangeType.DELETED, 0, 40, emptyList()),
-            fileDiff("docs/architecture.md", GitDiff.ChangeType.MODIFIED, 4, 1, emptyList()),
-            fileDiff("assets/logo.png", GitDiff.ChangeType.UNTRACKED, 0, 0, emptyList(), binary = true),
-        ),
-    )
-
-    private fun sampleLines() = listOf(
-        GitDiff.Line(GitDiff.LineKind.META, "diff --git a/SessionRegistry.java b/SessionRegistry.java", null, null),
-        GitDiff.Line(GitDiff.LineKind.HUNK, "@@ -41,9 +41,12 @@ public class SessionRegistry {", null, null),
-        GitDiff.Line(GitDiff.LineKind.CONTEXT, "    private final Map<String, Session> live = new ConcurrentHashMap<>();", 41, 41),
-        GitDiff.Line(GitDiff.LineKind.CONTEXT, "", 42, 42),
-        GitDiff.Line(GitDiff.LineKind.REMOVED, "    public List<Session> sessions() {", 43, null),
-        GitDiff.Line(GitDiff.LineKind.REMOVED, "        return new ArrayList<>(live.values());", 44, null),
-        GitDiff.Line(GitDiff.LineKind.ADDED, "    public List<SessionSnapshot> sessions() {", null, 43),
-        GitDiff.Line(GitDiff.LineKind.ADDED, "        return live.values().stream()", null, 44),
-        GitDiff.Line(GitDiff.LineKind.ADDED, "                .map(Session::snapshot)", null, 45),
-        GitDiff.Line(GitDiff.LineKind.ADDED, "                .toList();", null, 46),
-        GitDiff.Line(GitDiff.LineKind.CONTEXT, "    }", 45, 47),
-        GitDiff.Line(GitDiff.LineKind.CONTEXT, "", 46, 48),
-        GitDiff.Line(GitDiff.LineKind.REMOVED, "    // TODO make this thread safe", 47, null),
-        GitDiff.Line(GitDiff.LineKind.ADDED, "    /** Max urgency over the project's live sessions. */", null, 49),
-        GitDiff.Line(GitDiff.LineKind.CONTEXT, "    public AgentStatus projectStatus(long projectId) {", 48, 50),
-    )
-
-    private fun fileDiff(path: String, change: GitDiff.ChangeType, adds: Int, dels: Int, lines: List<GitDiff.Line>, binary: Boolean = false) =
-        GitDiff.FileDiff(path, null, change, adds, dels, binary, lines)
-
     fun fire() = changeListeners.toList().forEach { it.run() }
 
     fun backend(terminal: TerminalPort): Backend {
@@ -190,13 +159,10 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false) {
         val hooks = mock(HookEventStore::class.java)
         `when`(hooks.recent(anyString(), anyInt())).thenReturn(activity)
 
-        val diffs = mock(GitDiffService::class.java)
-        `when`(diffs.diff(any())).thenReturn(diff)
-
         val ide = mock(IdeLauncher::class.java)
         `when`(ide.available()).thenReturn(true)
 
-        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, diffs, mock(DirectoryOpener::class.java), ide, terminal)
+        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, terminal)
     }
 
     private fun installationNow() = if (claudeInstalled) {

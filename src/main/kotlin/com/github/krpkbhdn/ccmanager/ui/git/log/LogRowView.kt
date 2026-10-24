@@ -29,6 +29,8 @@ private val authorWidth = 120.dp
 private val dateWidth = 76.dp
 private val hashWidth = 64.dp
 private val chipsMaxWidth = 260.dp
+private const val WIDE_CHIP_LIMIT = 2
+private const val NARROW_CHIP_LIMIT = 1
 
 /** Which of the trailing columns fit; the graph and subject always show. */
 data class LogColumns(val date: Boolean, val author: Boolean, val hash: Boolean)
@@ -47,7 +49,7 @@ fun LogRowView(row: GitLog.Row, previous: GitLog.Row?, laneCount: Int, selected:
     Pressable(onClick, Modifier.fillMaxWidth(), RoundedCornerShape(Radius.sm), base = if (selected) colors.accentSoft else Color.Transparent) {
         Row(Modifier.height(LogRowHeight).padding(end = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
             GraphCell(row, previous, laneCount, LogRowHeight)
-            RefChips(commit.refs(), laneColor, Modifier.weight(1f, fill = false).widthIn(max = chipsMaxWidth).padding(end = Spacing.sm))
+            RefChips(commit.refs(), laneColor, Modifier.weight(1f, fill = false).widthIn(max = chipsMaxWidth).padding(end = Spacing.sm), limit = if (columns.date) WIDE_CHIP_LIMIT else NARROW_CHIP_LIMIT)
             Label(commit.subject(), Modifier.weight(1f), color = colors.textPrimary, style = Type.small, tooltipWhenTruncated = true)
             if (columns.author) Label(commit.authorName(), Modifier.width(authorWidth).padding(start = Spacing.sm), color = colors.textSecondary, style = Type.small)
             if (columns.date) WithTooltip(absoluteDate(commit.authorDate())) {

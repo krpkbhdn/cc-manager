@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test
 class DiffRowsTest {
     private fun line(kind: GitDiff.LineKind, text: String) = GitDiff.Line(kind, text, null, null)
 
-    private fun file(path: String) = GitDiff.FileDiff(path, null, GitDiff.ChangeType.MODIFIED, 1, 1, false, emptyList())
 
     @Test
     fun `changed middle skips the shared prefix and suffix`() {
@@ -39,13 +38,6 @@ class DiffRowsTest {
     fun `unpaired lines carry no highlight`() {
         val rows = diffRows(listOf(line(GitDiff.LineKind.REMOVED, "a"), line(GitDiff.LineKind.REMOVED, "b"), line(GitDiff.LineKind.ADDED, "c")))
         assertThat(rows[1].highlight).isNull()
-    }
-
-    @Test
-    fun `file tree groups files under directory headings`() {
-        val tree = fileTree(listOf(file("src/b/B.java"), file("README.md"), file("src/a/A.java"), file("src/a/C.java")))
-        assertThat(tree.map { (it as? FileTreeEntry.Directory)?.path ?: (it as FileTreeEntry.File).file.path })
-            .containsExactly("README.md", "src/a", "src/a/A.java", "src/a/C.java", "src/b", "src/b/B.java")
     }
 
     @Test

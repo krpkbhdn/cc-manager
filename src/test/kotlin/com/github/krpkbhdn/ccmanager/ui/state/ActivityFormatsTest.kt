@@ -39,15 +39,6 @@ class ActivityFormatsTest {
     }
 
     @Test
-    fun `selected file falls back to the first one`() {
-        val files = listOf(file("a"), file("b"))
-
-        assertThat(selectedFile(files, "b")?.path).isEqualTo("b")
-        assertThat(selectedFile(files, "gone")?.path).isEqualTo("a")
-        assertThat(selectedFile(emptyList(), null)).isNull()
-    }
-
-    @Test
     fun `renamed files show both names`() {
         assertThat(renameLabel(file("new", GitDiff.ChangeType.RENAMED, "old"))).isEqualTo("old -> new")
         assertThat(renameLabel(file("same"))).isEqualTo("same")

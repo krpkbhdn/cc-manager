@@ -100,7 +100,7 @@ private suspend fun captureTour(capture: Capture, state: AppState, world: Previe
     state.openSession("s-needs")
     state.openSession("s-working")
     capture.take("2-project-terminal")
-    state.select(1, ProjectTab.Diff)
+    state.select(1, ProjectTab.Git)
     capture.take("3-diff")
     state.select(1, ProjectTab.Activity)
     capture.take("4-activity")

@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -22,17 +23,18 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
-private const val MAX_CHIPS = 3
+private const val DEFAULT_LIMIT = 3
 private val chipIcon = 11.dp
+private val chipLabelMax = 130.dp
 
 /** Refs of a commit as small chips: HEAD, local branches in the lane colour, remotes neutral, tags amber. */
 @Composable
-fun RefChips(refs: List<GitLog.Ref>, laneColor: Color, modifier: Modifier = Modifier) {
+fun RefChips(refs: List<GitLog.Ref>, laneColor: Color, modifier: Modifier = Modifier, limit: Int = DEFAULT_LIMIT) {
     if (refs.isEmpty()) return
-    val shown = refs.sortedBy { it.kind().ordinal }.take(MAX_CHIPS)
+    val shown = refs.sortedBy { it.kind().ordinal }.take(limit)
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
         shown.forEach { RefChip(it, laneColor) }
-        if (refs.size > MAX_CHIPS) Label("+${refs.size - MAX_CHIPS}", color = colors.textTertiary, style = Type.numericCaption)
+        if (refs.size > limit) Label("+${refs.size - limit}", color = colors.textTertiary, style = Type.numericCaption)
     }
 }
 
@@ -56,6 +58,6 @@ private fun ChipBody(icon: ImageVector, text: String, tint: Color) {
         horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
         Glyph(icon, tint, size = chipIcon)
-        Label(text, color = tint, style = Type.captionMedium)
+        Label(text, Modifier.widthIn(max = chipLabelMax), color = tint, style = Type.captionMedium)
     }
 }

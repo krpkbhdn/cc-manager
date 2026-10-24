@@ -13,6 +13,8 @@ import com.github.krpkbhdn.ccmanager.CcManagerApplication
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.ui.chrome.MainWindow
+import com.github.krpkbhdn.ccmanager.ui.git.GitDemoRepo
+import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.Backend
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
@@ -56,7 +58,12 @@ internal fun runReal(args: Array<String>) {
             LaunchedEffect(Unit) {
                 window.isAlwaysOnTop = true
                 val capture = Capture(window, out, "real-${if (dark) "dark" else "light"}-${size[0]}")
-                if ("--shortcuts" in args) shortcutProbe(capture, state, out.resolve("shortcuts.txt")) else if ("--attention" in args) attentionTour(capture, state) else realTour(capture, state, prompts = "--noprompt" !in args)
+                when {
+                    "--shortcuts" in args -> shortcutProbe(capture, state, out.resolve("shortcuts.txt"))
+                    "--attention" in args -> attentionTour(capture, state)
+                    "--git" in args -> gitTour(capture, state)
+                    else -> realTour(capture, state, prompts = "--noprompt" !in args)
+                }
                 backend.sessions.sessions().forEach { TerminalHost.close(it.ccmSessionId()) }
                 context.close()
                 exitApplication()
@@ -127,10 +134,25 @@ private suspend fun realTour(capture: Capture, state: AppState, prompts: Boolean
         waitUntil(60_000) { state.live.find(apiSession)?.status == AgentStatus.IDLE }
     }
     capture.take("11-after-approval")
-    state.select(api.id, ProjectTab.Diff)
+    state.select(api.id, ProjectTab.Git)
     capture.take("12-real-diff")
     state.select(api.id, ProjectTab.Activity)
     capture.take("13-real-activity")
+}
+
+private const val GIT_LOAD_MILLIS = 2_500L
+
+/** `--real --git`: adds the throwaway ccm-sandbox/git-demo repository and shoots every Git section against the real git services. */
+private suspend fun gitTour(capture: Capture, state: AppState) {
+    val repo = GitDemoRepo.create(sandbox)
+    state.addProjectAt(repo)
+    delay(GIT_LOAD_MILLIS)
+    val project = state.projects.first { it.path == repo }
+    GitSubView.entries.forEach { view ->
+        state.openGit(project.id, view)
+        delay(GIT_LOAD_MILLIS)
+        capture.take("git-${view.name.lowercase()}")
+    }
 }
 
 private const val SHIFT_TAB = "\u001b[Z"
