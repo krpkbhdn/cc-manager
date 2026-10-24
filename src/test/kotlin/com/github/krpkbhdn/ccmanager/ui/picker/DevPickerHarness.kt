@@ -32,6 +32,10 @@ private const val WINDOW_X = 100
 private const val WINDOW_Y = 60
 private const val WINDOW_W = 1000
 private const val WINDOW_H = 700
+private const val ROW_X = 500
+private const val THIRD_ROW_Y = 344
+private const val BACK_X = 70
+private const val TOOLTIP_WAIT_MILLIS = 1600L
 private const val HEADER_X = 400
 private const val HEADER_Y = 85
 private const val EYE_X = 930
@@ -122,9 +126,30 @@ private class Script(private val window: java.awt.Window, private val outDir: Fi
         paste(sandbox.toString(), select = true)
         press(KeyEvent.VK_ENTER)
         shot("14-typed-path-jump")
+        click(ROW_X, THIRD_ROW_Y)
+        click(ROW_X, THIRD_ROW_Y)
+        shot("15-double-click-open")
+        alt(KeyEvent.VK_LEFT)
+        alt(KeyEvent.VK_RIGHT)
+        shot("16-alt-right-forward")
+        alt(KeyEvent.VK_LEFT)
+        ctrl(KeyEvent.VK_L)
+        paste(sandbox.toString() + File.separator + "zet", select = true)
+        press(KeyEvent.VK_TAB)
+        shot("17-tab-complete")
+        press(KeyEvent.VK_ESCAPE)
+        robot.mouseMove(bounds.x + BACK_X, bounds.y + TOOLBAR_Y)
+        robot.mouseMove(bounds.x + BACK_X + 2, bounds.y + TOOLBAR_Y + 2)
+        Thread.sleep(TOOLTIP_WAIT_MILLIS)
+        shot("18-tooltip")
         ctrl(KeyEvent.VK_ENTER)
-        shot("15-picked")
+        shotNow("19-closing-mid-animation")
+        shot("20-picked")
         Runtime.getRuntime().halt(0)
+    }
+
+    private fun shotNow(name: String) {
+        ImageIO.write(robot.createScreenCapture(Rectangle(bounds)), "png", File(outDir, "$name.png"))
     }
 
     private fun shot(name: String) {

@@ -1,7 +1,6 @@
 package com.github.krpkbhdn.ccmanager.ui.picker
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -25,9 +24,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
@@ -40,7 +37,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.ui.components.HorizontalRule
 import com.github.krpkbhdn.ccmanager.ui.components.VerticalRule
-import com.github.krpkbhdn.ccmanager.ui.components.cardSurface
+import com.github.krpkbhdn.ccmanager.ui.components.card
+import com.github.krpkbhdn.ccmanager.ui.theme.Motion
 import com.github.krpkbhdn.ccmanager.ui.theme.Radius
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import kotlinx.coroutines.Dispatchers
@@ -49,14 +47,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.nio.file.Path
 
-private val dialogMaxWidth = 720.dp
-private val dialogMaxHeight = 520.dp
-private val dialogElevation = 32.dp
+private val dialogMaxWidth = 800.dp
+private val dialogMaxHeight = 560.dp
 private const val DIALOG_WIDTH_FRACTION = 0.94f
 private const val DIALOG_HEIGHT_FRACTION = 0.92f
-private const val ANIMATION_MILLIS = 180
+private const val ANIMATION_MILLIS = Motion.BASE
 private const val CARD_START_SCALE = 0.96f
-private const val SHADOW_ALPHA = 0.45f
 
 /** In-app modal folder browser used to add a project; replaces the native chooser. */
 @Composable
@@ -69,7 +65,7 @@ internal fun FolderPicker(initial: Path?, recents: RecentFolders, onDismiss: () 
     val scope = rememberCoroutineScope()
     val state = remember { FolderPickerState(initial, scope, recents) }
     var open by remember { mutableStateOf(false) }
-    val progress by animateFloatAsState(if (open) 1f else 0f, tween(ANIMATION_MILLIS))
+    val progress by animateFloatAsState(if (open) 1f else 0f, Motion.base())
     val listFocus = remember { FocusRequester() }
     val listState = rememberLazyListState()
     val rows = remember(state.listing, state.showHidden, state.filter.text) {
@@ -91,17 +87,16 @@ internal fun FolderPicker(initial: Path?, recents: RecentFolders, onDismiss: () 
         closeThen { onPicked(chosen) }
     }
     LaunchedEffect(Unit) { open = true; listFocus.requestFocus() }
-    val shape = RoundedCornerShape(Radius.lg)
+    val shape = RoundedCornerShape(Radius.xl)
     Box(
         Modifier.fillMaxSize().background(colors.scrim.copy(alpha = colors.scrim.alpha * progress))
             .pointerInput(Unit) { detectTapGestures { closeThen(onDismiss) } },
         contentAlignment = Alignment.Center,
     ) {
         Column(
-            Modifier.fillMaxWidth(DIALOG_WIDTH_FRACTION).widthIn(max = dialogMaxWidth).fillMaxHeight(DIALOG_HEIGHT_FRACTION).heightIn(max = dialogMaxHeight)
+            Modifier.widthIn(max = dialogMaxWidth).fillMaxWidth(DIALOG_WIDTH_FRACTION).heightIn(max = dialogMaxHeight).fillMaxHeight(DIALOG_HEIGHT_FRACTION)
                 .graphicsLayer { alpha = progress; scaleX = CARD_START_SCALE + (1 - CARD_START_SCALE) * progress; scaleY = scaleX }
-                .shadow(dialogElevation, shape, ambientColor = Color.Black.copy(SHADOW_ALPHA), spotColor = Color.Black.copy(SHADOW_ALPHA))
-                .cardSurface(shape)
+                .card(shape, colors.surfaceRaised, raised = true)
                 .pointerInput(Unit) { detectTapGestures { } }
                 .onKeyEvent { cardKey(it, state, ::confirm) { closeThen(onDismiss) } },
         ) {

@@ -28,17 +28,17 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
-import com.github.krpkbhdn.ccmanager.ui.components.AppIcon
-import com.github.krpkbhdn.ccmanager.ui.components.FontSize
+import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.components.Glyph
 import com.github.krpkbhdn.ccmanager.ui.components.Label
 import com.github.krpkbhdn.ccmanager.ui.components.Pressable
-import com.github.krpkbhdn.ccmanager.ui.components.cardSurface
+import com.github.krpkbhdn.ccmanager.ui.components.card
+import com.github.krpkbhdn.ccmanager.ui.theme.Type
+import com.github.krpkbhdn.ccmanager.ui.theme.IconSize
 import com.github.krpkbhdn.ccmanager.ui.theme.Radius
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
@@ -70,16 +70,16 @@ private fun Breadcrumbs(state: FolderPickerState, modifier: Modifier) {
             .padding(horizontal = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Glyph(AppIcon.Folder, colors.textTertiary, Modifier.padding(horizontal = Spacing.xs))
+        Glyph(Icons.Folder, colors.textTertiary, Modifier.padding(horizontal = Spacing.xs))
         crumbs.forEachIndexed { index, crumb ->
-            if (index > 0) PickerGlyph(PickerIcon.ChevronRight, colors.textTertiary, size = 12.dp)
+            if (index > 0) Glyph(Icons.ChevronRight, colors.textTertiary, size = IconSize.small)
             val last = index == crumbs.lastIndex
             Pressable({ crumb.path?.let(state::open) }, enabled = crumb.path != null && !last) {
                 Label(
                     crumb.label,
                     Modifier.widthIn(max = crumbMaxWidth).padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                     color = if (last) colors.textPrimary else colors.textSecondary,
-                    weight = if (last) FontWeight.SemiBold else FontWeight.Normal,
+                    style = if (last) Type.heading else Type.body,
                 )
             }
         }
@@ -107,8 +107,8 @@ private fun PathEditor(state: FolderPickerState, onFocusList: () -> Unit, modifi
     Box(modifier) {
         PickerField(
             state.pathText, "Type or paste a folder path", Modifier.fillMaxWidth(), focus, invalid = check != PathCheck.Valid && text.isNotBlank(), mono = true,
-            leading = { Glyph(AppIcon.Folder, colors.textTertiary) },
-            trailing = { if (text.isNotBlank()) check.message?.let { Label(it, color = colors.danger, size = FontSize.small) } },
+            leading = { Glyph(Icons.Folder, colors.textTertiary) },
+            trailing = { if (text.isNotBlank()) check.message?.let { Label(it, color = colors.danger, style = Type.small) } },
         ) { event ->
             when {
                 event.type != KeyEventType.KeyDown -> false
@@ -126,16 +126,16 @@ private fun PathEditor(state: FolderPickerState, onFocusList: () -> Unit, modifi
 private fun SuggestionPopup(suggestions: List<Path>, onPick: (Path) -> Unit) {
     val offsetY = with(LocalDensity.current) { barHeight.roundToPx() + suggestionGapPx }
     Popup(alignment = Alignment.TopStart, offset = IntOffset(0, offsetY), properties = PopupProperties(focusable = false)) {
-        Column(Modifier.widthIn(max = suggestionWidth).cardSurface(RoundedCornerShape(Radius.md)).padding(Spacing.xs), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        Column(Modifier.widthIn(max = suggestionWidth).card(RoundedCornerShape(Radius.md), colors.surfaceRaised, raised = true).padding(Spacing.xs), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             suggestions.forEach { path ->
                 Pressable({ onPick(path) }, Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                        PickerGlyph(PickerIcon.FolderTinted, colors.accent)
+                        Glyph(Icons.Folder, colors.accent)
                         Label(path.fileName?.toString() ?: path.toString())
                     }
                 }
             }
-            Label("Tab completes the first match", Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs), color = colors.textTertiary, size = FontSize.caption)
+            Label("Tab completes the first match", Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs), color = colors.textTertiary, style = Type.caption)
         }
     }
 }
