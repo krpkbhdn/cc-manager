@@ -10,6 +10,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -26,8 +28,6 @@ import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.ui.components.HorizontalRule
 import com.github.krpkbhdn.ccmanager.ui.components.IconButton
-import com.github.krpkbhdn.ccmanager.ui.components.Label
-import com.github.krpkbhdn.ccmanager.ui.components.WithTooltip
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.shortcuts.AppShortcut
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
@@ -37,11 +37,9 @@ import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectView
 import com.github.krpkbhdn.ccmanager.ui.state.byUrgency
-import com.github.krpkbhdn.ccmanager.ui.state.effectiveModelLabel
 import com.github.krpkbhdn.ccmanager.ui.state.sessionTitle
 import com.github.krpkbhdn.ccmanager.ui.theme.Motion
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
-import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
 private const val ENDED_SESSION_LABEL = "Ended session"
@@ -65,7 +63,6 @@ fun ProjectScreen(state: AppState, project: Project, modifier: Modifier = Modifi
             ideAvailable = state.ideAvailable,
             launching = state.launching,
             gitSummary = gitState?.summary,
-            modelPicker = { ModelPicker(state, project) },
             actions = ProjectHeaderActions(
                 onLaunch = { state.launch(project.id, it) },
                 onOpenFolder = { state.openFolder(project) },
@@ -108,9 +105,8 @@ private fun ProjectMainArea(state: AppState, project: Project, view: ProjectView
             onClose = { (it as? ProjectTab.Session)?.let { session -> state.requestCloseSession(project.id, session.ccmSessionId) } },
             onNewSession = { state.launch(project.id, LaunchMode.NEW) },
         ) {
-            (view.selected as? ProjectTab.Session)?.let { tab -> state.sessionUsage[tab.ccmSessionId] }?.let { effectiveModelLabel(it.modelName(), it.effort()) }?.let { label ->
-                WithTooltip("Model and effort this session runs with") { Label(label, Modifier.padding(end = Spacing.sm), color = colors.textTertiary, style = Type.caption) }
-            }
+            ModelControl(state, project, (view.selected as? ProjectTab.Session)?.let { state.live.find(it.ccmSessionId) })
+            Spacer(Modifier.width(Spacing.sm))
             if (onSession) {
                 IconButton(Icons.Zap, state::toggleQuickBar, tooltip = "Quick actions", hint = AppShortcut.TOGGLE_QUICK_ACTIONS.hint(), active = state.settings.quickBarOpen)
             }

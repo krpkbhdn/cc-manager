@@ -10,14 +10,17 @@ import java.util.Map;
 /** Pure builders for the claude command line and the child environment. */
 final class ClaudeCommand {
 
+    static final String RESUMED_LABEL = "claude (resumed)";
     static final String ENV_TERM = "TERM";
     static final String ENV_COLORTERM = "COLORTERM";
     static final String ENV_SESSION = "CCM_SESSION";
     static final String TERM_VALUE = "xterm-256color";
     static final String COLORTERM_VALUE = "truecolor";
-    /** Would turn off Claude colors or make it think it runs inside another agent or terminal host. */
+    /** Would turn off Claude colors or make it think it runs inside another agent (which also switches off transcripts, so no --resume) or terminal host. */
     private static final List<String> INHERITED_ENV_TO_DROP = List.of(
-            "NO_COLOR", "FORCE_COLOR", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "AI_AGENT", "TERMINAL_EMULATOR", "TERM_SESSION_ID");
+            "NO_COLOR", "FORCE_COLOR", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_CHILD_SESSION",
+            "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_SESSION_ATTENDED", "CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN", "CLAUDE_CODE_SSE_PORT", "CLAUDE_CODE_EXECPATH", "CLAUDE_PID",
+            "AI_AGENT", "TERMINAL_EMULATOR", "TERM_SESSION_ID");
 
     private ClaudeCommand() {}
 
@@ -29,6 +32,15 @@ final class ClaudeCommand {
             case CONTINUE -> command.add("--continue");
             case RESUME_PICKER -> command.add("--resume");
         }
+        return command;
+    }
+
+    /** The same conversation in a new process; the flags apply to that session only. */
+    static List<String> resumeArguments(Path executable, Path settingsFile, String claudeSessionId, ModelSelection selection) {
+        List<String> command = base(executable, settingsFile);
+        command.addAll(selection.arguments());
+        command.add("--resume");
+        command.add(claudeSessionId);
         return command;
     }
 

@@ -41,15 +41,21 @@ class ClaudeCommandTest {
 
     @Test
     void environmentDropsVariablesThatBreakClaudeColors() {
-        Map<String, String> env = ClaudeCommand.environment(Map.of("NO_COLOR", "1", "CLAUDECODE", "1", "CLAUDE_CONFIG_DIR", "d"), "ccm-1");
+        Map<String, String> env = ClaudeCommand.environment(Map.of("NO_COLOR", "1", "CLAUDECODE", "1", "CLAUDE_CODE_CHILD_SESSION", "1", "CLAUDE_CONFIG_DIR", "d"), "ccm-1");
 
-        assertThat(env).doesNotContainKeys("NO_COLOR", "CLAUDECODE").containsEntry("CLAUDE_CONFIG_DIR", "d");
+        assertThat(env).doesNotContainKeys("NO_COLOR", "CLAUDECODE", "CLAUDE_CODE_CHILD_SESSION").containsEntry("CLAUDE_CONFIG_DIR", "d");
     }
 
     @Test
     void selectionFlagsComeBeforeTheModeFlagSoResumeKeepsItsOptionalValueFree() {
         assertThat(ClaudeCommand.launchArguments(EXE, SETTINGS, LaunchMode.RESUME_PICKER, new ModelSelection("sonnet", "low")))
                 .containsExactly(EXE.toString(), "--settings", SETTINGS.toString(), "--model", "sonnet", "--effort", "low", "--resume");
+    }
+
+    @Test
+    void resumeKeepsTheConversationAndPutsSelectionFirst() {
+        assertThat(ClaudeCommand.resumeArguments(EXE, SETTINGS, "ab-12", new ModelSelection("sonnet", "high")))
+                .containsExactly(EXE.toString(), "--settings", SETTINGS.toString(), "--model", "sonnet", "--effort", "high", "--resume", "ab-12");
     }
 
     @Test

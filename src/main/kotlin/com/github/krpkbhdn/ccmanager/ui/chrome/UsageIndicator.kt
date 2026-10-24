@@ -49,7 +49,7 @@ internal fun UsageIndicator(state: AppState) {
 private fun UsageChip(meters: List<UsageMeter>, active: Boolean, onClick: () -> Unit) {
     WithTooltip("Usage", hint = AppShortcut.USAGE.hint()) {
         Pressable(onClick, Modifier.height(chipHeight), shape = RoundedCornerShape(Radius.sm + 1.dp), base = if (active) colors.accentSoft else Color.Transparent) {
-            Row(Modifier.padding(horizontal = Spacing.sm), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+            Row(Modifier.fillMaxHeight().padding(horizontal = Spacing.md), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 if (meters.isEmpty()) {
                     Glyph(Icons.Gauge, colors.textTertiary, size = IconSize.medium)
                     Label("No usage data", color = colors.textTertiary, style = Type.caption)

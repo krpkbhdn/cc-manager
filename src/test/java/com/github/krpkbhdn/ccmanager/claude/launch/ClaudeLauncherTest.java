@@ -11,6 +11,7 @@ import com.github.krpkbhdn.ccmanager.claude.hook.HookSettingsWriter;
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation;
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
+import com.github.krpkbhdn.ccmanager.project.ModelSelection;
 import com.github.krpkbhdn.ccmanager.project.Project;
 import com.github.krpkbhdn.ccmanager.project.ProjectService;
 import java.nio.file.Files;
@@ -51,6 +52,13 @@ class ClaudeLauncherTest {
         when(projects.find(anyLong())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> launcher.launch(1, LaunchMode.NEW)).hasMessageContaining("project");
+    }
+
+    @Test
+    void restartRejectsMissingOrUnsafeConversationIds() {
+        assertThatThrownBy(() -> launcher.restart(1, null, ModelSelection.DEFAULT)).hasMessageContaining("no conversation");
+        assertThatThrownBy(() -> launcher.restart(1, "a b;c", ModelSelection.DEFAULT)).isInstanceOf(IllegalStateException.class);
+        verify(sessions, never()).register(anyLong());
     }
 
     @Test

@@ -85,6 +85,8 @@ class AppState(
     var notificationsOpen by mutableStateOf(false)
     var usageOpen by mutableStateOf(false)
     var modelPickerOpen by mutableStateOf(false)
+    var modelSwitching by mutableStateOf(false)
+        private set
     var loginBannerDismissed by mutableStateOf(false)
 
     val views = mutableStateMapOf<Long, ProjectView>()
@@ -261,6 +263,20 @@ class AppState(
                 navigate(Route.Project(projectId))
             }
             launching = false
+        }
+    }
+
+    /** Resumes the session's conversation with [selection]; only for a free session, see [modelTarget]. */
+    fun restartSession(session: SessionSnapshot, selection: ModelSelection) {
+        if ((modelTarget(session, modelSwitching) as? ModelTarget.Running)?.blockedReason != null) return
+        modelSwitching = true
+        scope.launch {
+            guarded {
+                val restarted = SessionRestarter(backend) { live.find(it) != null }.restart(session, selection)
+                backend.terminal.open(restarted)
+                views[session.projectId] = viewOf(session.projectId).closeSession(session.ccmSessionId).openSession(restarted.ccmSessionId)
+            }
+            modelSwitching = false
         }
     }
 
