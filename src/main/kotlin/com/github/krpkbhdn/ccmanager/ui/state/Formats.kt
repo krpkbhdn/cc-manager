@@ -83,6 +83,14 @@ fun changeLetter(change: GitDiff.ChangeType): String = when (change) {
     GitDiff.ChangeType.UNTRACKED -> "U"
 }
 
+fun changeLabel(change: GitDiff.ChangeType): String = when (change) {
+    GitDiff.ChangeType.ADDED -> "Added"
+    GitDiff.ChangeType.MODIFIED -> "Modified"
+    GitDiff.ChangeType.DELETED -> "Deleted"
+    GitDiff.ChangeType.RENAMED -> "Renamed"
+    GitDiff.ChangeType.UNTRACKED -> "New file"
+}
+
 fun fileName(path: String): String = path.substringAfterLast('/')
 
 fun parentDirectory(path: String): String = path.substringBeforeLast('/', "")

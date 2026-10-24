@@ -9,6 +9,8 @@ import com.github.krpkbhdn.ccmanager.claude.hook.ActivityEntry
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation
 import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgent
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
+import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
+import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import com.github.krpkbhdn.ccmanager.notification.AppNotification
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.project.Project
@@ -27,12 +29,23 @@ private const val NOTIFICATION_CAP = 100
 private const val TICK_MILLIS = 1_000L
 private const val ACTIVITY_LIMIT = 300
 private const val UNEXPECTED_ERROR = "Something went wrong"
+private const val ACTION_FAILED_TITLE = "Action failed"
+private const val ADD_FAILED_TITLE = "Could not add project"
 
 /**
  * Single subscription point to the backend: re-reads snapshots on change callbacks (any thread) and exposes
  * Compose state. All state writes happen on [scope], which must run on the UI dispatcher.
  */
-class AppState(private val backend: Backend, private val scope: CoroutineScope) {
+class AppState(
+    private val backend: Backend,
+    private val scope: CoroutineScope,
+    private val settingsStore: UiSettingsStore = UiSettingsStore.inUserHome(),
+) {
+    var settings by mutableStateOf(settingsStore.load())
+        private set
+    var paletteOpen by mutableStateOf(false)
+    var pickerOpen by mutableStateOf(false)
+
     var installation by mutableStateOf<ClaudeInstallation?>(null)
         private set
     var checkingInstallation by mutableStateOf(false)
@@ -55,8 +68,6 @@ class AppState(private val backend: Backend, private val scope: CoroutineScope) 
         private set
     var confirm by mutableStateOf<ConfirmRequest?>(null)
     var renaming by mutableStateOf<RenameRequest?>(null)
-    var addError by mutableStateOf<String?>(null)
-        private set
     var launching by mutableStateOf(false)
         private set
     var notificationsOpen by mutableStateOf(false)
@@ -139,11 +150,16 @@ class AppState(private val backend: Backend, private val scope: CoroutineScope) 
         readUpTo = notifications.maxOfOrNull { it.id } ?: readUpTo
     }
 
-    fun addProject() {
-        addError = null
+    /** Opens the folder picker; the chosen directory is handed to [addProjectAt]. */
+    fun requestAddProject() {
+        paletteOpen = false
+        pickerOpen = true
+    }
+
+    fun addProjectAt(directory: Path) {
+        pickerOpen = false
         scope.launch {
-            guarded(onError = { addError = it }) {
-                val directory = io { DirectoryChooser.choose() } ?: return@guarded
+            guarded(onError = { reportError(ADD_FAILED_TITLE, it) }) {
                 val added = io { backend.projects.add(directory) }
                 loadProjects()
                 navigate(Route.Project(added.id))
@@ -151,8 +167,27 @@ class AppState(private val backend: Backend, private val scope: CoroutineScope) 
         }
     }
 
-    fun clearAddError() {
-        addError = null
+    fun updateSettings(transform: (UiSettings) -> UiSettings) {
+        settings = transform(settings)
+        settingsStore.save(settings)
+    }
+
+    fun toggleSidebar() = updateSettings { it.copy(sidebarCollapsed = !it.sidebarCollapsed) }
+
+    fun toggleAgents() = updateSettings { it.copy(agentsOpen = !it.agentsOpen) }
+
+    fun toggleQuickBar() = updateSettings { it.copy(quickBarOpen = !it.quickBarOpen) }
+
+    fun setThemeMode(mode: ThemeMode) = updateSettings { it.copy(themeMode = mode) }
+
+    /** Flips between light and dark, starting from whatever [systemDark] says when following the system. */
+    fun toggleTheme(systemDark: Boolean) {
+        val dark = when (settings.themeMode) {
+            ThemeMode.SYSTEM -> systemDark
+            ThemeMode.DARK -> true
+            ThemeMode.LIGHT -> false
+        }
+        setThemeMode(if (dark) ThemeMode.LIGHT else ThemeMode.DARK)
     }
 
     fun renameProject(project: Project, name: String) {
@@ -263,7 +298,9 @@ class AppState(private val backend: Backend, private val scope: CoroutineScope) 
         )
     }
 
-    fun reportError(message: String) = pushToast(ToastItem(nextToastId(), NotificationKind.ERROR, "Action failed", message))
+    fun reportError(message: String) = reportError(ACTION_FAILED_TITLE, message)
+
+    fun reportError(title: String, message: String) = pushToast(ToastItem(nextToastId(), NotificationKind.ERROR, title, message))
 
     private fun nextToastId() = -(++toastCounter)
 
@@ -302,6 +339,13 @@ class AppState(private val backend: Backend, private val scope: CoroutineScope) 
         val previous = live.sessions.associate { it.ccmSessionId to it.status }
         live = LiveSessions(sessions, statuses)
         projectsBecameIdle(previous, sessions).filter { it in diffs }.forEach(::refreshDiff)
+    }
+
+    /** A toast asking for the user is stale once its session left NEEDS_ACTION, whoever answered. */
+    private fun dismissResolvedAttentionToasts(previous: Map<String, AgentStatus>, current: List<SessionSnapshot>) {
+        val resolved = current.filter { previous[it.ccmSessionId] == AgentStatus.NEEDS_ACTION && it.status != AgentStatus.NEEDS_ACTION }.map { it.ccmSessionId }.toSet()
+        if (resolved.isEmpty()) return
+        toasts = toasts.filterNot { it.kind == NotificationKind.NEEDS_ACTION && it.ccmSessionId in resolved }
     }
 
     private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { block() }

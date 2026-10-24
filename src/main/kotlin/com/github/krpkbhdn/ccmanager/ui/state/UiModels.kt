@@ -34,6 +34,7 @@ data class ConfirmRequest(
     val title: String,
     val message: String,
     val confirmLabel: String,
+    val destructive: Boolean = true,
     val onConfirm: () -> Unit,
 )
 
