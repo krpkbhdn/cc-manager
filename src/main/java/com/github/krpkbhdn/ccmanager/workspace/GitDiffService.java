@@ -21,8 +21,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class GitDiffService {
 
-    static final int MAX_LINES_PER_FILE = 2000;
-    static final int MAX_TOTAL_LINES = 20000;
+    public static final int MAX_LINES_PER_FILE = 2000;
+    public static final int MAX_TOTAL_LINES = 20000;
     static final int MAX_UNTRACKED_BYTES = 64 * 1024;
     private static final Duration GIT_TIMEOUT = Duration.ofSeconds(15);
     private static final String EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
