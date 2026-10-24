@@ -19,6 +19,7 @@ Direction (not built yet): one coordinating Claude that routes user requests to 
 
 - Java 25 (Jewel 0.41 classes are Java 25 bytecode; Java 21 fails with `UnsupportedClassVersionError`), Spring Boot 4.1, Kotlin 2.4 (UI only).
 - UI: Compose Multiplatform 1.12 + Jewel standalone (`jewel-int-ui-standalone`). Compose is Kotlin-only, hence the Kotlin source set.
+- Storage: SQLite (`sqlite-jdbc`, WAL) in `~/.cc-manager/cc-manager.db` (`cc-manager.data-dir`), schema via Flyway SQL migrations in `src/main/resources/db/migration` (`V<n>__name.sql`, never edit an applied one). Access through `JdbcClient`, not JPA.
 - Gradle (Kotlin DSL) — the Compose plugin owns desktop packaging (`packageMsi` / `packageDeb` / `packageDmg`), so no Maven.
 - Single module for now: `src/main/java` (Spring, domain logic) and `src/main/kotlin` (Compose UI). Package root `com.github.krpkbhdn.ccmanager`; UI in `.ui`.
 - Spring runs **in-process without a web server** (`WebApplicationType.NONE`, `headless(false)`); the UI is started from `ui/Main.kt` and calls Spring beans directly.

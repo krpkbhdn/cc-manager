@@ -10,7 +10,7 @@ plugins {
 }
 
 group = "com.github.krpkbhdn"
-version = "1.0.0"
+version = "1.0.1"
 
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(25)
@@ -19,10 +19,17 @@ java {
 repositories {
     mavenCentral()
     google()
+    maven("https://packages.jetbrains.team/maven/p/ij/intellij-dependencies")
 }
 
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter")
+    implementation("org.springframework.boot:spring-boot-starter-jdbc")
+    implementation("org.springframework.boot:spring-boot-starter-flyway")
+    implementation("org.xerial:sqlite-jdbc:3.50.3.0")
+    implementation("org.jetbrains.pty4j:pty4j:0.14.0")
+    implementation("org.jetbrains.jediterm:jediterm-core:3.76")
+    implementation("org.jetbrains.jediterm:jediterm-ui:3.76")
     implementation(compose.desktop.currentOs)
     implementation("org.jetbrains.jewel:jewel-int-ui-standalone:0.41.0-262.10968.63")
 
@@ -32,12 +39,14 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
 }
 
 compose.desktop {
     application {
         mainClass = "com.github.krpkbhdn.ccmanager.ui.MainKt"
         javaHome = javaToolchains.launcherFor(java.toolchain).get().metadata.installationPath.asFile.absolutePath
+        jvmArgs += "--enable-native-access=ALL-UNNAMED"
         nativeDistributions {
             targetFormats(TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Dmg)
             packageName = "Claude Code Manager"
