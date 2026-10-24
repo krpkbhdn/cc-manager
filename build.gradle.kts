@@ -10,7 +10,7 @@ plugins {
 }
 
 group = "com.github.krpkbhdn"
-version = "1.0.1"
+version = "1.0.2"
 
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(25)
@@ -25,6 +25,7 @@ repositories {
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter")
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
+    implementation("org.springframework.boot:spring-boot-starter-json")
     implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation("org.xerial:sqlite-jdbc:3.50.3.0")
     implementation("org.jetbrains.pty4j:pty4j:0.14.0")
