@@ -10,7 +10,7 @@ plugins {
 }
 
 group = "com.github.krpkbhdn"
-version = "1.0.4"
+version = "1.0.5"
 
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(25)
@@ -32,6 +32,7 @@ dependencies {
     implementation("org.jetbrains.jediterm:jediterm-core:3.76")
     implementation("org.jetbrains.jediterm:jediterm-ui:3.76")
     implementation(compose.desktop.currentOs)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing")
     implementation("org.jetbrains.jewel:jewel-int-ui-standalone:0.41.0-262.10968.63")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
@@ -40,6 +41,15 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+}
+
+tasks.register<JavaExec>("runPreview") {
+    group = "application"
+    description = "Boots the UI with fake services (flags: --light, --shots, --out=<dir>)"
+    mainClass = "com.github.krpkbhdn.ccmanager.ui.PreviewMainKt"
+    classpath = sourceSets["test"].runtimeClasspath
+    javaLauncher = javaToolchains.launcherFor(java.toolchain)
     jvmArgs("--enable-native-access=ALL-UNNAMED")
 }
 
