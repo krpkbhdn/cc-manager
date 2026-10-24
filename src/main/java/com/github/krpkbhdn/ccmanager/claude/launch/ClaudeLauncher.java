@@ -91,6 +91,7 @@ public class ClaudeLauncher {
     private PtyProcess spawn(List<String> command, Path directory, String ccmSessionId) throws IOException {
         return new PtyProcessBuilder(command.toArray(String[]::new))
                 .setDirectory(directory.toString())
+                .setUseWinConPty(true)
                 .setEnvironment(ClaudeCommand.environment(System.getenv(), ccmSessionId))
                 .setInitialColumns(INITIAL_COLUMNS)
                 .setInitialRows(INITIAL_ROWS)

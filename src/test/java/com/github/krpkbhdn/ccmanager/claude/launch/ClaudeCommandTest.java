@@ -39,6 +39,13 @@ class ClaudeCommandTest {
     }
 
     @Test
+    void environmentDropsVariablesThatBreakClaudeColors() {
+        Map<String, String> env = ClaudeCommand.environment(Map.of("NO_COLOR", "1", "CLAUDECODE", "1", "CLAUDE_CONFIG_DIR", "d"), "ccm-1");
+
+        assertThat(env).doesNotContainKeys("NO_COLOR", "CLAUDECODE").containsEntry("CLAUDE_CONFIG_DIR", "d");
+    }
+
+    @Test
     void labelsAreShort() {
         assertThat(ClaudeCommand.label(LaunchMode.NEW)).isEqualTo("claude");
         assertThat(ClaudeCommand.label(LaunchMode.CONTINUE)).isEqualTo("claude (continue)");

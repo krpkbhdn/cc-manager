@@ -14,6 +14,9 @@ final class ClaudeCommand {
     static final String ENV_SESSION = "CCM_SESSION";
     static final String TERM_VALUE = "xterm-256color";
     static final String COLORTERM_VALUE = "truecolor";
+    /** Would turn off Claude colors or make it think it runs inside another agent or terminal host. */
+    private static final List<String> INHERITED_ENV_TO_DROP = List.of(
+            "NO_COLOR", "FORCE_COLOR", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "AI_AGENT", "TERMINAL_EMULATOR", "TERM_SESSION_ID");
 
     private ClaudeCommand() {}
 
@@ -36,6 +39,7 @@ final class ClaudeCommand {
 
     static Map<String, String> environment(Map<String, String> parent, String ccmSessionId) {
         Map<String, String> env = new HashMap<>(parent);
+        INHERITED_ENV_TO_DROP.forEach(env::remove);
         env.put(ENV_TERM, TERM_VALUE);
         env.put(ENV_COLORTERM, COLORTERM_VALUE);
         env.put(ENV_SESSION, ccmSessionId);
