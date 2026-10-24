@@ -39,6 +39,7 @@ import java.nio.file.Path
 import java.time.Instant
 import java.util.Optional
 import java.util.function.Consumer
+import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import org.jetbrains.jewel.ui.component.Text
 import org.mockito.ArgumentMatchers.any
 import org.mockito.ArgumentMatchers.anyInt
@@ -50,19 +51,34 @@ import org.mockito.Mockito.`when`
 private fun ago(seconds: Long): Instant = Instant.now().minusSeconds(seconds)
 
 /** In-memory backend data for the dev preview; Mockito keeps it independent of the real services' constructors. */
-class PreviewWorld {
+class PreviewWorld(many: Boolean = false, empty: Boolean = false) {
     @Volatile var claudeInstalled = true
     private val changeListeners = mutableListOf<Runnable>()
     private val notificationListeners = mutableListOf<Consumer<AppNotification>>()
 
-    val projects = listOf(
+    private val extraNames = listOf(
+        "customer-portal-frontend-with-a-really-long-name", "ml-pipeline", "mobile-ios", "mobile-android",
+        "data-warehouse", "auth-service", "marketing-site", "design-system",
+    )
+
+    val projects: List<Project> = if (empty) emptyList() else listOf(
         Project(1, "cc-manager", Path.of("C:/Users/dev/Work/cc-manager"), ago(9000)),
         Project(2, "billing-api", Path.of("C:/Users/dev/Work/billing-api"), ago(8000)),
         Project(3, "docs-site", Path.of("C:/Users/dev/Work/docs-site"), ago(7000)),
         Project(4, "infra-terraform", Path.of("C:/Users/dev/Work/infra-terraform"), ago(6000)),
-    )
+    ) + if (many) extraNames.mapIndexed { index, name -> Project(5L + index, name, Path.of("C:/Users/dev/Work/clients/$name"), ago(5000L - index)) } else emptyList()
 
-    val sessions = listOf(
+    private val extraSessions = if (!many || empty) emptyList() else extraNames.indices.filter { it % 2 == 0 }.map { index ->
+        val status = listOf(AgentStatus.WORKING, AgentStatus.IDLE, AgentStatus.NEEDS_ACTION, AgentStatus.IDLE)[index / 2 % 4]
+        SessionSnapshot(
+            "s-extra-$index", 5L + index, "cx$index", status, "Running Bash: npm run build", "default", "claude-opus-4-7",
+            "Session $index", ago(900), ago(5L + index * 7), emptyList(), 0, null,
+        )
+    }
+
+    val sessions: List<SessionSnapshot> = (if (empty) emptyList() else baseSessions()) + extraSessions
+
+    private fun baseSessions() = listOf(
         SessionSnapshot(
             "s-working", 1, "c1", AgentStatus.WORKING, "Running Bash: ./gradlew test", "acceptEdits", "claude-opus-4-7",
             "Refactor session registry", ago(2400), ago(4),
@@ -200,9 +216,9 @@ object PreviewTerminal : TerminalPort {
 
     @Composable
     override fun View(ccmSessionId: String, modifier: Modifier) {
-        Column(modifier.fillMaxSize().background(Color(0xFF0D0F12)).padding(16.dp)) {
+        Column(modifier.fillMaxSize().background(colors.terminal).padding(16.dp)) {
             listOf("> claude", "", "  Claude Code v2.1.143", "  Opus 4.7 - ~/Work/cc-manager", "", "> Refactor the session registry to use immutable snapshots", "", "  Reading SessionRegistry.java ...", "  Edit src/main/java/.../SessionRegistry.java")
-                .forEach { Text(it, color = Color(0xFFD7DAE0), fontFamily = FontFamily.Monospace, fontSize = 13.sp) }
+                .forEach { Text(it, color = colors.textPrimary, fontFamily = FontFamily.Monospace, fontSize = 13.sp) }
         }
     }
 }
