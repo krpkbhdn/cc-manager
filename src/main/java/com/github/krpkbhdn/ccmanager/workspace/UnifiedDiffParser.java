@@ -15,6 +15,7 @@ public final class UnifiedDiffParser {
     private static final String FILE_START = "diff --git ";
     private static final Pattern HUNK_HEADER = Pattern.compile("^@@ -(\\d+)(?:,\\d+)? \\+(\\d+)(?:,\\d+)? @@.*");
     private static final Pattern LINE_BREAK = Pattern.compile("\\r?\\n");
+    private static final Pattern LF_ONLY = Pattern.compile("\\n");
 
     private final int maxLinesPerFile;
     private final int maxTotalLines;
@@ -28,8 +29,13 @@ public final class UnifiedDiffParser {
     }
 
     public static List<FileDiff> parse(String diff, int maxLinesPerFile, int maxTotalLines) {
+        return parse(diff, maxLinesPerFile, maxTotalLines, false);
+    }
+
+    /** With {@code keepCarriageReturns} a CR before the line feed stays in the line text, so patches rebuilt from the lines still apply to CRLF files. */
+    public static List<FileDiff> parse(String diff, int maxLinesPerFile, int maxTotalLines, boolean keepCarriageReturns) {
         var parser = new UnifiedDiffParser(maxLinesPerFile, maxTotalLines);
-        LINE_BREAK.splitAsStream(diff).forEach(parser::accept);
+        (keepCarriageReturns ? LF_ONLY : LINE_BREAK).splitAsStream(diff).forEach(parser::accept);
         parser.finishFile();
         return List.copyOf(parser.files);
     }
