@@ -33,11 +33,11 @@ Packages under `com.github.krpkbhdn.ccmanager` (Java, Spring beans) and `.ui` (K
 - `claude.session` — `StatusReducer` (pure) + `SessionRegistry`: per-session status OFFLINE/IDLE(green)/WORKING(yellow)/NEEDS_ACTION(red), subagents. `notification` — status transitions to notifications.
 - `claude.launch` — `ClaudeLauncher` starts `claude` in a pty4j PTY with `CCM_SESSION` env and injected hooks; `BackgroundAgentService` wraps `claude agents --json`.
 - `workspace` — open folder, open in IntelliJ IDEA, `git diff` parsing.
-- `ui` — `Main.kt` → `AppWindow`; `state/Backend` + `AppState` bridge Spring beans to Compose; `ui/terminal` = JediTerm widget per session (`TerminalHost`), survives navigation.
+- `ui` — design system in `ui/theme` (palette, Inter + JetBrains Mono type scale, motion), Lucide icons in `ui/icons`, undecorated window with own title bar/status bar in `ui/chrome`, command palette in `ui/palette`; `Main.kt` → `AppWindow`; `state/Backend` + `AppState` bridge Spring beans to Compose; `ui/terminal` = JediTerm widget per session (`TerminalHost`), survives navigation.
 
 Hooks are observe-only: the server always answers 200 with an empty body, so the integration never changes Claude's behaviour. Claude fires no `Stop` on Esc, so the terminal reports lone-Esc to `SessionRegistry.markInterrupted`. Reference for all events and payloads: `docs/claude-code-protocol.md` (read it before touching hooks).
 
-Dev checks: `./gradlew runPreview` (UI with fake services; `--args="--shots --out=<dir>"` saves screenshots); `CCM_REAL_CLAUDE=1 ./gradlew test --tests '*RealClaudeLaunchTest'` (real claude through the whole stack, no prompt sent); `CCM_SMOKE=true` runs the hook smoke test (calls the model twice, haiku).
+Dev checks: `./gradlew runPreview` (UI with fake services; flags `--light --many --empty --size=WxH --shots --out=<dir>`; `--real [--noprompt|--attention]` boots the real stack on a temp data dir, adds the ccm-sandbox projects and launches real claude sessions, at most a few tiny prompts); `CCM_REAL_CLAUDE=1 ./gradlew test --tests '*RealClaudeLaunchTest'` (real claude through the whole stack, no prompt sent); `CCM_SMOKE=true` runs the hook smoke test (calls the model twice, haiku).
 
 ## Commands
 
