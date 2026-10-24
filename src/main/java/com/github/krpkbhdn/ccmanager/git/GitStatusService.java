@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -54,12 +55,11 @@ public class GitStatusService {
         if (!staged && !isTracked(repo, path)) {
             return untrackedDiff(repo, path);
         }
-        var args = new ArrayList<>(List.of("--literal-pathspecs", "diff", "--no-color", "--no-ext-diff", "-M"));
-        if (staged) {
-            args.add("--cached");
+        var file = trackedDiff(repo, staged, path);
+        if (!staged || file.change() != ChangeType.ADDED) {
+            return file;
         }
-        args.addAll(List.of("--", path));
-        return firstFile(git.out(repo, args.toArray(String[]::new)), path, ChangeType.MODIFIED);
+        return stagedRenameSource(repo, path).map(oldPath -> trackedDiff(repo, true, oldPath, path)).orElse(file);
     }
 
     public List<Remote> remotes(Path repo) {
@@ -72,6 +72,27 @@ public class GitStatusService {
 
     public Identity identity(Path repo) {
         return new Identity(config(repo, "user.name"), config(repo, "user.email"));
+    }
+
+    private FileDiff trackedDiff(Path repo, boolean staged, String... paths) {
+        var args = new ArrayList<>(List.of("--literal-pathspecs", "diff", "--no-color", "--no-ext-diff", "-M"));
+        if (staged) {
+            args.add("--cached");
+        }
+        args.add("--");
+        args.addAll(List.of(paths));
+        return firstFile(git.out(repo, args.toArray(String[]::new)), paths[paths.length - 1], ChangeType.MODIFIED);
+    }
+
+    /** A path-limited diff cannot see a rename, so the source is looked up in the whole staged name-status list. */
+    private Optional<String> stagedRenameSource(Path repo, String path) {
+        var fields = git.out(repo, "diff", "--cached", "-M", "--name-status", "-z").split("\0");
+        for (var i = 0; i + 2 < fields.length; i++) {
+            if (fields[i].startsWith("R") && fields[i + 2].equals(path)) {
+                return Optional.of(fields[i + 1]);
+            }
+        }
+        return Optional.empty();
     }
 
     private static void collectRemote(LinkedHashMap<String, String[]> byName, String line) {
