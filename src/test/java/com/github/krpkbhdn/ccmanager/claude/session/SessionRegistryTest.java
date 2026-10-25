@@ -36,6 +36,17 @@ class SessionRegistryTest {
     }
 
     @Test
+    void discardedSessionIgnoresLateHooksAndNeverComesBack() {
+        var id = registry.register(1);
+        registry.discard(id);
+
+        registry.on(eventFor(id, "Stop", "{}"));
+
+        assertThat(registry.find(id)).isEmpty();
+        assertThat(registry.sessions()).isEmpty();
+    }
+
+    @Test
     void hookEventsDriveStatusAndProjectStatusIsMaxOverSessions() {
         var first = registry.register(1);
         registry.register(1);

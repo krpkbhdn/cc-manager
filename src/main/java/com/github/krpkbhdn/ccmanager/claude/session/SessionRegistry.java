@@ -42,6 +42,11 @@ public class SessionRegistry {
     /** Process exited: the session leaves the registry. */
     public void markEnded(String ccmSessionId, int exitCode) {
         log.debug("Session {} ended with exit code {}", ccmSessionId, exitCode);
+        discard(ccmSessionId);
+    }
+
+    /** The user closed the session: it leaves at once so late hooks of the exiting process raise no status or notification. */
+    public void discard(String ccmSessionId) {
         if (states.remove(ccmSessionId) != null) {
             notifyListeners();
         }

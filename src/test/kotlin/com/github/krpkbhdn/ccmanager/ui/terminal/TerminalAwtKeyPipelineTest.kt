@@ -9,6 +9,10 @@ import org.junit.jupiter.api.Assumptions.assumeFalse
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.awt.GraphicsEnvironment
+import java.awt.Toolkit
+import java.awt.datatransfer.DataFlavor
+import java.awt.datatransfer.StringSelection
+import java.awt.datatransfer.Transferable
 import java.awt.KeyboardFocusManager
 import java.awt.event.InputEvent
 import java.awt.event.KeyEvent
@@ -82,5 +86,74 @@ class TerminalAwtKeyPipelineTest {
         typed('\uDE00')
         val expected = "Ñ\u0097a\u0003${ESC}b${ESC}p$ESC\r$ESC[A$ESC[Z@" + String("😀".toByteArray(), Charsets.ISO_8859_1)
         assertThat(written()).isEqualTo(expected)
+    }
+
+    private val clipboard = Toolkit.getDefaultToolkit().systemClipboard
+    private var savedClipboard: Transferable? = null
+
+    @BeforeEach
+    fun saveClipboard() {
+        savedClipboard = runCatching { clipboard.getContents(null) }.getOrNull()
+    }
+
+    @AfterEach
+    fun restoreClipboard() {
+        savedClipboard?.let { runCatching { clipboard.setContents(it, null) } }
+    }
+
+    private fun selectHello() {
+        connector.feed("hello")
+        settle(connector, session)
+        session.select(CellSelection(Cell(0, 0), Cell(4, 0)))
+    }
+
+    private fun ctrl(code: Int, char: Char, extra: Int = 0) = pressed(code, char, InputEvent.CTRL_DOWN_MASK or extra)
+
+    private fun clipboardText() = clipboard.getData(DataFlavor.stringFlavor) as String
+
+    @Test
+    fun ctrlCWithASelectionCopiesItWithoutWritingTheInterrupt() {
+        assumeFalse(!session.focused)
+        selectHello()
+        ctrl(KeyEvent.VK_C, '\u0003')
+        assertThat(written()).isEmpty()
+        assertThat(clipboardText()).isEqualTo("hello")
+        assertThat(session.selection).isNull()
+    }
+
+    @Test
+    fun aSecondCtrlCWritesTheInterrupt() {
+        assumeFalse(!session.focused)
+        selectHello()
+        ctrl(KeyEvent.VK_C, '\u0003')
+        ctrl(KeyEvent.VK_C, '\u0003')
+        assertThat(written()).isEqualTo("\u0003")
+    }
+
+    @Test
+    fun ctrlVPastesClipboardTextInsteadOfWritingTheControlByte() {
+        assumeFalse(!session.focused)
+        clipboard.setContents(StringSelection("pasted"), null)
+        ctrl(KeyEvent.VK_V, '\u0016')
+        assertThat(written()).isEqualTo("pasted")
+    }
+
+    @Test
+    fun ctrlShiftCWithoutASelectionWritesNothing() {
+        assumeFalse(!session.focused)
+        ctrl(KeyEvent.VK_C, '\u0003', InputEvent.SHIFT_DOWN_MASK)
+        assertThat(written()).isEmpty()
+    }
+
+    @Test
+    fun ctrlVWithoutClipboardTextFallsThroughAsTheControlByte() {
+        assumeFalse(!session.focused)
+        clipboard.setContents(object : Transferable {
+            override fun getTransferDataFlavors() = arrayOf<DataFlavor>()
+            override fun isDataFlavorSupported(flavor: DataFlavor) = false
+            override fun getTransferData(flavor: DataFlavor) = throw java.awt.datatransfer.UnsupportedFlavorException(flavor)
+        }, null)
+        ctrl(KeyEvent.VK_V, '\u0016')
+        assertThat(written()).isEqualTo("\u0016")
     }
 }

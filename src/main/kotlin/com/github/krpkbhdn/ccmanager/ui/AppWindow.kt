@@ -6,6 +6,8 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.LocalWindowExceptionHandlerFactory
 import androidx.compose.ui.window.WindowExceptionHandler
 import androidx.compose.ui.window.WindowExceptionHandlerFactory
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 import org.slf4j.LoggerFactory
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -74,7 +76,17 @@ fun ApplicationScope.AppWindow(backend: Backend, onShutdown: () -> Unit, setting
     var restoreRequests by remember { mutableIntStateOf(0) }
     val handledRestores = remember { intArrayOf(0) }
     val restore: () -> Unit = { visible = true; windowState.isMinimized = false; restoreRequests++ }
-    val exit = { TerminalHost.closeAll(); onShutdown(); exitApplication() }
+    val exiting = remember { AtomicBoolean(false) }
+    val exit = {
+        if (exiting.compareAndSet(false, true)) {
+            visible = false
+            thread(name = "AppShutdown") {
+                TerminalHost.closeAll()
+                onShutdown()
+                SwingUtilities.invokeLater { exitApplication() }
+            }
+        }
+    }
     state.exitApp = exit
     val quit = { state.requestQuit(exit) }
     LaunchedEffect(Unit) { installMacQuitHandler({ state.live.sessions.isNotEmpty() }) { restore(); quit() } }
