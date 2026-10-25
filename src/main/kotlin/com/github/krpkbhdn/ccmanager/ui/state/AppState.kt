@@ -40,8 +40,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -92,6 +90,9 @@ class AppState(
         private set
     var toasts by mutableStateOf<List<ToastItem>>(emptyList())
         private set
+    var popups by mutableStateOf<List<ToastItem>>(emptyList())
+        private set
+    var windowActive by mutableStateOf(true)
     var confirm by mutableStateOf<ConfirmRequest?>(null)
     var renaming by mutableStateOf<RenameRequest?>(null)
     var launching by mutableStateOf(false)
@@ -111,9 +112,7 @@ class AppState(
     val views = mutableStateMapOf<Long, ProjectView>()
     val sessionTeams = mutableStateMapOf<String, Team>()
     val backgroundAgents = mutableStateMapOf<Long, List<BackgroundAgent>>()
-    val notificationEvents: SharedFlow<AppNotification> get() = events
 
-    private val events = MutableSharedFlow<AppNotification>(extraBufferCapacity = NOTIFICATION_CAP)
     val teams = TeamsState(backend.teams, scope, { confirm = it }, { reportError(it) })
     val plugins = PluginsState(backend.plugins, scope, { confirm = it }, ::toast)
     val mcp = McpState(backend.mcp, null, scope, { confirm = it }, ::toast)
@@ -249,6 +248,7 @@ class AppState(
 
     fun dismissToast(id: Long) {
         toasts = toasts.filterNot { it.id == id }
+        popups = popups.filterNot { it.id == id }
     }
 
     fun markAllRead() {
@@ -459,20 +459,21 @@ class AppState(
         toasts = (toasts + toast).takeLast(MAX_TOASTS)
     }
 
-    private suspend fun receive(notification: AppNotification) {
+    private fun receive(notification: AppNotification) {
         if (notifications.any { it.id == notification.id }) return
         notifications = (notifications + notification).takeLast(NOTIFICATION_CAP)
-        pushToast(
-            ToastItem(
-                id = notification.id,
-                kind = notification.kind,
-                title = "${projectName(notification.projectId)}: ${notification.title}",
-                body = notification.body,
-                projectId = notification.projectId,
-                ccmSessionId = notification.ccmSessionId,
-            ),
+        val toast = ToastItem(
+            id = notification.id,
+            kind = notification.kind,
+            title = "${projectName(notification.projectId)}: ${notification.title}",
+            body = notification.body,
+            projectId = notification.projectId,
+            ccmSessionId = notification.ccmSessionId,
         )
-        events.emit(notification)
+        when (toastPlaceFor(windowActive)) {
+            ToastPlace.IN_APP -> pushToast(toast)
+            ToastPlace.DESKTOP_POPUP -> popups = (popups + toast).takeLast(MAX_TOASTS)
+        }
     }
 
     private suspend fun loadProjects() {

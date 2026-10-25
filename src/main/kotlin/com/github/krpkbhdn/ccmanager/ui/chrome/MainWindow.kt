@@ -24,14 +24,10 @@ fun ApplicationScope.MainWindow(
     title: String,
     icon: Painter,
     onCloseRequest: () -> Unit,
+    visible: Boolean = true,
     extra: @Composable FrameWindowScope.() -> Unit = {},
 ) {
-    val systemDark = isSystemInDarkTheme()
-    val dark = when (state.settings.themeMode) {
-        ThemeMode.SYSTEM -> systemDark
-        ThemeMode.DARK -> true
-        ThemeMode.LIGHT -> false
-    }
+    val dark = isDarkTheme(state)
     val content: @Composable FrameWindowScope.() -> Unit = {
         window.minimumSize = Dimension(MIN_WIDTH, MIN_HEIGHT)
         AppFrame(state, windowState)
@@ -39,9 +35,20 @@ fun ApplicationScope.MainWindow(
     }
     AppTheme(dark) {
         if (WindowDecorationSupport.available) {
-            DecoratedWindow(onCloseRequest = onCloseRequest, state = windowState, title = title, icon = icon, content = content)
+            DecoratedWindow(onCloseRequest = onCloseRequest, state = windowState, visible = visible, title = title, icon = icon, content = content)
         } else {
-            Window(onCloseRequest = onCloseRequest, state = windowState, title = title, icon = icon, content = content)
+            Window(onCloseRequest = onCloseRequest, state = windowState, visible = visible, title = title, icon = icon, content = content)
         }
+    }
+}
+
+/** Resolves the user's theme choice, following the OS for [ThemeMode.SYSTEM]. */
+@Composable
+fun isDarkTheme(state: AppState): Boolean {
+    val systemDark = isSystemInDarkTheme()
+    return when (state.settings.themeMode) {
+        ThemeMode.SYSTEM -> systemDark
+        ThemeMode.DARK -> true
+        ThemeMode.LIGHT -> false
     }
 }

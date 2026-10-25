@@ -49,7 +49,7 @@ import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
 private const val TOAST_MILLIS = 6_000
 private const val URGENT_TOAST_MILLIS = 15_000
-private val toastWidth = 372.dp
+internal val toastWidth = 372.dp
 private val kindBox = 32.dp
 private val progressHeight = 2.dp
 private val toastElevation = 18.dp
@@ -70,7 +70,7 @@ fun ToastHost(toasts: List<ToastItem>, onOpen: (ToastItem) -> Unit, onDismiss: (
 }
 
 @Composable
-private fun Toast(toast: ToastItem, onOpen: () -> Unit, onDismiss: () -> Unit) {
+internal fun Toast(toast: ToastItem, onOpen: () -> Unit, onDismiss: () -> Unit) {
     val visible = remember { MutableTransitionState(false).apply { targetState = true } }
     LaunchedEffect(visible.currentState, visible.targetState) {
         if (!visible.currentState && !visible.targetState) onDismiss()
