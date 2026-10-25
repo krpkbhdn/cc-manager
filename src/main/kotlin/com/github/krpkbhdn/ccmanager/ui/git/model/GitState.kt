@@ -13,7 +13,6 @@ import com.github.krpkbhdn.ccmanager.ui.state.Refresher
 import java.nio.file.Path
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
@@ -62,12 +61,10 @@ class GitState(
     internal val scope: CoroutineScope,
     internal val host: GitHost,
 ) {
-    /** The repository top level: git reports paths relative to it, whatever subfolder the project is. Final once [root] completed. */
+    /** The repository top level, re-read on every reload: git reports paths relative to it, whatever subfolder the project is. */
     @Volatile
     var repo: Path = folder
         private set
-
-    private val root = scope.async(Dispatchers.IO, start = CoroutineStart.LAZY) { repo = git.status.topLevel(folder) }
 
     var status by mutableStateOf<GitStatus?>(null)
         private set
@@ -125,6 +122,12 @@ class GitState(
 
     fun refresh() = refresher.request()
 
+    /** The toolbar Refresh: also re-reads tags, remotes and stashes, which a terminal can change without the watcher noticing. */
+    fun refreshAll() {
+        refresh()
+        scope.launch { loadAuxiliary() }
+    }
+
     /** Stops the reload loop once the project is gone. */
     fun close() = refresher.close()
 
@@ -132,8 +135,7 @@ class GitState(
     fun attach(): Runnable {
         val subscription = scope.async(Dispatchers.IO) {
             try {
-                root.await()
-                git.watcher.subscribe(repo) { refresh() }
+                git.watcher.subscribe(folder) { refresh() }
             } catch (e: RuntimeException) {
                 Runnable { }
             }
@@ -192,8 +194,8 @@ class GitState(
     private suspend fun reload() {
         loading = true
         try {
-            root.await()
             val loaded = gitCall(::failLoad) {
+                repo = git.status.topLevel(folder)
                 val current = git.status.status(repo)
                 current to if (current.repository()) git.branches.branches(repo) else emptyList()
             }

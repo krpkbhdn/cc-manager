@@ -82,7 +82,8 @@ public class GitStatusService {
     }
 
     private FileDiff trackedDiff(Path repo, boolean staged, String... paths) {
-        var args = new ArrayList<>(List.of("--literal-pathspecs", "diff", "--no-color", "--no-ext-diff", "-M"));
+        var args = new ArrayList<>(List.of("--literal-pathspecs", "diff", "--no-color", "--no-ext-diff", "-M",
+                GitRunner.SRC_PREFIX, GitRunner.DST_PREFIX));
         if (staged) {
             args.add("--cached");
         }
@@ -149,7 +150,7 @@ public class GitStatusService {
             var marker = new Line(LineKind.META, TOO_LARGE_MARKER, null, null);
             return new FileDiff(path, null, ChangeType.UNTRACKED, 0, 0, false, List.of(marker));
         }
-        var result = git.tryRun(repo, "diff", "--no-index", "--no-color", "--no-ext-diff", "--", NULL_DEVICE, path);
+        var result = git.tryRun(repo, "diff", "--no-index", "--no-color", "--no-ext-diff", GitRunner.SRC_PREFIX, GitRunner.DST_PREFIX, "--", NULL_DEVICE, path);
         return firstFile(result.stdout(), path, ChangeType.UNTRACKED);
     }
 

@@ -173,5 +173,17 @@ class ProposalDialogKeysTest {
         assertThat(scene.answered()).isEqualTo(PermissionAllow.once())
     }
 
+    @Test
+    fun plainEnterAfterTypingAPermissionReasonStillSendsNothing() {
+        val proposal = PermissionProposal("p", "s", Instant.now(), "", "Bash", mapper.readTree("""{"command":"ls"}"""), emptyList())
+        val scene = ProposalDialogHarness(proposal) { context, title -> PermissionDialog(proposal, title, context) }.also { harness = it }
+        scene.state.draft(proposal) { PermissionDraft(proposal) }.reason.edit { replace(0, length, "not now") }
+        scene.settle()
+
+        scene.press(Key.Enter)
+
+        scene.assertNoAnswer()
+    }
+
     private fun Question.copyAsSingle() = Question(text(), header(), options(), false)
 }

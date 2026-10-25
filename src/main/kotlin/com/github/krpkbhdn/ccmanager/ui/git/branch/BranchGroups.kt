@@ -7,9 +7,7 @@ import com.github.krpkbhdn.ccmanager.ui.state.fuzzyFilter
 data class RemoteGroup(val remote: String, val branches: List<GitBranch>)
 
 /** The popup's content after filtering: local branches, then remote branches grouped by remote. */
-data class BranchGroups(val local: List<GitBranch>, val remotes: List<RemoteGroup>) {
-    val isEmpty: Boolean get() = local.isEmpty() && remotes.isEmpty()
-}
+data class BranchGroups(val local: List<GitBranch>, val remotes: List<RemoteGroup>)
 
 fun branchGroups(branches: List<GitBranch>, query: String): BranchGroups {
     val matching = if (query.isBlank()) branches else fuzzyFilter(query, branches) { it.name }

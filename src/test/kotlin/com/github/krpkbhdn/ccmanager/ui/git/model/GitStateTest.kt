@@ -65,6 +65,37 @@ class GitStateTest {
     }
 
     @Test
+    fun `a top level that changes after opening is used by the next refresh`() {
+        val (git, data) = open()
+        data.topLevel = Path.of("moved")
+
+        git.refresh()
+
+        await { data.statusRepos.lastOrNull() == Path.of("moved") }
+        assertThat(git.repo).isEqualTo(Path.of("moved"))
+    }
+
+    @Test
+    fun `a failing top level shows a load error and the next reload recovers`() {
+        val data = SampleRepos.busy().also { it.topLevelFailure = GitException(GitException.Kind.OTHER, "dubious ownership", "") }
+        val host = GitHost({ prefs }, { change -> prefs = change(prefs) }, { kind, title, _ -> toasts += kind to title })
+        val git = GitState(1, Path.of("repo"), FakeGit(data).backend, scope, host)
+        git.attach()
+        await { git.loadError != null }
+
+        git.refresh()
+
+        await { git.loadError == null && git.status != null }
+    }
+
+    @Test
+    fun `the watcher subscribes to the project folder`() {
+        val (_, data) = open(SampleRepos.busy().also { it.topLevel = Path.of("top") })
+
+        assertThat(data.watchedPaths).containsExactly(Path.of("repo"))
+    }
+
+    @Test
     fun `staging a file moves it between the lists after the refresh`() {
         val (git, data) = open()
 

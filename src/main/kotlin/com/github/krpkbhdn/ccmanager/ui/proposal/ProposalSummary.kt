@@ -31,17 +31,16 @@ fun permissionSummary(toolName: String, input: JsonNode): List<SummaryBlock> = w
 private fun fileBlocks(toolName: String, input: JsonNode): List<SummaryBlock> {
     val path = input.text("file_path").ifEmpty { input.text("notebook_path") }
     val blocks = mutableListOf(SummaryBlock("File", path, true))
+    if (toolName == "Write") blocks += SummaryBlock("Content", input.text("content").snippet(), true)
     if (toolName == "Edit") {
-        val old = input.text("old_string")
-        val new = input.text("new_string")
-        if (old.length <= SNIPPET_LIMIT && new.length <= SNIPPET_LIMIT) {
-            blocks += SummaryBlock("Replace", old, true)
-            blocks += SummaryBlock("With", new, true)
-        }
+        blocks += SummaryBlock("Replace", input.text("old_string").snippet(), true)
+        blocks += SummaryBlock("With", input.text("new_string").snippet(), true)
     }
     if (toolName == "MultiEdit") blocks += SummaryBlock(null, "${input.path("edits").size()} edits", false)
     return blocks
 }
+
+private fun String.snippet() = if (length > SNIPPET_LIMIT) take(SNIPPET_LIMIT) + "…" else this
 
 private fun mcpLabel(toolName: String): String {
     val parts = toolName.removePrefix(MCP_PREFIX).split(MCP_SEPARATOR, limit = 2)

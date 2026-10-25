@@ -63,7 +63,7 @@ fun OverviewScreen(state: AppState, modifier: Modifier = Modifier) {
                     project = project,
                     status = state.live.statusOf(project.id),
                     sessions = state.live.of(project.id),
-                    now = state.now,
+                    now = { state.now },
                     actions = state.projectActions(project),
                     modifier = Modifier.animateItem(),
                 )
@@ -83,7 +83,7 @@ private fun LazyGridScope.attentionCards(attention: List<SessionSnapshot>, state
         AttentionCard(
             projectName = state.projects.nameOf(session.projectId),
             session = session,
-            now = state.now,
+            now = { state.now },
             onOpen = { state.answerProposals(session.ccmSessionId) },
             modifier = Modifier.animateItem(),
             proposalHeadline = state.proposals.headlineOf(session.ccmSessionId),

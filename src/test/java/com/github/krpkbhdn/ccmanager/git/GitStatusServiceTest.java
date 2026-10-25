@@ -182,6 +182,22 @@ class GitStatusServiceTest {
     }
 
     @Test
+    void diffIgnoresUserConfiguredPrefixes() {
+        var sandbox = GitCliSandbox.create(root);
+        sandbox.write("a.txt", "1\n");
+        sandbox.commitAll("base");
+        sandbox.git("config", "diff.mnemonicPrefix", "true");
+        sandbox.git("config", "diff.srcPrefix", "x/");
+        sandbox.git("config", "diff.dstPrefix", "y/");
+        sandbox.write("a.txt", "1\n2\n");
+
+        var diff = serviceFor(sandbox).diff(sandbox.repo, "a.txt", false);
+
+        assertThat(diff.path()).isEqualTo("a.txt");
+        assertThat(diff.lines()).filteredOn(l -> l.kind() == LineKind.ADDED).extracting(l -> l.text()).containsExactly("2");
+    }
+
+    @Test
     void diffSeparatesStagedFromUnstaged() {
         var sandbox = GitCliSandbox.create(root);
         sandbox.write("a.txt", "1\n2\n3\n");

@@ -62,7 +62,7 @@ fun GitToolbar(git: GitState, modifier: Modifier = Modifier) {
             PullButton(git, compact, enabled)
             PushButton(git, compact, enabled)
             IconButton(Icons.Archive, { git.dialog = GitDialog.SaveStash() }, tooltip = "Stash changes", enabled = enabled)
-            IconButton(Icons.Refresh, git::refresh, tooltip = "Refresh", enabled = !git.loading)
+            IconButton(Icons.Refresh, git::refreshAll, tooltip = "Refresh", enabled = !git.loading)
             if (git.loading) Spinner(size = 14.dp)
         }
     }

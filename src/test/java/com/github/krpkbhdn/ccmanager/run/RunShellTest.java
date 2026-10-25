@@ -42,7 +42,15 @@ class RunShellTest {
     void windowsFallsBackToCmd() {
         var host = new FakeHostEnvironment(WINDOWS, HOME);
 
-        assertThat(new RunShell(host).invocation("dir")).containsExactly("cmd.exe", "/c", "dir");
+        assertThat(new RunShell(host).invocation("dir")).containsExactly("cmd.exe", "/s", "/c", "\"dir\"");
+    }
+
+    @Test
+    void cmdFallbackWrapsACommandThatStartsWithAQuote() {
+        var command = "\"C:\\Program Files\\nodejs\\node.exe\" server.js --name \"a b\"";
+
+        assertThat(new RunShell(new FakeHostEnvironment(WINDOWS, HOME)).invocation(command))
+                .containsExactly("cmd.exe", "/s", "/c", "\"" + command + "\"");
     }
 
     @Test

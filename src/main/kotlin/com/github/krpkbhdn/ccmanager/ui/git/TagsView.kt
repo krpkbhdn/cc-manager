@@ -31,9 +31,9 @@ import com.github.krpkbhdn.ccmanager.ui.components.Pressable
 import com.github.krpkbhdn.ccmanager.ui.components.copyToClipboard
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitDialog
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitState
-import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
 import com.github.krpkbhdn.ccmanager.ui.git.model.SHORT_HASH
 import com.github.krpkbhdn.ccmanager.ui.git.model.requestDeleteTag
+import com.github.krpkbhdn.ccmanager.ui.git.model.showInLog
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.theme.IconSize
 import com.github.krpkbhdn.ccmanager.ui.theme.Radius
@@ -67,7 +67,7 @@ fun TagsView(git: GitState, modifier: Modifier = Modifier) {
 @Composable
 private fun TagRow(git: GitState, tag: Tag) {
     ContextMenuArea({ tagMenu(git, tag) }) {
-        Pressable({ git.log.update { it.forBranch(tag.name()) }; git.show(GitSubView.LOG) }, Modifier.fillMaxWidth(), RoundedCornerShape(Radius.sm)) { hovered ->
+        Pressable({ git.showInLog(tag.name()) },Modifier.fillMaxWidth(), RoundedCornerShape(Radius.sm)) { hovered ->
             Row(Modifier.height(rowHeight).padding(horizontal = Spacing.md), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 Glyph(Icons.Tag, colors.warning, size = IconSize.large)
                 Label(tag.name(), Modifier.width(nameWidth), color = colors.textPrimary, style = Type.monoMedium, tooltipWhenTruncated = true)
@@ -81,7 +81,7 @@ private fun TagRow(git: GitState, tag: Tag) {
 }
 
 private fun tagMenu(git: GitState, tag: Tag): List<MenuEntry> = listOf(
-    MenuEntry("Show in log", Icons.Log) { git.log.update { it.forBranch(tag.name()) }; git.show(GitSubView.LOG) },
+    MenuEntry("Show in log", Icons.Log) { git.showInLog(tag.name()) },
     MenuEntry("Copy name", Icons.Copy) { copyToClipboard(tag.name()) },
     MenuEntry("Delete...", Icons.Trash, danger = true, dividerAbove = true) { git.requestDeleteTag(tag.name()) },
 )

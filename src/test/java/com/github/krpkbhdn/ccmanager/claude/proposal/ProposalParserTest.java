@@ -69,6 +69,15 @@ class ProposalParserTest {
     }
 
     @Test
+    void formWithAnArrayPropertyStaysInTheTerminal() {
+        var proposal = ProposalParser.parse(event(HookEventType.ELICITATION, """
+                {"mcp_server_name":"jira","requested_schema":{"properties":{"labels":{"type":"array","items":{"type":"string"}}}}}
+                """));
+
+        assertThat(proposal).isEmpty();
+    }
+
+    @Test
     void parsesFormWithDefaults() {
         var proposal = ProposalParser.parse(event(HookEventType.ELICITATION, """
                 {"mcp_server_name":"jira","message":"Which project?","requested_schema":{"properties":{"key":{"type":"string"}},"required":["key"]}}
@@ -89,6 +98,10 @@ class ProposalParserTest {
         assertThat(ProposalParser.parse(permission("{\"tool_name\":\"AskUserQuestion\",\"tool_input\":{\"questions\":[{\"question\":\"\"}]}}"))).isEmpty();
         assertThat(ProposalParser.parse(permission(
                 "{\"tool_name\":\"AskUserQuestion\",\"tool_input\":{\"questions\":[{\"question\":\"Q\",\"options\":[{\"description\":\"d\"}]}]}}"))).isEmpty();
+        assertThat(ProposalParser.parse(permission(
+                "{\"tool_name\":\"AskUserQuestion\",\"tool_input\":{\"questions\":[{\"question\":\"Q\",\"options\":[]}]}}"))).isEmpty();
+        assertThat(ProposalParser.parse(permission(
+                "{\"tool_name\":\"AskUserQuestion\",\"tool_input\":{\"questions\":[{\"question\":\"Q\"}]}}"))).isEmpty();
         assertThat(ProposalParser.parse(event(HookEventType.ELICITATION, "{\"message\":\"no server\"}"))).isEmpty();
         assertThat(ProposalParser.parse(event(HookEventType.STOP, "{\"tool_name\":\"Bash\"}"))).isEmpty();
     }

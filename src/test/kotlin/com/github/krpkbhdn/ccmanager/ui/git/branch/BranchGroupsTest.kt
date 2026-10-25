@@ -28,7 +28,7 @@ class BranchGroupsTest {
 
         assertThat(groups.local.map { it.name() }).containsExactly("feature/login")
         assertThat(groups.remotes.single().branches.map { it.name() }).containsExactly("origin/feature/login")
-        assertThat(branchGroups(all, "zzz").isEmpty).isTrue()
+        assertThat(branchGroups(all, "zzz")).isEqualTo(BranchGroups(emptyList(), emptyList()))
     }
 
     @Test

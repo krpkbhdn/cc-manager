@@ -54,7 +54,7 @@ public class GitLogService {
         GitRevisions.requireNotOption(hash);
         var commit = GitLogParser.parse(git.out(repo, "log", "-1", "--decorate=full", GitLogParser.FORMAT, hash), Integer.MAX_VALUE)
                 .getFirst();
-        var diff = git.out(repo, "show", "--format=", "-M", "--no-color", "--no-ext-diff", "-m", "--first-parent", "--root", hash);
+        var diff = git.out(repo, "show", "--format=", "-M", "--no-color", "--no-ext-diff", "-m", "--first-parent", "--root", GitRunner.SRC_PREFIX, GitRunner.DST_PREFIX, hash);
         var files = UnifiedDiffParser.parse(diff, UnifiedDiffParser.MAX_LINES_PER_FILE, UnifiedDiffParser.MAX_TOTAL_LINES);
         return new GitLog.Details(commit, files);
     }

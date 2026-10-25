@@ -1,8 +1,10 @@
 package com.github.krpkbhdn.ccmanager.ui.git.log
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 
 const val GRAPH_COLOR_COUNT = 8
+const val MAX_GRAPH_LANES = 10
 
 /** A cubic Bezier in row-local coordinates: start, two control points, end. */
 data class Cubic(val x0: Float, val y0: Float, val x1: Float, val y1: Float, val x2: Float, val y2: Float, val x3: Float, val y3: Float)
@@ -40,3 +42,6 @@ private val lightLanes = listOf(0xFFB04F2E, 0xFF2A6FD0, 0xFF0F7A4F, 0xFFA85F00, 
 /** The 8-slot lane palette, tuned separately per theme so every colour keeps contrast on its background. */
 fun graphColor(slot: Int, dark: Boolean): Color =
     Color((if (dark) darkLanes else lightLanes)[Math.floorMod(slot, GRAPH_COLOR_COUNT)])
+
+/** Width of one lane: full size up to [MAX_GRAPH_LANES] lanes, squeezed beyond so the graph column never outgrows that. */
+fun laneWidth(lanes: Int): Dp = GraphLaneWidth * minOf(1f, MAX_GRAPH_LANES.toFloat() / maxOf(lanes, 1))

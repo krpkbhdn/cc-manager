@@ -24,12 +24,20 @@ class ProposalSummaryTest {
     }
 
     @Test
-    fun editShowsPathAndShortSnippetsOnly() {
-        val short = permissionSummary("Edit", json("""{"file_path":"A.java","old_string":"a","new_string":"b"}"""))
+    fun editAlwaysShowsBothSnippetsCutToTheLimit() {
         val long = permissionSummary("Edit", json("""{"file_path":"A.java","old_string":"${"x".repeat(401)}","new_string":"b"}"""))
 
-        assertThat(short.map { it.label }).containsExactly("File", "Replace", "With")
-        assertThat(long.map { it.label }).containsExactly("File")
+        assertThat(long.map { it.label }).containsExactly("File", "Replace", "With")
+        assertThat(long[1].text).isEqualTo("x".repeat(400) + "…")
+        assertThat(long[2].text).isEqualTo("b")
+    }
+
+    @Test
+    fun writeShowsTheContentCutToTheLimit() {
+        val blocks = permissionSummary("Write", json("""{"file_path":"A.java","content":"${"y".repeat(500)}"}"""))
+
+        assertThat(blocks.map { it.label }).containsExactly("File", "Content")
+        assertThat(blocks[1].text).isEqualTo("y".repeat(400) + "…")
     }
 
     @Test

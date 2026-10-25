@@ -29,10 +29,11 @@ public class RunShell {
         return host.windows() ? windows(command) : unix(command);
     }
 
+    /** For cmd the command is wrapped in quotes: pty4j does not re-wrap an argument starting with a quote, and {@code /s} strips exactly that outer pair. */
     private List<String> windows(String command) {
         return gitBash()
                 .map(bash -> List.of(bash.toString(), "-c", command))
-                .orElseGet(() -> List.of(CMD, "/c", command));
+                .orElseGet(() -> List.of(CMD, "/s", "/c", "\"" + command + "\""));
     }
 
     static boolean isCmd(String executable) {

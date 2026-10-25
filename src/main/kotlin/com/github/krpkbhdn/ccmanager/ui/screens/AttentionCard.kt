@@ -41,10 +41,10 @@ private const val ASK_LINES = 3
 
 /** Large actionable card for a session that waits for the user: what is asked and a jump to its terminal. */
 @Composable
-fun AttentionCard(projectName: String, session: SessionSnapshot, now: Instant, onOpen: () -> Unit, modifier: Modifier = Modifier, proposalHeadline: String? = null) {
+fun AttentionCard(projectName: String, session: SessionSnapshot, now: () -> Instant, onOpen: () -> Unit, modifier: Modifier = Modifier, proposalHeadline: String? = null) {
     val tint = colors.danger
     val shape = RoundedCornerShape(Radius.xl)
-    val waiting = session.lastEventAt?.let { "Waiting ${formatElapsed(Duration.between(it, now))}" }
+    val waiting = session.lastEventAt?.let { "Waiting ${formatElapsed(Duration.between(it, now()))}" }
     Pressable(
         onOpen,
         modifier.fillMaxWidth().shadow(14.dp, shape, ambientColor = tint.copy(alpha = Alpha.HALO), spotColor = tint.copy(alpha = Alpha.HALO))

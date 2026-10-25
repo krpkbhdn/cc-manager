@@ -24,7 +24,7 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
 private const val COLLAPSED_LINES = 12
-private const val HINTS = "Tab moves · Ctrl+Enter allows"
+private const val HINTS = "Tab moves · Tab to Deny · Ctrl+Enter allows"
 
 /** Any tool call that needs approval: what it does, optional "remember" choices from Claude's own suggestions, and a reason for denying. Focus starts on the reason, so a stray Enter never allows. */
 @Composable

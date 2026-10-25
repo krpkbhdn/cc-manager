@@ -34,7 +34,12 @@ public class GitRunner {
 
     private static final ExecutorService PIPES = Executors.newVirtualThreadPerTaskExecutor();
     private static final List<String> BASE_COMMAND =
-            List.of("git", "-c", "core.quotepath=false", "-c", "color.ui=never", "-c", "core.fsmonitor=false");
+            List.of("git", "-c", "core.quotepath=false", "-c", "color.ui=never", "-c", "core.fsmonitor=false",
+                    "-c", "diff.noprefix=false", "-c", "diff.mnemonicPrefix=false");
+
+    /** Pins the a/ b/ prefixes the diff parser reads, over git 2.45+ diff.srcPrefix/dstPrefix. */
+    public static final String SRC_PREFIX = "--src-prefix=a/";
+    public static final String DST_PREFIX = "--dst-prefix=b/";
 
     private final GitProperties properties;
     private final Map<String, String> extraEnvironment;

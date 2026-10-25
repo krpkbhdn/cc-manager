@@ -31,7 +31,7 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
-private const val INHERIT_NOTE = "Inherits all tools of the lead. Untick a tool or pick a preset to restrict this agent."
+private const val INHERIT_NOTE = "Inherits all tools of the lead. Unticking a tool switches to an allowlist of the ticked built-in tools; add mcp__server__* to keep MCP tools."
 private const val CUSTOM_HINT = "Custom: a tool name or mcp__server__*"
 
 /** Tool allowlist as presets, ticked tool chips by group and a field for custom entries such as MCP tools. */

@@ -11,7 +11,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -54,6 +57,7 @@ private val emptyIconBox = 52.dp
 private val emptyTextWidth = 420.dp
 private val menuWidth = 208.dp
 private val menuElevation = 16.dp
+private val menuMaxHeight = 420.dp
 private val cardElevation = 10.dp
 private const val POPUP_GAP_PX = 6
 private const val POP_START_SCALE = 0.96f
@@ -153,7 +157,7 @@ private fun atCursor(cursor: IntOffset, windowSize: IntSize, popupContentSize: I
 @Composable
 fun PopupMenu(entries: List<MenuEntry>, onDismiss: () -> Unit, alignEnd: Boolean = false, at: IntOffset? = null) {
     AnchoredPopup(onDismiss, alignEnd, Modifier.widthIn(min = menuWidth).width(IntrinsicSize.Max), at) {
-        Column(Modifier.padding(Spacing.xs)) { entries.forEach { MenuItem(it, onDismiss) } }
+        Column(Modifier.heightIn(max = menuMaxHeight).verticalScroll(rememberScrollState()).padding(Spacing.xs)) { entries.forEach { MenuItem(it, onDismiss) } }
     }
 }
 

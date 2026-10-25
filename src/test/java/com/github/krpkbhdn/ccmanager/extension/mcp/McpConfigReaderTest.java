@@ -47,6 +47,29 @@ class McpConfigReaderTest {
     }
 
     @Test
+    void projectSettingsFilesApproveAndDisableMcpjsonServers() throws IOException {
+        Files.createDirectories(project.resolve(".claude"));
+        Files.writeString(project.resolve(".mcp.json"), "{\"mcpServers\":{\"a\":{\"command\":\"x\"},\"b\":{\"command\":\"x\"},\"c\":{\"command\":\"x\"}}}");
+        Files.writeString(project.resolve(".claude/settings.json"), "{\"enabledMcpjsonServers\":[\"a\"],\"disabledMcpjsonServers\":[\"b\"]}");
+        Files.writeString(project.resolve(".claude/settings.local.json"), "{\"enabledMcpjsonServers\":[\"b\",\"c\"]}");
+
+        assertThat(reader(HostEnvironment.OperatingSystem.LINUX).read(project)).extracting(McpServerConfig::name, McpServerConfig::approval)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("a", McpApproval.APPROVED), org.assertj.core.groups.Tuple.tuple("b", McpApproval.DISABLED),
+                        org.assertj.core.groups.Tuple.tuple("c", McpApproval.APPROVED));
+    }
+
+    @Test
+    void enableAllInLocalSettingsOverridesSharedAndApprovesEverything() throws IOException {
+        Files.createDirectories(project.resolve(".claude"));
+        Files.writeString(project.resolve(".mcp.json"), "{\"mcpServers\":{\"a\":{\"command\":\"x\"}}}");
+        Files.writeString(project.resolve(".claude/settings.json"), "{\"enableAllProjectMcpServers\":false}");
+        Files.writeString(project.resolve(".claude/settings.local.json"), "{\"enableAllProjectMcpServers\":true}");
+
+        assertThat(reader(HostEnvironment.OperatingSystem.LINUX).read(project)).extracting(McpServerConfig::approval)
+                .containsExactly(McpApproval.APPROVED);
+    }
+
+    @Test
     void urlTargetsHideQueryValuesAndCredentials() throws IOException {
         Files.writeString(home.resolve(".claude.json"), """
                 {"mcpServers":{"u":{"type":"http","url":"https://user:pw@host/mcp?api_key=SECRET&mode=a#f"}}}""");

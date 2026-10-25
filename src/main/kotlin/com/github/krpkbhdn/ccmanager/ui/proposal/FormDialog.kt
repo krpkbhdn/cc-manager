@@ -86,7 +86,7 @@ private fun FieldRow(field: FormField, value: String, error: String?, focus: Foc
         }
         if (field.help.isNotBlank()) Label(field.help, color = colors.textSecondary, style = Type.small, maxLines = Int.MAX_VALUE)
         when (field.kind) {
-            FieldKind.CHOICE -> SegmentedControl(field.options.map { Segment(it, it) }, value, onChange)
+            FieldKind.CHOICE -> SegmentedControl(field.options.zip(field.optionLabels).map { (value, label) -> Segment(value, label) }, value, onChange)
             FieldKind.BOOLEAN -> Unit
             else -> TextInput(value, onChange, field.kind != FieldKind.TEXT, focus)
         }

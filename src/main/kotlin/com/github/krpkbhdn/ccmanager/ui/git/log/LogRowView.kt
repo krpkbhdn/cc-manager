@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.git.GitLog
 import com.github.krpkbhdn.ccmanager.ui.components.Label
@@ -43,12 +44,12 @@ private const val HASH_MIN_WIDTH = 760f
 
 /** One history line: graph, ref chips and subject, author, age and short hash; cheap enough for thousands of rows. */
 @Composable
-fun LogRowView(row: GitLog.Row, previous: GitLog.Row?, laneCount: Int, selected: Boolean, columns: LogColumns, now: () -> Instant, onClick: () -> Unit) {
+fun LogRowView(row: GitLog.Row, previous: GitLog.Row?, laneCount: Int, laneWidth: Dp, selected: Boolean, columns: LogColumns, now: () -> Instant, onClick: () -> Unit) {
     val commit = row.commit()
     val laneColor = graphColor(row.color(), colors.dark)
     Pressable(onClick, Modifier.fillMaxWidth(), RoundedCornerShape(Radius.sm), base = if (selected) colors.accentSoft else Color.Transparent) {
         Row(Modifier.height(LogRowHeight).padding(end = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
-            GraphCell(row, previous, laneCount, LogRowHeight)
+            GraphCell(row, previous, laneCount, laneWidth, LogRowHeight)
             RefChips(commit.refs(), laneColor, Modifier.weight(1f, fill = false).widthIn(max = chipsMaxWidth).padding(end = Spacing.sm), limit = if (columns.date) WIDE_CHIP_LIMIT else NARROW_CHIP_LIMIT)
             Label(commit.subject(), Modifier.weight(1f), color = colors.textPrimary, style = Type.small, tooltipWhenTruncated = true)
             if (columns.author) Label(commit.authorName(), Modifier.width(authorWidth).padding(start = Spacing.sm), color = colors.textSecondary, style = Type.small)

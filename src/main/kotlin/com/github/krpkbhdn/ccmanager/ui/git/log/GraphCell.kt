@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -26,16 +27,16 @@ private val ringWidth = 2.dp
  * the commit dot (hollow for merges). Rows stay independent so the list can be lazy.
  */
 @Composable
-fun GraphCell(row: GitLog.Row, previous: GitLog.Row?, laneCount: Int, rowHeight: Dp, modifier: Modifier = Modifier) {
+fun GraphCell(row: GitLog.Row, previous: GitLog.Row?, laneCount: Int, laneWidth: Dp, rowHeight: Dp, modifier: Modifier = Modifier) {
     val dark = colors.dark
     val surface = colors.background
-    Canvas(modifier.width(GraphLaneWidth * maxOf(laneCount, 1)).height(rowHeight)) {
-        val laneWidth = GraphLaneWidth.toPx()
+    Canvas(modifier.width(laneWidth * maxOf(laneCount, 1)).height(rowHeight).clipToBounds()) {
+        val lanePx = laneWidth.toPx()
         val height = size.height
         val stroke = Stroke(strokeWidth.toPx(), cap = StrokeCap.Round)
-        previous?.links()?.forEach { link -> drawCubic(linkSegments(link.fromLane(), link.toLane(), height, laneWidth).upper, graphColor(link.color(), dark), stroke) }
-        row.links().forEach { link -> drawCubic(linkSegments(link.fromLane(), link.toLane(), height, laneWidth).lower, graphColor(link.color(), dark), stroke) }
-        drawDot(Offset(laneX(row.lane(), laneWidth), height / 2f), graphColor(row.color(), dark), hollow = row.commit().parents().size > 1, surface)
+        previous?.links()?.forEach { link -> drawCubic(linkSegments(link.fromLane(), link.toLane(), height, lanePx).upper, graphColor(link.color(), dark), stroke) }
+        row.links().forEach { link -> drawCubic(linkSegments(link.fromLane(), link.toLane(), height, lanePx).lower, graphColor(link.color(), dark), stroke) }
+        drawDot(Offset(laneX(row.lane(), lanePx), height / 2f), graphColor(row.color(), dark), hollow = row.commit().parents().size > 1, surface, minOf(dotRadius.toPx(), lanePx / 3f))
     }
 }
 
@@ -47,8 +48,7 @@ private fun DrawScope.drawCubic(c: Cubic, color: Color, stroke: Stroke) {
     drawPath(path, color, style = stroke)
 }
 
-private fun DrawScope.drawDot(center: Offset, color: Color, hollow: Boolean, surface: Color) {
-    val radius = dotRadius.toPx()
+private fun DrawScope.drawDot(center: Offset, color: Color, hollow: Boolean, surface: Color, radius: Float) {
     if (hollow) {
         drawCircle(surface, radius, center)
         drawCircle(color, radius - ringWidth.toPx() / 2f, center, style = Stroke(ringWidth.toPx()))

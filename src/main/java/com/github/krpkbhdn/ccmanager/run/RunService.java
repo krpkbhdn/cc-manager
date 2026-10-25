@@ -13,10 +13,12 @@ import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
@@ -58,6 +60,8 @@ public class RunService {
             throw new IllegalStateException("The run directory is missing: " + configuration.directory());
         }
         stopAndAwaitExit(configurationId);
+        configuration = configurations.find(configurationId)
+                .orElseThrow(() -> new IllegalStateException("The run configuration no longer exists."));
         var runId = "run-" + configurationId + "-" + counter.incrementAndGet();
         PtyProcess process;
         try {
@@ -82,12 +86,15 @@ public class RunService {
 
     private void stopAndAwaitExit(long configurationId) {
         var previous = runs.get(configurationId);
-        stop(configurationId);
         if (previous == null) {
             return;
         }
+        var exits = new ArrayList<CompletableFuture<?>>();
+        exits.add(previous.process().onExit());
+        ProcessHandle.of(previous.process().pid()).ifPresent(handle -> handle.descendants().forEach(child -> exits.add(child.onExit())));
+        stop(configurationId);
         try {
-            previous.process().onExit().get(RESTART_EXIT_WAIT.toMillis(), TimeUnit.MILLISECONDS);
+            CompletableFuture.allOf(exits.toArray(CompletableFuture[]::new)).get(RESTART_EXIT_WAIT.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (ExecutionException | TimeoutException e) {
@@ -124,7 +131,7 @@ public class RunService {
         return quotedForWindows(shell.invocation(command), host.windows());
     }
 
-    /** cmd.exe parses its own command line and does not understand the backslash-escaped quotes, so its command goes through as is. */
+    /** cmd.exe does not understand backslash-escaped quotes, so its arguments go through as is (RunShell already wraps the command for {@code /s /c}). */
     static String[] quotedForWindows(List<String> invocation, boolean windows) {
         var verbatim = !windows || RunShell.isCmd(invocation.getFirst());
         return invocation.stream().map(argument -> verbatim ? argument : WindowsArgument.quote(argument)).toArray(String[]::new);

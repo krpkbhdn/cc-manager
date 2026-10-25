@@ -58,7 +58,7 @@ private val menuButtonSize = 24.dp
 
 /** Overview card of one project: identity, live activity line, session pills and last activity. */
 @Composable
-fun ProjectCard(project: Project, status: AgentStatus, sessions: List<SessionSnapshot>, now: Instant, actions: ProjectActions, modifier: Modifier = Modifier) {
+fun ProjectCard(project: Project, status: AgentStatus, sessions: List<SessionSnapshot>, now: () -> Instant, actions: ProjectActions, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(Radius.xl)
     val urgent = mostUrgent(sessions)
     val lastActive = lastActivityAt(sessions)
@@ -97,7 +97,7 @@ private fun CardMenu(actions: ProjectActions, hovered: Boolean) {
 }
 
 @Composable
-private fun CardFooter(sessions: List<SessionSnapshot>, lastActive: Instant?, now: Instant, hovered: Boolean) {
+private fun CardFooter(sessions: List<SessionSnapshot>, lastActive: Instant?, now: () -> Instant, hovered: Boolean) {
     val arrow by animateFloatAsState(if (hovered) 1f else 0f, Motion.base(), label = "cardArrow")
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(Spacing.xs + 2.dp), verticalArrangement = Arrangement.spacedBy(Spacing.xs + 2.dp)) {
@@ -106,7 +106,7 @@ private fun CardFooter(sessions: List<SessionSnapshot>, lastActive: Instant?, no
         }
         lastActive?.let {
             Glyph(Icons.Clock, colors.textTertiary, size = IconSize.small)
-            Label(relativeTime(it, now), color = colors.textTertiary, style = Type.numericCaption)
+            Label(relativeTime(it, now()), color = colors.textTertiary, style = Type.numericCaption)
         }
         Box(Modifier.alpha(arrow)) { Glyph(Icons.ArrowRight, colors.accent, size = IconSize.medium) }
     }

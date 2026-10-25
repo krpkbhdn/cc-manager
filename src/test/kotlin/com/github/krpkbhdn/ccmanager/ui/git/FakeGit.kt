@@ -44,6 +44,8 @@ class FakeRepoData(
     /** One-shot failure thrown by the next mutating call. */
     @Volatile var failure: GitException? = null
     @Volatile var topLevel: Path? = null
+    @Volatile var topLevelFailure: GitException? = null
+    val watchedPaths: MutableList<Path> = java.util.Collections.synchronizedList(mutableListOf())
     val statusRepos: MutableList<Path> = java.util.Collections.synchronizedList(mutableListOf())
     val calls: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
     val logContinuations: MutableList<GraphState?> = java.util.Collections.synchronizedList(mutableListOf())
@@ -72,7 +74,10 @@ class FakeGit(val data: FakeRepoData) {
     val backend = GitBackend(status(), index(), branches(), sync(), log(), stashes(), history(), conflicts(), watcher())
 
     private fun status() = object : GitStatusService(GitRunner()) {
-        override fun topLevel(folder: Path): Path = data.topLevel ?: folder
+        override fun topLevel(folder: Path): Path {
+            data.topLevelFailure?.let { data.topLevelFailure = null; throw it }
+            return data.topLevel ?: folder
+        }
         override fun status(repo: Path): GitStatus {
             data.statusRepos.add(repo)
             return data.status()
@@ -189,6 +194,7 @@ class FakeGit(val data: FakeRepoData) {
 
     private fun watcher() = object : GitWatcher(GitRunner()) {
         override fun subscribe(repo: Path, onChange: Runnable): Runnable {
+            data.watchedPaths.add(repo)
             data.watchers += onChange
             return Runnable { data.watchers -= onChange }
         }

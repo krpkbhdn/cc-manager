@@ -28,6 +28,11 @@ class SkillFrontmatterTest {
     }
 
     @Test
+    void byteOrderMarkBeforeTheFenceIsIgnored() {
+        assertThat(SkillFrontmatter.parse("﻿---\nname: bom\n---\n")).containsEntry("name", "bom");
+    }
+
+    @Test
     void fileWithoutFrontmatterHasNoFields() {
         assertThat(SkillFrontmatter.parse("# Just text\nname: x")).isEmpty();
     }

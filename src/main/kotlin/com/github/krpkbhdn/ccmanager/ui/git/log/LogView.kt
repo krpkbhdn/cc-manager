@@ -31,7 +31,6 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import java.time.Instant
 
 private const val PREFETCH_ROWS = 25
-private const val MAX_GRAPH_LANES = 10
 private val minDetailsWidth = 360.dp
 private val maxDetailsWidth = 600.dp
 private const val DETAILS_SHARE = 0.5f
@@ -69,7 +68,8 @@ private fun LogList(git: GitState, now: () -> Instant, modifier: Modifier) {
         rows.isEmpty() -> EmptyState(Icons.Log, "No commits", if (log.filter.isActive) "Nothing matches these filters." else "This branch has no commits yet.", modifier)
         else -> BoxWithConstraints(modifier) {
             val columns = logColumnsFor(maxWidth.value)
-            val laneCount = minOf(rows.maxOf { it.laneCount() }, MAX_GRAPH_LANES)
+            val laneCount = rows.maxOf { it.laneCount() }
+            val laneWidth = laneWidth(laneCount)
             val state = rememberLazyListState()
             LaunchedEffect(state, rows.size) {
                 snapshotFlow { state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }.collect { if (it >= rows.size - PREFETCH_ROWS) log.loadMore() }
@@ -77,7 +77,7 @@ private fun LogList(git: GitState, now: () -> Instant, modifier: Modifier) {
             LazyColumn(Modifier.fillMaxSize(), state, contentPadding = PaddingValues(horizontal = Spacing.xs, vertical = Spacing.xs)) {
                 itemsIndexed(rows, key = { _, row -> row.commit().hash() }) { index, row ->
                     ContextMenuArea({ commitMenu(git, row.commit()) }) {
-                        LogRowView(row, rows.getOrNull(index - 1), laneCount, row.commit().hash() == log.selected, columns, now) { log.select(row.commit().hash()) }
+                        LogRowView(row, rows.getOrNull(index - 1), laneCount, laneWidth, row.commit().hash() == log.selected, columns, now) { log.select(row.commit().hash()) }
                     }
                 }
             }

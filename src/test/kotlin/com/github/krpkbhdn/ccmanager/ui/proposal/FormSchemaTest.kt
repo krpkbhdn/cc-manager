@@ -48,6 +48,33 @@ class FormSchemaTest {
     }
 
     @Test
+    fun oneOfBecomesChoicesWithTitlesAsLabelsAndConstsAsValues() {
+        val oneOf = formFields(JsonMapper.builder().build().readTree("""{"properties":{"p":{"oneOf":[{"const":"a","title":"Alpha"},{"const":"b"}]}}}"""))
+
+        assertThat(oneOf[0].kind).isEqualTo(FieldKind.CHOICE)
+        assertThat(oneOf[0].options).containsExactly("a", "b")
+        assertThat(oneOf[0].optionLabels).containsExactly("Alpha", "b")
+    }
+
+    @Test
+    fun valuesOutsideTheNumericRangeAreReported() {
+        val limited = formFields(JsonMapper.builder().build().readTree("""{"properties":{"n":{"type":"integer","minimum":1,"maximum":5},"r":{"type":"number","maximum":0.5}}}"""))
+
+        assertThat(formErrors(limited, mapOf("n" to "0", "r" to "0.6"))).containsEntry("n", "Must be at least 1").containsEntry("r", "Must be at most 0.5")
+        assertThat(formErrors(limited, mapOf("n" to "6"))["n"]).isEqualTo("Must be at most 5")
+        assertThat(formErrors(limited, mapOf("n" to "3", "r" to "0.5"))).isEmpty()
+    }
+
+    @Test
+    fun textOutsideTheLengthLimitsIsReported() {
+        val limited = formFields(JsonMapper.builder().build().readTree("""{"properties":{"s":{"type":"string","minLength":2,"maxLength":4}}}"""))
+
+        assertThat(formErrors(limited, mapOf("s" to "a"))["s"]).isEqualTo("Must be at least 2 characters")
+        assertThat(formErrors(limited, mapOf("s" to "abcde"))["s"]).isEqualTo("Must be at most 4 characters")
+        assertThat(formErrors(limited, mapOf("s" to "abc"))).isEmpty()
+    }
+
+    @Test
     fun emptySchemaGivesNoFields() {
         assertThat(formFields(JsonMapper.builder().build().readTree("{}"))).isEmpty()
     }

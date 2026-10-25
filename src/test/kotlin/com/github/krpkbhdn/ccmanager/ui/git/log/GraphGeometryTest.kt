@@ -11,6 +11,14 @@ class GraphGeometryTest {
     private val tolerance = Offset.offset(0.001f)
 
     @Test
+    fun `lane width shrinks past the lane cap so the column never outgrows it`() {
+        assertThat(laneWidth(3)).isEqualTo(GraphLaneWidth)
+        assertThat(laneWidth(10)).isEqualTo(GraphLaneWidth)
+        assertThat(laneWidth(20)).isEqualTo(GraphLaneWidth / 2f)
+        assertThat(laneWidth(25) * 25).isEqualTo(GraphLaneWidth * MAX_GRAPH_LANES)
+    }
+
+    @Test
     fun `lanes sit at the centre of their column`() {
         assertThat(laneX(0, lane)).isEqualTo(7f)
         assertThat(laneX(3, lane)).isEqualTo(49f)

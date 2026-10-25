@@ -8,9 +8,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +35,7 @@ import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
 private val panelWidth = 380.dp
 private val progressHeight = 6.dp
+private val sessionListMaxHeight = 260.dp
 private const val NO_LIMITS_NOTE = "Usage limits are reported by Claude Code for Pro and Max plans only. Other plans, such as Team, show the per-session figures below."
 private const val NO_REPLY_NOTE = "Limits appear after a session of a Pro or Max plan gets its first reply."
 
@@ -51,7 +55,9 @@ internal fun UsagePanel(state: AppState, onDismiss: () -> Unit) {
             HorizontalRule()
             Label("Sessions", color = colors.textSecondary, style = Type.smallMedium)
             if (rows.isEmpty()) Label("No running sessions", color = colors.textTertiary, style = Type.small)
-            rows.forEach { SessionRow(it) }
+            Column(Modifier.heightIn(max = sessionListMaxHeight).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                rows.forEach { SessionRow(it) }
+            }
         }
     }
 }

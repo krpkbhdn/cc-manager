@@ -72,11 +72,12 @@ fun RenameBranchDialog(git: GitState, dialog: GitDialog.RenameBranch, onDismiss:
 @Composable
 fun DeleteBranchDialog(git: GitState, dialog: GitDialog.DeleteBranch, onDismiss: () -> Unit) {
     var force by remember { mutableStateOf(false) }
-    val unmerged = dialog.branch.ahead() > 0 && dialog.branch.upstream() == null
+    val ahead = dialog.branch.ahead()
     ModalHost(onDismiss) {
         DialogBody("Delete branch", Icons.Trash, colors.danger) {
             Label("Delete ${dialog.branch.name()}?", color = colors.textPrimary)
-            if (unmerged) Label("It has commits that exist nowhere else.", color = colors.warning, style = Type.small)
+            if (ahead > 0) Label("It has $ahead unpushed commits.", color = colors.warning, style = Type.small)
+            if (dialog.branch.upstream() == null) Label("This branch was never pushed.", color = colors.textSecondary, style = Type.small)
             CheckboxRow("Force delete", force, { force = it }, hint = "Delete even if the branch is not fully merged.")
             DialogActions("Delete", true, true, { onDismiss(); git.deleteBranch(dialog.branch.name(), force) }, onDismiss)
         }

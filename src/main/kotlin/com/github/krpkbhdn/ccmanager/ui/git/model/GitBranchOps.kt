@@ -55,6 +55,11 @@ fun GitState.cherryPick(commit: String) = act("Cherry-picking ${commit.take(SHOR
 
 fun GitState.createTag(name: String, commit: String?, message: String) = act("Tagging $name") { history.createTag(repo, name, commit, message) }
 
+fun GitState.showInLog(ref: String) {
+    log.update { it.forBranch(ref) }
+    show(GitSubView.LOG)
+}
+
 fun GitState.requestDeleteTag(name: String) {
     dialog = GitDialog.Confirm(ConfirmRequest("Delete tag", "Delete the local tag $name?", "Delete") { deleteTag(name) })
 }

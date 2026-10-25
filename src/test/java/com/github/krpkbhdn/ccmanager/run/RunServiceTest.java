@@ -118,6 +118,18 @@ class RunServiceTest {
     }
 
     @Test
+    void restartDoesNotSpawnWhenTheConfigurationWasDeletedDuringTheWait() {
+        var configuration = configurations.save(projectId, "gone", "exit 0", temp);
+        var spied = org.mockito.Mockito.spy(configurations);
+        org.mockito.Mockito.doCallRealMethod().doReturn(java.util.Optional.empty()).when(spied).find(configuration.id());
+        var host = new SystemHostEnvironment();
+        var service = new RunService(spied, projects, new RunShell(host), host);
+
+        assertThatThrownBy(() -> service.start(configuration.id())).isInstanceOf(IllegalStateException.class).hasMessageContaining("no longer exists");
+        assertThat(service.current(configuration.id())).isEmpty();
+    }
+
+    @Test
     void startFailsReadablyForAMissingConfiguration() {
         assertThatThrownBy(() -> runs.start(12345)).isInstanceOf(IllegalStateException.class).hasMessageContaining("no longer exists");
     }
