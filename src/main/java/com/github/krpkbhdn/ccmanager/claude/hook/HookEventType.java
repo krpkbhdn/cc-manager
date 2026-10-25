@@ -27,6 +27,11 @@ public enum HookEventType {
         return wireName;
     }
 
+    /** The hooks Claude waits on for a decision, so the server may hold them. */
+    public boolean awaitsDecision() {
+        return this == PERMISSION_REQUEST || this == ELICITATION;
+    }
+
     public static HookEventType of(String wireName) {
         return Arrays.stream(values()).filter(type -> type.wireName.equals(wireName)).findFirst().orElse(UNKNOWN);
     }

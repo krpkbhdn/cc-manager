@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.github.krpkbhdn.ccmanager.claude.hook.ActivityEntry
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation
+import com.github.krpkbhdn.ccmanager.claude.proposal.Proposal
 import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgent
 import com.github.krpkbhdn.ccmanager.notification.AppNotification
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
@@ -20,6 +21,7 @@ import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.HealthCheck
 import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.McpState
 import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillHost
 import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillsState
+import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalState
 import com.github.krpkbhdn.ccmanager.ui.run.RunState
 import com.github.krpkbhdn.ccmanager.ui.teams.TeamsState
 import com.github.krpkbhdn.ccmanager.usage.RateLimitSnapshot
@@ -120,6 +122,7 @@ class AppState(
         onClosed = { projectId, id -> views[projectId]?.let { views[projectId] = it.closeShell(id) } },
         reportError = notifications::reportError,
     )
+    val proposals = ProposalState(backend.proposals, scope, notifications::reportError) { terminal.focus(it) }
     val teams = TeamsState(backend.teams, scope, { confirm = it }, notifications::reportError)
     val plugins = PluginsState(backend.plugins, scope, { confirm = it }, notifications::toast)
     val mcp = McpState(backend.mcp, null, scope, { confirm = it }, notifications::toast)
@@ -145,6 +148,20 @@ class AppState(
 
     fun viewOf(projectId: Long): ProjectView = views[projectId] ?: ProjectView()
 
+    /** The proposal dialog to show: the oldest unhidden proposal of the session whose terminal tab is open. */
+    val proposalDialog: Proposal?
+        get() {
+            val project = route as? Route.Project ?: return null
+            val session = viewOf(project.id).selected as? ProjectTab.Session ?: return null
+            return proposals.dialogFor(session.ccmSessionId)
+        }
+
+    /** Opens the session and shows its proposals again, also those the user hid before. */
+    fun answerProposals(ccmSessionId: String) {
+        proposals.reopen(ccmSessionId)
+        openSession(ccmSessionId)
+    }
+
     fun start() {
         unsubscribers += backend.projects.subscribe { projectReload.request() }
         unsubscribers += backend.sessions.subscribe { sessionReload.request() }
@@ -156,6 +173,7 @@ class AppState(
         author.offerAtStart()
         runs.start()
         shells.detect()
+        proposals.start()
         update.start()
         projectReload.request()
         sessionReload.request()
@@ -178,6 +196,7 @@ class AppState(
         cancelProjectSettings()
         teams.dispose()
         runs.dispose()
+        proposals.dispose()
         unsubscribers.forEach { it.run() }
         unsubscribers.clear()
     }

@@ -21,4 +21,10 @@ class OverviewHeadlineTest {
         assertThat(overviewHeadline(0, 0, 2).title).isEqualTo("All sessions are free")
         assertThat(overviewHeadline(0, 0, 0).title).isEqualTo("Nothing running")
     }
+
+    @Test
+    fun `answerable sessions change the attention hint`() {
+        assertThat(overviewHeadline(1, 0, 1, answerable = 1).subtitle).contains("Answer it here")
+        assertThat(overviewHeadline(1, 0, 1).subtitle).contains("Jump straight")
+    }
 }

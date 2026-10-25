@@ -30,6 +30,8 @@ public class HookSettingsWriter {
     private static final String STATUS_LINE_CURL = "status";
     private static final Pattern SAFE_ID = Pattern.compile("[A-Za-z0-9-]+");
     private static final int HOOK_TIMEOUT_SECONDS = 5;
+    /** These calls are held until the user answers; HookProperties.decisionHold stays a bit below. */
+    private static final int DECISION_TIMEOUT_SECONDS = 600;
     private static final int CURL_MAX_SECONDS = 3;
     /** WorktreeCreate replaces git behaviour, MessageDisplay is a token firehose, the rest never fire in sessions. */
     private static final Set<HookEventType> NOT_SUBSCRIBED = EnumSet.of(HookEventType.SETUP, HookEventType.WORKTREE_CREATE,
@@ -144,11 +146,14 @@ public class HookSettingsWriter {
     }
 
     private ObjectNode handler(HookEventType type, String ccmSessionId) {
-        return type == HookEventType.SESSION_START ? curlHandler(ccmSessionId) : httpHandler(server.hookUrl(ccmSessionId));
+        if (type == HookEventType.SESSION_START) {
+            return curlHandler(ccmSessionId);
+        }
+        return httpHandler(server.hookUrl(ccmSessionId), type.awaitsDecision() ? DECISION_TIMEOUT_SECONDS : HOOK_TIMEOUT_SECONDS);
     }
 
-    private ObjectNode httpHandler(String url) {
-        return mapper.createObjectNode().put("type", "http").put("url", url).put("timeout", HOOK_TIMEOUT_SECONDS);
+    private ObjectNode httpHandler(String url, int timeoutSeconds) {
+        return mapper.createObjectNode().put("type", "http").put("url", url).put("timeout", timeoutSeconds);
     }
 
     /** SessionStart does not accept http handlers; async so a stalled curl can never delay startup. */

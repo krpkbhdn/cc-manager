@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,6 +21,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
@@ -27,6 +29,8 @@ import com.github.krpkbhdn.ccmanager.claude.hook.ActivityEntry
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.project.Project
+import com.github.krpkbhdn.ccmanager.ui.components.AppButton
+import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant
 import com.github.krpkbhdn.ccmanager.ui.components.HorizontalRule
 import com.github.krpkbhdn.ccmanager.ui.components.IconButton
 import com.github.krpkbhdn.ccmanager.ui.components.MenuEntry
@@ -131,7 +135,8 @@ private fun ProjectMainArea(state: AppState, project: Project, view: ProjectView
             onNewSession = { state.sessions.launch(project.id, LaunchMode.NEW) },
             shellMenu = shellMenu(state, project.id),
         ) {
-            ModelControl(state, project, (view.selected as? ProjectTab.Session)?.let { state.live.find(it.ccmSessionId) })
+            val shown = (view.selected as? ProjectTab.Session)?.ccmSessionId
+            ModelControl(state, project, shown?.let { state.live.find(it) })
             Spacer(Modifier.width(Spacing.sm))
             if (onSession) {
                 IconButton(Icons.Zap, state::toggleQuickBar, tooltip = "Quick actions", hint = AppShortcut.TOGGLE_QUICK_ACTIONS.hint(), active = state.settings.quickBarOpen)
@@ -203,14 +208,23 @@ private fun SessionTab(state: AppState, ccmSessionId: String) {
     Column(Modifier.fillMaxSize()) {
         state.sessions.sessionTeams[ccmSessionId]?.let { TeamRoleStrip(it, state.live.find(ccmSessionId).runningAgentTypes()) }
         QuickActionsBar(state.settings.quickBarOpen, enabled = state.live.find(ccmSessionId) != null, onSend = { state.sessions.send(ccmSessionId, it) })
-        TerminalPane(state, ccmSessionId)
+        TerminalPane(state, ccmSessionId) {
+            if (state.proposals.hiddenCount(ccmSessionId) > 0) {
+                AppButton(
+                    "Claude is waiting - Answer", { state.proposals.reopen(ccmSessionId) },
+                    Modifier.align(Alignment.TopEnd).padding(end = Spacing.lg, top = Spacing.xs),
+                    variant = ButtonVariant.PRIMARY, icon = Icons.Message, compact = true,
+                )
+            }
+        }
     }
 }
 
 @Composable
-private fun TerminalPane(state: AppState, terminalId: String) {
+private fun TerminalPane(state: AppState, terminalId: String, overlay: @Composable BoxScope.() -> Unit = {}) {
     Box(Modifier.fillMaxSize().background(colors.terminal).padding(start = TERMINAL_INSET, top = TERMINAL_INSET)) {
         state.terminal.View(terminalId, Modifier.fillMaxSize())
+        overlay()
     }
 }
 

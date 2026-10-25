@@ -8,7 +8,10 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.github.krpkbhdn.ccmanager.claude.mcp.McpEndpoint;
+import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalService;
 import java.net.URI;
+import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.net.http.HttpClient;
@@ -29,12 +32,14 @@ class HookServerTest {
     private final HookEventStore store = mock(HookEventStore.class);
     private final ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
     private final McpEndpoint mcp = mock(McpEndpoint.class);
+    private final ProposalService proposals = mock(ProposalService.class);
     private final HttpClient client = HttpClient.newHttpClient();
     private HookServer server;
 
     @BeforeEach
     void setUp() {
-        server = new HookServer(store, publisher, JsonMapper.builder().build(), new HookProperties(10, MAX_BODY, 500), mcp);
+        server = new HookServer(store, publisher, JsonMapper.builder().build(),
+                new HookProperties(10, MAX_BODY, 500, Duration.ofSeconds(5)), mcp, proposals);
         server.start();
     }
 
@@ -61,6 +66,44 @@ class HookServerTest {
         assertThat(captor.getValue().type()).isEqualTo(HookEventType.STOP);
         assertThat(captor.getValue().text("session_id")).isEqualTo("c1");
         verify(store).save(captor.getValue());
+    }
+
+    @Test
+    void permissionRequestIsHeldUntilDecidedThenAnsweredWithTheDecision() throws Exception {
+        var decision = new CompletableFuture<Optional<String>>();
+        when(proposals.hold(org.mockito.ArgumentMatchers.any(HookEvent.class))).thenReturn(decision);
+        var response = client.sendAsync(HttpRequest.newBuilder(URI.create(server.hookUrl("sess-1")))
+                .POST(HttpRequest.BodyPublishers.ofString("{\"hook_event_name\":\"PermissionRequest\",\"tool_name\":\"Bash\"}")).build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        var captor = ArgumentCaptor.forClass(HookEvent.class);
+        verify(publisher, timeout(VERIFY_TIMEOUT_MS)).publishEvent(captor.capture());
+        verify(store, timeout(VERIFY_TIMEOUT_MS)).save(captor.getValue());
+        assertThat(response).isNotDone();
+        decision.complete(Optional.of("{\"decided\":true}"));
+
+        var answered = response.get();
+        assertThat(answered.statusCode()).isEqualTo(200);
+        assertThat(answered.headers().firstValue("Content-Type")).contains("application/json");
+        assertThat(answered.body()).isEqualTo("{\"decided\":true}");
+    }
+
+    @Test
+    void heldCallWithoutDecisionGetsEmptyOk() throws Exception {
+        when(proposals.hold(org.mockito.ArgumentMatchers.any(HookEvent.class))).thenReturn(CompletableFuture.completedFuture(Optional.empty()));
+
+        var response = post(server.hookUrl("sess-1"), "{\"hook_event_name\":\"Elicitation\"}");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isEmpty();
+    }
+
+    @Test
+    void otherHooksNeverTouchTheProposals() throws Exception {
+        post(server.hookUrl("sess-1"), "{\"hook_event_name\":\"PreToolUse\"}");
+
+        verify(publisher, timeout(VERIFY_TIMEOUT_MS)).publishEvent(ArgumentCaptor.forClass(HookEvent.class).capture());
+        verifyNoInteractions(proposals);
     }
 
     @Test

@@ -1,15 +1,11 @@
 package com.github.krpkbhdn.ccmanager.ui.git.dialog
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -18,13 +14,12 @@ import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.ui.components.AppCheckbox
 import com.github.krpkbhdn.ccmanager.ui.components.Label
 import com.github.krpkbhdn.ccmanager.ui.components.Pressable
+import com.github.krpkbhdn.ccmanager.ui.components.RadioMark
 import com.github.krpkbhdn.ccmanager.ui.theme.Radius
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
-private val radioSize = 16.dp
-private val radioDot = 8.dp
 
 /** Small caption above a form control; [error] replaces the caption in red. */
 @Composable
@@ -56,7 +51,7 @@ fun <T> ChoiceList(choices: List<Choice<T>>, selected: T, onSelect: (T) -> Unit)
             val on = choice.value == selected
             Pressable({ onSelect(choice.value) }, Modifier.fillMaxWidth(), RoundedCornerShape(Radius.sm), base = if (on) colors.accentSoft else androidx.compose.ui.graphics.Color.Transparent) {
                 Row(Modifier.padding(Spacing.sm + 2.dp), horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                    Radio(on)
+                    RadioMark(on, Modifier.padding(top = 2.dp))
                     Column {
                         Label(choice.label, color = colors.textPrimary, style = Type.bodyMedium)
                         Label(choice.description, color = colors.textSecondary, style = Type.caption, maxLines = 2)
@@ -64,13 +59,5 @@ fun <T> ChoiceList(choices: List<Choice<T>>, selected: T, onSelect: (T) -> Unit)
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun Radio(on: Boolean) {
-    val ring = if (on) colors.accent else colors.borderStrong
-    Box(Modifier.padding(top = 2.dp).size(radioSize).border(1.5.dp, ring, CircleShape), contentAlignment = Alignment.Center) {
-        if (on) Box(Modifier.size(radioDot).background(colors.accent, CircleShape))
     }
 }

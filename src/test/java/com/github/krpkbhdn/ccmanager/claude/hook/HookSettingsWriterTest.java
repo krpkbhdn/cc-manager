@@ -84,6 +84,14 @@ class HookSettingsWriterTest {
     }
 
     @Test
+    void permissionRequestAndElicitationWaitUpToTenMinutes() throws Exception {
+        var hooks = mapper.readTree(Files.readString(writer.write("abc-1").settings())).path("hooks");
+
+        assertThat(hooks.path("PermissionRequest").get(0).path("hooks").get(0).path("timeout").asInt()).isEqualTo(600);
+        assertThat(hooks.path("Elicitation").get(0).path("hooks").get(0).path("timeout").asInt()).isEqualTo(600);
+    }
+
+    @Test
     void onPosixSessionStartUsesAsyncExecFormCurlReadingItsUrlFromAConfigFile() throws Exception {
         var handler = mapper.readTree(Files.readString(writer.write("abc-1").settings())).path("hooks").path("SessionStart").get(0)
                 .path("hooks").get(0);

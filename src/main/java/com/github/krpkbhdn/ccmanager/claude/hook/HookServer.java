@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.claude.hook;
 
 import com.github.krpkbhdn.ccmanager.claude.mcp.McpEndpoint;
+import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalService;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -12,6 +13,7 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.slf4j.Logger;
@@ -25,7 +27,8 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Loopback-only HTTP endpoint that Claude Code http hooks (and a curl command hook for SessionStart) post to.
  * Parses each call into a HookEvent, persists it and publishes it (the session registry listens).
- * Always answers hooks with 200 and an empty body: anything else would change Claude's behaviour. The MCP path is the one that answers with content.
+ * Answers hooks with 200 and an empty body at once; only PermissionRequest and Elicitation are held until the user answers in the app
+ * (or the terminal settles it) and then get a decision. The MCP path answers with content too.
  */
 @Component
 public class HookServer implements SmartLifecycle {
@@ -48,17 +51,19 @@ public class HookServer implements SmartLifecycle {
     private final JsonMapper mapper;
     private final HookProperties properties;
     private final McpEndpoint mcp;
+    private final ProposalService proposals;
     private final byte[] secret = secret();
     private final ExecutorService worker = Executors.newSingleThreadExecutor(Thread.ofPlatform().name("hook-worker").daemon().factory());
     private HttpServer server;
 
     public HookServer(HookEventStore store, ApplicationEventPublisher publisher, JsonMapper mapper, HookProperties properties,
-            McpEndpoint mcp) {
+            McpEndpoint mcp, ProposalService proposals) {
         this.store = store;
         this.publisher = publisher;
         this.mapper = mapper;
         this.properties = properties;
         this.mcp = mcp;
+        this.proposals = proposals;
     }
 
     public synchronized int port() {
@@ -133,9 +138,16 @@ public class HookServer implements SmartLifecycle {
         }
     }
 
+    /** Answers at once with an empty 200, except calls that ask for a decision: those wait for the user (see holdForDecision). */
     private void respondToHook(HttpExchange exchange, String ccmSessionId, byte[] body, BodyConsumer consumer) throws IOException {
+        var receivedAt = Instant.now();
+        var payload = parseObject(ccmSessionId, body);
+        if (payload.filter(this::asksForDecision).isPresent()) {
+            respondWithDecision(exchange, holdForDecision(ccmSessionId, payload.get(), receivedAt));
+            return;
+        }
         exchange.sendResponseHeaders(OK, NO_RESPONSE_BODY);
-        accept(ccmSessionId, body, consumer);
+        payload.ifPresent(parsed -> worker.execute(() -> consume(ccmSessionId, parsed, receivedAt, consumer)));
     }
 
     private void respondToMcp(HttpExchange exchange, String ccmSessionId, byte[] body) throws IOException {
@@ -148,10 +160,42 @@ public class HookServer implements SmartLifecycle {
             exchange.sendResponseHeaders(ACCEPTED, NO_RESPONSE_BODY);
             return;
         }
-        var bytes = json.get().getBytes(StandardCharsets.UTF_8);
+        writeJson(exchange, json.get());
+    }
+
+    private void writeJson(HttpExchange exchange, String json) throws IOException {
+        var bytes = json.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", "application/json");
         exchange.sendResponseHeaders(OK, bytes.length);
         exchange.getResponseBody().write(bytes);
+    }
+
+    private boolean asksForDecision(JsonNode payload) {
+        return HookEventType.of(payload.path("hook_event_name").asString("")).awaitsDecision();
+    }
+
+    /** The event is stored and published on the worker first, so its order and the NEEDS_ACTION status are as for any hook; the worker never waits. */
+    private CompletableFuture<Optional<String>> holdForDecision(String ccmSessionId, JsonNode payload, Instant receivedAt) {
+        var decision = new CompletableFuture<Optional<String>>();
+        worker.execute(() -> {
+            try {
+                proposals.hold(acceptHook(ccmSessionId, payload, receivedAt)).whenComplete((output, error) -> decision.complete(output == null ? Optional.empty() : output));
+            } catch (RuntimeException e) {
+                log.debug("Could not hold hook call for session {}: {}", ccmSessionId, e.toString());
+                decision.complete(Optional.empty());
+            }
+        });
+        return decision;
+    }
+
+    /** Runs on a virtual thread, so waiting for the user costs nothing; ProposalService bounds the wait. */
+    private void respondWithDecision(HttpExchange exchange, CompletableFuture<Optional<String>> decision) throws IOException {
+        var output = decision.join();
+        if (output.isPresent()) {
+            writeJson(exchange, output.get());
+        } else {
+            exchange.sendResponseHeaders(OK, NO_RESPONSE_BODY);
+        }
     }
 
     /** The session id of a request whose path carries the right secret, otherwise empty. */
@@ -160,32 +204,35 @@ public class HookServer implements SmartLifecycle {
         return parts.length == PATH_PARTS && secretMatches(parts[0]) ? Optional.of(parts[1]) : Optional.empty();
     }
 
-    private void accept(String ccmSessionId, byte[] body, BodyConsumer consumer) {
+    private Optional<JsonNode> parseObject(String ccmSessionId, byte[] body) {
         if (body.length > properties.maxBodyBytes()) {
             log.debug("Dropped oversized hook body for session {}", ccmSessionId);
-            return;
+            return Optional.empty();
         }
-        var receivedAt = Instant.now();
-        worker.execute(() -> process(ccmSessionId, body, receivedAt, consumer));
-    }
-
-    private void process(String ccmSessionId, byte[] body, Instant receivedAt, BodyConsumer consumer) {
         try {
             JsonNode payload = mapper.readTree(body);
-            if (payload.isObject()) {
-                consumer.accept(ccmSessionId, payload, receivedAt);
-            }
+            return payload.isObject() ? Optional.of(payload) : Optional.empty();
+        } catch (RuntimeException e) {
+            log.debug("Ignored unusable hook call for session {}: {}", ccmSessionId, e.toString());
+            return Optional.empty();
+        }
+    }
+
+    private void consume(String ccmSessionId, JsonNode payload, Instant receivedAt, BodyConsumer consumer) {
+        try {
+            consumer.accept(ccmSessionId, payload, receivedAt);
         } catch (RuntimeException e) {
             log.debug("Ignored unusable hook call for session {}: {}", ccmSessionId, e.toString());
         }
     }
 
-    private void acceptHook(String ccmSessionId, JsonNode payload, Instant receivedAt) {
+    private HookEvent acceptHook(String ccmSessionId, JsonNode payload, Instant receivedAt) {
         var rawName = payload.path("hook_event_name").asString("");
         var event = new HookEvent(ccmSessionId, HookEventType.of(rawName), rawName, payload, receivedAt);
         log.debug("Hook event {} for session {}", rawName, ccmSessionId);
         persist(event);
         publisher.publishEvent(event);
+        return event;
     }
 
     private void acceptStatusLine(String ccmSessionId, JsonNode payload, Instant receivedAt) {

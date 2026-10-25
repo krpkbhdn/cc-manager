@@ -48,6 +48,7 @@ import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.palette.CommandPalette
 import com.github.krpkbhdn.ccmanager.ui.palette.paletteItems
 import com.github.krpkbhdn.ccmanager.ui.picker.FolderPickerDialog
+import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalDialogHost
 import com.github.krpkbhdn.ccmanager.ui.projectsettings.ProjectSettingsDialog
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.Route
@@ -104,6 +105,7 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
         state.author.offer?.let { AuthorOfferDialog(it, state.author) }
         state.author.manage?.let { open -> AuthorConfigurationDialog(open, open.projectId?.let { state.projects.find(it)?.name }, state.author) }
         state.author.report?.let { AuthorReportPanel(it, state.author::closeReport) }
+        ProposalDialogHost(state)
         state.confirm?.let { ConfirmDialog(it) { state.confirm = null } }
         state.projects.renaming?.let { RenameDialog(it, { name -> state.projects.rename(it.project, name) }, { state.projects.renaming = null }) }
         if (state.projects.pickerOpen) FolderPickerDialog(initial = null, onDismiss = { state.projects.pickerOpen = false }, onPicked = state.projects::addAt)

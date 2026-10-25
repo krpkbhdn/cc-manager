@@ -84,8 +84,9 @@ private fun LazyGridScope.attentionCards(attention: List<SessionSnapshot>, state
             projectName = state.projects.nameOf(session.projectId),
             session = session,
             now = state.now,
-            onOpen = { state.openSession(session.ccmSessionId) },
+            onOpen = { state.answerProposals(session.ccmSessionId) },
             modifier = Modifier.animateItem(),
+            proposalHeadline = state.proposals.headlineOf(session.ccmSessionId),
         )
     }
 }
@@ -93,7 +94,8 @@ private fun LazyGridScope.attentionCards(attention: List<SessionSnapshot>, state
 @Composable
 private fun OverviewHero(state: AppState, attentionCount: Int) {
     val working = state.live.sessions.count { it.status == AgentStatus.WORKING }
-    val headline = overviewHeadline(attentionCount, working, state.live.sessions.size)
+    val answerable = state.live.sessions.count { state.proposals.of(it.ccmSessionId).isNotEmpty() }
+    val headline = overviewHeadline(attentionCount, working, state.live.sessions.size, answerable)
     val status = when {
         attentionCount > 0 -> AgentStatus.NEEDS_ACTION
         working > 0 -> AgentStatus.WORKING

@@ -8,6 +8,7 @@ import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService
 import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgentService
 import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
+import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalService
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry
 import com.github.krpkbhdn.ccmanager.claude.session.TranscriptService
 import com.github.krpkbhdn.ccmanager.notification.NotificationService
@@ -90,6 +91,7 @@ class Backend(
     val shellDetector: ShellDetector,
     val shellLauncher: ShellLauncher,
     val author: AuthorProfileService,
+    val proposals: ProposalService,
     val terminal: TerminalPort = HostTerminalPort,
     val updates: UpdateService? = null,
     val sound: NotificationSoundService? = null,
@@ -118,6 +120,7 @@ class Backend(
             shellDetector = context.getBean(ShellDetector::class.java),
             shellLauncher = context.getBean(ShellLauncher::class.java),
             author = context.getBean(AuthorProfileService::class.java),
+            proposals = context.getBean(ProposalService::class.java),
             updates = context.getBean(UpdateService::class.java),
             sound = context.getBean(NotificationSoundService::class.java),
         )
