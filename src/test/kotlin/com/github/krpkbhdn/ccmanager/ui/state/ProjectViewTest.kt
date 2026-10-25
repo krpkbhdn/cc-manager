@@ -61,6 +61,22 @@ class ProjectViewTest {
     }
 
     @Test
+    fun `shell tabs sit between sessions and git and close to their neighbour`() {
+        val view = ProjectView().openSession("a").openShell("s1").openShell("s2")
+
+        assertThat(view.tabs()).containsExactly(ProjectTab.Session("a"), ProjectTab.Shell("s1"), ProjectTab.Shell("s2"), ProjectTab.Git, ProjectTab.Run, ProjectTab.Activity)
+        assertThat(view.closeShell("s2").selected).isEqualTo(ProjectTab.Shell("s1"))
+        assertThat(view.closeShell("s2").closeShell("s1").selected).isEqualTo(ProjectTab.Session("a"))
+    }
+
+    @Test
+    fun `further tabs of the same shell are numbered`() {
+        assertThat(uniqueLabel("Git Bash", emptyList())).isEqualTo("Git Bash")
+        assertThat(uniqueLabel("Git Bash", listOf("Git Bash"))).isEqualTo("Git Bash 2")
+        assertThat(uniqueLabel("Git Bash", listOf("Git Bash", "Git Bash 2"))).isEqualTo("Git Bash 3")
+    }
+
+    @Test
     fun `sessions are ordered by urgency`() {
         val sessions = listOf(session("idle", AgentStatus.IDLE), session("needs", AgentStatus.NEEDS_ACTION), session("work", AgentStatus.WORKING))
 

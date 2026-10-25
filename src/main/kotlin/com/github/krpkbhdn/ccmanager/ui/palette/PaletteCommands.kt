@@ -72,11 +72,20 @@ private fun globalActions(state: AppState, systemDark: Boolean): List<PaletteIte
     PaletteItem("toggle-sidebar", "Toggle sidebar", PaletteGroup.ACTIONS, icon = Icons.PanelLeftClose, shortcut = AppShortcut.TOGGLE_SIDEBAR, run = state::toggleSidebar),
 )
 
+private fun shellActions(state: AppState, projectId: Long, here: String): List<PaletteItem> {
+    val default = state.shells.default ?: return emptyList()
+    val openDefault = PaletteItem("open-terminal", "Open terminal", PaletteGroup.ACTIONS, "$here: ${default.name}", Icons.SquareTerminal, shortcut = AppShortcut.OPEN_TERMINAL) { state.shells.open(projectId, default) }
+    val perShell = state.shells.available.map { shell ->
+        PaletteItem("open-terminal-${shell.name}", "Open terminal: ${shell.name}", PaletteGroup.ACTIONS, here, Icons.SquareTerminal) { state.shells.open(projectId, shell) }
+    }
+    return listOf(openDefault) + perShell
+}
+
 private fun projectActions(state: AppState): List<PaletteItem> {
     val route = state.route as? Route.Project ?: return emptyList()
     val project = state.projects.all.firstOrNull { it.id == route.id } ?: return emptyList()
     val here = "in ${project.name}"
-    return listOfNotNull(
+    return shellActions(state, project.id, here) + listOfNotNull(
         PaletteItem("launch", "Launch Claude", PaletteGroup.ACTIONS, here, Icons.Play, shortcut = AppShortcut.NEW_SESSION) { state.sessions.launch(project.id, LaunchMode.NEW) },
         PaletteItem("start-task", "Start task with team", PaletteGroup.ACTIONS, here, Icons.Users) { state.taskDialogProjectId = project.id },
         PaletteItem("continue", "Continue last session", PaletteGroup.ACTIONS, here, Icons.ArrowRight) { state.sessions.launch(project.id, LaunchMode.CONTINUE) },

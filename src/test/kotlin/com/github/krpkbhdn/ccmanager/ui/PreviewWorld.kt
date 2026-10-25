@@ -48,6 +48,9 @@ import com.github.krpkbhdn.ccmanager.ui.git.FakeRepoData
 import com.github.krpkbhdn.ccmanager.ui.git.SampleRepos
 import com.github.krpkbhdn.ccmanager.ui.state.Backend
 import com.github.krpkbhdn.ccmanager.ui.state.TerminalPort
+import com.github.krpkbhdn.ccmanager.shell.ShellDetector
+import com.github.krpkbhdn.ccmanager.shell.ShellLauncher
+import com.github.krpkbhdn.ccmanager.shell.ShellProfile
 import com.github.krpkbhdn.ccmanager.workspace.DirectoryOpener
 import com.github.krpkbhdn.ccmanager.workspace.IdeLauncher
 import java.nio.file.Path
@@ -276,7 +279,12 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         `when`(usage.all()).thenAnswer { sessionUsage }
         `when`(usage.subscribe(any())).thenAnswer { Runnable { } }
 
-        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), TranscriptService(JsonMapper.builder().build(), previewTranscriptDir), runConfigurationService(), runService(), terminal = terminal)
+        val shellDetector = mock(ShellDetector::class.java)
+        `when`(shellDetector.detect()).thenReturn(listOf(ShellProfile("PowerShell", Path.of("pwsh.exe"), emptyList()), ShellProfile("Git Bash", Path.of("bash.exe"), listOf("--login", "-i"))))
+        val shellLauncher = mock(ShellLauncher::class.java)
+        `when`(shellLauncher.launch(anyLong(), any())).thenThrow(IllegalStateException("Preview mode: shells cannot be started here."))
+
+        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), TranscriptService(JsonMapper.builder().build(), previewTranscriptDir), runConfigurationService(), runService(), shellDetector, shellLauncher, terminal = terminal)
     }
 
     private fun installationNow() = if (claudeInstalled) {

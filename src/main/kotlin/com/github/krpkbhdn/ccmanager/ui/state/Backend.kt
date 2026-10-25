@@ -17,6 +17,9 @@ import com.github.krpkbhdn.ccmanager.run.RunService
 import com.github.krpkbhdn.ccmanager.extension.mcp.McpService
 import com.github.krpkbhdn.ccmanager.extension.plugin.PluginService
 import com.github.krpkbhdn.ccmanager.extension.skill.SkillService
+import com.github.krpkbhdn.ccmanager.shell.LaunchedShell
+import com.github.krpkbhdn.ccmanager.shell.ShellDetector
+import com.github.krpkbhdn.ccmanager.shell.ShellLauncher
 import com.github.krpkbhdn.ccmanager.team.TeamService
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitBackend
 import com.github.krpkbhdn.ccmanager.ui.terminal.TerminalHost
@@ -32,6 +35,7 @@ import org.springframework.context.ConfigurableApplicationContext
 /** The terminal widget layer, behind an interface so the UI can be previewed without a real PTY. */
 interface TerminalPort {
     fun open(session: LaunchedSession)
+    fun openShell(shell: LaunchedShell) {}
     fun send(ccmSessionId: String, text: String)
     fun close(ccmSessionId: String)
 
@@ -50,6 +54,7 @@ interface TerminalPort {
 
 object HostTerminalPort : TerminalPort {
     override fun open(session: LaunchedSession) = TerminalHost.open(session)
+    override fun openShell(shell: LaunchedShell) = TerminalHost.open(shell)
     override fun send(ccmSessionId: String, text: String) = TerminalHost.send(ccmSessionId, text)
     override fun close(ccmSessionId: String) = TerminalHost.close(ccmSessionId)
     override fun focus(ccmSessionId: String) = TerminalHost.focus(ccmSessionId)
@@ -81,6 +86,8 @@ class Backend(
     val transcripts: TranscriptService,
     val runConfigurations: RunConfigurationService,
     val runs: RunService,
+    val shellDetector: ShellDetector,
+    val shellLauncher: ShellLauncher,
     val terminal: TerminalPort = HostTerminalPort,
     val updates: UpdateService? = null,
     val sound: NotificationSoundService? = null,
@@ -106,6 +113,8 @@ class Backend(
             transcripts = context.getBean(TranscriptService::class.java),
             runConfigurations = context.getBean(RunConfigurationService::class.java),
             runs = context.getBean(RunService::class.java),
+            shellDetector = context.getBean(ShellDetector::class.java),
+            shellLauncher = context.getBean(ShellLauncher::class.java),
             updates = context.getBean(UpdateService::class.java),
             sound = context.getBean(NotificationSoundService::class.java),
         )

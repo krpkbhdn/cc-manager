@@ -64,8 +64,8 @@ class PtyClaudeRealTest {
         return new PtyProcessBuilder(command)
                 .setDirectory(directory.toString())
                 .setEnvironment(ClaudeCommand.environment(System.getenv(), "ccm-test"))
-                .setInitialColumns(ClaudeLauncher.INITIAL_COLUMNS)
-                .setInitialRows(ClaudeLauncher.INITIAL_ROWS)
+                .setInitialColumns(PtySpawner.INITIAL_COLUMNS)
+                .setInitialRows(PtySpawner.INITIAL_ROWS)
                 .start();
     }
 

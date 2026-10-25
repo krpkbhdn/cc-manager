@@ -24,6 +24,16 @@ public interface HostEnvironment {
     /** @return direct child directories of parent whose name starts with prefix, in no particular order */
     List<Path> childDirectoriesStartingWith(Path parent, String prefix);
 
+    /** @return the lines of a text file, empty when it cannot be read */
+    default List<String> readLines(Path file) {
+        return List.of();
+    }
+
+    /** @return the path with symbolic links resolved, or the path itself when that is not possible */
+    default Path realPath(Path path) {
+        return path;
+    }
+
     /** Claude Code's configuration directory: CLAUDE_CONFIG_DIR when set, else ~/.claude. */
     default Path claudeConfigDirectory() {
         var configured = env("CLAUDE_CONFIG_DIR");

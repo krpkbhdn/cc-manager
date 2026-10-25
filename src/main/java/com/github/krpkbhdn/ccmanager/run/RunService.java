@@ -1,7 +1,7 @@
 package com.github.krpkbhdn.ccmanager.run;
 
 import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeCommand;
-import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher;
+import com.github.krpkbhdn.ccmanager.claude.launch.PtySpawner;
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession;
 import com.github.krpkbhdn.ccmanager.claude.launch.WindowsArgument;
 import com.github.krpkbhdn.ccmanager.workspace.HostEnvironment;
@@ -93,8 +93,8 @@ public class RunService {
                 .setDirectory(configuration.directory().toString())
                 .setUseWinConPty(true)
                 .setEnvironment(ClaudeCommand.terminalEnvironment(System.getenv()))
-                .setInitialColumns(ClaudeLauncher.INITIAL_COLUMNS)
-                .setInitialRows(ClaudeLauncher.INITIAL_ROWS)
+                .setInitialColumns(PtySpawner.INITIAL_COLUMNS)
+                .setInitialRows(PtySpawner.INITIAL_ROWS)
                 .start();
     }
 

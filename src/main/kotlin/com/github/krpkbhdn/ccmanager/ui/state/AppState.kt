@@ -85,8 +85,8 @@ class AppState(
     val projects: ProjectsState = ProjectsState(
         backend, scope,
         hasRunningSessions = { live.of(it).isNotEmpty() },
-        sessionIdsOf = { id -> (viewOf(id).openSessions + live.of(id).map { it.ccmSessionId }).distinct() },
-        closeSession = { projectId, id -> sessions.close(projectId, id) },
+        sessionIdsOf = { id -> (viewOf(id).openSessions + viewOf(id).openShells + live.of(id).map { it.ccmSessionId }).distinct() },
+        closeSession = { projectId, id -> if (shells.owns(id)) shells.close(projectId, id) else sessions.close(projectId, id) },
         requestConfirm = { confirm = it },
         showProject = { navigate(Route.Project(it)) },
         onRemoved = { if (route == Route.Project(it)) route = Route.Overview },
@@ -108,6 +108,15 @@ class AppState(
         projectPath = { projects.find(it)?.path },
         showRunTab = { select(it, ProjectTab.Run) },
         requestConfirm = { confirm = it },
+        reportError = notifications::reportError,
+    )
+    val shells = ShellsState(
+        backend, scope,
+        openShellsOf = { viewOf(it).openShells },
+        lastChosen = { settings.lastShell },
+        onChosen = { name -> updateSettings { it.copy(lastShell = name) } },
+        onOpened = { projectId, id -> views[projectId] = viewOf(projectId).openShell(id); navigate(Route.Project(projectId)) },
+        onClosed = { projectId, id -> views[projectId]?.let { views[projectId] = it.closeShell(id) } },
         reportError = notifications::reportError,
     )
     val teams = TeamsState(backend.teams, scope, { confirm = it }, notifications::reportError)
@@ -135,6 +144,7 @@ class AppState(
         backend.sound?.setEnabled(settings.notificationSound)
         teams.start()
         runs.start()
+        shells.detect()
         update.start()
         projectReload.request()
         sessionReload.request()

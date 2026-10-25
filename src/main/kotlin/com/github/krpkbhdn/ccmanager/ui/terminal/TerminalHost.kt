@@ -2,6 +2,7 @@ package com.github.krpkbhdn.ccmanager.ui.terminal
 
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry
+import com.github.krpkbhdn.ccmanager.shell.LaunchedShell
 import com.github.krpkbhdn.ccmanager.workspace.ProcessTree
 import com.pty4j.PtyProcess
 import java.util.concurrent.ConcurrentHashMap
@@ -23,8 +24,13 @@ object TerminalHost {
         registry = sessionRegistry
     }
 
-    fun open(session: LaunchedSession) {
-        terminals.computeIfAbsent(session.ccmSessionId()) { createTerminal(session) }
+    fun open(session: LaunchedSession) = open(session.ccmSessionId(), session.label(), session.process())
+
+    /** Plain shells are opened under their own ids; the registry ignores Esc reports for ids it does not know. */
+    fun open(shell: LaunchedShell) = open(shell.terminalId(), shell.shell().name(), shell.process())
+
+    private fun open(id: String, label: String, process: PtyProcess) {
+        terminals.computeIfAbsent(id) { createTerminal(id, label, process) }
     }
 
     /** Types text into the session console exactly as if the user typed it (CR = Enter, ESC = Esc). */
@@ -62,9 +68,8 @@ object TerminalHost {
         if (process.isAlive) ProcessTree.kill(process)
     }
 
-    private fun createTerminal(session: LaunchedSession): OpenTerminal {
-        val id = session.ccmSessionId()
-        val connector = PtyTtyConnector(session.process(), session.label()) { registry?.markInterrupted(id) }
-        return OpenTerminal(TerminalSession(connector), session.process(), connector)
+    private fun createTerminal(id: String, label: String, process: PtyProcess): OpenTerminal {
+        val connector = PtyTtyConnector(process, label) { registry?.markInterrupted(id) }
+        return OpenTerminal(TerminalSession(connector), process, connector)
     }
 }

@@ -11,7 +11,6 @@ import com.github.krpkbhdn.ccmanager.project.ModelSelection;
 import com.github.krpkbhdn.ccmanager.project.ProjectService;
 import com.github.krpkbhdn.ccmanager.team.Team;
 import com.pty4j.PtyProcess;
-import com.pty4j.PtyProcessBuilder;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -27,8 +26,6 @@ import org.springframework.stereotype.Service;
 @Service
 public class ClaudeLauncher {
 
-    public static final int INITIAL_COLUMNS = 120;
-    public static final int INITIAL_ROWS = 32;
     private static final int SPAWN_FAILED_EXIT_CODE = -1;
     private static final Logger log = LoggerFactory.getLogger(ClaudeLauncher.class);
 
@@ -73,7 +70,7 @@ public class ClaudeLauncher {
         try {
             SessionFiles files = hookSettings.write(ccmSessionId);
             List<String> command = commandFactory.build(files, executable, project.modelSelection());
-            PtyProcess process = spawn(command, directory, ccmSessionId);
+            PtyProcess process = PtySpawner.spawn(command, directory, ClaudeCommand.environment(System.getenv(), ccmSessionId));
             watchExit(ccmSessionId, process);
             return new LaunchedSession(ccmSessionId, projectId, label, process);
         } catch (IOException | RuntimeException e) {
@@ -99,27 +96,6 @@ public class ClaudeLauncher {
             throw new IllegalStateException(reason);
         }
         return current.executable();
-    }
-
-    private PtyProcess spawn(List<String> command, Path directory, String ccmSessionId) throws IOException {
-        return new PtyProcessBuilder(platformArguments(command))
-                .setDirectory(directory.toString())
-                .setUseWinConPty(true)
-                .setEnvironment(ClaudeCommand.environment(System.getenv(), ccmSessionId))
-                .setInitialColumns(INITIAL_COLUMNS)
-                .setInitialRows(INITIAL_ROWS)
-                .start();
-    }
-
-    private static String[] platformArguments(List<String> command) {
-        var windows = System.getProperty("os.name").startsWith("Windows");
-        if (!windows) {
-            return command.toArray(String[]::new);
-        }
-        WindowsArgument.requireSafeForBatchFile(command);
-        var quoted = command.stream().map(WindowsArgument::quote).toArray(String[]::new);
-        WindowsArgument.requireFitsCommandLine(quoted);
-        return quoted;
     }
 
     private void watchExit(String ccmSessionId, PtyProcess process) {

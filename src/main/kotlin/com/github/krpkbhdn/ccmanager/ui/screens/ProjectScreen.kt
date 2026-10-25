@@ -29,6 +29,7 @@ import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.ui.components.HorizontalRule
 import com.github.krpkbhdn.ccmanager.ui.components.IconButton
+import com.github.krpkbhdn.ccmanager.ui.components.MenuEntry
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.run.RunControlActions
 import com.github.krpkbhdn.ccmanager.ui.run.RunTab
@@ -126,8 +127,9 @@ private fun ProjectMainArea(state: AppState, project: Project, view: ProjectView
             tabs = tabSpecs(state, view),
             selected = view.selected,
             onSelect = { state.select(project.id, it) },
-            onClose = { (it as? ProjectTab.Session)?.let { session -> state.sessions.requestClose(project.id, session.ccmSessionId) } },
+            onClose = { closeTab(state, project.id, it) },
             onNewSession = { state.sessions.launch(project.id, LaunchMode.NEW) },
+            shellMenu = shellMenu(state, project.id),
         ) {
             ModelControl(state, project, (view.selected as? ProjectTab.Session)?.let { state.live.find(it.ccmSessionId) })
             Spacer(Modifier.width(Spacing.sm))
@@ -147,11 +149,28 @@ private fun ProjectMainArea(state: AppState, project: Project, view: ProjectView
     }
 }
 
+private fun closeTab(state: AppState, projectId: Long, tab: ProjectTab) {
+    when (tab) {
+        is ProjectTab.Session -> state.sessions.requestClose(projectId, tab.ccmSessionId)
+        is ProjectTab.Shell -> state.shells.close(projectId, tab.terminalId)
+        else -> Unit
+    }
+}
+
+private fun shellMenu(state: AppState, projectId: Long): List<MenuEntry> =
+    state.shells.available.map { shell ->
+        MenuEntry(shell.name, Icons.SquareTerminal, hint = "Default".takeIf { shell == state.shells.default }) { state.shells.open(projectId, shell) }
+    }
+
 @Composable
 private fun MainContent(state: AppState, project: Project, view: ProjectView) {
     val tab = view.selected
     if (tab is ProjectTab.Session) {
         SessionTab(state, tab.ccmSessionId)
+        return
+    }
+    if (tab is ProjectTab.Shell) {
+        TerminalPane(state, tab.terminalId)
         return
     }
     Crossfade(tab, animationSpec = Motion.base(), label = "projectTab") { shown ->
@@ -171,7 +190,8 @@ private fun tabSpecs(state: AppState, view: ProjectView): List<TabSpec> {
         val snapshot = state.live.find(id)
         TabSpec(ProjectTab.Session(id), snapshot?.let(::sessionTitle) ?: ENDED_SESSION_LABEL, snapshot?.status ?: AgentStatus.OFFLINE, null, closable = true)
     }
-    return sessions + listOf(
+    val shells = view.openShells.map { id -> TabSpec(ProjectTab.Shell(id), state.shells.labelOf(id), null, Icons.SquareTerminal, closable = true) }
+    return sessions + shells + listOf(
         TabSpec(ProjectTab.Git, "Git", null, Icons.Branch, closable = false),
         TabSpec(ProjectTab.Run, "Run", null, Icons.Play, closable = false),
         TabSpec(ProjectTab.Activity, "Activity", null, Icons.Activity, closable = false),
@@ -183,9 +203,14 @@ private fun SessionTab(state: AppState, ccmSessionId: String) {
     Column(Modifier.fillMaxSize()) {
         state.sessions.sessionTeams[ccmSessionId]?.let { TeamRoleStrip(it, state.live.find(ccmSessionId).runningAgentTypes()) }
         QuickActionsBar(state.settings.quickBarOpen, enabled = state.live.find(ccmSessionId) != null, onSend = { state.sessions.send(ccmSessionId, it) })
-        Box(Modifier.fillMaxSize().background(colors.terminal).padding(start = TERMINAL_INSET, top = TERMINAL_INSET)) {
-            state.terminal.View(ccmSessionId, Modifier.fillMaxSize())
-        }
+        TerminalPane(state, ccmSessionId)
+    }
+}
+
+@Composable
+private fun TerminalPane(state: AppState, terminalId: String) {
+    Box(Modifier.fillMaxSize().background(colors.terminal).padding(start = TERMINAL_INSET, top = TERMINAL_INSET)) {
+        state.terminal.View(terminalId, Modifier.fillMaxSize())
     }
 }
 

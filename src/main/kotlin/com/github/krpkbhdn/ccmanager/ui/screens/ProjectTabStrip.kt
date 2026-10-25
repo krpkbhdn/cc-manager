@@ -14,6 +14,12 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.github.krpkbhdn.ccmanager.ui.components.MenuEntry
+import com.github.krpkbhdn.ccmanager.ui.components.PopupMenu
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -49,6 +55,7 @@ fun ProjectTabStrip(
     onSelect: (ProjectTab) -> Unit,
     onClose: (ProjectTab) -> Unit,
     onNewSession: () -> Unit,
+    shellMenu: List<MenuEntry>,
     modifier: Modifier = Modifier,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
@@ -58,11 +65,21 @@ fun ProjectTabStrip(
                 tabs.filter { it.closable }.forEach { spec -> TabPill(spec, spec.tab == selected, { onSelect(spec.tab) }, { onClose(spec.tab) }) }
             }
             IconButton(Icons.Plus, onNewSession, Modifier.padding(horizontal = Spacing.xs), tooltip = "Start another session", hint = AppShortcut.NEW_SESSION.hint())
+            if (shellMenu.isNotEmpty()) NewShellButton(shellMenu)
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 tabs.filterNot { it.closable }.forEach { spec -> TabPill(spec, spec.tab == selected, { onSelect(spec.tab) }, { onClose(spec.tab) }) }
             }
         }
         trailing()
+    }
+}
+
+@Composable
+private fun NewShellButton(menu: List<MenuEntry>) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(Modifier.padding(end = Spacing.xs)) {
+        IconButton(Icons.SquareTerminal, { expanded = true }, tooltip = "Open terminal", hint = AppShortcut.OPEN_TERMINAL.hint())
+        if (expanded) PopupMenu(menu, onDismiss = { expanded = false })
     }
 }
 
@@ -85,7 +102,7 @@ private fun TabPill(spec: TabSpec, selected: Boolean, onSelect: () -> Unit, onCl
             spec.icon?.let { Glyph(it, tint, size = IconSize.medium) }
             Label(spec.label, Modifier.widthIn(max = pillMaxWidth), color = tint, style = if (selected) Type.smallMedium else Type.small, tooltipWhenTruncated = true)
             if (spec.closable) {
-                if (hovered || selected) IconButton(Icons.Close, onClose, tint = colors.textTertiary, size = closeSize, tooltip = "Close session", hint = AppShortcut.CLOSE_SESSION.hint()) else Box(Modifier.size(closeSize))
+                if (hovered || selected) IconButton(Icons.Close, onClose, tint = colors.textTertiary, size = closeSize, tooltip = "Close tab", hint = AppShortcut.CLOSE_SESSION.hint()) else Box(Modifier.size(closeSize))
             }
         }
     }

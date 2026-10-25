@@ -36,7 +36,8 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
         val session = (view.selected as? ProjectTab.Session)?.ccmSessionId
         return when (shortcut) {
             AppShortcut.NEW_SESSION -> handled { state.sessions.launch(project.id, LaunchMode.NEW) }
-            AppShortcut.CLOSE_SESSION -> session != null && handled { state.sessions.requestClose(project.id, session) }
+            AppShortcut.OPEN_TERMINAL -> state.shells.default != null && handled { state.shells.openDefault(project.id) }
+            AppShortcut.CLOSE_SESSION -> closeSelectedTab(project.id, view.selected)
             AppShortcut.NEXT_TAB -> handled { state.select(project.id, view.cycle(1).selected) }
             AppShortcut.PREVIOUS_TAB -> handled { state.select(project.id, view.cycle(-1).selected) }
             AppShortcut.GIT_TAB -> handled { state.openGit(project.id) }
@@ -50,6 +51,12 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
             AppShortcut.FOCUS_TERMINAL -> session != null && handled { state.terminal.focus(session) }
             else -> false
         }
+    }
+
+    private fun closeSelectedTab(projectId: Long, tab: ProjectTab): Boolean = when (tab) {
+        is ProjectTab.Session -> handled { state.sessions.requestClose(projectId, tab.ccmSessionId) }
+        is ProjectTab.Shell -> handled { state.shells.close(projectId, tab.terminalId) }
+        else -> false
     }
 
     private fun openProject(slot: Int): Boolean {

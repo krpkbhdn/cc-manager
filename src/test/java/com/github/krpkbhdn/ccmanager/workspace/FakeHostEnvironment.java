@@ -15,6 +15,8 @@ public class FakeHostEnvironment implements HostEnvironment {
     private final Map<String, String> env = new HashMap<>();
     private final Set<Path> files = new HashSet<>();
     private final Set<Path> directories = new HashSet<>();
+    private final Map<Path, List<String>> fileLines = new HashMap<>();
+    private final Map<Path, Path> links = new HashMap<>();
     private List<Path> pathDirectories = List.of();
 
     public FakeHostEnvironment(OperatingSystem os, Path home) {
@@ -37,6 +39,17 @@ public class FakeHostEnvironment implements HostEnvironment {
         for (var parent = file.getParent(); parent != null; parent = parent.getParent()) {
             directories.add(parent);
         }
+        return this;
+    }
+
+    public FakeHostEnvironment withLines(Path file, String... lines) {
+        withFile(file);
+        fileLines.put(file, List.of(lines));
+        return this;
+    }
+
+    public FakeHostEnvironment withLink(Path link, Path target) {
+        links.put(link, target);
         return this;
     }
 
@@ -68,6 +81,16 @@ public class FakeHostEnvironment implements HostEnvironment {
     @Override
     public boolean isFile(Path path) {
         return files.contains(path);
+    }
+
+    @Override
+    public List<String> readLines(Path file) {
+        return fileLines.getOrDefault(file, List.of());
+    }
+
+    @Override
+    public Path realPath(Path path) {
+        return links.getOrDefault(path, path);
     }
 
     @Override

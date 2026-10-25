@@ -72,6 +72,24 @@ public class SystemHostEnvironment implements HostEnvironment {
         }
     }
 
+    @Override
+    public List<String> readLines(Path file) {
+        try {
+            return Files.readAllLines(file);
+        } catch (IOException | RuntimeException e) {
+            return List.of();
+        }
+    }
+
+    @Override
+    public Path realPath(Path path) {
+        try {
+            return path.toRealPath();
+        } catch (IOException e) {
+            return path;
+        }
+    }
+
     private static Path toPathOrNull(String entry) {
         try {
             return Path.of(entry.strip().replace("\"", ""));
