@@ -59,6 +59,9 @@ private fun globalActions(state: AppState, systemDark: Boolean): List<PaletteIte
     PaletteItem("add-project", "Add project", PaletteGroup.ACTIONS, "Pick a folder to manage", Icons.FolderPlus, shortcut = AppShortcut.ADD_PROJECT, run = state::requestAddProject),
     PaletteItem("overview", "Go to overview", PaletteGroup.ACTIONS, icon = Icons.Grid, shortcut = AppShortcut.OVERVIEW) { state.navigate(Route.Overview) },
     PaletteItem("teams", "Manage teams", PaletteGroup.ACTIONS, "Roles and models of your agent teams", Icons.Users) { state.navigate(Route.Teams) },
+    PaletteItem("plugins", "Open plugins", PaletteGroup.ACTIONS, "Install and manage Claude plugins", Icons.Plug) { state.navigate(Route.Plugins) },
+    PaletteItem("mcp", "Open MCP servers", PaletteGroup.ACTIONS, "Servers that give Claude extra tools", Icons.Server) { state.navigate(Route.Mcp) },
+    PaletteItem("skills", "Open skills", PaletteGroup.ACTIONS, "Instructions Claude loads on demand", Icons.Book) { state.navigate(Route.Skills) },
     PaletteItem("notifications", "Show notifications", PaletteGroup.ACTIONS, icon = Icons.Bell, shortcut = AppShortcut.NOTIFICATIONS) { state.notificationsOpen = true },
     PaletteItem("usage", "Show usage", PaletteGroup.ACTIONS, "Limits, context and cost", Icons.Gauge, shortcut = AppShortcut.USAGE) { state.usageOpen = true },
     PaletteItem("toggle-theme", "Toggle light and dark theme", PaletteGroup.ACTIONS, icon = Icons.Sun, shortcut = AppShortcut.TOGGLE_THEME) { state.toggleTheme(systemDark) },
@@ -78,6 +81,7 @@ private fun projectActions(state: AppState): List<PaletteItem> {
         PaletteItem("resume", "Resume a session", PaletteGroup.ACTIONS, here, Icons.Rewind) { state.launch(project.id, LaunchMode.RESUME_PICKER) },
         PaletteItem("open-folder", "Open folder", PaletteGroup.ACTIONS, here, Icons.FolderOpen) { state.openFolder(project) },
         PaletteItem("open-ide", "Open in IntelliJ IDEA", PaletteGroup.ACTIONS, here, Icons.Code) { state.openIde(project) },
+        PaletteItem("project-settings", "Project settings", PaletteGroup.ACTIONS, "$here: plugins, MCP servers, skills", Icons.Settings, shortcut = AppShortcut.PROJECT_SETTINGS) { state.openProjectSettings(project) },
         PaletteItem("show-activity", "Show activity", PaletteGroup.ACTIONS, here, Icons.Activity, shortcut = AppShortcut.ACTIVITY_TAB) { state.select(project.id, ProjectTab.Activity) },
         PaletteItem("toggle-agents", "Toggle agents panel", PaletteGroup.ACTIONS, here, Icons.PanelRightClose, shortcut = AppShortcut.TOGGLE_AGENTS, run = state::toggleAgents),
         state.viewOf(project.id).focusedSession?.let { state.live.find(it) }?.let { session ->

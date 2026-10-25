@@ -69,6 +69,7 @@ fun limitsAt(fiveHourPercent: Double, sevenDayPercent: Double) = RateLimitSnapsh
 
 /** In-memory backend data for the dev preview; Mockito keeps it independent of the real services' constructors. */
 class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeRepoData = SampleRepos.busy(), val rateLimits: RateLimitSnapshot? = limitsAt(23.5, 41.2), selection: ModelSelection = ModelSelection("opus", "high")) {
+    val fakeMcp = FakeMcp()
     val sessionUsage = mapOf(
         "s-working" to SessionUsage("s-working", "Opus 4.7", "xhigh", 62.0, 4.38, 2_400_000L, Instant.now()),
         "s-needs" to SessionUsage("s-needs", "Sonnet 5.5", "medium", 18.5, 0.42, 1_200_000L, Instant.now()),
@@ -195,7 +196,7 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         `when`(usage.all()).thenAnswer { sessionUsage }
         `when`(usage.subscribe(any())).thenAnswer { Runnable { } }
 
-        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), terminal)
+        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), terminal)
     }
 
     private fun installationNow() = if (claudeInstalled) {

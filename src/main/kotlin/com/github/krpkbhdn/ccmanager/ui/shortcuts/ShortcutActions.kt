@@ -44,6 +44,7 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
             AppShortcut.GIT_COMMIT -> handled { state.openGit(project.id)?.requestCommitFocus() }
             AppShortcut.GIT_BRANCHES -> handled { state.openGit(project.id)?.branchPopupOpen = true }
             AppShortcut.GIT_PUSH -> handled { state.gitOf(project.id)?.push() }
+            AppShortcut.PROJECT_SETTINGS -> handled { state.openProjectSettings(project) }
             AppShortcut.ACTIVITY_TAB -> handled { state.select(project.id, ProjectTab.Activity) }
             AppShortcut.FOCUS_TERMINAL -> session != null && handled { state.terminal.focus(session) }
             else -> false
@@ -64,7 +65,7 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
 
     private fun currentProject(): Project? = (state.route as? Route.Project)?.let { route -> state.projects.firstOrNull { it.id == route.id } }
 
-    private fun modalOpen() = state.confirm != null || state.renaming != null || state.pickerOpen
+    private fun modalOpen() = state.confirm != null || state.renaming != null || state.pickerOpen || state.projectSettings != null
 
     private fun handled(action: () -> Unit): Boolean {
         action()

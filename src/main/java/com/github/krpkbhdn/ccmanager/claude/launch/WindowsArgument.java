@@ -4,11 +4,11 @@ package com.github.krpkbhdn.ccmanager.claude.launch;
  * pty4j joins arguments into a Windows command line without escaping quotes, which breaks JSON and multi-line prompts.
  * An argument that starts with a quote is passed through untouched, so it is quoted here by the CommandLineToArgvW rules.
  */
-final class WindowsArgument {
+public final class WindowsArgument {
 
     private WindowsArgument() {}
 
-    static String quote(String argument) {
+    public static String quote(String argument) {
         if (!argument.isEmpty() && argument.chars().noneMatch(c -> c == '"' || c == ' ' || c == '\t' || c == '\n' || c == '\r')) {
             return argument;
         }

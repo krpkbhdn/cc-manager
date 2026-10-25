@@ -54,6 +54,9 @@ private fun Breadcrumb(state: AppState, modifier: Modifier) {
     val parts = when (val route = state.route) {
         Route.Overview -> listOf("Overview")
         Route.Teams -> listOf("Teams")
+        Route.Plugins -> listOf("Plugins")
+        Route.Mcp -> listOf("MCP servers")
+        Route.Skills -> listOf("Skills")
         is Route.Project -> listOf(state.projectName(route.id)) + listOfNotNull(state.viewOf(route.id).focusedSession?.let { state.live.find(it) }?.let(::sessionTitle))
     }
     Row(modifier.padding(start = Spacing.sm), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs + 1.dp)) {

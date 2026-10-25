@@ -10,6 +10,9 @@ import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry
 import com.github.krpkbhdn.ccmanager.notification.NotificationService
 import com.github.krpkbhdn.ccmanager.project.ProjectService
+import com.github.krpkbhdn.ccmanager.extension.mcp.McpService
+import com.github.krpkbhdn.ccmanager.extension.plugin.PluginService
+import com.github.krpkbhdn.ccmanager.extension.skill.SkillService
 import com.github.krpkbhdn.ccmanager.team.TeamService
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitBackend
 import com.github.krpkbhdn.ccmanager.ui.terminal.TerminalHost
@@ -60,6 +63,9 @@ class Backend(
     val rateLimits: RateLimitService,
     val sessionUsage: SessionUsageService,
     val teams: TeamService,
+    val plugins: PluginService,
+    val mcp: McpService,
+    val skills: SkillService,
     val terminal: TerminalPort = HostTerminalPort,
     val updates: UpdateService? = null,
 ) {
@@ -78,6 +84,9 @@ class Backend(
             rateLimits = context.getBean(RateLimitService::class.java),
             sessionUsage = context.getBean(SessionUsageService::class.java),
             teams = context.getBean(TeamService::class.java),
+            plugins = context.getBean(PluginService::class.java),
+            mcp = context.getBean(McpService::class.java),
+            skills = context.getBean(SkillService::class.java),
             updates = context.getBean(UpdateService::class.java),
         )
     }

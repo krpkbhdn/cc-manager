@@ -72,6 +72,7 @@ fun ProjectScreen(state: AppState, project: Project, modifier: Modifier = Modifi
                 onOpenIde = { state.openIde(project) },
                 onShowGit = { state.openGit(project.id) },
                 onShowChanges = { state.openGit(project.id, GitSubView.CHANGES) },
+                onOpenSettings = { state.openProjectSettings(project) },
             ),
         )
         Row(Modifier.fillMaxSize()) {

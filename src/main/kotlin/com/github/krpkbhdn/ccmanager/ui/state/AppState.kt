@@ -17,6 +17,14 @@ import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.project.ModelSelection
 import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.team.Team
+import com.github.krpkbhdn.ccmanager.ui.extensions.ExtensionContext
+import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.PluginsState
+import com.github.krpkbhdn.ccmanager.ui.projectsettings.ProjectSettingsSection
+import com.github.krpkbhdn.ccmanager.ui.projectsettings.ProjectSettingsState
+import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.HealthCheck
+import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.McpState
+import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillHost
+import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillsState
 import com.github.krpkbhdn.ccmanager.ui.teams.TeamsState
 import com.github.krpkbhdn.ccmanager.usage.RateLimitSnapshot
 import com.github.krpkbhdn.ccmanager.usage.SessionUsage
@@ -29,6 +37,8 @@ import java.time.Instant
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -94,6 +104,8 @@ class AppState(
         private set
     var loginBannerDismissed by mutableStateOf(false)
     var taskDialogProjectId by mutableStateOf<Long?>(null)
+    var projectSettings by mutableStateOf<ProjectSettingsState?>(null)
+        private set
 
     val views = mutableStateMapOf<Long, ProjectView>()
     val sessionTeams = mutableStateMapOf<String, Team>()
@@ -102,6 +114,10 @@ class AppState(
 
     private val events = MutableSharedFlow<AppNotification>(extraBufferCapacity = NOTIFICATION_CAP)
     val teams = TeamsState(backend.teams, scope, { confirm = it }, { reportError(it) })
+    val plugins = PluginsState(backend.plugins, scope, { confirm = it }, ::toast)
+    val mcp = McpState(backend.mcp, null, scope, { confirm = it }, ::toast)
+    private val skillHost = SkillHost(::openDirectory, ::openInIde) { ideAvailable }
+    val skills = SkillsState(backend.skills, null, scope, { confirm = it }, ::toast, skillHost)
     val update = UpdateState(backend.updates, scope, ::reportError, ::requestQuit) { exitApp() }
     var exitApp: () -> Unit = {}
     private val commandWriter = SessionCommandWriter(backend.terminal)
@@ -137,6 +153,7 @@ class AppState(
     }
 
     fun dispose() {
+        cancelProjectSettings()
         teams.dispose()
         unsubscribers.forEach { it.run() }
         unsubscribers.clear()
@@ -146,6 +163,42 @@ class AppState(
         checkingInstallation = true
         guarded { installation = io { backend.installation.recheck() } }
         checkingInstallation = false
+    }
+
+    /** Opens the settings dialog of [project] with its own extension states, so the global pages stay untouched. */
+    fun openProjectSettings(project: Project, section: ProjectSettingsSection = ProjectSettingsSection.PLUGINS) {
+        cancelProjectSettings()
+        val dialogScope = CoroutineScope(scope.coroutineContext + SupervisorJob(scope.coroutineContext[Job]))
+        projectSettings = ProjectSettingsState(
+            ExtensionContext.ForProject(project.id, project.name, project.path),
+            section,
+            dialogScope,
+            PluginsState(backend.plugins, dialogScope, { confirm = it }, ::toast),
+            McpState(backend.mcp, project.path, dialogScope, { confirm = it }, ::toast),
+            SkillsState(backend.skills, project.path, dialogScope, { confirm = it }, ::toast, skillHost),
+        )
+    }
+
+    private fun cancelProjectSettings() {
+        projectSettings?.dispose()
+        projectSettings = null
+    }
+
+    fun closeProjectSettings() {
+        val dialog = projectSettings ?: return
+        if (dialog.busy) {
+            toast(NotificationKind.INFO, "Wait for the running action to finish", "Project settings can be closed afterwards.")
+            return
+        }
+        cancelProjectSettings()
+        reloadGlobalExtensions()
+    }
+
+    /** The dialog may have changed what the global pages list; reload only pages already shown, without the catalogue or a health check. */
+    private fun reloadGlobalExtensions() {
+        if (plugins.loaded) plugins.refresh(reloadCatalog = false)
+        if (mcp.loaded) mcp.refresh(withHealth = mcp.healthCheck == HealthCheck.DONE)
+        if (skills.loaded) skills.refresh()
     }
 
     fun navigate(target: Route) {

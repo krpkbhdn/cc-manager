@@ -25,11 +25,25 @@ import com.github.krpkbhdn.ccmanager.ui.state.UiSettingsStore
 import com.github.krpkbhdn.ccmanager.team.Team
 import com.github.krpkbhdn.ccmanager.ui.teams.RoleForm
 import com.github.krpkbhdn.ccmanager.ui.teams.ToolSelection
+import com.github.krpkbhdn.ccmanager.extension.ExtensionScope
+import com.github.krpkbhdn.ccmanager.ui.NEEDS_COMMAND_PLUGIN
+import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.DetailsState
+import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.HealthCheck
+import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.RawDetails
+import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.mcpKey
+import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillText
+import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.ExtensionFailure
+import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.PluginsTab
+import com.github.krpkbhdn.ccmanager.ui.projectsettings.ProjectSettingsSection
+import com.github.krpkbhdn.ccmanager.ui.projectsettings.ProjectSettingsState
+import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.key
 import com.github.krpkbhdn.ccmanager.ui.theme.AppTheme
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentLinkedQueue
+import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import org.jetbrains.skia.EncodedImageFormat
@@ -37,6 +51,7 @@ import org.jetbrains.skia.EncodedImageFormat
 private const val FRAME_NANOS = 16_000_000L
 private const val SETTLE_FRAMES = 40
 private const val POLL_MILLIS = 20L
+private const val SETTLE_MILLIS = 300L
 private const val WAIT_MILLIS = 8_000L
 private val defaultOut = "C:/Users/Bohdan/Work/Code/Personal/ccm-shots/git"
 
@@ -96,6 +111,27 @@ private val shots = listOf(
     Shot("session-team", prepare = { state, _, _ -> waitFor { state.teams.teams.isNotEmpty() }; state.sessionTeams["s-working"] = state.teams.teams.first(); state.openSession("s-working") }),
     Shot("agents-roles", prepare = { state, _, _ -> waitFor { state.teams.teams.isNotEmpty() }; state.sessionTeams["s-working"] = state.teams.teams.first() }),
     Shot("progress",prepare = { _, git, data -> data.progressDelayMillis = 4_000; git.fetchNow() }),
+    Shot("plugins-installed", prepare = { state, _, _ -> openPlugins(state, PluginsTab.INSTALLED) }),
+    Shot("plugins-installed-detail", prepare = { state, _, _ -> openPlugins(state, PluginsTab.INSTALLED); state.plugins.selectedInstalled = state.plugins.installed.first { it.id.startsWith("frontend-design") }.key(); waitFor { state.plugins.details.values.any { it is DetailsState.Loaded } } }),
+    Shot("plugins-marketplace", prepare = { state, _, _ -> openPlugins(state, PluginsTab.MARKETPLACE) }),
+    Shot("plugins-marketplace-detail", prepare = { state, _, _ -> openPlugins(state, PluginsTab.MARKETPLACE); state.plugins.selectedAvailable = "code-review@claude-plugins-official"; waitFor { state.plugins.details.values.any { it is DetailsState.Loaded } } }),
+    Shot("plugins-sources", prepare = { state, _, _ -> openPlugins(state, PluginsTab.SOURCES) }),
+    Shot("plugins-command", prepare = { state, _, _ -> openPlugins(state, PluginsTab.MARKETPLACE); state.plugins.install(NEEDS_COMMAND_PLUGIN, ExtensionScope.USER, null); waitFor { state.plugins.pending != null } }),
+    Shot("plugins-failure", prepare = { state, _, _ -> openPlugins(state, PluginsTab.INSTALLED); state.plugins.failure = ExtensionFailure("Updating legacy-linter", "Could not update legacy-linter@acme-internal", "error: marketplace acme-internal is unreachable\nfatal: unable to access 'https://git.acme.dev/platform/claude-plugins.git/': Could not resolve host") }),
+    Shot("plugins-busy", prepare = { state, _, _ -> openPlugins(state, PluginsTab.INSTALLED); state.plugins.update(state.plugins.installed.first { it.id.startsWith("context7") }); waitFor { state.plugins.job != null } }),
+    Shot("mcp-list", prepare = { state, _, _ -> openMcp(state); waitFor { state.mcp.healthCheck == HealthCheck.DONE } }),
+    Shot("mcp-checking", prepare = { state, _, _ -> openMcp(state) }),
+    Shot("mcp-detail", prepare = { state, _, _ -> openMcp(state); state.mcp.selected = mcpKey(ExtensionScope.USER, "github"); waitFor { state.mcp.healthCheck == HealthCheck.DONE && state.mcp.details.values.any { it is RawDetails.Loaded } } }),
+    Shot("mcp-add-dialog", prepare = { state, _, _ -> openMcp(state); state.mcp.adding = true }),
+    Shot("skills-list", prepare = { state, _, _ -> openSkills(state) }),
+    Shot("skills-detail", prepare = { state, _, _ -> openSkills(state); state.skills.selected = state.skills.skills.first { it.name == "code-review" }.file.toString(); waitFor { state.skills.texts.values.any { it is SkillText.Loaded } } }),
+    Shot("project-plugins", prepare = { state, _, _ -> openProjectSettings(state, ProjectSettingsSection.PLUGINS) }),
+    Shot("project-plugins-marketplace", prepare = { state, _, _ -> openProjectSettings(state, ProjectSettingsSection.PLUGINS).plugins.tab = PluginsTab.MARKETPLACE }),
+    Shot("project-mcp", prepare = { state, _, _ -> openProjectSettings(state, ProjectSettingsSection.MCP); waitFor { state.projectSettings?.mcp?.healthCheck == HealthCheck.DONE } }),
+    Shot("project-mcp-add", prepare = { state, _, _ -> openProjectSettings(state, ProjectSettingsSection.MCP).mcp.adding = true }),
+    Shot("project-skills", prepare = { state, _, _ -> openProjectSettings(state, ProjectSettingsSection.SKILLS) }),
+    Shot("project-skills-new", prepare = { state, _, _ -> openProjectSettings(state, ProjectSettingsSection.SKILLS).skills.creating = true }),
+    Shot("skills-new-dialog", prepare = { state, _, _ -> openSkills(state); state.skills.creating = true }),
 )
 
 private fun GitState.pushNow() { push(); waitFor { error != null } }
@@ -103,9 +139,28 @@ private fun GitState.pushNow() { push(); waitFor { error != null } }
 private fun GitState.fetchNow() { fetch(); waitFor { job != null } }
 
 
+/** Runs coroutine continuations only when the render thread pumps them, so Compose state is never written during a frame. */
+private class PumpedDispatcher : CoroutineDispatcher() {
+    private val queue = ConcurrentLinkedQueue<Runnable>()
+
+    override fun dispatch(context: CoroutineContext, block: Runnable) {
+        queue.add(block)
+    }
+
+    fun pump() {
+        while (true) queue.poll()?.run() ?: return
+    }
+}
+
+private val shotLoop = PumpedDispatcher()
+
 private fun waitFor(timeoutMillis: Long = WAIT_MILLIS, condition: () -> Boolean) {
     val deadline = System.currentTimeMillis() + timeoutMillis
-    while (!condition() && System.currentTimeMillis() < deadline) Thread.sleep(POLL_MILLIS)
+    shotLoop.pump()
+    while (!condition() && System.currentTimeMillis() < deadline) {
+        Thread.sleep(POLL_MILLIS)
+        shotLoop.pump()
+    }
 }
 
 /**
@@ -127,7 +182,7 @@ fun main(args: Array<String>) {
 private fun render(shot: Shot, dark: Boolean, width: Int, height: Int, out: Path) {
     val data = shot.data()
     val world = PreviewWorld(git = data, rateLimits = shot.limits, selection = shot.selection)
-    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    val scope = CoroutineScope(SupervisorJob() + shotLoop)
     val state = AppState(world.backend(PreviewTerminal), scope, UiSettingsStore(null)).also {
         it.start()
         it.setThemeMode(if (dark) ThemeMode.DARK else ThemeMode.LIGHT)
@@ -141,16 +196,16 @@ private fun render(shot: Shot, dark: Boolean, width: Int, height: Int, out: Path
     val scene = ImageComposeScene(width, height, Density(1f)) { AppTheme(dark) { Column { TopBar(state); AppRoot(state, osName = "Windows 11", modifier = Modifier.weight(1f)) } } }
     try {
         var frame = 0L
-        repeat(SETTLE_FRAMES) { scene.render(frame++ * FRAME_NANOS) }
-        Thread.sleep(300)
-        repeat(SETTLE_FRAMES) { scene.render(frame++ * FRAME_NANOS) }
+        repeat(SETTLE_FRAMES) { shotLoop.pump(); scene.render(frame++ * FRAME_NANOS) }
+        waitFor(SETTLE_MILLIS) { false }
+        repeat(SETTLE_FRAMES) { shotLoop.pump(); scene.render(frame++ * FRAME_NANOS) }
         val bytes = scene.render(frame * FRAME_NANOS).encodeToData(EncodedImageFormat.PNG)!!.bytes
         val file = out.resolve("${shot.name}-${if (dark) "dark" else "light"}-${width}x$height.png")
         Files.write(file, bytes)
         println("wrote $file")
     } finally {
-        scene.close()
         scope.cancel()
+        scene.close()
     }
 }
 
@@ -185,4 +240,35 @@ private fun addRoles(state: AppState, count: Int) {
         state.teams.saveRole(state.teams.dialog!!) { }
         waitFor { state.teams.dialog == null && state.teams.selected!!.roles.size == team.roles.size + 1 }
     }
+}
+
+private fun openPlugins(state: AppState, tab: PluginsTab) {
+    state.navigate(Route.Plugins)
+    state.plugins.tab = tab
+    state.plugins.ensureLoaded()
+    state.plugins.loadCatalog()
+    waitFor { state.plugins.loaded && state.plugins.catalog.isNotEmpty() }
+}
+
+private fun openProjectSettings(state: AppState, section: ProjectSettingsSection): ProjectSettingsState {
+    state.openProjectSettings(state.projects.first { it.id == 1L }, section)
+    val settings = state.projectSettings!!
+    settings.plugins.ensureLoaded()
+    settings.plugins.loadCatalog()
+    settings.mcp.ensureLoaded()
+    settings.skills.ensureLoaded()
+    waitFor { settings.plugins.loaded && settings.mcp.loaded && settings.skills.loaded }
+    return settings
+}
+
+private fun openMcp(state: AppState) {
+    state.navigate(Route.Mcp)
+    state.mcp.ensureLoaded()
+    waitFor { state.mcp.loaded }
+}
+
+private fun openSkills(state: AppState) {
+    state.navigate(Route.Skills)
+    state.skills.ensureLoaded()
+    waitFor { state.skills.loaded }
 }

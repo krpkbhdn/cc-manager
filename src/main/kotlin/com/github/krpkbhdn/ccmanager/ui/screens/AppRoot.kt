@@ -48,8 +48,13 @@ import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.palette.CommandPalette
 import com.github.krpkbhdn.ccmanager.ui.palette.paletteItems
 import com.github.krpkbhdn.ccmanager.ui.picker.FolderPickerDialog
+import com.github.krpkbhdn.ccmanager.ui.projectsettings.ProjectSettingsDialog
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.Route
+import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.PluginCommandDialog
+import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.PluginsScreen
+import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.McpScreen
+import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillsScreen
 import com.github.krpkbhdn.ccmanager.ui.teams.RoleDialog
 import com.github.krpkbhdn.ccmanager.ui.teams.StartTaskDialog
 import com.github.krpkbhdn.ccmanager.ui.teams.StartTaskActions
@@ -88,6 +93,8 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
         (state.route as? Route.Project)?.let { state.gitOf(it.id) }?.let { GitDialogHost(it) }
         state.taskDialogProjectId?.let { id -> state.projects.firstOrNull { it.id == id } }?.let { StartTaskDialog(it, state.teams, startTaskActions(state, it)) }
         state.teams.dialog?.let { open -> state.teams.find(open.teamId)?.let { RoleDialog(it, open, state.teams) } }
+        state.projectSettings?.let { ProjectSettingsDialog(it, state::closeProjectSettings) }
+        state.plugins.pending?.let { PluginCommandDialog(it, state.plugins.job == null, state.plugins::confirmPending, state.plugins::dismissPending) }
         state.confirm?.let { ConfirmDialog(it) { state.confirm = null } }
         state.renaming?.let { RenameDialog(it, { name -> state.renameProject(it.project, name) }, { state.renaming = null }) }
         if (state.pickerOpen) FolderPickerDialog(initial = null, onDismiss = { state.pickerOpen = false }, onPicked = state::addProjectAt)
@@ -143,6 +150,9 @@ private fun MainLayout(state: AppState, installation: ClaudeInstallation) = BoxW
 private fun RouteContent(state: AppState) {
     val route = state.route
     if (route == Route.Teams) return TeamsScreen(state.teams, state.projects)
+    if (route == Route.Plugins) return PluginsScreen(state.plugins)
+    if (route == Route.Mcp) return McpScreen(state.mcp)
+    if (route == Route.Skills) return SkillsScreen(state.skills)
     val project = (route as? Route.Project)?.let { target -> state.projects.firstOrNull { it.id == target.id } }
     Crossfade(project?.id, label = "route") { shown ->
         val current = state.projects.firstOrNull { it.id == shown }

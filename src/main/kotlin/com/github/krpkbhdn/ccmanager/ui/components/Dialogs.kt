@@ -7,6 +7,10 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -53,38 +57,40 @@ private val dialogWidth = 420.dp
 private val dialogIconBox = 40.dp
 private const val MESSAGE_LINES = 5
 
-/** Scrim plus a centred, animated surface; Esc and clicks outside the card call [onDismiss]. */
+/** Scrim plus a centred, animated surface; Esc (unless [escapeDismisses] is off) and clicks outside the card call [onDismiss]. */
 @Composable
 fun ModalHost(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     width: Dp = dialogWidth,
     takeFocus: Boolean = true,
+    escapeDismisses: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val focus = remember { FocusRequester() }
     var shown by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { shown = true; if (takeFocus) focus.requestFocus() }
     val fade by animateFloatAsState(if (shown) 1f else 0f, Motion.base(), label = "scrim")
-    Box(
+    BoxWithConstraints(
         modifier.fillMaxSize()
             .background(colors.scrim.copy(alpha = colors.scrim.alpha * fade))
             .onPreviewKeyEvent { event ->
-                (event.type == KeyEventType.KeyDown && event.key == Key.Escape).also { if (it) onDismiss() }
+                (escapeDismisses && event.type == KeyEventType.KeyDown && event.key == Key.Escape).also { if (it) onDismiss() }
             }
             .focusRequester(focus).focusable()
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
         contentAlignment = Alignment.Center,
     ) {
         Box(
-            Modifier.popIn().width(width).card(RoundedCornerShape(Radius.xl), colors.surfaceRaised, raised = true)
+            Modifier.popIn().width(width).heightIn(max = maxHeight - Spacing.lg * 2).card(RoundedCornerShape(Radius.xl), colors.surfaceRaised, raised = true)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
         ) { content() }
     }
 }
 
+/** Header and [actions] stay visible; only [content] scrolls when the card is capped by the window height. */
 @Composable
-fun DialogBody(title: String, icon: ImageVector, tint: Color, content: @Composable () -> Unit) {
+fun DialogBody(title: String, icon: ImageVector, tint: Color, actions: @Composable (() -> Unit)? = null, content: @Composable () -> Unit) {
     Column(Modifier.padding(Spacing.xl), verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(dialogIconBox).clip(RoundedCornerShape(Radius.md)).background(tint.copy(alpha = Alpha.SOFT)), contentAlignment = Alignment.Center) {
@@ -92,7 +98,12 @@ fun DialogBody(title: String, icon: ImageVector, tint: Color, content: @Composab
             }
             Label(title, style = Type.subtitle)
         }
-        content()
+        val scroll = rememberScrollState()
+        Box(Modifier.weight(1f, fill = false)) {
+            Column(Modifier.fillMaxWidth().verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(Spacing.lg)) { content() }
+            ThinScrollbar(scroll)
+        }
+        actions?.invoke()
     }
 }
 

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.input.InputTransformation
+import androidx.compose.foundation.text.input.OutputTransformation
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.KeyboardActionHandler
@@ -36,6 +37,7 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
 private val fieldHeight = 36.dp
+private const val MASK_CHAR = '•'
 
 /** Single-line text field with an optional leading icon and placeholder, a focus ring and Enter-to-submit. */
 @Composable
@@ -46,6 +48,7 @@ fun AppTextField(
     icon: ImageVector? = null,
     focusRequester: FocusRequester? = null,
     mono: Boolean = false,
+    masked: Boolean = false,
     onSubmit: () -> Unit = {},
     trailing: @Composable () -> Unit = {},
 ) {
@@ -61,6 +64,7 @@ fun AppTextField(
         cursorBrush = SolidColor(colors.accent),
         lineLimits = TextFieldLineLimits.SingleLine,
         inputTransformation = InputTransformation { },
+        outputTransformation = if (masked) OutputTransformation { replace(0, length, MASK_CHAR.toString().repeat(length)) } else null,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         onKeyboardAction = KeyboardActionHandler { onSubmit() },
         interactionSource = source,
