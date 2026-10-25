@@ -129,8 +129,10 @@ data class MenuEntry(
     val onSelect: () -> Unit,
 )
 
-private class BelowAnchor(private val alignEnd: Boolean) : PopupPositionProvider {
+/** Places a popup below its anchor, or, when [at] is set, at that offset inside the anchor like a context menu. */
+private class BelowAnchor(private val alignEnd: Boolean, private val at: IntOffset?) : PopupPositionProvider {
     override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
+        if (at != null) return atCursor(anchorBounds.topLeft + at, windowSize, popupContentSize)
         val left = if (alignEnd) anchorBounds.right - popupContentSize.width else anchorBounds.left
         val fitted = left.coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
         val below = anchorBounds.bottom + POPUP_GAP_PX
@@ -139,21 +141,27 @@ private class BelowAnchor(private val alignEnd: Boolean) : PopupPositionProvider
     }
 }
 
-/** Dropdown menu anchored to its parent composable; Esc or an outside click dismisses it. */
+private fun atCursor(cursor: IntOffset, windowSize: IntSize, popupContentSize: IntSize): IntOffset {
+    val left = if (cursor.x + popupContentSize.width > windowSize.width) cursor.x - popupContentSize.width else cursor.x
+    val top = if (cursor.y + popupContentSize.height > windowSize.height) cursor.y - popupContentSize.height else cursor.y
+    return IntOffset(left.coerceAtLeast(0), top.coerceAtLeast(0))
+}
+
+/** Dropdown menu anchored to its parent composable, or opened at the offset [at] inside it; Esc or an outside click dismisses it. */
 @Composable
-fun PopupMenu(entries: List<MenuEntry>, onDismiss: () -> Unit, alignEnd: Boolean = false) {
-    AnchoredPopup(onDismiss, alignEnd, Modifier.widthIn(min = menuWidth).width(IntrinsicSize.Max)) {
+fun PopupMenu(entries: List<MenuEntry>, onDismiss: () -> Unit, alignEnd: Boolean = false, at: IntOffset? = null) {
+    AnchoredPopup(onDismiss, alignEnd, Modifier.widthIn(min = menuWidth).width(IntrinsicSize.Max), at) {
         Column(Modifier.padding(Spacing.xs)) { entries.forEach { MenuItem(it, onDismiss) } }
     }
 }
 
 /** Raised floating card anchored below its parent composable; [modifier] sizes it, Esc or an outside click dismisses it. */
 @Composable
-fun AnchoredPopup(onDismiss: () -> Unit, alignEnd: Boolean = false, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Popup(popupPositionProvider = remember(alignEnd) { BelowAnchor(alignEnd) }, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
+fun AnchoredPopup(onDismiss: () -> Unit, alignEnd: Boolean = false, modifier: Modifier = Modifier, at: IntOffset? = null, content: @Composable () -> Unit) {
+    Popup(popupPositionProvider = remember(alignEnd, at) { BelowAnchor(alignEnd, at) }, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
         val shape = RoundedCornerShape(Radius.md)
         Box(
-            Modifier.popIn(TransformOrigin(if (alignEnd) 1f else 0f, 0f))
+            Modifier.popIn(TransformOrigin(if (alignEnd && at == null) 1f else 0f, 0f))
                 .shadow(menuElevation, shape, ambientColor = colors.shadow, spotColor = colors.shadow)
                 .then(modifier).card(shape, colors.surfaceRaised),
         ) { content() }

@@ -10,9 +10,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -22,8 +26,11 @@ import androidx.compose.foundation.background
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import com.github.krpkbhdn.ccmanager.project.Project
+import com.github.krpkbhdn.ccmanager.ui.components.ContextMenuArea
 import com.github.krpkbhdn.ccmanager.ui.components.Glyph
+import com.github.krpkbhdn.ccmanager.ui.components.IconButton
 import com.github.krpkbhdn.ccmanager.ui.components.Label
+import com.github.krpkbhdn.ccmanager.ui.components.PopupMenu
 import com.github.krpkbhdn.ccmanager.ui.components.Pressable
 import com.github.krpkbhdn.ccmanager.ui.components.ProjectAvatar
 import com.github.krpkbhdn.ccmanager.ui.components.StatusChip
@@ -47,32 +54,45 @@ import java.time.Instant
 private const val MAX_PILLS = 3
 private const val ACTIVITY_LINES = 2
 private val cardMinHeight = 168.dp
+private val menuButtonSize = 24.dp
 
 /** Overview card of one project: identity, live activity line, session pills and last activity. */
 @Composable
-fun ProjectCard(project: Project, status: AgentStatus, sessions: List<SessionSnapshot>, now: Instant, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+fun ProjectCard(project: Project, status: AgentStatus, sessions: List<SessionSnapshot>, now: Instant, actions: ProjectActions, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(Radius.xl)
     val urgent = mostUrgent(sessions)
     val lastActive = lastActivityAt(sessions)
     val edge = if (status == AgentStatus.OFFLINE) colors.border else colors.status(status).copy(alpha = Alpha.BORDER_TINT / 2)
-    Pressable(onOpen, modifier.fillMaxWidth().heightIn(min = cardMinHeight).border(1.dp, edge, shape), shape, colors.surface, colors.surfaceHover) { hovered ->
-        Column(Modifier.fillMaxWidth().padding(Spacing.lg + 2.dp), verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                ProjectAvatar(project.name, size = 40.dp, cutout = colors.surface)
-                Column(Modifier.weight(1f)) {
-                    Label(project.name, style = Type.subtitle, tooltipWhenTruncated = true)
-                    Label(pathTail(project.path, 3), color = colors.textTertiary, style = Type.monoSmall, tooltipWhenTruncated = true)
+    ContextMenuArea({ projectMenu(actions) }, modifier.fillMaxWidth()) {
+        Pressable(actions.onOpen, Modifier.fillMaxWidth().heightIn(min = cardMinHeight).border(1.dp, edge, shape), shape, colors.surface, colors.surfaceHover) { hovered ->
+            Column(Modifier.fillMaxWidth().padding(Spacing.lg + 2.dp), verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                    ProjectAvatar(project.name, size = 40.dp, cutout = colors.surface)
+                    Column(Modifier.weight(1f)) {
+                        Label(project.name, style = Type.subtitle, tooltipWhenTruncated = true)
+                        Label(pathTail(project.path, 3), color = colors.textTertiary, style = Type.monoSmall, tooltipWhenTruncated = true)
+                    }
+                    StatusChip(status)
+                    CardMenu(actions, hovered)
                 }
-                StatusChip(status)
+                Label(
+                    urgent?.let { it.activity ?: sessionTitle(it) } ?: "No live sessions. Launch Claude to start one.",
+                    color = if (urgent == null) colors.textTertiary else colors.textSecondary,
+                    style = Type.body,
+                    maxLines = ACTIVITY_LINES,
+                )
+                CardFooter(sessions, lastActive, now, hovered)
             }
-            Label(
-                urgent?.let { it.activity ?: sessionTitle(it) } ?: "No live sessions. Launch Claude to start one.",
-                color = if (urgent == null) colors.textTertiary else colors.textSecondary,
-                style = Type.body,
-                maxLines = ACTIVITY_LINES,
-            )
-            CardFooter(sessions, lastActive, now, hovered)
         }
+    }
+}
+
+@Composable
+private fun CardMenu(actions: ProjectActions, hovered: Boolean) {
+    var menuOpen by remember { mutableStateOf(false) }
+    Box(Modifier.size(menuButtonSize)) {
+        if (hovered || menuOpen) IconButton(Icons.More, { menuOpen = true }, tooltip = "Project actions", size = menuButtonSize)
+        if (menuOpen) PopupMenu(projectMenu(actions), { menuOpen = false }, alignEnd = true)
     }
 }
 

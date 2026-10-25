@@ -27,7 +27,6 @@ import com.github.krpkbhdn.ccmanager.ui.components.StatusDot
 import com.github.krpkbhdn.ccmanager.ui.components.ThinScrollbar
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
-import com.github.krpkbhdn.ccmanager.ui.state.Route
 import com.github.krpkbhdn.ccmanager.ui.state.needingAttention
 import com.github.krpkbhdn.ccmanager.ui.state.overviewHeadline
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
@@ -65,7 +64,7 @@ fun OverviewScreen(state: AppState, modifier: Modifier = Modifier) {
                     status = state.live.statusOf(project.id),
                     sessions = state.live.of(project.id),
                     now = state.now,
-                    onOpen = { state.navigate(Route.Project(project.id)) },
+                    actions = state.projectActions(project),
                     modifier = Modifier.animateItem(),
                 )
             }

@@ -36,7 +36,6 @@ import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.shortcuts.AppShortcut
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.Route
-import com.github.krpkbhdn.ccmanager.ui.state.RenameRequest
 import com.github.krpkbhdn.ccmanager.ui.theme.Motion
 import com.github.krpkbhdn.ccmanager.ui.theme.Radius
 import com.github.krpkbhdn.ccmanager.ui.theme.IconSize
@@ -137,13 +136,7 @@ private fun ProjectsSection(state: AppState, collapsed: Boolean, modifier: Modif
                         selected = state.route == Route.Project(project.id),
                         collapsed = collapsed,
                         gitSummary = state.gitSummaryOf(project.id),
-                        actions = ProjectActions(
-                            onOpen = { state.navigate(Route.Project(project.id)) },
-                            onRename = { state.projects.renaming = RenameRequest(project) },
-                            onRemove = { state.projects.requestRemove(project) },
-                            onOpenFolder = { state.openFolder(project) },
-                            onSettings = { state.openProjectSettings(project) },
-                        ),
+                        actions = state.projectActions(project),
                         modifier = Modifier.animateItem(),
                     )
                 }
