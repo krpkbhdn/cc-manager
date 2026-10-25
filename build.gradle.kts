@@ -10,7 +10,7 @@ plugins {
 }
 
 group = "com.github.krpkbhdn"
-version = "1.0.59"
+version = "1.0.60"
 
 java {
     toolchain {
@@ -91,7 +91,10 @@ compose.desktop {
             vendor = "krpkbhdn"
             // Spring reflects over many JDK modules; a trimmed jlink image breaks it at runtime.
             includeAllModules = true
+            linux { iconFile.set(file("packaging/icon.png")) }
+            macOS { iconFile.set(file("packaging/icon.icns")) }
             windows {
+                iconFile.set(file("packaging/icon.ico"))
                 menu = true
                 shortcut = true
                 dirChooser = true
@@ -101,4 +104,13 @@ compose.desktop {
             }
         }
     }
+}
+
+tasks.register<JavaExec>("generateIcons") {
+    group = "application"
+    description = "Renders the app icon into packaging/icon.ico, icon.icns and icon.png used by the installers"
+    mainClass = "com.github.krpkbhdn.ccmanager.ui.GenerateIconsKt"
+    classpath = sourceSets["test"].runtimeClasspath
+    javaLauncher = javaToolchains.launcherFor(java.toolchain)
+    systemProperty("java.awt.headless", "true")
 }
