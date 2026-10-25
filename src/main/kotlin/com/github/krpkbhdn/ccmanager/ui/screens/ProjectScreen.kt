@@ -86,12 +86,15 @@ fun ProjectScreen(state: AppState, project: Project, modifier: Modifier = Modifi
                     sessions = byUrgency(state.live.of(project.id)),
                     teams = state.sessionTeams,
                     selectedSessionId = (view.selected as? ProjectTab.Session)?.ccmSessionId,
-                    now = state.now,
+                    finishedOpen = state.agents::isFinishedOpen,
+                    now = { state.now },
                     background = state.backgroundAgents[project.id],
                     actions = AgentsPanelActions(
                         onOpenSession = { state.select(project.id, ProjectTab.Session(it)) },
                         onRefreshBackground = { state.refreshBackgroundAgents(project.id) },
                         onAttach = { state.attach(project.id, it) },
+                        onOpenAgent = state.agents::openLog,
+                        onToggleFinished = state.agents::toggleFinished,
                     ),
                 )
             }

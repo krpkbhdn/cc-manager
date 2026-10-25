@@ -47,6 +47,7 @@ import kotlinx.coroutines.withContext
 
 private const val NOTIFICATION_CAP = 100
 private const val TICK_MILLIS = 1_000L
+private const val STALE_REFRESH_TICKS = 30
 private const val APPLY_TIMEOUT_MILLIS = 6_000L
 private const val APPLY_POLL_MILLIS = 200L
 private const val ACTIVITY_LIMIT = 300
@@ -121,6 +122,7 @@ class AppState(
     val update = UpdateState(backend.updates, scope, ::reportError, ::requestQuit) { exitApp() }
     var exitApp: () -> Unit = {}
     private val commandWriter = SessionCommandWriter(backend.terminal)
+    val agents = AgentsState(backend.transcripts, scope, { live }, ::showSessionTerminal)
     private val unsubscribers = mutableListOf<Runnable>()
     private val gitStates = mutableMapOf<Long, GitState>()
     private val gitHost = GitHost({ settings.git }, { change -> updateSettings { it.copy(git = change(it.git)) } }, ::toast)
@@ -149,7 +151,14 @@ class AppState(
         scope.launch { guarded { notifications = io { backend.notifications.history() }.takeLast(NOTIFICATION_CAP) } }
         scope.launch { guarded { installation = io { backend.installation.current() } } }
         scope.launch { guarded { ideAvailable = io { backend.ide.available() } } }
-        scope.launch { while (true) { delay(TICK_MILLIS); now = Instant.now() } }
+        scope.launch {
+            var ticks = 0
+            while (true) {
+                delay(TICK_MILLIS)
+                now = Instant.now()
+                if (++ticks % STALE_REFRESH_TICKS == 0) sessionReload.request()
+            }
+        }
     }
 
     fun dispose() {
@@ -380,6 +389,11 @@ class AppState(
         }
     }
 
+    private fun showSessionTerminal(ccmSessionId: String) {
+        openSession(ccmSessionId)
+        backend.terminal.focus(ccmSessionId)
+    }
+
     fun requestCloseSession(projectId: Long, ccmSessionId: String) {
         if (live.find(ccmSessionId) == null) return closeSession(projectId, ccmSessionId)
         confirm = ConfirmRequest(
@@ -476,6 +490,7 @@ class AppState(
         }
         val previous = live.sessions.associate { it.ccmSessionId to it.status }
         live = LiveSessions(sessions, statuses)
+        agents.prune(sessions.map { it.ccmSessionId })
         projectsBecameIdle(previous, sessions).forEach { gitStates[it]?.refresh() }
     }
 

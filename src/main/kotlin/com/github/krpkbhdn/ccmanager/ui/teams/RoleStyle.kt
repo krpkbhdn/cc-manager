@@ -43,4 +43,4 @@ fun RoleAvatar(name: String, slot: Int, size: Dp = 28.dp, modifier: Modifier = M
 @Composable
 fun RoleChip(role: TeamRole, slot: Int, modifier: Modifier = Modifier) = Chip(roleModelLabel(role), roleColor(slot), modifier)
 
-fun SessionSnapshot?.runningAgentTypes(): Set<String> = this?.subagents.orEmpty().filter { it.running }.map { it.agentType }.toSet()
+fun SessionSnapshot?.runningAgentTypes(): Set<String> = this?.subagents.orEmpty().filter { it.running() }.map { it.agentType }.toSet()

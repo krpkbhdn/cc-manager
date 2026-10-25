@@ -95,6 +95,7 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
         state.teams.dialog?.let { open -> state.teams.find(open.teamId)?.let { RoleDialog(it, open, state.teams) } }
         state.projectSettings?.let { ProjectSettingsDialog(it, state::closeProjectSettings) }
         state.plugins.pending?.let { PluginCommandDialog(it, state.plugins.job == null, state.plugins::confirmPending, state.plugins::dismissPending) }
+        state.agents.log?.let { SubagentLogHost(state.agents, { state.now }, it) }
         state.confirm?.let { ConfirmDialog(it) { state.confirm = null } }
         state.renaming?.let { RenameDialog(it, { name -> state.renameProject(it.project, name) }, { state.renaming = null }) }
         if (state.pickerOpen) FolderPickerDialog(initial = null, onDismiss = { state.pickerOpen = false }, onPicked = state::addProjectAt)

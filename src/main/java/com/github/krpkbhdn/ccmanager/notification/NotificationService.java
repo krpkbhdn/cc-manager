@@ -4,6 +4,7 @@ import com.github.krpkbhdn.ccmanager.claude.hook.ActivityFormatter;
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot;
+import com.github.krpkbhdn.ccmanager.claude.session.SubagentSnapshot;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -72,11 +73,12 @@ public class NotificationService {
         return notification;
     }
 
+    /** A running (even silent) subagent means the work may go on, so going idle by staleness alone is not "finished". */
     private Optional<AppNotification> transition(AgentStatus from, SessionSnapshot session) {
         if (session.status() == AgentStatus.NEEDS_ACTION) {
             return Optional.of(create(NotificationKind.NEEDS_ACTION, session, "Claude needs your action", session.activity()));
         }
-        if (session.status() != AgentStatus.IDLE || from == AgentStatus.IDLE) {
+        if (session.status() != AgentStatus.IDLE || from == AgentStatus.IDLE || session.subagents().stream().anyMatch(SubagentSnapshot::running)) {
             return Optional.empty();
         }
         if (session.error() != null) {

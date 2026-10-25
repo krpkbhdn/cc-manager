@@ -60,12 +60,19 @@ import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import java.time.Duration
 import java.time.Instant
 
-val agentsPanelWidth = 304.dp
+val agentsPanelWidth = 340.dp
 private const val PLAN_MODE = "plan"
 private const val BYPASS_MODE = "bypassPermissions"
 private const val SKELETON_ROWS = 2
+private val skeletonRowHeight = 52.dp
 
-class AgentsPanelActions(val onOpenSession: (String) -> Unit, val onRefreshBackground: () -> Unit, val onAttach: (String) -> Unit)
+class AgentsPanelActions(
+    val onOpenSession: (String) -> Unit,
+    val onRefreshBackground: () -> Unit,
+    val onAttach: (String) -> Unit,
+    val onOpenAgent: (String, SubagentSnapshot) -> Unit,
+    val onToggleFinished: (String) -> Unit,
+)
 
 /** Collapsible right rail: live sessions with nested subagents, then background agents. [background] is null while loading. */
 @Composable
@@ -73,7 +80,8 @@ fun AgentsPanel(
     sessions: List<SessionSnapshot>,
     teams: Map<String, Team>,
     selectedSessionId: String?,
-    now: Instant,
+    finishedOpen: (String) -> Boolean,
+    now: () -> Instant,
     background: List<BackgroundAgent>?,
     actions: AgentsPanelActions,
     modifier: Modifier = Modifier,
@@ -86,7 +94,7 @@ fun AgentsPanel(
                 item(key = "agents-header") { PanelTitle("Agents", sessions.size) }
                 if (sessions.isEmpty()) item(key = "agents-empty") { Label("No live sessions yet. Launch Claude to start one.", color = colors.textTertiary, style = Type.small, maxLines = 3) }
                 items(sessions, key = { it.ccmSessionId }) { session ->
-                    SessionCard(session, teams[session.ccmSessionId], session.ccmSessionId == selectedSessionId, now, Modifier.animateItem()) { actions.onOpenSession(session.ccmSessionId) }
+                    SessionCard(session, teams[session.ccmSessionId], session.ccmSessionId == selectedSessionId, finishedOpen(session.ccmSessionId), now, actions, Modifier.animateItem())
                 }
                 item(key = "background-header") { PanelTitle("Background agents", background?.size, Modifier.padding(top = Spacing.md), actions.onRefreshBackground) }
                 backgroundItems(background, actions.onAttach)
@@ -98,7 +106,7 @@ fun AgentsPanel(
 
 private fun androidx.compose.foundation.lazy.LazyListScope.backgroundItems(background: List<BackgroundAgent>?, onAttach: (String) -> Unit) {
     when {
-        background == null -> items(SKELETON_ROWS, key = { "skeleton-$it" }) { SkeletonBlock(Modifier.fillMaxWidth().height(52.dp), RoundedCornerShape(Radius.md)) }
+        background == null -> items(SKELETON_ROWS, key = { "skeleton-$it" }) { SkeletonBlock(Modifier.fillMaxWidth().height(skeletonRowHeight), RoundedCornerShape(Radius.md)) }
         background.isEmpty() -> item(key = "background-empty") { Label("Nothing running in the background.", color = colors.textTertiary, style = Type.small) }
         else -> items(background, key = { "bg-${it.id}" }) { agent -> BackgroundAgentCard(agent) { onAttach(agent.id) } }
     }
@@ -115,7 +123,7 @@ private fun PanelTitle(title: String, count: Int?, modifier: Modifier = Modifier
 }
 
 @Composable
-private fun SessionCard(session: SessionSnapshot, team: Team?, selected: Boolean, now: Instant, modifier: Modifier, onClick: () -> Unit) {
+private fun SessionCard(session: SessionSnapshot, team: Team?, selected: Boolean, finishedOpen: Boolean, now: () -> Instant, actions: AgentsPanelActions, modifier: Modifier) {
     val shape = RoundedCornerShape(Radius.lg)
     val tint = colors.status(session.status)
     val edge = when {
@@ -123,18 +131,21 @@ private fun SessionCard(session: SessionSnapshot, team: Team?, selected: Boolean
         session.status == AgentStatus.NEEDS_ACTION -> tint.copy(alpha = Alpha.BORDER_TINT)
         else -> colors.border
     }
-    Pressable(onClick, modifier.fillMaxWidth().border(1.dp, edge, shape), shape, if (selected) colors.surfaceSelected else colors.surface, if (selected) colors.surfaceSelected else colors.surfaceHover) {
+    Pressable({ actions.onOpenSession(session.ccmSessionId) }, modifier.fillMaxWidth().border(1.dp, edge, shape), shape, if (selected) colors.surfaceSelected else colors.surface, if (selected) colors.surfaceSelected else colors.surfaceHover) {
         Column(Modifier.padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.xs + 2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 StatusDot(session.status, Modifier.padding(horizontal = Spacing.xs))
                 Label(sessionTitle(session), Modifier.weight(1f), style = Type.bodyMedium, tooltipWhenTruncated = true)
                 permissionModeLabel(session.permissionMode)?.let { Chip(it, modeTint(session.permissionMode)) }
             }
-            Label(metaLine(session, now), color = colors.textTertiary, style = Type.caption, tooltipWhenTruncated = true)
+            MetaLine(session, now)
             session.activity?.let { Label(it, color = colors.textSecondary, style = Type.small, maxLines = 2) }
             session.error?.let { Label(it, color = colors.danger, style = Type.small, maxLines = 2) }
             if (session.backgroundTasks > 0) Chip(backgroundTasksLabel(session.backgroundTasks), colors.accent)
-            if (session.subagents.isNotEmpty()) SubagentTree(session.subagents, team)
+            if (session.subagents.isNotEmpty()) {
+                val subagentActions = SubagentActions({ actions.onOpenAgent(session.ccmSessionId, it) }) { actions.onToggleFinished(session.ccmSessionId) }
+                SubagentList(session, team, now, finishedOpen, subagentActions)
+            }
         }
     }
 }
@@ -152,37 +163,6 @@ private fun metaLine(session: SessionSnapshot, now: Instant): String {
 }
 
 @Composable
-private fun SubagentTree(subagents: List<SubagentSnapshot>, team: Team?) {
-    val rail = colors.borderStrong
-    Column(Modifier.padding(start = Spacing.sm, top = Spacing.xs), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-        subagents.forEach { subagent ->
-            Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                Box(Modifier.width(1.dp).fillMaxHeight().background(rail))
-                val role = team?.subagentRole(subagent.agentType)
-                SubagentRow(subagent, role, role?.let { team.slotOf(it) } ?: 0, Modifier.weight(1f))
-            }
-        }
-    }
-}
-
-@Composable
-private fun SubagentRow(subagent: SubagentSnapshot, role: TeamRole?, slot: Int, modifier: Modifier) {
-    Row(
-        modifier.clip(RoundedCornerShape(Radius.sm)).background(colors.hoverOverlay).padding(horizontal = Spacing.sm, vertical = Spacing.xs + 1.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-    ) {
-        if (role != null) RoleAvatar(role.name(), slot, 18.dp)
-        if (subagent.running) Spinner(size = 12.dp, tint = colors.warning) else Glyph(Icons.Check, colors.textTertiary, size = IconSize.small)
-        Column(Modifier.weight(1f)) {
-            Label(subagent.agentType.ifBlank { "agent" }, style = Type.smallMedium, color = if (subagent.running) colors.textPrimary else colors.textSecondary)
-            subagent.activity?.let { Label(it, color = colors.textTertiary, style = Type.caption, maxLines = 1, tooltipWhenTruncated = true) }
-        }
-        role?.let { RoleChip(it, slot) }
-    }
-}
-
-@Composable
 private fun BackgroundAgentCard(agent: BackgroundAgent, onAttach: () -> Unit) {
     val shape = RoundedCornerShape(Radius.md)
     Row(
@@ -197,4 +177,10 @@ private fun BackgroundAgentCard(agent: BackgroundAgent, onAttach: () -> Unit) {
         }
         AppButton("Attach", onAttach, compact = true)
     }
+}
+
+/** Own composable so only this line recomposes on each clock tick. */
+@Composable
+private fun MetaLine(session: SessionSnapshot, now: () -> Instant) {
+    Label(metaLine(session, now()), color = colors.textTertiary, style = Type.caption, tooltipWhenTruncated = true)
 }

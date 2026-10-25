@@ -110,6 +110,10 @@ private val shots = listOf(
     Shot("task-dialog-no-teams", prepare = { state, _, _ -> waitFor { state.teams.teams.isNotEmpty() }; state.teams.teams.forEach { state.teams.requestDeleteTeam(it); state.confirm?.onConfirm?.invoke() }; state.confirm = null; waitFor { state.teams.teams.isEmpty() }; state.taskDialogProjectId = 1 }),
     Shot("session-team", prepare = { state, _, _ -> waitFor { state.teams.teams.isNotEmpty() }; state.sessionTeams["s-working"] = state.teams.teams.first(); state.openSession("s-working") }),
     Shot("agents-roles", prepare = { state, _, _ -> waitFor { state.teams.teams.isNotEmpty() }; state.sessionTeams["s-working"] = state.teams.teams.first() }),
+    Shot("agents-rail", prepare = { state, _, _ -> state.openSession("s-agents") }),
+    Shot("agents-rail-finished", prepare = { state, _, _ -> state.openSession("s-agents"); state.agents.toggleFinished("s-agents") }),
+    Shot("agents-log", prepare = { state, _, _ -> openAgentLog(state, 2) }),
+    Shot("agents-log-live", prepare = { state, _, _ -> openAgentLog(state, 0) }),
     Shot("progress",prepare = { _, git, data -> data.progressDelayMillis = 4_000; git.fetchNow() }),
     Shot("plugins-installed", prepare = { state, _, _ -> openPlugins(state, PluginsTab.INSTALLED) }),
     Shot("plugins-installed-detail", prepare = { state, _, _ -> openPlugins(state, PluginsTab.INSTALLED); state.plugins.selectedInstalled = state.plugins.installed.first { it.id.startsWith("frontend-design") }.key(); waitFor { state.plugins.details.values.any { it is DetailsState.Loaded } } }),
@@ -158,6 +162,12 @@ private class PumpedDispatcher : CoroutineDispatcher() {
 }
 
 private val shotLoop = PumpedDispatcher()
+
+private fun openAgentLog(state: AppState, index: Int) {
+    state.openSession("s-agents")
+    state.agents.openLog("s-agents", state.live.find("s-agents")!!.subagents[index])
+    waitFor { state.agents.log?.entries != null }
+}
 
 private fun waitFor(timeoutMillis: Long = WAIT_MILLIS, condition: () -> Boolean) {
     val deadline = System.currentTimeMillis() + timeoutMillis

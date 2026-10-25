@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.krpkbhdn.ccmanager.claude.hook.HookEvent;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
+import com.github.krpkbhdn.ccmanager.claude.session.SessionProperties;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,7 +15,7 @@ class NotificationServiceTest {
 
     private static final long PROJECT_ID = 9;
 
-    private final SessionRegistry registry = new SessionRegistry();
+    private final SessionRegistry registry = new SessionRegistry(new com.github.krpkbhdn.ccmanager.claude.session.SessionProperties(java.time.Duration.ofMinutes(10)));
     private final NotificationService service = new NotificationService(registry);
     private final List<AppNotification> received = new ArrayList<>();
     private String id;
@@ -47,6 +48,29 @@ class NotificationServiceTest {
             assertThat(notification.projectId()).isEqualTo(PROJECT_ID);
             assertThat(notification.ccmSessionId()).isEqualTo(id);
         });
+    }
+
+    @Test
+    void goingIdleOnlyBecauseABackgroundAgentWentStaleIsNotFinished() throws Exception {
+        var shortLived = new SessionRegistry(new SessionProperties(java.time.Duration.ofMillis(200)));
+        var stale = new NotificationService(shortLived);
+        var seen = new ArrayList<AppNotification>();
+        stale.subscribe(seen::add);
+        var sid = shortLived.register(PROJECT_ID);
+        var async = "{\"tool_name\":\"Agent\",\"tool_response\":\"Async agent launched successfully. agentId: a1 (x)\"}";
+        for (var step : List.of(List.of("UserPromptSubmit", "{}"), List.of("SubagentStart", "{\"agent_id\":\"a1\",\"agent_type\":\"developer\"}"),
+                List.of("PostToolUse", async), List.of("Stop", "{}"))) {
+            var template = of(step.get(0), step.get(1));
+            shortLived.on(new HookEvent(sid, template.type(), step.get(0), template.payload(), java.time.Instant.now()));
+        }
+        assertThat(shortLived.find(sid).orElseThrow().status().name()).isEqualTo("WORKING");
+
+        Thread.sleep(400);
+        var nudge = of("Notification", "{\"notification_type\":\"idle_prompt\"}");
+        shortLived.on(new HookEvent(sid, nudge.type(), "Notification", nudge.payload(), java.time.Instant.now()));
+
+        assertThat(shortLived.find(sid).orElseThrow().status().name()).isEqualTo("IDLE");
+        assertThat(seen).isEmpty();
     }
 
     @Test

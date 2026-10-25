@@ -8,6 +8,7 @@ import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgentService
 import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry
+import com.github.krpkbhdn.ccmanager.claude.session.TranscriptService
 import com.github.krpkbhdn.ccmanager.notification.NotificationService
 import com.github.krpkbhdn.ccmanager.project.ProjectService
 import com.github.krpkbhdn.ccmanager.extension.mcp.McpService
@@ -66,6 +67,7 @@ class Backend(
     val plugins: PluginService,
     val mcp: McpService,
     val skills: SkillService,
+    val transcripts: TranscriptService,
     val terminal: TerminalPort = HostTerminalPort,
     val updates: UpdateService? = null,
 ) {
@@ -87,6 +89,7 @@ class Backend(
             plugins = context.getBean(PluginService::class.java),
             mcp = context.getBean(McpService::class.java),
             skills = context.getBean(SkillService::class.java),
+            transcripts = context.getBean(TranscriptService::class.java),
             updates = context.getBean(UpdateService::class.java),
         )
     }
