@@ -8,6 +8,6 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 @ConfigurationProperties("cc-manager.notification-sound")
 public record NotificationSoundProperties(
         @DefaultValue("true") boolean enabled,
-        @DefaultValue("1.0") double volume,
+        @DefaultValue("0.9") double volume,
         @DefaultValue("1s") Duration minInterval,
         @DefaultValue("500ms") Duration lineTail) {}
