@@ -7,6 +7,8 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /** Runs a short-lived command with a hard timeout; stdout and stderr are drained concurrently. */
 public final class CommandRunner {
@@ -18,6 +20,8 @@ public final class CommandRunner {
         }
     }
 
+    private static final ExecutorService PIPES = Executors.newVirtualThreadPerTaskExecutor();
+
     private CommandRunner() {}
 
     /** @throws IOException when the process cannot be started */
@@ -28,16 +32,16 @@ public final class CommandRunner {
         }
         var process = builder.start();
         process.getOutputStream().close();
-        var stdout = CompletableFuture.supplyAsync(() -> read(process.getInputStream()));
-        var stderr = CompletableFuture.supplyAsync(() -> read(process.getErrorStream()));
+        var stdout = CompletableFuture.supplyAsync(() -> read(process.getInputStream()), PIPES);
+        var stderr = CompletableFuture.supplyAsync(() -> read(process.getErrorStream()), PIPES);
         try {
             var finished = process.waitFor(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
             if (!finished) {
-                killTree(process);
+                ProcessTree.kill(process);
             }
             return new Result(finished ? process.exitValue() : -1, stdout.join(), stderr.join(), !finished);
         } catch (InterruptedException e) {
-            killTree(process);
+            ProcessTree.kill(process);
             Thread.currentThread().interrupt();
             throw new IOException("Interrupted while running " + command.getFirst(), e);
         }
@@ -50,11 +54,6 @@ public final class CommandRunner {
                 .redirectError(ProcessBuilder.Redirect.DISCARD)
                 .start();
         process.getOutputStream().close();
-    }
-
-    private static void killTree(Process process) {
-        process.descendants().forEach(ProcessHandle::destroyForcibly);
-        process.destroyForcibly();
     }
 
     private static String read(InputStream stream) {

@@ -44,10 +44,10 @@ fun shortName(remoteBranch: String): String = remoteBranch.substringAfter('/')
 
 private val forbiddenInBranchName = Regex("[\\s~^:?*\\[\\\\]|\\.\\.|@\\{|//")
 
-/** Why [name] cannot be a branch name, or null when git would accept it. Mirrors git check-ref-format's main rules. */
+/** Why [name] cannot be a branch or tag name, or null when git would accept it. Mirrors git check-ref-format's main rules. */
 fun branchNameProblem(name: String, existing: Collection<String>): String? = when {
     name.isBlank() -> "Enter a name"
-    name in existing -> "A branch with this name already exists"
+    name in existing -> "This name already exists"
     name.startsWith("-") || name.startsWith("/") || name.endsWith("/") -> "Cannot start with - or / or end with /"
     name.endsWith(".") || name.endsWith(".lock") -> "Cannot end with . or .lock"
     forbiddenInBranchName.containsMatchIn(name) -> "Contains characters git does not allow"

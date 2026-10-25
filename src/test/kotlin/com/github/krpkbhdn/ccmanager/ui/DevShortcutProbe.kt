@@ -43,10 +43,10 @@ private class ShortcutProbe(private val capture: Capture, private val state: App
     private var clicked = false
 
     suspend fun run() {
-        state.addProjectAt(sandboxApi)
+        state.projects.addAt(sandboxApi)
         delay(1_200)
-        val project = state.projects.first { it.name == "demo-api" }
-        state.launch(project.id, LaunchMode.NEW)
+        val project = state.projects.all.first { it.name == "demo-api" }
+        state.sessions.launch(project.id, LaunchMode.NEW)
         delay(BOOT_MILLIS)
         firstSession = state.live.of(project.id).first().ccmSessionId
         capture.window.toFront()
@@ -76,7 +76,7 @@ private class ShortcutProbe(private val capture: Capture, private val state: App
         press(KeyEvent.VK_CONTROL, KeyEvent.VK_B)
         press(KeyEvent.VK_CONTROL, KeyEvent.VK_N)
         press(KeyEvent.VK_CONTROL, KeyEvent.VK_L)
-        check("plain Ctrl+J/B/N/L changed no app state", before.same(Snapshot()) && !state.pickerOpen)
+        check("plain Ctrl+J/B/N/L changed no app state", before.same(Snapshot()) && !state.projects.pickerOpen)
         capture.take("1-after-plain-ctrl")
         press(KeyEvent.VK_CONTROL, KeyEvent.VK_SHIFT, KeyEvent.VK_C)
         press(KeyEvent.VK_CONTROL, KeyEvent.VK_SHIFT, KeyEvent.VK_V)
@@ -157,14 +157,14 @@ private class ShortcutProbe(private val capture: Capture, private val state: App
         check("plain Ctrl+K opens the palette outside the terminal", state.paletteOpen)
         press(KeyEvent.VK_ESCAPE)
         press(KeyEvent.VK_CONTROL, KeyEvent.VK_N)
-        check("plain Ctrl+N opens add project outside the terminal", state.pickerOpen)
-        state.pickerOpen = false
+        check("plain Ctrl+N opens add project outside the terminal", state.projects.pickerOpen)
+        state.projects.pickerOpen = false
     }
 
     private fun screen(): String = TerminalHost.sessionOf(firstSession)?.screenText().orEmpty()
 
     private suspend fun typeText(text: String) {
-        state.send(firstSession, text)
+        state.sessions.send(firstSession, text)
         delay(SETTLE_MILLIS * 2)
     }
 

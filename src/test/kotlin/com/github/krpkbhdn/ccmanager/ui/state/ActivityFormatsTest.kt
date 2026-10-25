@@ -45,14 +45,6 @@ class ActivityFormatsTest {
     }
 
     @Test
-    fun `diff totals sum all files`() {
-        val diff = GitDiff(true, listOf(file("a"), file("b")))
-
-        assertThat(totalAdditions(diff)).isEqualTo(2)
-        assertThat(totalDeletions(diff)).isEqualTo(2)
-    }
-
-    @Test
     fun `quick actions type real control sequences`() {
         val byLabel = quickActions.associateBy { it.label }
 

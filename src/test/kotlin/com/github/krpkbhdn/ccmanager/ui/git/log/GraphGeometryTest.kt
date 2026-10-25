@@ -14,8 +14,6 @@ class GraphGeometryTest {
     fun `lanes sit at the centre of their column`() {
         assertThat(laneX(0, lane)).isEqualTo(7f)
         assertThat(laneX(3, lane)).isEqualTo(49f)
-        assertThat(graphWidth(4, lane)).isEqualTo(56f)
-        assertThat(graphWidth(0, lane)).isEqualTo(14f)
     }
 
     @Test

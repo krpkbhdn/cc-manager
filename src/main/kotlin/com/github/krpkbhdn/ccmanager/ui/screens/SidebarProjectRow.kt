@@ -51,7 +51,7 @@ private val markerWidth = 3.dp
 private val markerHeight = 20.dp
 private val avatarSize = 30.dp
 
-class ProjectActions(val onOpen: () -> Unit, val onRename: () -> Unit, val onRemove: () -> Unit, val onOpenFolder: () -> Unit)
+class ProjectActions(val onOpen: () -> Unit, val onRename: () -> Unit, val onRemove: () -> Unit, val onOpenFolder: () -> Unit, val onSettings: () -> Unit)
 
 /** Sidebar entry of one project: avatar with status dot, name, live activity ticker and a context menu. */
 @Composable
@@ -86,6 +86,7 @@ fun ProjectRow(
             PopupMenu(
                 listOf(
                     MenuEntry("Open folder", Icons.FolderOpen) { actions.onOpenFolder() },
+                    MenuEntry("Project settings", Icons.Settings) { actions.onSettings() },
                     MenuEntry("Rename", Icons.Edit) { actions.onRename() },
                     MenuEntry("Remove from manager", Icons.Trash, danger = true) { actions.onRemove() },
                 ),

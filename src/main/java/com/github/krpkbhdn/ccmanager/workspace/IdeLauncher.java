@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.workspace;
 
+import com.github.krpkbhdn.ccmanager.claude.launch.WindowsArgument;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -28,7 +29,7 @@ public class IdeLauncher {
         var launcher = locator.find(host).orElseThrow(() -> new IllegalStateException(
                 "IntelliJ IDEA was not found. Install it or add its launcher (idea) to PATH."));
         var command = new ArrayList<>(launcher);
-        command.add(directory.toString());
+        command.add(WindowsArgument.directoryArgument(launcher.getFirst(), directory));
         try {
             CommandRunner.startDetached(command);
         } catch (IOException e) {

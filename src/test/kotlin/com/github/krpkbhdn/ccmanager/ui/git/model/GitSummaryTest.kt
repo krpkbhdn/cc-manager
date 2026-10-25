@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test
 
 class GitSummaryTest {
     private fun status(branch: String?, ahead: Int = 0, behind: Int = 0, vararg changes: GitStatus.Change) =
-        GitStatus(true, branch, "0123456789abcdef", branch == null, "origin/main", ahead, behind, GitStatus.Operation.NONE, 0, changes.toList())
+        GitStatus(true, branch, "0123456789abcdef", branch == null, "origin/main", ahead, behind, GitStatus.Operation.NONE, 0, null, changes.toList())
 
     @Test
     fun `a repository summarises branch dirty count and divergence`() {

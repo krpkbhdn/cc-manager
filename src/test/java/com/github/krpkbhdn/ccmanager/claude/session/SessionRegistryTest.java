@@ -16,7 +16,7 @@ class SessionRegistryTest {
     private static final int THREADS = 8;
     private static final int SESSIONS_PER_THREAD = 50;
 
-    private final SessionRegistry registry = new SessionRegistry();
+    private final SessionRegistry registry = new SessionRegistry(new SessionProperties(java.time.Duration.ofMinutes(10)));
 
     private HookEvent eventFor(String ccmId, String name, String json) {
         var template = of(name, json);

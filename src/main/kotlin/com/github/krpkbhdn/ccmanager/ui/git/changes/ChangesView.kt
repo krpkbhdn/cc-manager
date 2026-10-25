@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.git.GitMisc.ConflictSide
+import com.github.krpkbhdn.ccmanager.git.GitPatches
 import com.github.krpkbhdn.ccmanager.ui.components.AppButton
 import com.github.krpkbhdn.ccmanager.ui.components.EmptyState
 import com.github.krpkbhdn.ccmanager.ui.components.HorizontalRule
@@ -44,6 +45,7 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import com.github.krpkbhdn.ccmanager.workspace.GitDiff
+import com.github.krpkbhdn.ccmanager.workspace.UnifiedDiffParser
 
 private val minListWidth = 300.dp
 private val maxListWidth = 400.dp
@@ -117,11 +119,15 @@ private fun DiffArea(git: GitState, conflicted: Boolean, system: GitSystemAction
     }
 }
 
-private fun hunkActions(git: GitState, file: GitDiff.FileDiff, context: DiffContext): HunkActions {
+/** Null for a cut-off diff: a patch built from it would be corrupt. */
+private fun hunkActions(git: GitState, file: GitDiff.FileDiff, context: DiffContext): HunkActions? {
+    if (file.lines.any { it.text == UnifiedDiffParser.TRUNCATED_MARKER }) return null
     val reverse = context == DiffContext.STAGED
     return HunkActions(
-        onApplyHunk = { hunk -> git.applyPatch(hunkPatch(file, hunk), reverse) },
-        onApplyLines = { hunk, lines -> git.applyPatch(linePatch(file, hunk, lines, reverse), reverse) },
+        onApplyHunk = { hunk -> git.applyPatch(reverse) { GitPatches.hunk(file, hunk.number) } },
+        onApplyLines = { hunk, lines ->
+            git.applyPatch(reverse) { if (reverse) GitPatches.linesForUnstaging(file, hunk.number, lines) else GitPatches.lines(file, hunk.number, lines) }
+        },
     )
 }
 
@@ -136,7 +142,6 @@ private fun ConflictBar(git: GitState, ref: ChangeRef, system: GitSystemActions)
         AppButton("Accept ours", { git.resolveConflict(ref.path, ConflictSide.OURS) }, compact = true, enabled = !git.busy)
         AppButton("Accept theirs", { git.resolveConflict(ref.path, ConflictSide.THEIRS) }, compact = true, enabled = !git.busy)
         AppButton("Mark resolved", { git.markResolved(ref.path) }, compact = true, enabled = !git.busy)
-        AppButton("Open in IDE", { system.openInIde(ref.path) }, compact = true, icon = Icons.Code, enabled = system.ideAvailable)
         AppButton("Open in IDE", { system.openInIde(ref.path) }, compact = true, icon = Icons.Code, enabled = system.ideAvailable)
     }
     HorizontalRule()

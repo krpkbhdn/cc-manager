@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.ui.git.model
 
 import com.github.krpkbhdn.ccmanager.git.GitException
+import com.github.krpkbhdn.ccmanager.git.GitMisc
 import com.github.krpkbhdn.ccmanager.git.GitMisc.MergeMode
 import com.github.krpkbhdn.ccmanager.git.GitMisc.ResetMode
 import com.github.krpkbhdn.ccmanager.ui.state.ConfirmRequest
@@ -62,16 +63,16 @@ fun GitState.deleteTag(name: String) = act("Deleting tag $name") { history.delet
 
 fun GitState.stashPush(message: String, includeUntracked: Boolean) = act("Stashing") { stashes.push(repo, message, includeUntracked) }
 
-fun GitState.stashApply(index: Int) = act("Applying stash") { stashes.apply(repo, index) }
+fun GitState.stashApply(stash: GitMisc.Stash) = act("Applying stash") { stashes.apply(repo, stash.index(), stash.hash()) }
 
-fun GitState.stashPop(index: Int) = act("Popping stash") { stashes.pop(repo, index) }
+fun GitState.stashPop(stash: GitMisc.Stash) = act("Popping stash") { stashes.pop(repo, stash.index(), stash.hash()) }
 
-fun GitState.requestDropStash(index: Int) {
-    dialog = GitDialog.Confirm(ConfirmRequest("Drop stash", "Delete stash@{$index}? Its changes are lost.", "Drop") { stashDrop(index) })
+fun GitState.requestDropStash(stash: GitMisc.Stash) {
+    dialog = GitDialog.Confirm(ConfirmRequest("Drop stash", "Delete stash@{${stash.index()}}? Its changes are lost.", "Drop") { stashDrop(stash) })
 }
 
-fun GitState.stashDrop(index: Int) = act("Dropping stash") { stashes.drop(repo, index) }
+fun GitState.stashDrop(stash: GitMisc.Stash) = act("Dropping stash") { stashes.drop(repo, stash.index(), stash.hash()) }
 
-suspend fun GitState.stashDiff(index: Int) = guarded("Could not read the stash") { stashes.show(repo, index) }
+suspend fun GitState.stashDiff(hash: String) = guarded("Could not read the stash") { stashes.show(repo, hash) }
 
 const val SHORT_HASH = 7

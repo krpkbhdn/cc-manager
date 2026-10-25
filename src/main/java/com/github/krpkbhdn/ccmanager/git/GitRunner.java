@@ -5,6 +5,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -17,6 +18,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 /**
@@ -24,39 +26,37 @@ import org.springframework.stereotype.Component;
  * Non-interactive by design: prompts are disabled, so a missing credential fails fast with {@link Kind#AUTH}.
  */
 @Component
+@EnableConfigurationProperties(GitProperties.class)
 public class GitRunner {
 
-    public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(60);
-    public static final Duration SYNC_TIMEOUT = Duration.ofMinutes(10);
 
     private static final ExecutorService PIPES = Executors.newVirtualThreadPerTaskExecutor();
     private static final List<String> BASE_COMMAND =
             List.of("git", "-c", "core.quotepath=false", "-c", "color.ui=never", "-c", "core.fsmonitor=false");
 
+    private final GitProperties properties;
     private final Map<String, String> extraEnvironment;
 
     @Autowired
+    public GitRunner(GitProperties properties) {
+        this(properties, Map.of());
+    }
+
     public GitRunner() {
-        this(Map.of());
+        this(GitProperties.defaults());
     }
 
     /** Extra environment for every spawned git, e.g. GIT_CONFIG_GLOBAL to isolate tests from the user's config. */
-    public GitRunner(Map<String, String> extraEnvironment) {
+    public GitRunner(GitProperties properties, Map<String, String> extraEnvironment) {
+        this.properties = properties;
         this.extraEnvironment = Map.copyOf(extraEnvironment);
     }
 
-    public static boolean isAvailable() {
-        try {
-            var process = new ProcessBuilder("git", "--version").redirectErrorStream(true).start();
-            process.getInputStream().readAllBytes();
-            return process.waitFor(DEFAULT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS) && process.exitValue() == 0;
-        } catch (IOException e) {
-            return false;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return false;
-        }
+    /** The git tunables, shared with the services built on this runner. */
+    public GitProperties properties() {
+        return properties;
     }
+
 
     public record Result(int exitCode, String stdout, String stderr) {
 
@@ -67,17 +67,17 @@ public class GitRunner {
 
     /** stdout of a command that must succeed. @throws GitException otherwise */
     public String out(Path repo, String... args) {
-        return run(repo, DEFAULT_TIMEOUT, null, null, List.of(args)).stdout();
+        return run(repo, properties.commandTimeout(), null, null, List.of(args)).stdout();
     }
 
     /** Like {@link #out} with {@code stdin} fed to git (patches, commit messages, path lists). */
     public String outWithInput(Path repo, byte[] stdin, String... args) {
-        return run(repo, DEFAULT_TIMEOUT, null, stdin, List.of(args)).stdout();
+        return run(repo, properties.commandTimeout(), null, stdin, List.of(args)).stdout();
     }
 
     /** Result of a command whose non-zero exit is an answer, not an error (e.g. merge-base --is-ancestor). */
     public Result tryRun(Path repo, String... args) {
-        return execute(repo, DEFAULT_TIMEOUT, null, null, List.of(args));
+        return execute(repo, properties.commandTimeout(), null, null, List.of(args));
     }
 
     /**
@@ -97,6 +97,9 @@ public class GitRunner {
     }
 
     private Result execute(Path repo, Duration timeout, Consumer<String> progress, byte[] stdin, List<String> args) {
+        if (!Files.isDirectory(repo)) {
+            throw new GitException(Kind.NOT_A_REPOSITORY, "Folder does not exist: " + repo, "");
+        }
         var command = new ArrayList<>(BASE_COMMAND);
         command.addAll(args);
         var builder = new ProcessBuilder(command).directory(repo.toFile());

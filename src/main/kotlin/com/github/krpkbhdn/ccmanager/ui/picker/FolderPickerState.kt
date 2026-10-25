@@ -104,9 +104,10 @@ class FolderPickerState(initial: Path?, private val scope: CoroutineScope, priva
     }
 
     /** Jumps to the typed path when it is a readable directory; returns the failure otherwise. */
-    fun commitTypedPath(): PathCheck {
-        val parsed = FolderRules.parse(pathText.text.toString())
-        val check = FolderRules.checkText(pathText.text.toString())
+    suspend fun commitTypedPath(): PathCheck {
+        val text = pathText.text.toString()
+        val parsed = FolderRules.parse(text)
+        val check = withContext(Dispatchers.IO) { FolderRules.checkText(text) }
         if (check == PathCheck.Valid && parsed != null) open(parsed)
         return check
     }
@@ -137,19 +138,19 @@ class FolderPickerState(initial: Path?, private val scope: CoroutineScope, priva
         creatingFolder = false
     }
 
-    fun validateNewFolder() {
+    suspend fun validateNewFolder() {
         val name = newFolderName.text.toString()
-        newFolderError = if (name.isEmpty()) null else FolderRules.newFolderError(current, name)
+        newFolderError = if (name.isEmpty()) null else withContext(Dispatchers.IO) { FolderRules.newFolderError(current, name) }
     }
 
     fun createFolder() {
         val name = newFolderName.text.toString()
-        val error = FolderRules.newFolderError(current, name)
-        if (error != null) {
-            newFolderError = error
-            return
-        }
         scope.launch {
+            val error = withContext(Dispatchers.IO) { FolderRules.newFolderError(current, name) }
+            if (error != null) {
+                newFolderError = error
+                return@launch
+            }
             val created = withContext(Dispatchers.IO) { FolderRules.createFolder(current, name) }
             created.onSuccess {
                 creatingFolder = false

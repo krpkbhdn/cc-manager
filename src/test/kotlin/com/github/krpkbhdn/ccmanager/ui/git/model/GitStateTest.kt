@@ -1,7 +1,10 @@
 package com.github.krpkbhdn.ccmanager.ui.git.model
 
 import com.github.krpkbhdn.ccmanager.git.GitException
+import com.github.krpkbhdn.ccmanager.git.GitLog
 import com.github.krpkbhdn.ccmanager.git.GitStatus
+import com.github.krpkbhdn.ccmanager.git.GraphState
+import com.github.krpkbhdn.ccmanager.ui.git.log.LOG_PAGE_SIZE
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.ui.git.FakeGit
 import com.github.krpkbhdn.ccmanager.ui.git.FakeRepoData
@@ -146,6 +149,7 @@ class GitStateTest {
         await { git.job == null && data.calls.any { it == "fetch" } }
 
         assertThat(data.calls.filter { it.startsWith("pull") }).isEmpty()
+        assertThat(toasts).contains(NotificationKind.INFO to "Git is busy")
     }
 
     @Test
@@ -211,6 +215,43 @@ class GitStateTest {
 
         assertThat(git.log.rows).allMatch { it.commit().authorName() == "Priya N" }
         assertThat(git.log.hasMore).isFalse()
+    }
+
+    @Test
+    fun `the next log page continues from the graph state of the previous page`() {
+        val data = SampleRepos.busy()
+        data.rows = List(LOG_PAGE_SIZE + 50) { withHash(data.rows[it % data.rows.size], "h$it") }
+        val (git, _) = open(data)
+
+        git.log.reload()
+        await { git.log.rows.size == LOG_PAGE_SIZE && !git.log.loading }
+        git.log.loadMore()
+        await { git.log.rows.size == LOG_PAGE_SIZE + 50 && !git.log.loading }
+
+        assertThat(data.logContinuations).containsExactly(null, GraphState(emptyList(), LOG_PAGE_SIZE))
+    }
+
+    @Test
+    fun `a log page repeating an already shown commit does not duplicate its row`() {
+        val data = SampleRepos.busy()
+        val first = data.rows.first()
+        data.rows = List(LOG_PAGE_SIZE) { withHash(first, "h$it") } + withHash(first, "h0") + withHash(first, "tail")
+        val (git, _) = open(data)
+
+        git.log.reload()
+        await { git.log.rows.size == LOG_PAGE_SIZE && !git.log.loading }
+        git.log.loadMore()
+        await { git.log.rows.size == LOG_PAGE_SIZE + 1 && !git.log.loading }
+
+        assertThat(git.log.rows.map { it.commit().hash() }).doesNotHaveDuplicates()
+    }
+
+    private fun withHash(row: GitLog.Row, hash: String): GitLog.Row {
+        val commit = row.commit()
+        return GitLog.Row(
+            GitLog.Commit(hash, hash, commit.parents(), commit.authorName(), commit.authorEmail(), commit.authorDate(), commit.subject(), commit.body(), commit.refs()),
+            row.lane(), row.color(), row.laneCount(), row.links(),
+        )
     }
 
     @Test

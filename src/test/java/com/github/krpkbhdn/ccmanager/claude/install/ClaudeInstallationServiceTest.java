@@ -44,15 +44,14 @@ class ClaudeInstallationServiceTest {
     }
 
     @Test
-    void windowsCandidatesTryExeCmdBatInEachDirectory() {
+    void windowsCandidatesTryEveryExeBeforeAnyCmdShim() {
         var home = Path.of("C:\\Users\\u");
         var host = new FakeHostEnvironment(OperatingSystem.WINDOWS, home).withPath(Path.of("C:\\tools"));
 
         assertThat(new ClaudeBinaryLocator().candidates(host)).containsExactly(
-                Path.of("C:\\tools\\claude.exe"), Path.of("C:\\tools\\claude.cmd"), Path.of("C:\\tools\\claude.bat"),
-                home.resolve(".local").resolve("bin").resolve("claude.exe"),
-                home.resolve(".local").resolve("bin").resolve("claude.cmd"),
-                home.resolve(".local").resolve("bin").resolve("claude.bat"));
+                Path.of("C:\\tools\\claude.exe"), home.resolve(".local").resolve("bin").resolve("claude.exe"),
+                Path.of("C:\\tools\\claude.cmd"), home.resolve(".local").resolve("bin").resolve("claude.cmd"),
+                Path.of("C:\\tools\\claude.bat"), home.resolve(".local").resolve("bin").resolve("claude.bat"));
     }
 
     @Test

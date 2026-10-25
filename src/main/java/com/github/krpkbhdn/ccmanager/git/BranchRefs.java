@@ -22,16 +22,9 @@ final class BranchRefs {
 
     /** A name for a branch that is about to be created. */
     void requireValidNewName(Path repo, String name) {
-        requireNotOptionLike(name);
+        GitRevisions.requireNotOption(name);
         if (!git.tryRun(repo, "check-ref-format", "--branch", name).ok()) {
             throw new GitException(Kind.OTHER, "'" + name + "' is not a valid branch name", "");
-        }
-    }
-
-    /** Any ref, remote or commit-ish typed by the user must not be mistaken for a git option. */
-    void requireNotOptionLike(String name) {
-        if (name == null || name.isBlank() || name.startsWith("-")) {
-            throw new GitException(Kind.OTHER, "'" + name + "' is not a valid name", "");
         }
     }
 

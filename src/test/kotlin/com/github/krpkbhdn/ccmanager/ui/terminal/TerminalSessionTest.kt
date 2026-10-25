@@ -130,6 +130,17 @@ class TerminalSessionTest {
     }
 
     @Test
+    fun selectionIsClearedWhenScrollbackShrankEvenIfOutputGrewItAgain() {
+        play((1..40).joinToString("\r\n") { "row $it" })
+        session.select(CellSelection(Cell(0, 2), Cell(4, 2)))
+        val frameBefore = session.frame
+        connector.feed("$ESC[3J")
+        while (session.frame == frameBefore) Thread.sleep(10)
+        play((1..60).joinToString("\r\n") { "again $it" })
+        assertThat(session.selection).isNull()
+    }
+
+    @Test
     fun selectedTextJoinsWrappedLinesAndTrimsBlanks() {
         play("one   \r\ntwo")
         session.select(CellSelection(Cell(0, 0), Cell(5, 1)))

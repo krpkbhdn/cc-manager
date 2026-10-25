@@ -57,6 +57,7 @@ fun Sidebar(state: AppState, modifier: Modifier = Modifier, forceCollapsed: Bool
             SidebarHeader(collapsed, forceCollapsed, state)
             NavItem(Icons.Grid, "Overview", state.route == Route.Overview, collapsed, state.live.sessions.size) { state.navigate(Route.Overview) }
             NavItem(Icons.Users, "Teams", state.route == Route.Teams, collapsed, 0) { state.navigate(Route.Teams) }
+            ExtensionsGroup(state, collapsed)
             ProjectsSection(state, collapsed, Modifier.weight(1f))
         }
         VerticalRule()
@@ -120,14 +121,14 @@ private fun ProjectsSection(state: AppState, collapsed: Boolean, modifier: Modif
         if (!collapsed) {
             Row(Modifier.fillMaxWidth().padding(start = Spacing.sm, top = Spacing.lg, bottom = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
                 Label("Projects", Modifier.weight(1f), color = colors.textTertiary, style = Type.overline)
-                CountBadge(state.projects.size)
+                CountBadge(state.projects.all.size)
             }
         } else {
             HorizontalRule(Modifier.padding(vertical = Spacing.sm, horizontal = Spacing.sm))
         }
         Box(Modifier.weight(1f)) {
             LazyColumn(Modifier.animateContentSize(), list, verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
-                items(state.projects, key = { it.id }) { project ->
+                items(state.projects.all, key = { it.id }) { project ->
                     val sessions = state.live.of(project.id)
                     ProjectRow(
                         project = project,
@@ -138,9 +139,10 @@ private fun ProjectsSection(state: AppState, collapsed: Boolean, modifier: Modif
                         gitSummary = state.gitSummaryOf(project.id),
                         actions = ProjectActions(
                             onOpen = { state.navigate(Route.Project(project.id)) },
-                            onRename = { state.renaming = RenameRequest(project) },
-                            onRemove = { state.requestRemove(project) },
+                            onRename = { state.projects.renaming = RenameRequest(project) },
+                            onRemove = { state.projects.requestRemove(project) },
                             onOpenFolder = { state.openFolder(project) },
+                            onSettings = { state.openProjectSettings(project) },
                         ),
                         modifier = Modifier.animateItem(),
                     )
@@ -166,5 +168,25 @@ private fun AddProjectRow(collapsed: Boolean, onClick: () -> Unit, modifier: Mod
                 Shortcut(AppShortcut.ADD_PROJECT)
             }
         }
+    }
+}
+
+private class ExtensionNav(val icon: ImageVector, val label: String, val route: Route)
+
+private val extensionNavItems = listOf(
+    ExtensionNav(Icons.Plug, "Plugins", Route.Plugins),
+    ExtensionNav(Icons.Server, "MCP servers", Route.Mcp),
+    ExtensionNav(Icons.Book, "Skills", Route.Skills),
+)
+
+@Composable
+private fun ExtensionsGroup(state: AppState, collapsed: Boolean) {
+    if (collapsed) {
+        HorizontalRule(Modifier.padding(vertical = Spacing.sm, horizontal = Spacing.sm))
+    } else {
+        Label("Extensions", Modifier.padding(start = Spacing.sm, top = Spacing.lg, bottom = Spacing.xs), color = colors.textTertiary, style = Type.overline)
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
+        extensionNavItems.forEach { item -> NavItem(item.icon, item.label, state.route == item.route, collapsed, 0) { state.navigate(item.route) } }
     }
 }

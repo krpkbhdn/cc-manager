@@ -12,17 +12,24 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.UnaryOperator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /** Live sessions and their status, derived from hook events and process lifecycle. Thread-safe. */
 @Component
+@EnableConfigurationProperties(SessionProperties.class)
 public class SessionRegistry {
 
     private static final Logger log = LoggerFactory.getLogger(SessionRegistry.class);
 
     private final Map<String, SessionState> states = new ConcurrentHashMap<>();
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
+    private final SessionProperties properties;
+
+    public SessionRegistry(SessionProperties properties) {
+        this.properties = properties;
+    }
 
     /** Creates a live session in IDLE state and returns its ccm id. */
     public String register(long projectId) {
@@ -53,7 +60,7 @@ public class SessionRegistry {
 
     public List<SessionSnapshot> sessions() {
         return states.values().stream()
-                .map(SessionState::toSnapshot)
+                .map(this::snapshotOf)
                 .sorted(Comparator.comparing(SessionSnapshot::startedAt))
                 .toList();
     }
@@ -63,7 +70,7 @@ public class SessionRegistry {
     }
 
     public Optional<SessionSnapshot> find(String ccmSessionId) {
-        return Optional.ofNullable(states.get(ccmSessionId)).map(SessionState::toSnapshot);
+        return Optional.ofNullable(states.get(ccmSessionId)).map(this::snapshotOf);
     }
 
     /** Max urgency over the project's live sessions; OFFLINE when there are none. */
@@ -78,6 +85,10 @@ public class SessionRegistry {
     public Runnable subscribe(Runnable onChange) {
         listeners.add(onChange);
         return () -> listeners.remove(onChange);
+    }
+
+    private SessionSnapshot snapshotOf(SessionState state) {
+        return state.toSnapshot(Instant.now(), properties.subagentStaleAfter());
     }
 
     private void update(String ccmSessionId, UnaryOperator<SessionState> change) {

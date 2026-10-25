@@ -5,6 +5,7 @@ import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
 import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 
+import com.sun.nio.file.ExtendedWatchEventModifier;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;
@@ -22,8 +23,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -33,6 +34,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.StreamSupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,14 +45,12 @@ import org.springframework.stereotype.Component;
  * directory (HEAD, index, refs, merge/rebase state files) and the working tree, debounced.
  *
  * <p>One daemon thread serves every repository; a repository is watched while it has subscribers. Registering a
- * directory is costly on Windows, so a tree with more than {@value #MAX_TREE_DIRECTORIES} directories (build output and
+ * directory is costly on Windows, so a tree with more than {@code maxWatchedDirectories} directories (build output and
  * dependency folders are skipped) is watched at its root only, plus .git. Directories are not filtered by .gitignore.
  */
 @Component
 public class GitWatcher {
 
-    public static final Duration DEFAULT_DEBOUNCE = Duration.ofMillis(300);
-    static final int MAX_TREE_DIRECTORIES = 2000;
     private static final Set<String> IGNORED_TREE_NAMES = Set.of(".git", "node_modules", "build", "target", ".gradle", "dist",
             ".idea", "out", ".venv", "__pycache__", ".next");
     private static final Set<String> GIT_STATE_NAMES = Set.of("HEAD", "ORIG_HEAD", "index", "MERGE_HEAD", "CHERRY_PICK_HEAD",
@@ -62,6 +62,7 @@ public class GitWatcher {
 
     private record Registration(Watch watch, Zone zone) {}
 
+    private final boolean windows = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
     private final GitRunner git;
     private final Duration debounce;
     private final Object lock = new Object();
@@ -74,12 +75,8 @@ public class GitWatcher {
 
     @Autowired
     public GitWatcher(GitRunner git) {
-        this(git, DEFAULT_DEBOUNCE);
-    }
-
-    public GitWatcher(GitRunner git, Duration debounce) {
         this.git = git;
-        this.debounce = debounce;
+        this.debounce = git.properties().watchDebounce();
     }
 
     /** @return idempotent unsubscribe handle; the callback runs on an arbitrary thread, at most a few times per second */
@@ -111,23 +108,41 @@ public class GitWatcher {
     private Watch open(Path root) {
         startService();
         var watch = new Watch(root);
-        resolveGitDirectory(root).ifPresent(gitDir -> {
+        resolveGitDirectories(root).forEach(gitDir -> {
             register(watch, gitDir, Zone.GIT_ROOT);
             registerTree(watch, gitDir.resolve("refs"), Zone.GIT_REFS, Integer.MAX_VALUE);
         });
-        if (!registerTree(watch, root, Zone.TREE, MAX_TREE_DIRECTORIES)) {
+        if (windows && registerFileTree(watch, root)) {
+            return watch;
+        }
+        if (!registerTree(watch, root, Zone.TREE, git.properties().maxWatchedDirectories())) {
             watch.rootOnly = true;
             register(watch, root, Zone.TREE);
         }
         return watch;
     }
 
-    private Optional<Path> resolveGitDirectory(Path root) {
+    /** One recursive handle for the whole tree: a handle per directory would block renaming or moving folders on Windows. */
+    private boolean registerFileTree(Watch watch, Path root) {
         try {
-            var result = git.tryRun(root, "rev-parse", "--absolute-git-dir");
-            return result.ok() ? Optional.of(Path.of(result.stdout().strip())) : Optional.empty();
+            var key = root.register(service, new WatchEvent.Kind<?>[] {ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY}, ExtendedWatchEventModifier.FILE_TREE);
+            registrations.put(key, new Registration(watch, Zone.TREE));
+            watch.keys.add(key);
+            watch.fileTree = true;
+            return true;
+        } catch (IOException | UnsupportedOperationException e) {
+            log.debug("recursive watch of {} unavailable: {}", root, e.getMessage());
+            return false;
+        }
+    }
+
+    /** The repository's git directory and, in a linked worktree, the common one that holds branch and remote refs. */
+    private List<Path> resolveGitDirectories(Path root) {
+        try {
+            var result = git.tryRun(root, "rev-parse", "--absolute-git-dir", "--git-common-dir");
+            return result.ok() ? result.stdout().lines().map(String::strip).map(root::resolve).map(Path::normalize).distinct().toList() : List.of();
         } catch (GitException e) {
-            return Optional.empty();
+            return List.of();
         }
     }
 
@@ -215,7 +230,7 @@ public class GitWatcher {
         return switch (zone) {
             case GIT_ROOT -> GIT_STATE_NAMES.contains(text);
             case GIT_REFS -> true;
-            case TREE -> !IGNORED_TREE_NAMES.contains(text);
+            case TREE -> StreamSupport.stream(name.spliterator(), false).noneMatch(segment -> IGNORED_TREE_NAMES.contains(segment.toString()));
         };
     }
 
@@ -224,8 +239,8 @@ public class GitWatcher {
             return;
         }
         synchronized (lock) {
-            if (service != null && !registration.watch().rootOnly && registration.watch().isActive()) {
-                var limit = registration.zone() == Zone.TREE ? MAX_TREE_DIRECTORIES - registration.watch().treeKeyCount() : Integer.MAX_VALUE;
+            if (service != null && !registration.watch().rootOnly && !(registration.watch().fileTree && registration.zone() == Zone.TREE) && registration.watch().isActive()) {
+                var limit = registration.zone() == Zone.TREE ? git.properties().maxWatchedDirectories() - registration.watch().treeKeyCount() : Integer.MAX_VALUE;
                 registerTree(registration.watch(), path, registration.zone(), limit);
             }
         }
@@ -278,6 +293,7 @@ public class GitWatcher {
         final List<WatchKey> keys = new CopyOnWriteArrayList<>();
         private final AtomicBoolean pending = new AtomicBoolean();
         volatile boolean rootOnly;
+        volatile boolean fileTree;
 
         Watch(Path root) {
             this.root = root;

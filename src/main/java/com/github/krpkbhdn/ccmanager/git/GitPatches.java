@@ -20,7 +20,7 @@ public final class GitPatches {
 
     private static final Pattern HUNK_HEADER = Pattern.compile("^@@ -(\\d+)(?:,(\\d+))? \\+(\\d+)(?:,(\\d+))? @@(.*)$");
     private static final String NULL_DEVICE = "/dev/null";
-    private static final String NEW_FILE_MODE = "100644";
+    private static final String DEFAULT_FILE_MODE = "100644";
 
     private GitPatches() {}
 
@@ -93,11 +93,18 @@ public final class GitPatches {
         var deleted = wholeFile && diff.change() == ChangeType.DELETED;
         var header = new StringBuilder("diff --git a/").append(path).append(" b/").append(path).append('\n');
         if (added) {
-            header.append("new file mode ").append(NEW_FILE_MODE).append('\n');
+            header.append("new file mode ").append(fileMode(diff)).append('\n');
+        }
+        if (deleted) {
+            header.append("deleted file mode ").append(fileMode(diff)).append('\n');
         }
         header.append("--- ").append(added ? NULL_DEVICE : "a/" + path + pathSuffix(path)).append('\n');
         header.append("+++ ").append(deleted ? NULL_DEVICE : "b/" + path + pathSuffix(path)).append('\n');
         return header.toString();
+    }
+
+    private static String fileMode(FileDiff diff) {
+        return diff.fileMode() == null ? DEFAULT_FILE_MODE : diff.fileMode();
     }
 
     private static String pathSuffix(String path) {

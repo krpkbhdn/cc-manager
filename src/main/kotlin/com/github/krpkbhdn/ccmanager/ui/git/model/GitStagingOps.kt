@@ -12,13 +12,6 @@ fun GitState.stage(paths: List<String>) = act("Staging") { index.stage(repo, pat
 
 fun GitState.unstage(paths: List<String>) = act("Unstaging") { index.unstage(repo, paths) }
 
-fun GitState.stageAll() = act("Staging all") { index.stageAll(repo) }
-
-fun GitState.unstageAll() {
-    val staged = changeSections(status?.changes().orEmpty()).staged.map { it.path() }
-    if (staged.isNotEmpty()) unstage(staged)
-}
-
 fun GitState.requestDiscard(paths: List<String>) {
     val noun = if (paths.size == 1) paths.single() else "${paths.size} files"
     dialog = GitDialog.Confirm(
@@ -28,7 +21,8 @@ fun GitState.requestDiscard(paths: List<String>) {
 
 fun GitState.discard(paths: List<String>) = act("Discarding") { index.discard(repo, paths) }
 
-fun GitState.applyPatch(patch: String, reverse: Boolean) = act("Updating the index") { index.applyToIndex(repo, patch, reverse) }
+/** [patch] is built inside the job, so a refusal (binary file, bad selection) becomes a toast. */
+fun GitState.applyPatch(reverse: Boolean, patch: () -> String) = act("Updating the index") { index.applyToIndex(repo, patch(), reverse) }
 
 fun GitState.resolveConflict(path: String, side: ConflictSide) = act("Resolving") { conflicts.resolve(repo, path, side) }
 

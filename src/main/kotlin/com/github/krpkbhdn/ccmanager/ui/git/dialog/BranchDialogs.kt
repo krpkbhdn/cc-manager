@@ -40,9 +40,9 @@ fun NewBranchDialog(git: GitState, dialog: GitDialog.NewBranch, onDismiss: () ->
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
     val problem = name.text.toString().takeIf { it.isNotEmpty() }?.let { branchNameProblem(it, git.branches.filter { b -> !b.remote() }.map { b -> b.name() }) }
-    val valid = name.text.isNotBlank() && problem == null && start.text.isNotBlank()
+    val valid = name.text.isNotBlank() && problem == null && start.text.isNotBlank() && !git.busy
     val submit = { if (valid) { onDismiss(); git.createBranch(name.text.toString(), start.text.toString(), checkout) } }
-    ModalHost(onDismiss, takeFocus = false) {
+    ModalHost(onDismiss, takeFocus = false, hasInput = { name.text.isNotEmpty() }) {
         DialogBody("New branch", Icons.Branch, colors.accent) {
             LabeledField("Name", problem) { AppTextField(name, Modifier.fillMaxWidth(), placeholder = "feature/my-change", focusRequester = focus, mono = true, onSubmit = submit) }
             LabeledField("Start point") { AppTextField(start, Modifier.fillMaxWidth(), placeholder = "branch, tag or commit", mono = true, onSubmit = submit) }
@@ -59,9 +59,9 @@ fun RenameBranchDialog(git: GitState, dialog: GitDialog.RenameBranch, onDismiss:
     LaunchedEffect(Unit) { focus.requestFocus(); name.edit { selectAll() } }
     val others = git.branches.filter { !it.remote() && it.name() != dialog.name }.map { it.name() }
     val problem = name.text.toString().takeIf { it != dialog.name }?.let { branchNameProblem(it, others) }
-    val valid = name.text.isNotBlank() && name.text.toString() != dialog.name && problem == null
+    val valid = name.text.isNotBlank() && name.text.toString() != dialog.name && problem == null && !git.busy
     val submit = { if (valid) { onDismiss(); git.renameBranch(dialog.name, name.text.toString()) } }
-    ModalHost(onDismiss, takeFocus = false) {
+    ModalHost(onDismiss, takeFocus = false, hasInput = { name.text.toString() != dialog.name }) {
         DialogBody("Rename branch", Icons.Edit, colors.accent) {
             LabeledField("New name for ${dialog.name}", problem) { AppTextField(name, Modifier.fillMaxWidth(), focusRequester = focus, mono = true, onSubmit = submit) }
             DialogActions("Rename", valid, false, submit, onDismiss)

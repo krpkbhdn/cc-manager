@@ -2,13 +2,13 @@ package com.github.krpkbhdn.ccmanager.git;
 
 import com.github.krpkbhdn.ccmanager.git.GitException.Kind;
 import com.github.krpkbhdn.ccmanager.git.GitMisc.CommitRequest;
+import com.github.krpkbhdn.ccmanager.workspace.TreeDeleter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -22,6 +22,8 @@ public class GitIndexService {
 
     static final int MAX_PATHS_ON_COMMAND_LINE = 100;
 
+    private static final String GIT_DIRECTORY = ".git";
+    private static final char REPLACEMENT_CHARACTER = '�';
     private static final String LITERAL_PATHSPECS = "--literal-pathspecs";
     private static final List<String> PATHS_FROM_STDIN = List.of("--pathspec-from-file=-", "--pathspec-file-nul");
     private static final List<String> COMMIT_HOOKS = List.of("hooks/pre-commit", "hooks/commit-msg");
@@ -56,6 +58,9 @@ public class GitIndexService {
 
     /** Applies a unified patch to the index only (hunk/line staging); {@code reverse} unstages it. */
     public void applyToIndex(Path repo, String patch, boolean reverse) {
+        if (patch.indexOf(REPLACEMENT_CHARACTER) >= 0) {
+            throw new GitException(Kind.OTHER, "This file is not valid UTF-8, so its hunks cannot be staged; stage the whole file instead", "");
+        }
         var args = new ArrayList<>(List.of("apply", "--cached"));
         if (reverse) {
             args.add("--reverse");
@@ -146,10 +151,11 @@ public class GitIndexService {
         if (!Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
             return;
         }
-        try (var walk = Files.walk(target)) {
-            for (var path : walk.sorted(Comparator.reverseOrder()).toList()) {
-                Files.deleteIfExists(path);
-            }
+        if (Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS) && Files.exists(target.resolve(GIT_DIRECTORY), LinkOption.NOFOLLOW_LINKS)) {
+            throw new GitException(Kind.OTHER, "'" + target.getFileName() + "' is a nested repository; delete it by hand", "");
+        }
+        try {
+            TreeDeleter.delete(target);
         } catch (IOException e) {
             throw new GitException(Kind.OTHER, "Cannot delete " + target + ": " + e.getMessage(), "");
         }

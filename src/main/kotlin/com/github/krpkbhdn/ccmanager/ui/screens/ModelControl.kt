@@ -63,11 +63,11 @@ private const val CLAUDE_PICKER = "Open Claude's model picker (Alt+P)"
 /** Tab strip control: the selected session's live model and effort, changed by typing /model and /effort into it; on other tabs it sets the default of the next session. */
 @Composable
 internal fun ModelControl(state: AppState, project: Project, session: SessionSnapshot?) {
-    val target = modelTarget(session, state.modelApplying)
+    val target = modelTarget(session, state.sessions.modelApplying, session != null && state.sessions.isAttached(session.ccmSessionId))
     val blocked = (target as? ModelTarget.Running)?.blockedReason
     val usage = session?.let { state.sessionUsage[it.ccmSessionId] }
     val label = when {
-        state.modelApplying -> APPLYING
+        state.sessions.modelApplying -> APPLYING
         target is ModelTarget.Running -> effectiveModelLabel(usage?.modelName(), usage?.effort()) ?: NO_MODEL_YET
         else -> selectionLabel(project.modelSelection())
     }
@@ -75,7 +75,7 @@ internal fun ModelControl(state: AppState, project: Project, session: SessionSna
     Box {
         AppButton(
             label, { state.modelPickerOpen = !state.modelPickerOpen }, variant = ButtonVariant.SECONDARY, icon = Icons.Cpu,
-            enabled = blocked == null, loading = state.modelApplying, compact = true, tooltip = tooltip,
+            enabled = blocked == null, loading = state.sessions.modelApplying, compact = true, tooltip = tooltip,
         )
         if (state.modelPickerOpen && blocked == null) {
             when (target) {
@@ -91,7 +91,7 @@ private fun RunningSwitcher(state: AppState, session: SessionSnapshot, usage: Se
     val reportedModel = modelPresets.firstOrNull { modelReported(usage?.modelName(), it.value) }?.value
     fun apply(command: String, reached: (SessionUsage?) -> Boolean) {
         state.modelPickerOpen = false
-        state.applyToSession(session, command, reached)
+        state.sessions.applyToSession(session, command, reached)
     }
     ModelOptions(
         selection = ModelSelection(reportedModel, knownEffort(usage?.effort())),
@@ -103,7 +103,7 @@ private fun RunningSwitcher(state: AppState, session: SessionSnapshot, usage: Se
         onDismiss = { state.modelPickerOpen = false },
     ) {
         AppButton(
-            CLAUDE_PICKER, { state.modelPickerOpen = false; state.openClaudeModelPicker(session) }, Modifier.fillMaxWidth(),
+            CLAUDE_PICKER, { state.modelPickerOpen = false; state.sessions.openClaudeModelPicker(session) }, Modifier.fillMaxWidth(),
             variant = ButtonVariant.SECONDARY, icon = Icons.Cpu,
         )
     }
@@ -117,8 +117,8 @@ private fun NextLaunchDefault(state: AppState, project: Project) {
         note = NEXT_LAUNCH_NOTE,
         title = null,
         markDefault = true,
-        onModel = { state.selectModel(project, ModelSelection(it, current.effort())) },
-        onEffort = { state.selectModel(project, ModelSelection(current.model(), it)) },
+        onModel = { state.projects.selectModel(project, ModelSelection(it, current.effort())) },
+        onEffort = { state.projects.selectModel(project, ModelSelection(current.model(), it)) },
         onDismiss = { state.modelPickerOpen = false },
     ) {}
 }

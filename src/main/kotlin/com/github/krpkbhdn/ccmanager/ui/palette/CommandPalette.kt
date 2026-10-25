@@ -21,7 +21,6 @@ import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -78,9 +77,12 @@ fun CommandPalette(items: List<PaletteItem>, onDismiss: () -> Unit) {
     val query: TextFieldState = rememberTextFieldState()
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
-    val matches = remember(items, query.text.toString()) { fuzzyFilter(query.text.toString(), items) { "${it.title} ${it.subtitle}" } }
+    val matches = remember(items, query.text.toString()) {
+        fuzzyFilter(query.text.toString(), items) { "${it.title} ${it.subtitle}" }.sortedBy { it.group }
+    }
     val rows = remember(matches) { rowsOf(matches) }
-    var selected by remember(matches) { mutableIntStateOf(0) }
+    var selectedId by remember(query.text.toString()) { mutableStateOf<String?>(null) }
+    val selected = matches.indexOfFirst { it.id == selectedId }.coerceAtLeast(0)
     val list = rememberLazyListState()
     var mouseActive by remember { mutableStateOf(false) }
     val run = { matches.getOrNull(selected)?.let { onDismiss(); it.run() }; Unit }
@@ -100,8 +102,8 @@ fun CommandPalette(items: List<PaletteItem>, onDismiss: () -> Unit) {
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (event.key) {
                     Key.Escape -> { onDismiss(); true }
-                    Key.DirectionDown -> { if (matches.isNotEmpty()) selected = (selected + 1) % matches.size; true }
-                    Key.DirectionUp -> { if (matches.isNotEmpty()) selected = (selected - 1 + matches.size) % matches.size; true }
+                    Key.DirectionDown -> { if (matches.isNotEmpty()) selectedId = matches[(selected + 1) % matches.size].id; true }
+                    Key.DirectionUp -> { if (matches.isNotEmpty()) selectedId = matches[(selected - 1 + matches.size) % matches.size].id; true }
                     Key.Enter, Key.NumPadEnter -> { run(); true }
                     else -> false
                 }
@@ -117,7 +119,7 @@ fun CommandPalette(items: List<PaletteItem>, onDismiss: () -> Unit) {
                 AppTextField(query, Modifier.fillMaxWidth(), placeholder = "Jump to a project, session or action", icon = Icons.Search, focusRequester = focus, onSubmit = { run() })
             }
             HorizontalRule()
-            if (rows.isEmpty()) NoMatches() else Results(rows, matches.getOrNull(selected), list, { if (mouseActive) selected = matches.indexOf(it) }, { onDismiss(); it.run() })
+            if (rows.isEmpty()) NoMatches() else Results(rows, matches.getOrNull(selected), list, { if (mouseActive) selectedId = it.id }, { onDismiss(); it.run() })
             HorizontalRule()
             PaletteFooter()
         }

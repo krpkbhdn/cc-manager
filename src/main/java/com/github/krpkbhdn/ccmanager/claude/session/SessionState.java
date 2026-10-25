@@ -1,10 +1,12 @@
 package com.github.krpkbhdn.ccmanager.claude.session;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 
 /**
@@ -27,7 +29,8 @@ record SessionState(
         boolean turnOpen,
         boolean compacting,
         boolean needsAction,
-        String blockingToolUseId) {
+        String blockingToolUseId,
+        Set<String> backgroundAgentIds) {
 
     private static final int MAX_SUBAGENTS = 50;
 
@@ -46,6 +49,7 @@ record SessionState(
         boolean compacting;
         boolean needsAction;
         String blockingToolUseId;
+        Set<String> backgroundAgentIds;
 
         private Draft(SessionState s) {
             claudeSessionId = s.claudeSessionId;
@@ -61,6 +65,7 @@ record SessionState(
             compacting = s.compacting;
             needsAction = s.needsAction;
             blockingToolUseId = s.blockingToolUseId;
+            backgroundAgentIds = s.backgroundAgentIds;
         }
 
         /** Keeps the current value when the new one is empty. */
@@ -81,15 +86,39 @@ record SessionState(
             blockingToolUseId = "";
         }
 
-        void stopAllSubagents() {
-            var stopped = new LinkedHashMap<String, SubagentSnapshot>();
-            subagents.forEach((id, agent) -> stopped.put(id, agent.stopped()));
-            subagents = stopped;
+        /** The launch call named this agent as a background one; its SubagentStart may come before or after that. */
+        void markBackground(String agentId) {
+            var agent = subagents.get(agentId);
+            if (agent == null) {
+                var ids = new java.util.HashSet<>(backgroundAgentIds);
+                ids.add(agentId);
+                backgroundAgentIds = ids;
+                return;
+            }
+            var copy = new LinkedHashMap<>(subagents);
+            copy.put(agentId, agent.inBackground());
+            subagents = copy;
+        }
+
+        boolean takeBackground(String agentId) {
+            var ids = new java.util.HashSet<>(backgroundAgentIds);
+            var known = ids.remove(agentId);
+            backgroundAgentIds = ids;
+            return known;
+        }
+
+        /** Background agents keep running when the turn that launched them ends. */
+        void endForeground(SubagentState finalState, Instant at) {
+            var ended = new LinkedHashMap<String, SubagentSnapshot>();
+            subagents.forEach((id, agent) -> ended.put(id, agent.running() && !agent.background()
+                    ? agent.finished(finalState, agent.lastMessage(), agent.transcriptPath(), at)
+                    : agent));
+            subagents = ended;
         }
     }
 
     static SessionState initial(String ccmSessionId, long projectId, Instant now) {
-        return new SessionState(ccmSessionId, projectId, "", "", "", "", "", now, now, Map.of(), 0, "", false, false, false, "");
+        return new SessionState(ccmSessionId, projectId, "", "", "", "", "", now, now, Map.of(), 0, "", false, false, false, "", Set.of());
     }
 
     SessionState edit(Consumer<Draft> change) {
@@ -97,35 +126,53 @@ record SessionState(
         change.accept(draft);
         return new SessionState(ccmSessionId, projectId, draft.claudeSessionId, draft.activity, draft.permissionMode, draft.model,
                 draft.title, startedAt, draft.lastEventAt, bounded(draft.subagents), draft.backgroundTasks, draft.error,
-                draft.turnOpen, draft.compacting, draft.needsAction, draft.blockingToolUseId);
+                draft.turnOpen, draft.compacting, draft.needsAction, draft.blockingToolUseId, boundedIds(draft.backgroundAgentIds));
     }
 
+    /** Status with no staleness cutoff. */
     AgentStatus status() {
-        if (needsAction) {
+        return status(Instant.EPOCH, Duration.ZERO);
+    }
+
+    /** Agents silent for [staleAfter] (zero or less: never) neither keep the session working nor ask for the user. */
+    AgentStatus status(Instant now, Duration staleAfter) {
+        var agents = subagents.values().stream().map(agent -> agent.withStale(now, staleAfter)).filter(agent -> agent.running() && !agent.stale()).toList();
+        if (needsAction || agents.stream().anyMatch(agent -> agent.state() == SubagentState.NEEDS_ACTION)) {
             return AgentStatus.NEEDS_ACTION;
         }
-        return turnOpen || compacting || runningSubagents() ? AgentStatus.WORKING : AgentStatus.IDLE;
+        return turnOpen || compacting || !agents.isEmpty() ? AgentStatus.WORKING : AgentStatus.IDLE;
     }
 
     SessionSnapshot toSnapshot() {
-        return new SessionSnapshot(ccmSessionId, projectId, nullIfEmpty(claudeSessionId), status(), nullIfEmpty(activity),
+        return toSnapshot(Instant.EPOCH, Duration.ZERO);
+    }
+
+    SessionSnapshot toSnapshot(Instant now, Duration staleAfter) {
+        var agents = subagents.values().stream().map(agent -> agent.withStale(now, staleAfter)).toList();
+        return new SessionSnapshot(ccmSessionId, projectId, nullIfEmpty(claudeSessionId), status(now, staleAfter), nullIfEmpty(activity),
                 nullIfEmpty(permissionMode), nullIfEmpty(model), nullIfEmpty(title), startedAt, lastEventAt,
-                List.copyOf(subagents.values()), backgroundTasks, nullIfEmpty(error));
+                agents, backgroundTasks, nullIfEmpty(error));
     }
 
-    private boolean runningSubagents() {
-        return subagents.values().stream().anyMatch(SubagentSnapshot::running);
+    private static Set<String> boundedIds(Set<String> ids) {
+        return ids.size() <= MAX_SUBAGENTS ? Set.copyOf(ids) : Set.of();
     }
 
+    /** Over the cap the oldest finished agents go first, then the oldest running ones. */
     private static Map<String, SubagentSnapshot> bounded(Map<String, SubagentSnapshot> value) {
         var copy = new LinkedHashMap<>(value);
-        var iterator = copy.values().iterator();
-        while (copy.size() > MAX_SUBAGENTS && iterator.hasNext()) {
-            if (!iterator.next().running()) {
+        evictOldest(copy, false);
+        evictOldest(copy, true);
+        return Collections.unmodifiableMap(copy);
+    }
+
+    private static void evictOldest(Map<String, SubagentSnapshot> agents, boolean running) {
+        var iterator = agents.values().iterator();
+        while (agents.size() > MAX_SUBAGENTS && iterator.hasNext()) {
+            if (iterator.next().running() == running) {
                 iterator.remove();
             }
         }
-        return Collections.unmodifiableMap(copy);
     }
 
     private static String nullIfEmpty(String value) {

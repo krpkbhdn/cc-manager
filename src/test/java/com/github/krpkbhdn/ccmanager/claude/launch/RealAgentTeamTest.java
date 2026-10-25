@@ -65,7 +65,8 @@ class RealAgentTeamTest {
                 System.out.println("LEAD_USAGE=" + usage);
                 assertThat(usage.get().modelName()).containsIgnoringCase("opus");
                 assertThat(usage.get().effort()).isEqualTo("high");
-                var subagentEffort = jdbc.sql("SELECT event || ':' || substr(payload, instr(payload, '\"effort\"'), 24) FROM hook_event WHERE ccm_session_id = ? AND agent_id IS NOT NULL AND agent_id <> '' AND payload LIKE '%\"effort\"%'").param(id).query(String.class).list();
+                // SubagentStop reports the lead's effort, only the subagent's own tool events carry its effort
+                var subagentEffort = jdbc.sql("SELECT event || ':' || substr(payload, instr(payload, '\"effort\"'), 24) FROM hook_event WHERE ccm_session_id = ? AND agent_id IS NOT NULL AND agent_id <> '' AND event <> 'SubagentStop' AND payload LIKE '%\"effort\"%'").param(id).query(String.class).list();
                 System.out.println("SUBAGENT_EFFORT=" + subagentEffort);
                 assertThat(subagentEffort).isNotEmpty().allMatch(entry -> entry.contains("low"));
                 System.out.println("SUBAGENTS=" + subagents(registry, id));

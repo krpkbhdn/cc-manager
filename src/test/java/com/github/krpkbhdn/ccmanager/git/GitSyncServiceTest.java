@@ -140,7 +140,7 @@ class GitSyncServiceTest {
     }
 
     @Test
-    void rejectedPushIsNonFastForwardAndForceWithLeaseOverridesAfterFetch() {
+    void forceWithLeaseIsRefusedUntilTheFetchedRemoteCommitIsPartOfTheLocalHistory() {
         prepare();
         commitLocally("l.txt", "l\n");
         pushFromOther("r.txt", "r\n");
@@ -148,9 +148,12 @@ class GitSyncServiceTest {
         assertThat(failureOf(() -> service.push(sandbox.repo, PLAIN, null)).kind()).isEqualTo(Kind.NON_FAST_FORWARD);
         var staleLease = failureOf(() -> service.push(sandbox.repo, new PushOptions(true, false, false), null));
         service.fetch(sandbox.repo, null);
+        var fetchedButNotIncluded = failureOf(() -> service.push(sandbox.repo, new PushOptions(true, false, false), null));
+        sandbox.git("merge", "--no-edit", "origin/main");
         service.push(sandbox.repo, new PushOptions(true, false, false), null);
 
         assertThat(staleLease.kind()).isEqualTo(Kind.NON_FAST_FORWARD);
+        assertThat(fetchedButNotIncluded).isNotNull();
         assertThat(originMain()).isEqualTo(sandbox.git("rev-parse", "HEAD").strip());
     }
 

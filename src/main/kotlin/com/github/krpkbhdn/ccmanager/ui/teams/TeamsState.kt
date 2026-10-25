@@ -8,9 +8,12 @@ import com.github.krpkbhdn.ccmanager.team.Team
 import com.github.krpkbhdn.ccmanager.team.TeamRole
 import com.github.krpkbhdn.ccmanager.team.TeamService
 import com.github.krpkbhdn.ccmanager.ui.state.ConfirmRequest
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 private const val NEW_TEAM_NAME = "New team"
@@ -43,6 +46,7 @@ class TeamsState(
 
     private var selectedId by mutableStateOf<Long?>(null)
     private var unsubscribe: Runnable? = null
+    private val rosterWrites = Mutex()
 
     val selected: Team? get() = teams.firstOrNull { it.id == selectedId } ?: teams.firstOrNull()
 
@@ -63,7 +67,7 @@ class TeamsState(
 
     fun newTeam() = run { selectedId = withContext(Dispatchers.IO) { service.create(NEW_TEAM_NAME, listOf(starterLead)) }.id }
 
-    fun renameTeam(team: Team, name: String) = run { withContext(Dispatchers.IO) { service.update(team.id, name, team.drafts()) } }
+    fun renameTeam(team: Team, name: String) = run { updateFresh(team, name) { it } }
 
     fun duplicateTeam(team: Team) = run { selectedId = withContext(Dispatchers.IO) { service.duplicate(team.id) }.id }
 
@@ -79,7 +83,7 @@ class TeamsState(
 
     fun newRole(team: Team) {
         val form = RoleForm(null, lead = false)
-        form.name.edit { replace(0, length, uniqueName(NEW_ROLE_NAME, team)) }
+        form.name.edit { replace(0, length, uniqueName(NEW_ROLE_NAME, team.drafts())) }
         dialog = RoleDialogState(team.id, null, form)
     }
 
@@ -88,7 +92,7 @@ class TeamsState(
     }
 
     fun duplicateRole(team: Team, role: TeamRole) =
-        change(team) { it + role.draft.withName(uniqueName(role.name() + COPY_SUFFIX, team)).withLead(false) }
+        change(team) { drafts -> drafts + role.draft.withName(uniqueName(role.name() + COPY_SUFFIX, drafts)).withLead(false) }
 
     fun requestDeleteRole(team: Team, role: TeamRole) {
         if (role.lead()) return report("Make another agent the lead before removing \"${role.name()}\".")
@@ -109,9 +113,11 @@ class TeamsState(
         scope.launch {
             try {
                 val saved = state.form.draft()
-                withContext(Dispatchers.IO) { service.update(team.id, team.name, withRole(team.drafts(), state.index, saved)) }
+                updateFresh(team) { withRole(it, state.index, saved) }
                 dialog = null
-            } catch (e: IllegalArgumentException) {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: RuntimeException) {
                 onError(e.message ?: "Could not save the agent")
             }
         }
@@ -133,27 +139,43 @@ class TeamsState(
         return if (saved.lead) replaced.map { if (it === saved) it else it.withLead(false) } else replaced
     }
 
-    private fun change(team: Team, transform: (List<RoleDraft>) -> List<RoleDraft>) =
-        run { withContext(Dispatchers.IO) { service.update(team.id, team.name, transform(team.drafts())) } }
+    private fun change(team: Team, transform: (List<RoleDraft>) -> List<RoleDraft>) = run { updateFresh(team, transform = transform) }
+
+    /** Writes one at a time against the stored roster, so a quick second edit builds on the first instead of the stale list. */
+    private suspend fun updateFresh(team: Team, name: String? = null, transform: (List<RoleDraft>) -> List<RoleDraft>) =
+        rosterWrites.withLock {
+            withContext(Dispatchers.IO) {
+                val stored = service.find(team.id).orElseThrow { IllegalArgumentException("The team \"${team.name}\" no longer exists.") }
+                service.update(team.id, name ?: stored.name, transform(stored.drafts()))
+            }
+        }
 
     private fun Team.drafts(): List<RoleDraft> = roles.map { it.draft }
 
-    private fun uniqueName(base: String, team: Team): String {
-        val taken = team.roles.map { it.name() }.toSet()
+    private fun uniqueName(base: String, existing: List<RoleDraft>): String {
+        val taken = existing.map { it.name() }.toSet()
         return generateSequence(1) { it + 1 }.map { if (it == 1) base else "$base-$it" }.map { it.take(RoleDraft.MAX_NAME) }.first { it !in taken }
     }
 
     private suspend fun reload() {
-        val (loaded, defaults) = withContext(Dispatchers.IO) { service.list() to service.projectDefaults() }
-        teams = loaded
-        projectDefaults = defaults
+        try {
+            val (loaded, defaults) = withContext(Dispatchers.IO) { service.list() to service.projectDefaults() }
+            teams = loaded
+            projectDefaults = defaults
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: RuntimeException) {
+            report(e.message ?: "Could not load the teams")
+        }
     }
 
     private fun run(block: suspend () -> Unit) {
         scope.launch {
             try {
                 block()
-            } catch (e: IllegalArgumentException) {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: RuntimeException) {
                 report(e.message ?: "Could not change the team")
             }
         }

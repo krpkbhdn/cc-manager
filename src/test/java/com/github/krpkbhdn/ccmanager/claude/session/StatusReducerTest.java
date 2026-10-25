@@ -3,6 +3,7 @@ package com.github.krpkbhdn.ccmanager.claude.session;
 import static com.github.krpkbhdn.ccmanager.claude.HookEvents.CCM_ID;
 import static com.github.krpkbhdn.ccmanager.claude.HookEvents.of;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.github.krpkbhdn.ccmanager.claude.hook.HookEvent;
 import java.time.Instant;
@@ -120,7 +121,204 @@ class StatusReducerTest {
         assertThat(stopped.subagents()).singleElement().satisfies(agent -> assertThat(agent.running()).isFalse());
         assertThat(apply("Stop", "{}").status()).isEqualTo(AgentStatus.IDLE);
     }
+    private static final String ASYNC = "{\"tool_name\":\"Agent\",\"tool_input\":{\"run_in_background\":true},"
+            + "\"tool_response\":\"Async agent launched successfully.\\nagentId: %s (internal ID)\"}";
+    private static final String FOREGROUND = "{\"tool_name\":\"Agent\",\"tool_input\":{},\"tool_response\":\"Done.\\nagentId: %s\"}";
 
+    private void start(String id) {
+        apply("SubagentStart", "{\"agent_id\":\"" + id + "\",\"agent_type\":\"developer\"}");
+    }
+
+    private SubagentSnapshot agent(String id) {
+        return state.toSnapshot().subagents().stream().filter(a -> a.agentId().equals(id)).findFirst().orElseThrow();
+    }
+
+    @Test
+    void backgroundSubagentSurvivesParentStopAndEndsWithItsOwnSubagentStop() {
+        apply("UserPromptSubmit", "{}");
+        start("a1");
+        apply("PostToolUse", ASYNC.formatted("a1"));
+
+        var parentDone = apply("Stop", "{}");
+
+        assertThat(parentDone.status()).isEqualTo(AgentStatus.WORKING);
+        assertThat(agent("a1").background()).isTrue();
+
+        var finished = apply("SubagentStop", "{\"agent_id\":\"a1\",\"agent_type\":\"developer\",\"last_assistant_message\":\"Done it\","
+                + "\"agent_transcript_path\":\"/t/a1.jsonl\"}");
+
+        assertThat(finished.status()).isEqualTo(AgentStatus.WORKING);
+        assertThat(apply("Stop", "{}").status()).isEqualTo(AgentStatus.IDLE);
+        assertThat(agent("a1").state()).isEqualTo(SubagentState.DONE);
+        assertThat(agent("a1").lastMessage()).isEqualTo("Done it");
+        assertThat(agent("a1").transcriptPath()).isEqualTo("/t/a1.jsonl");
+        assertThat(agent("a1").endedAt()).isNotNull();
+    }
+
+    @Test
+    void parallelLaunchesAreCorrelatedByAgentIdInAnyEventOrder() {
+        apply("UserPromptSubmit", "{}");
+        start("fg");
+        apply("PostToolUse", ASYNC.formatted("b2"));
+        start("b1");
+        start("b2");
+        apply("PostToolUse", ASYNC.formatted("b1"));
+        apply("PostToolUse", FOREGROUND.formatted("fg"));
+
+        apply("Stop", "{}");
+
+        assertThat(agent("fg").background()).isFalse();
+        assertThat(agent("fg").state()).isEqualTo(SubagentState.DONE);
+        assertThat(agent("b1").background()).isTrue();
+        assertThat(agent("b2").background()).isTrue();
+        assertThat(state.toSnapshot().status()).isEqualTo(AgentStatus.WORKING);
+    }
+
+    @Test
+    void deniedAgentCallLeavesNoBackgroundMarkBehind() {
+        apply("UserPromptSubmit", "{}");
+        apply("PostToolUseFailure", "{\"tool_name\":\"Agent\",\"tool_input\":{\"run_in_background\":true}}");
+
+        start("fg");
+        apply("Stop", "{}");
+
+        assertThat(agent("fg").background()).isFalse();
+        assertThat(agent("fg").state()).isEqualTo(SubagentState.DONE);
+    }
+
+    @Test
+    void sessionStartForgetsPendingBackgroundMarksAndAgents() {
+        apply("UserPromptSubmit", "{}");
+        apply("PostToolUse", ASYNC.formatted("b1"));
+        apply("SessionStart", "{\"source\":\"clear\"}");
+
+        start("b1");
+
+        assertThat(agent("b1").background()).isFalse();
+    }
+
+    @Test
+    void foregroundSubagentLeftRunningIsClosedByInterruptButBackgroundOneIsKept() {
+        apply("UserPromptSubmit", "{}");
+        start("fg");
+        start("bg");
+        apply("PostToolUse", ASYNC.formatted("bg"));
+
+        state = StatusReducer.interrupted(state);
+
+        assertThat(state.toSnapshot().subagents()).extracting(SubagentSnapshot::agentId, SubagentSnapshot::state)
+                .containsExactly(tuple("fg", SubagentState.INTERRUPTED), tuple("bg", SubagentState.WORKING));
+    }
+
+    @Test
+    void lateEventOfFinishedAgentChangesNeitherItNorTheSession() {
+        apply("UserPromptSubmit", "{}");
+        start("a1");
+        apply("SubagentStop", "{\"agent_id\":\"a1\",\"agent_type\":\"developer\"}");
+        apply("Stop", "{}");
+
+        var late = apply("PermissionRequest", "{\"agent_id\":\"a1\",\"tool_name\":\"Bash\"}");
+
+        assertThat(late.status()).isEqualTo(AgentStatus.IDLE);
+        assertThat(agent("a1").state()).isEqualTo(SubagentState.DONE);
+    }
+
+    @Test
+    void sessionStaysRedWhileAnyAgentWaitsAndOtherEventsDoNotClearIt() {
+        apply("UserPromptSubmit", "{}");
+        start("a");
+        start("b");
+        apply("PermissionRequest", "{\"agent_id\":\"a\",\"tool_name\":\"Bash\"}");
+
+        apply("PostToolUse", "{\"agent_id\":\"b\",\"tool_name\":\"Read\"}");
+        apply("PreToolUse", "{\"tool_name\":\"Read\",\"tool_use_id\":\"t\"}");
+        var main = apply("PostToolUse", "{\"tool_name\":\"Read\",\"tool_use_id\":\"t\"}");
+
+        assertThat(main.status()).isEqualTo(AgentStatus.NEEDS_ACTION);
+        assertThat(apply("PostToolUse", "{\"agent_id\":\"a\",\"tool_name\":\"Bash\"}").status()).isEqualTo(AgentStatus.WORKING);
+    }
+
+    @Test
+    void silentRunningAgentIsStaleAndNoLongerKeepsTheSessionWorking() {
+        apply("UserPromptSubmit", "{}");
+        start("bg");
+        apply("PostToolUse", ASYNC.formatted("bg"));
+        apply("Stop", "{}");
+
+        var later = state.toSnapshot(Instant.now(), java.time.Duration.ofMinutes(10));
+
+        assertThat(later.subagents().get(0).stale()).isTrue();
+        assertThat(later.status()).isEqualTo(AgentStatus.IDLE);
+        assertThat(later.subagents().get(0).state()).isEqualTo(SubagentState.WORKING);
+    }
+
+    @Test
+    void agentsAreBoundedEvictingFinishedBeforeRunning() {
+        apply("UserPromptSubmit", "{}");
+        start("keep");
+        for (var i = 0; i < 60; i++) {
+            start("f" + i);
+            apply("SubagentStop", "{\"agent_id\":\"f" + i + "\",\"agent_type\":\"developer\"}");
+        }
+
+        assertThat(state.toSnapshot().subagents()).hasSize(50);
+        assertThat(agent("keep").running()).isTrue();
+    }
+
+    @Test
+    void unsafeAgentIdGetsNoTranscriptPath() {
+        apply("UserPromptSubmit", "{}");
+
+        apply("SubagentStart", "{\"agent_id\":\"../../x\",\"agent_type\":\"Explore\",\"transcript_path\":\"/p/s1.jsonl\"}");
+
+        assertThat(state.toSnapshot().subagents().get(0).transcriptPath()).isEmpty();
+    }
+
+    @Test
+    void subagentShowsCurrentToolThinkingBetweenToolsAndCountsCalls() {
+        apply("UserPromptSubmit", "{}");
+        apply("SubagentStart", "{\"agent_id\":\"a1\",\"agent_type\":\"developer\"}");
+
+        var editing = apply("PreToolUse", "{\"agent_id\":\"a1\",\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"C:/x/AppState.kt\"}}");
+        assertThat(editing.subagents().get(0).activity()).isEqualTo("Edit: AppState.kt");
+
+        var thinking = apply("PostToolUse", "{\"agent_id\":\"a1\",\"tool_name\":\"Edit\"}");
+        assertThat(thinking.subagents().get(0).activity()).isEmpty();
+        assertThat(thinking.subagents().get(0).toolCalls()).isEqualTo(1);
+    }
+
+    @Test
+    void subagentNeedingPermissionIsMarkedAndResumesAfterItsToolCompletes() {
+        apply("UserPromptSubmit", "{}");
+        apply("SubagentStart", "{\"agent_id\":\"a1\",\"agent_type\":\"tester\"}");
+
+        var waiting = apply("PermissionRequest", "{\"agent_id\":\"a1\",\"tool_name\":\"Bash\"}");
+        assertThat(waiting.subagents().get(0).state()).isEqualTo(SubagentState.NEEDS_ACTION);
+
+        var resumed = apply("PostToolUse", "{\"agent_id\":\"a1\",\"tool_name\":\"Bash\"}");
+        assertThat(resumed.subagents().get(0).state()).isEqualTo(SubagentState.WORKING);
+    }
+
+    @Test
+    void subagentWhoseLastToolFailedEndsFailedAndLateEventsDoNotReviveIt() {
+        apply("UserPromptSubmit", "{}");
+        apply("SubagentStart", "{\"agent_id\":\"a1\",\"agent_type\":\"tester\"}");
+        apply("PostToolUseFailure", "{\"agent_id\":\"a1\",\"tool_name\":\"Bash\"}");
+        apply("SubagentStop", "{\"agent_id\":\"a1\",\"agent_type\":\"tester\",\"last_assistant_message\":\"gave up\"}");
+
+        var late = apply("PreToolUse", "{\"agent_id\":\"a1\",\"tool_name\":\"Read\"}");
+
+        assertThat(late.subagents().get(0).state()).isEqualTo(SubagentState.FAILED);
+    }
+
+    @Test
+    void runningSubagentGetsItsTranscriptPathFromTheParentTranscript() {
+        apply("UserPromptSubmit", "{}");
+
+        var started = apply("SubagentStart", "{\"agent_id\":\"a9\",\"agent_type\":\"Explore\",\"transcript_path\":\"/p/s1.jsonl\"}");
+
+        assertThat(started.subagents().get(0).transcriptPath()).isEqualTo(java.nio.file.Path.of("/p/s1", "subagents", "agent-a9.jsonl").toString());
+    }
     @Test
     void internalHelperSubagentWithEmptyTypeIsIgnored() {
         apply("SessionStart", "{\"source\":\"startup\"}");
@@ -225,5 +423,47 @@ class StatusReducerTest {
         var event = of("InstructionsLoaded");
 
         assertThat(apply(event).lastEventAt()).isEqualTo(event.receivedAt());
+    }
+    private static final String BACKGROUND_STOP = "{\"background_tasks\":[{\"id\":\"a1\",\"type\":\"subagent\",\"status\":\"running\"}],\"session_crons\":[]}";
+    private static final String EMPTY_STOP = "{\"background_tasks\":[],\"session_crons\":[]}";
+
+    private SessionSnapshot startSubagentThenStop(String stopJson) {
+        apply("UserPromptSubmit", "{}");
+        start("a1");
+        return apply("Stop", stopJson);
+    }
+
+    @Test
+    void stopKeepsSubagentListedAsRunningBackgroundTaskEvenWithoutLaunchResponse() {
+        var snapshot = startSubagentThenStop(BACKGROUND_STOP);
+
+        assertThat(snapshot.status()).isEqualTo(AgentStatus.WORKING);
+        assertThat(agent("a1").background()).isTrue();
+        assertThat(agent("a1").running()).isTrue();
+    }
+
+    @Test
+    void stopWithoutBackgroundTasksClosesSubagentAndGoesIdle() {
+        var snapshot = startSubagentThenStop(EMPTY_STOP);
+
+        assertThat(snapshot.status()).isEqualTo(AgentStatus.IDLE);
+        assertThat(agent("a1").running()).isFalse();
+    }
+
+    @Test
+    void backgroundSubagentFinishingReopensLeadTurnUntilNextStop() {
+        startSubagentThenStop(BACKGROUND_STOP);
+
+        assertThat(apply("SubagentStop", "{\"agent_id\":\"a1\",\"agent_type\":\"developer\"}").status()).isEqualTo(AgentStatus.WORKING);
+        assertThat(apply("Stop", EMPTY_STOP).status()).isEqualTo(AgentStatus.IDLE);
+    }
+
+    @Test
+    void foregroundSubagentFinishingDoesNotReopenAClosedTurn() {
+        apply("UserPromptSubmit", "{}");
+        start("fg");
+        apply("Stop", EMPTY_STOP);
+
+        assertThat(apply("SubagentStop", "{\"agent_id\":\"fg\",\"agent_type\":\"developer\"}").status()).isEqualTo(AgentStatus.IDLE);
     }
 }

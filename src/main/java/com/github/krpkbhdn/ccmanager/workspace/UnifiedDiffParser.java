@@ -12,6 +12,8 @@ import java.util.regex.Pattern;
 public final class UnifiedDiffParser {
 
     public static final String TRUNCATED_MARKER = "... truncated";
+    public static final int MAX_LINES_PER_FILE = 2000;
+    public static final int MAX_TOTAL_LINES = 20000;
     private static final String FILE_START = "diff --git ";
     private static final Pattern HUNK_HEADER = Pattern.compile("^@@ -(\\d+)(?:,\\d+)? \\+(\\d+)(?:,\\d+)? @@.*");
     private static final Pattern LINE_BREAK = Pattern.compile("\\r?\\n");
@@ -57,6 +59,9 @@ public final class UnifiedDiffParser {
     }
 
     private static String pathFromHeader(String header) {
+        if (header.indexOf('"') >= 0) {
+            return quotedPathFromHeader(header);
+        }
         var middle = (header.length() - 1) / 2;
         if (header.startsWith("a/") && header.startsWith(" b/", middle) && header.substring(2, middle).equals(header.substring(middle + 3))) {
             return header.substring(2, middle);
@@ -65,11 +70,19 @@ public final class UnifiedDiffParser {
         return separator >= 0 ? header.substring(separator + 3) : header;
     }
 
+    /** The new-side path of a header where git quoted at least one side. */
+    private static String quotedPathFromHeader(String header) {
+        var newSide = header.startsWith("\"") ? header.substring(Math.min(GitQuotedPath.endOfQuoted(header, 0) + 1, header.length())) : header.substring(header.indexOf(" \"b/") + 1);
+        var path = GitQuotedPath.unquote(newSide);
+        return path.startsWith("b/") ? path.substring(2) : path;
+    }
+
     /** Accumulates one file; header lines set its change type, hunk lines fill its body. */
     private final class FileBuilder {
         private String path;
         private String oldPath;
         private ChangeType change = ChangeType.MODIFIED;
+        private String fileMode;
         private boolean binary;
         private boolean inHunk;
         private boolean truncated;
@@ -99,14 +112,16 @@ public final class UnifiedDiffParser {
 
         private void acceptHeaderLine(String line) {
             if (line.startsWith("new file mode")) {
+                fileMode = line.substring("new file mode ".length()).strip();
                 change = ChangeType.ADDED;
             } else if (line.startsWith("deleted file mode")) {
+                fileMode = line.substring("deleted file mode ".length()).strip();
                 change = ChangeType.DELETED;
             } else if (line.startsWith("rename from ")) {
                 change = ChangeType.RENAMED;
-                oldPath = line.substring("rename from ".length());
+                oldPath = GitQuotedPath.unquote(line.substring("rename from ".length()));
             } else if (line.startsWith("rename to ")) {
-                path = line.substring("rename to ".length());
+                path = GitQuotedPath.unquote(line.substring("rename to ".length()));
             } else if (line.startsWith("Binary files ") || line.startsWith("GIT binary patch")) {
                 binary = true;
                 add(new Line(LineKind.META, line, null, null));
@@ -144,7 +159,7 @@ public final class UnifiedDiffParser {
         }
 
         FileDiff build() {
-            return new FileDiff(path, oldPath, change, additions, deletions, binary, List.copyOf(lines));
+            return new FileDiff(path, oldPath, change, additions, deletions, binary, List.copyOf(lines), fileMode);
         }
     }
 }

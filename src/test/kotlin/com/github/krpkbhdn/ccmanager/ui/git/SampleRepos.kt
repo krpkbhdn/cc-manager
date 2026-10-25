@@ -252,8 +252,8 @@ object SampleRepos {
         branches = branches("feature/git-module"),
         rows = history(),
         stashes = mutableListOf(
-            GitMisc.Stash(0, "WIP on feature/ui-polish: sidebar spacing", "feature/ui-polish", ago(180)),
-            GitMisc.Stash(1, "Experiment with commit graph colours", "main", ago(4_000)),
+            GitMisc.Stash(0, "WIP on feature/ui-polish: sidebar spacing", "feature/ui-polish", ago(180), "a1"),
+            GitMisc.Stash(1, "Experiment with commit graph colours", "main", ago(4_000), "b2"),
         ),
         tags = mutableListOf(
             GitMisc.Tag("v1.0.0", "a1b2c3d4", "First public release", true),

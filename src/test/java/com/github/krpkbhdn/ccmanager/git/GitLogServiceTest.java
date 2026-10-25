@@ -135,6 +135,16 @@ class GitLogServiceTest {
     }
 
     @Test
+    void historyOfAFileWithBracketsDoesNotMatchTheGlobSiblings() {
+        repo.commit("[id].tsx", "route\n", "add route");
+        repo.commit("i.tsx", "other\n", "unrelated i");
+
+        var rows = service.log(repo.root(), new Query(null, null, null, "[id].tsx", 0, 50)).rows();
+
+        assertThat(rows).extracting(row -> row.commit().subject()).containsExactly("add route");
+    }
+
+    @Test
     void multilineBodiesAreKeptAndHugeBodiesAreCapped() {
         repo.write("a.txt", "1");
         repo.git("add", "a.txt");

@@ -206,4 +206,25 @@ class UnifiedDiffParserTest {
         assertThat(files).hasSize(2);
         assertThat(files.get(1).lines()).extracting(l -> l.text()).contains(UnifiedDiffParser.TRUNCATED_MARKER);
     }
+
+    @Test
+    void unquotesGitQuotedPathsWithEscapesAndUtf8Octal() {
+        var files = parse("""
+                diff --git "a/na\\"me\\t\\320\\260.txt" "b/na\\"me\\t\\320\\260.txt"
+                index 111..222 100644
+                --- "a/na\\"me\\t\\320\\260.txt"
+                +++ "b/na\\"me\\t\\320\\260.txt"
+                @@ -1 +1 @@
+                -a
+                +b
+                diff --git "a/old\\\\x.txt" "b/new\\320\\260.txt"
+                similarity index 100%
+                rename from "old\\\\x.txt"
+                rename to "new\\320\\260.txt"
+                """);
+
+        assertThat(files.get(0).path()).isEqualTo("na\"me\tа.txt");
+        assertThat(files.get(1).path()).isEqualTo("newа.txt");
+        assertThat(files.get(1).oldPath()).isEqualTo("old\\x.txt");
+    }
 }

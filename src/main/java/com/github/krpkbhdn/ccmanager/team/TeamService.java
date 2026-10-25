@@ -1,14 +1,18 @@
 package com.github.krpkbhdn.ccmanager.team;
 
+import com.github.krpkbhdn.ccmanager.project.ModelSelection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -21,6 +25,10 @@ public class TeamService {
 
     public static final int MAX_NAME = 60;
     public static final int MAX_ROLES = 12;
+    /** Role prompts and descriptions together; keeps the claude command line under the Windows limit of 32,767 characters. */
+    public static final int MAX_TOTAL_TEXT = 24_000;
+    private static final Logger log = LoggerFactory.getLogger(TeamService.class);
+    private static final String READ_ONLY_TOOL = "Read";
     private static final String SELECT_ROLES = "SELECT id, name, description, prompt, model, effort, tools, is_lead, position FROM team_role";
 
     private final JdbcClient jdbc;
@@ -115,6 +123,11 @@ public class TeamService {
         if (roles.stream().filter(RoleDraft::lead).count() != 1) {
             throw new IllegalArgumentException("Mark exactly one role as the lead");
         }
+        var totalText = roles.stream().mapToInt(role -> role.prompt().length() + role.description().length()).sum();
+        if (totalText > MAX_TOTAL_TEXT) {
+            throw new IllegalArgumentException("Role prompts and descriptions total " + totalText + " characters; shorten them to at most "
+                    + MAX_TOTAL_TEXT + " so the team can start");
+        }
         var names = new HashSet<String>();
         roles.forEach(role -> {
             if (!names.add(role.name())) {
@@ -125,30 +138,41 @@ public class TeamService {
     }
 
     private void writeRoles(long teamId, List<RoleDraft> roles) {
-        Long leadId = null;
         for (int position = 0; position < roles.size(); position++) {
             var role = roles.get(position);
-            var keys = new GeneratedKeyHolder();
             jdbc.sql("INSERT INTO team_role (team_id, name, description, prompt, model, effort, tools, is_lead, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
                     .param(teamId).param(role.name()).param(role.description()).param(role.prompt())
-                    .param(role.model()).param(role.effort()).param(role.tools()).param(role.lead() ? 1 : 0).param(position).update(keys);
-            if (role.lead()) {
-                leadId = keys.getKey().longValue();
-            }
+                    .param(role.model()).param(role.effort()).param(role.tools()).param(role.lead() ? 1 : 0).param(position).update();
         }
-        jdbc.sql("UPDATE team SET lead_role_id = ? WHERE id = ?").param(leadId).param(teamId).update();
     }
 
     private Team team(ResultSet rs) throws SQLException {
         long id = rs.getLong("id");
-        var roles = jdbc.sql(SELECT_ROLES + " WHERE team_id = ? ORDER BY position").param(id).query(TeamService::role).list();
+        var roles = jdbc.sql(SELECT_ROLES + " WHERE team_id = ? ORDER BY position").param(id).query(TeamService::role).list().stream()
+                .flatMap(Optional::stream).toList();
         return new Team(id, rs.getString("name"), roles);
     }
 
-    private static TeamRole role(ResultSet rs, int row) throws SQLException {
-        var draft = new RoleDraft(rs.getString("name"), rs.getString("description"), rs.getString("prompt"), rs.getString("model"),
-                rs.getString("effort"), rs.getString("tools"), rs.getInt("is_lead") == 1);
-        return new TeamRole(rs.getLong("id"), draft, rs.getInt("position"));
+    /** Stale model, effort or tools are repaired field by field; a role that still fails today's rules is skipped, not fatal. */
+    private static Optional<TeamRole> role(ResultSet rs, int row) throws SQLException {
+        var selection = ModelSelection.stored(rs.getString("model"), rs.getString("effort"));
+        try {
+            var draft = new RoleDraft(rs.getString("name"), rs.getString("description"), rs.getString("prompt"), selection.model(),
+                    selection.effort(), storedTools(rs.getString("tools")), rs.getInt("is_lead") == 1);
+            return Optional.of(new TeamRole(rs.getLong("id"), draft, rs.getInt("position")));
+        } catch (IllegalArgumentException invalidRole) {
+            log.warn("Skipping stored role {}: {}", rs.getLong("id"), invalidRole.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /** Null (all tools) stays null; entries that are no longer valid are dropped, and a list left with none keeps the most restrictive tool. */
+    private static String storedTools(String tools) {
+        if (tools == null || tools.isBlank()) {
+            return null;
+        }
+        var valid = Arrays.stream(tools.split(",")).map(String::strip).filter(RoleDraft::isToolEntry).toList();
+        return String.join(", ", valid.isEmpty() ? List.of(READ_ONLY_TOOL) : valid);
     }
 
     private void fireChanged() {

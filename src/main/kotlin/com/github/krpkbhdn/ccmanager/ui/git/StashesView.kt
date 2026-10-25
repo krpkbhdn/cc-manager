@@ -52,11 +52,11 @@ private val listWidth = 440.dp
 
 /** Stashes with Apply / Pop / Drop; selecting one shows its files and diff on the right. */
 @Composable
-fun StashesView(git: GitState, now: Instant, modifier: Modifier = Modifier) {
-    var picked by remember { mutableStateOf<Int?>(null) }
-    val selected = picked ?: git.stashes.firstOrNull()?.index()
+fun StashesView(git: GitState, now: () -> Instant, modifier: Modifier = Modifier) {
+    var pickedHash by remember { mutableStateOf<String?>(null) }
+    val selected = git.stashes.firstOrNull { it.hash() == pickedHash } ?: git.stashes.firstOrNull()
     var chosenFile by remember { mutableStateOf<String?>(null) }
-    val diff by produceState<GitDiff?>(null, selected, git.stashes) { value = selected?.let { git.stashDiff(it) } }
+    val diff by produceState<GitDiff?>(null, selected, git.stashes) { value = selected?.let { git.stashDiff(it.hash()) } }
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
             Label("${git.stashes.size} ${if (git.stashes.size == 1) "stash" else "stashes"}", Modifier.weight(1f), color = colors.textSecondary, style = Type.small)
@@ -69,7 +69,7 @@ fun StashesView(git: GitState, now: Instant, modifier: Modifier = Modifier) {
         }
         Row(Modifier.fillMaxSize()) {
             LazyColumn(Modifier.width(listWidth).fillMaxHeight(), contentPadding = androidx.compose.foundation.layout.PaddingValues(Spacing.sm)) {
-                items(git.stashes, key = { it.index() }) { stash -> StashRow(git, stash, now, stash.index() == selected) { picked = stash.index(); chosenFile = null } }
+                items(git.stashes, key = { it.hash() }) { stash -> StashRow(git, stash, now, stash.hash() == selected?.hash()) { pickedHash = stash.hash(); chosenFile = null } }
             }
             VerticalRule()
             val files = diff?.files().orEmpty()
@@ -88,7 +88,7 @@ fun StashesView(git: GitState, now: Instant, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun StashRow(git: GitState, stash: Stash, now: Instant, selected: Boolean, onSelect: () -> Unit) {
+private fun StashRow(git: GitState, stash: Stash, now: () -> Instant, selected: Boolean, onSelect: () -> Unit) {
     Pressable(onSelect, Modifier.fillMaxWidth().padding(vertical = 1.dp), RoundedCornerShape(Radius.sm), base = if (selected) colors.accentSoft else Color.Transparent) {
         Column(Modifier.padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
@@ -96,10 +96,10 @@ private fun StashRow(git: GitState, stash: Stash, now: Instant, selected: Boolea
                 Label(stash.message(), Modifier.weight(1f), color = colors.textPrimary, style = Type.smallMedium, tooltipWhenTruncated = true)
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                Label("on ${stash.branch()}  ·  ${commitAge(stash.date(), now)}", Modifier.weight(1f), color = colors.textTertiary, style = Type.caption)
-                GhostButton("Apply", { git.stashApply(stash.index()) }, enabled = !git.busy)
-                GhostButton("Pop", { git.stashPop(stash.index()) }, enabled = !git.busy)
-                GhostButton("Drop", { git.requestDropStash(stash.index()) }, enabled = !git.busy)
+                Label("on ${stash.branch()}  ·  ${commitAge(stash.date(), now())}", Modifier.weight(1f), color = colors.textTertiary, style = Type.caption)
+                GhostButton("Apply", { git.stashApply(stash) }, enabled = !git.busy)
+                GhostButton("Pop", { git.stashPop(stash) }, enabled = !git.busy)
+                GhostButton("Drop", { git.requestDropStash(stash) }, enabled = !git.busy)
             }
         }
     }

@@ -29,6 +29,10 @@ import com.github.krpkbhdn.ccmanager.usage.SessionUsage
 import com.github.krpkbhdn.ccmanager.usage.SessionUsageService
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import com.github.krpkbhdn.ccmanager.claude.session.SubagentSnapshot
+import com.github.krpkbhdn.ccmanager.claude.session.SubagentState
+import java.nio.file.Files
+import com.github.krpkbhdn.ccmanager.claude.session.TranscriptService
+import tools.jackson.databind.json.JsonMapper
 import com.github.krpkbhdn.ccmanager.notification.AppNotification
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.notification.NotificationService
@@ -57,6 +61,26 @@ import org.mockito.Mockito.`when`
 
 private fun ago(seconds: Long): Instant = Instant.now().minusSeconds(seconds)
 
+private val previewTranscriptDir: java.nio.file.Path by lazy { Files.createTempDirectory("ccm-projects") }
+
+private val previewTranscript: String by lazy {
+    Files.createTempFile(previewTranscriptDir, "ccm-agent", ".jsonl").also {
+        Files.writeString(it, listOf(
+            """{"type":"user","message":{"role":"user","content":"Run the StatusReducer tests and report failures."}}""",
+            """{"type":"assistant","message":{"content":[{"type":"text","text":"Running the reducer tests first."},{"type":"tool_use","name":"Bash","input":{"command":"./gradlew test --tests '*StatusReducerTest'"}}]}}""",
+            """{"type":"user","message":{"content":[{"type":"tool_result","content":"BUILD SUCCESSFUL in 14s\n9 tests completed, 0 failed"}]}}""",
+            """{"type":"assistant","message":{"content":[{"type":"text","text":"All 9 tests pass."}]}}""",
+        ).joinToString("\n"))
+    }.toString()
+}
+
+private fun previewAgent(
+    id: String, type: String, state: SubagentState, startedAgo: Long, activity: String = "", ended: Long? = null,
+    calls: Int = 0, message: String = "", background: Boolean = false, stale: Boolean = false,
+) = SubagentSnapshot(id, type, activity, state, background, calls, state == SubagentState.FAILED, message, previewTranscript, ago(startedAgo), ago(ended ?: if (stale) STALE_SECONDS else 4), ended?.let { ago(it) }, stale)
+
+private const val STALE_SECONDS = 1_320L
+
 private const val FIVE_HOUR_RESET_SECONDS = 8_040L
 private const val SEVEN_DAY_RESET_SECONDS = 3 * 86_400L + 4 * 3_600L
 
@@ -69,6 +93,7 @@ fun limitsAt(fiveHourPercent: Double, sevenDayPercent: Double) = RateLimitSnapsh
 
 /** In-memory backend data for the dev preview; Mockito keeps it independent of the real services' constructors. */
 class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeRepoData = SampleRepos.busy(), val rateLimits: RateLimitSnapshot? = limitsAt(23.5, 41.2), selection: ModelSelection = ModelSelection("opus", "high")) {
+    val fakeMcp = FakeMcp()
     val sessionUsage = mapOf(
         "s-working" to SessionUsage("s-working", "Opus 4.7", "xhigh", 62.0, 4.38, 2_400_000L, Instant.now()),
         "s-needs" to SessionUsage("s-needs", "Sonnet 5.5", "medium", 18.5, 0.42, 1_200_000L, Instant.now()),
@@ -102,13 +127,24 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
 
     private fun baseSessions() = listOf(
         SessionSnapshot(
+            "s-agents", 1, "c5", AgentStatus.NEEDS_ACTION, "Delegating to developer and tester", "acceptEdits", "claude-opus-4-7",
+            "Build the agents rail", ago(1800), ago(3),
+            listOf(
+                previewAgent("g1", "developer", SubagentState.WORKING, 754, "Bash: ./gradlew test --tests '*StatusReducerTest'", calls = 41, background = true),
+                previewAgent("g6", "Explore", SubagentState.WORKING, 2400, "Grep: SubagentStop", calls = 18, background = true, stale = true),
+                previewAgent("g2", "tester", SubagentState.NEEDS_ACTION, 95, "Waiting for permission: Bash", calls = 6),
+                previewAgent("g3", "Explore", SubagentState.DONE, 900, ended = 840, calls = 12, message = "The rail lives in AgentsPanel.kt; subagents come from SessionRegistry."),
+                previewAgent("g4", "code-reviewer", SubagentState.FAILED, 600, ended = 520, calls = 9, message = "API Error: overloaded, gave up after 3 retries."),
+                previewAgent("g5", "developer", SubagentState.INTERRUPTED, 500, ended = 470, calls = 3, message = ""),
+            ),
+            0, null,
+        ),
+        SessionSnapshot(
             "s-working", 1, "c1", AgentStatus.WORKING, "Running Bash: ./gradlew test", "acceptEdits", "claude-opus-4-7",
             "Refactor session registry", ago(2400), ago(4),
             listOf(
-                SubagentSnapshot("a1", "code-reviewer", "Reading SessionRegistry.java", true, ago(60)),
-                SubagentSnapshot("a2", "Explore", "Found 12 usages of AgentStatus", false, ago(300)),
-                SubagentSnapshot("a3", "developer", "Editing SessionRegistry.java", true, ago(40)),
-                SubagentSnapshot("a4", "tester", "Ran ./gradlew test, 212 passed", false, ago(200)),
+                previewAgent("a1", "code-reviewer", SubagentState.WORKING, 60, "Read: SessionRegistry.java", calls = 7),
+                previewAgent("a2", "Explore", SubagentState.DONE, 300, ended = 240, message = "Found 12 usages of AgentStatus"),
             ),
             1, null,
         ),
@@ -195,7 +231,7 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         `when`(usage.all()).thenAnswer { sessionUsage }
         `when`(usage.subscribe(any())).thenAnswer { Runnable { } }
 
-        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), terminal)
+        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), TranscriptService(JsonMapper.builder().build(), previewTranscriptDir), terminal = terminal)
     }
 
     private fun installationNow() = if (claudeInstalled) {

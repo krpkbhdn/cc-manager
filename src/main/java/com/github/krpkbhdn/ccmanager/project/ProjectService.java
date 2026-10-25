@@ -130,6 +130,6 @@ public class ProjectService {
 
     private static Project mapRow(ResultSet rs, int rowNum) throws SQLException {
         return new Project(rs.getLong("id"), rs.getString("name"), Path.of(rs.getString("path")),
-                Instant.parse(rs.getString("created_at")), new ModelSelection(rs.getString("model"), rs.getString("effort")));
+                Instant.parse(rs.getString("created_at")), ModelSelection.stored(rs.getString("model"), rs.getString("effort")));
     }
 }

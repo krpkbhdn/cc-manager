@@ -1,7 +1,8 @@
 package com.github.krpkbhdn.ccmanager.git;
 
-import com.github.krpkbhdn.ccmanager.workspace.GitDiffService;
 import com.github.krpkbhdn.ccmanager.workspace.UnifiedDiffParser;
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -54,7 +55,7 @@ public class GitLogService {
         var commit = GitLogParser.parse(git.out(repo, "log", "-1", "--decorate=full", GitLogParser.FORMAT, hash), Integer.MAX_VALUE)
                 .getFirst();
         var diff = git.out(repo, "show", "--format=", "-M", "--no-color", "--no-ext-diff", "-m", "--first-parent", "--root", hash);
-        var files = UnifiedDiffParser.parse(diff, GitDiffService.MAX_LINES_PER_FILE, GitDiffService.MAX_TOTAL_LINES);
+        var files = UnifiedDiffParser.parse(diff, UnifiedDiffParser.MAX_LINES_PER_FILE, UnifiedDiffParser.MAX_TOTAL_LINES);
         return new GitLog.Details(commit, files);
     }
 
@@ -62,7 +63,7 @@ public class GitLogService {
         var args = new ArrayList<>(List.of("log", GitLogParser.FORMAT, "--date-order", "--decorate=full", "--skip=" + skip,
                 "--max-count=" + count));
         addFilters(args, query);
-        addRevisions(args, query);
+        addRevisions(repo, args, query);
         return GitLogParser.parse(git.out(repo, args.toArray(String[]::new)));
     }
 
@@ -78,7 +79,7 @@ public class GitLogService {
         }
     }
 
-    private void addRevisions(List<String> args, GitLog.Query query) {
+    private void addRevisions(Path repo, List<String> args, GitLog.Query query) {
         if (isBlank(query.branch())) {
             args.addAll(List.of("--exclude=refs/stash", "--all"));
         } else {
@@ -86,10 +87,19 @@ public class GitLogService {
             args.add(query.branch());
         }
         if (!isBlank(query.path())) {
-            if (isSingleFile(query.path())) {
+            var existingFile = isExistingFile(repo, query.path());
+            if (existingFile || isSingleFile(query.path())) {
                 args.add("--follow");
             }
-            args.addAll(List.of("--", query.path()));
+            args.addAll(List.of("--", existingFile ? ":(literal)" + query.path() : query.path()));
+        }
+    }
+
+    private static boolean isExistingFile(Path repo, String path) {
+        try {
+            return Files.isRegularFile(repo.resolve(path));
+        } catch (InvalidPathException e) {
+            return false;
         }
     }
 

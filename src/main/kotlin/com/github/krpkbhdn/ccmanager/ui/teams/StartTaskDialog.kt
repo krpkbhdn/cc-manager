@@ -53,7 +53,7 @@ fun StartTaskDialog(project: Project, teams: TeamsState, actions: StartTaskActio
     LaunchedEffect(Unit) { focus.requestFocus() }
     val team = selected?.let(teams::find)
     val start = { if (team != null && task.text.isNotBlank()) actions.onStart(team, task.text.toString().trim(), makeDefault) }
-    ModalHost(actions.onDismiss, width = dialogWidth, takeFocus = false) {
+    ModalHost(actions.onDismiss, width = dialogWidth, takeFocus = false, hasInput = { task.text.isNotEmpty() }) {
         DialogBody("Start task in ${project.name}", Icons.Users, colors.accent) {
             if (teams.teams.isEmpty()) {
                 NoTeams(actions)

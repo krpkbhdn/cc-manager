@@ -18,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +45,7 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.nio.file.Path
 
@@ -89,6 +91,7 @@ private fun Breadcrumbs(state: FolderPickerState, modifier: Modifier) {
 @Composable
 private fun PathEditor(state: FolderPickerState, onFocusList: () -> Unit, modifier: Modifier) {
     val focus = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
     var check by remember { mutableStateOf(PathCheck.Valid) }
     var suggestions by remember { mutableStateOf(emptyList<Path>()) }
     val text = state.pathText.text.toString()
@@ -112,7 +115,7 @@ private fun PathEditor(state: FolderPickerState, onFocusList: () -> Unit, modifi
         ) { event ->
             when {
                 event.type != KeyEventType.KeyDown -> false
-                event.key == Key.Enter -> true.also { if (state.commitTypedPath() == PathCheck.Valid) finish() }
+                event.key == Key.Enter -> true.also { scope.launch { if (state.commitTypedPath() == PathCheck.Valid) finish() } }
                 event.key == Key.Escape -> true.also { finish() }
                 event.key == Key.Tab && suggestions.isNotEmpty() -> true.also { acceptSuggestion(suggestions.first()) }
                 else -> false

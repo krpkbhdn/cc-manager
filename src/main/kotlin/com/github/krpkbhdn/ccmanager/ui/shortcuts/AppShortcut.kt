@@ -13,6 +13,7 @@ import java.awt.event.KeyEvent.VK_9
 import java.awt.event.KeyEvent.VK_A
 import java.awt.event.KeyEvent.VK_B
 import java.awt.event.KeyEvent.VK_BACK_QUOTE
+import java.awt.event.KeyEvent.VK_COMMA
 import java.awt.event.KeyEvent.VK_D
 import java.awt.event.KeyEvent.VK_ESCAPE
 import java.awt.event.KeyEvent.VK_F1
@@ -26,6 +27,7 @@ import java.awt.event.KeyEvent.VK_N
 import java.awt.event.KeyEvent.VK_O
 import java.awt.event.KeyEvent.VK_P
 import java.awt.event.KeyEvent.VK_Q
+import java.awt.event.KeyEvent.VK_S
 import java.awt.event.KeyEvent.VK_SLASH
 import java.awt.event.KeyEvent.VK_T
 import java.awt.event.KeyEvent.VK_TAB
@@ -48,7 +50,7 @@ enum class AppShortcut(val label: String, private val windows: List<KeyChord>, p
     TOGGLE_AGENTS("Toggle agents rail", listOf(ctrlShift(VK_J)), listOf(cmd(VK_J))),
     TOGGLE_QUICK_ACTIONS("Toggle quick actions", listOf(ctrlShift(VK_Q)), listOf(cmd(VK_U))),
     TOGGLE_THEME("Toggle theme", listOf(ctrlShift(VK_L)), listOf(cmdShift(VK_L))),
-    OVERVIEW("Overview", listOf(alt(VK_0)), listOf(cmd(VK_0))),
+    OVERVIEW("Overview", listOf(alt(VK_0)), listOf(cmdShift(VK_0))),
     PROJECT_1("Project 1", listOf(alt(VK_1)), listOf(cmd(VK_1))),
     PROJECT_2("Project 2", listOf(alt(VK_2)), listOf(cmd(VK_2))),
     PROJECT_3("Project 3", listOf(alt(VK_3)), listOf(cmd(VK_3))),
@@ -66,6 +68,7 @@ enum class AppShortcut(val label: String, private val windows: List<KeyChord>, p
     ACTIVITY_TAB("Activity tab", listOf(ctrlShift(VK_A)), listOf(cmdShift(VK_A))),
     NOTIFICATIONS("Notifications", listOf(ctrlShift(VK_M)), listOf(cmdShift(VK_M))),
     USAGE("Show usage", listOf(ctrlShift(VK_Y)), listOf(cmdShift(VK_Y))),
+    PROJECT_SETTINGS("Project settings", listOf(ctrlShift(VK_COMMA)), listOf(cmd(VK_COMMA))),
     FOCUS_TERMINAL("Focus terminal", listOf(ctrlShift(VK_BACK_QUOTE)), listOf(ctrl(VK_BACK_QUOTE))),
     SHORTCUT_SHEET("Keyboard shortcuts", listOf(ctrlShift(VK_SLASH), plain(VK_F1)), listOf(cmdShift(VK_SLASH), plain(VK_F1))),
     CLOSE_OVERLAY("Close overlay", listOf(plain(VK_ESCAPE)), listOf(plain(VK_ESCAPE)));

@@ -13,9 +13,6 @@ data class LinkSegments(val lower: Cubic, val upper: Cubic)
 /** Horizontal centre of lane [lane]. */
 fun laneX(lane: Int, laneWidth: Float): Float = lane * laneWidth + laneWidth / 2f
 
-/** Width of the graph column for [laneCount] lanes. */
-fun graphWidth(laneCount: Int, laneWidth: Float): Float = maxOf(laneCount, 1) * laneWidth
-
 /**
  * The S-curve from (lane [fromLane], middle of this row) to (lane [toLane], middle of the next row) cut in two at the
  * row boundary. Vertical links degenerate to straight lines. De Casteljau at t = 0.5 keeps both halves smooth.

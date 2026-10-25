@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.usage;
 
 import com.github.krpkbhdn.ccmanager.claude.hook.StatusLineReport;
+import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -9,12 +10,18 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
-/** Keeps the newest statusLine figures of every session, for the usage panel and the session header. Thread-safe. */
+/** Keeps the newest statusLine figures of every live session, for the usage panel and the session header. Thread-safe. */
 @Component
 public class SessionUsageService {
 
     private final Map<String, SessionUsage> bySession = new ConcurrentHashMap<>();
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
+    private final SessionRegistry sessions;
+
+    public SessionUsageService(SessionRegistry sessions) {
+        this.sessions = sessions;
+        sessions.subscribe(this::dropEndedSessions);
+    }
 
     @EventListener
     public void on(StatusLineReport report) {
@@ -34,5 +41,9 @@ public class SessionUsageService {
     public Runnable subscribe(Runnable onChange) {
         listeners.add(onChange);
         return () -> listeners.remove(onChange);
+    }
+
+    private void dropEndedSessions() {
+        bySession.keySet().removeIf(id -> sessions.find(id).isEmpty());
     }
 }

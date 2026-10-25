@@ -16,16 +16,20 @@ public final class ActivityFormatter {
     private static final Set<String> ATTENTION_NOTIFICATIONS =
             Set.of("permission_prompt", "elicitation_dialog", "elicitation_url_dialog", "agent_needs_input");
     private static final Set<String> FILE_WRITING_TOOLS = Set.of("Edit", "MultiEdit", "Write", "NotebookEdit");
-    private static final Map<String, Function<HookEvent, String>> TOOL_ARGUMENTS = Map.of(
-            "Bash", event -> toolInput(event, "command"),
-            "PowerShell", event -> toolInput(event, "command"),
-            "Read", event -> fileName(toolInput(event, "file_path")),
-            "Grep", event -> toolInput(event, "pattern"),
-            "Glob", event -> toolInput(event, "pattern"),
-            "WebFetch", event -> toolInput(event, "url"),
-            "WebSearch", event -> toolInput(event, "query"),
-            "Agent", event -> toolInput(event, "description"),
-            "Task", event -> toolInput(event, "description"));
+    private static final Map<String, Function<HookEvent, String>> TOOL_ARGUMENTS = Map.ofEntries(
+            Map.entry("Bash", event -> toolInput(event, "command")),
+            Map.entry("PowerShell", event -> toolInput(event, "command")),
+            Map.entry("Read", event -> fileName(toolInput(event, "file_path"))),
+            Map.entry("Edit", event -> fileName(toolInput(event, "file_path"))),
+            Map.entry("MultiEdit", event -> fileName(toolInput(event, "file_path"))),
+            Map.entry("Write", event -> fileName(toolInput(event, "file_path"))),
+            Map.entry("NotebookEdit", event -> fileName(toolInput(event, "notebook_path"))),
+            Map.entry("Grep", event -> toolInput(event, "pattern")),
+            Map.entry("Glob", event -> toolInput(event, "pattern")),
+            Map.entry("WebFetch", event -> toolInput(event, "url")),
+            Map.entry("WebSearch", event -> toolInput(event, "query")),
+            Map.entry("Agent", event -> toolInput(event, "description")),
+            Map.entry("Task", event -> toolInput(event, "description")));
 
     private ActivityFormatter() {}
 
@@ -61,13 +65,15 @@ public final class ActivityFormatter {
         return singleLine.length() <= limit ? singleLine : singleLine.substring(0, limit) + ELLIPSIS;
     }
 
-    private static String preTool(HookEvent event) {
-        var tool = event.text("tool_name");
-        if (FILE_WRITING_TOOLS.contains(tool)) {
-            return null;
-        }
-        var argument = TOOL_ARGUMENTS.getOrDefault(tool, ignored -> "").apply(event);
+    /** The tool a PreToolUse starts, as "Bash: ./gradlew test"; file-writing tools included. */
+    public static String running(HookEvent preToolUse) {
+        var tool = preToolUse.text("tool_name");
+        var argument = TOOL_ARGUMENTS.getOrDefault(tool, ignored -> "").apply(preToolUse);
         return argument.isEmpty() ? tool : tool + ": " + truncate(argument, TEXT_LIMIT);
+    }
+
+    private static String preTool(HookEvent event) {
+        return FILE_WRITING_TOOLS.contains(event.text("tool_name")) ? null : running(event);
     }
 
     private static String postTool(HookEvent event) {

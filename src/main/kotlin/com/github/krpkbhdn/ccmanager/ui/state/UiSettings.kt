@@ -19,6 +19,7 @@ data class UiSettings(
     val sidebarCollapsed: Boolean = false,
     val agentsOpen: Boolean = true,
     val quickBarOpen: Boolean = true,
+    val notificationSound: Boolean = true,
     val window: WindowBounds = WindowBounds(DEFAULT_WIDTH, DEFAULT_HEIGHT),
     val git: GitPrefs = GitPrefs(),
 ) {
@@ -32,6 +33,7 @@ private const val KEY_THEME = "theme"
 private const val KEY_SIDEBAR = "sidebar.collapsed"
 private const val KEY_AGENTS = "agents.open"
 private const val KEY_QUICK_BAR = "quickbar.open"
+private const val KEY_NOTIFICATION_SOUND = "notification.sound"
 private const val KEY_WIDTH = "window.width"
 private const val KEY_HEIGHT = "window.height"
 private const val KEY_X = "window.x"
@@ -62,6 +64,7 @@ class UiSettingsStore(private val file: Path?) {
             setProperty(KEY_SIDEBAR, settings.sidebarCollapsed.toString())
             setProperty(KEY_AGENTS, settings.agentsOpen.toString())
             setProperty(KEY_QUICK_BAR, settings.quickBarOpen.toString())
+            setProperty(KEY_NOTIFICATION_SOUND, settings.notificationSound.toString())
             setProperty(KEY_WIDTH, settings.window.width.toString())
             setProperty(KEY_HEIGHT, settings.window.height.toString())
             settings.window.x?.let { setProperty(KEY_X, it.toString()) }
@@ -86,6 +89,7 @@ class UiSettingsStore(private val file: Path?) {
             sidebarCollapsed = props.flag(KEY_SIDEBAR, defaults.sidebarCollapsed),
             agentsOpen = props.flag(KEY_AGENTS, defaults.agentsOpen),
             quickBarOpen = props.flag(KEY_QUICK_BAR, defaults.quickBarOpen),
+            notificationSound = props.flag(KEY_NOTIFICATION_SOUND, defaults.notificationSound),
             window = WindowBounds(
                 width = props.getProperty(KEY_WIDTH)?.toIntOrNull() ?: defaults.window.width,
                 height = props.getProperty(KEY_HEIGHT)?.toIntOrNull() ?: defaults.window.height,

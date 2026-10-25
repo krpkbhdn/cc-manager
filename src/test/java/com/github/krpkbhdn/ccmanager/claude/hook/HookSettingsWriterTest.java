@@ -2,12 +2,14 @@ package com.github.krpkbhdn.ccmanager.claude.hook;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.github.krpkbhdn.ccmanager.config.AppProperties;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -17,19 +19,27 @@ class HookSettingsWriterTest {
 
     private static final String URL = "http://127.0.0.1:5555/hook/secret/abc-1";
     private static final String STATUS_LINE_URL = "http://127.0.0.1:5555/statusline/secret/abc-1";
+    private static final String DEAD_PID = String.valueOf(Integer.MAX_VALUE);
 
     private final JsonMapper mapper = JsonMapper.builder().build();
     private HookSettingsWriter writer;
+    private HookSettingsWriter windowsWriter;
+    private HookServer server;
 
     @TempDir
     Path dataDir;
 
     @BeforeEach
     void setUp() {
-        var server = mock(HookServer.class);
+        server = mock(HookServer.class);
         when(server.hookUrl("abc-1")).thenReturn(URL);
         when(server.statusLineUrl("abc-1")).thenReturn(STATUS_LINE_URL);
-        writer = new HookSettingsWriter(server, new AppProperties(dataDir), mapper);
+        writer = new HookSettingsWriter(server, new AppProperties(dataDir), mapper, false);
+        windowsWriter = new HookSettingsWriter(server, new AppProperties(dataDir), mapper, true);
+    }
+
+    private Path ownDir() {
+        return dataDir.resolve("hooks").resolve(String.valueOf(ProcessHandle.current().pid()));
     }
 
     @Test
@@ -37,8 +47,18 @@ class HookSettingsWriterTest {
         var file = writer.write("abc-1");
 
         var json = mapper.readTree(Files.readString(file));
-        assertThat(file).isEqualTo(dataDir.resolve("hooks").resolve("abc-1.json"));
+        assertThat(file).isEqualTo(ownDir().resolve("abc-1.json"));
         assertThat(json.propertyNames()).containsExactlyInAnyOrder("hooks", "statusLine");
+    }
+
+    @Test
+    void onPosixOnlyTheOwnerCanReadTheDirectoryAndFile() throws Exception {
+        assumeTrue(dataDir.getFileSystem().supportedFileAttributeViews().contains("posix"));
+
+        var file = writer.write("abc-1");
+
+        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(file))).isEqualTo("rw-------");
+        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(file.getParent()))).isEqualTo("rwx------");
     }
 
     @Test
@@ -62,24 +82,39 @@ class HookSettingsWriterTest {
     }
 
     @Test
-    void sessionStartUsesAsyncExecFormCurlBecauseHttpIsRejected() throws Exception {
+    void onPosixSessionStartUsesAsyncExecFormCurlReadingItsUrlFromAConfigFile() throws Exception {
         var handler = mapper.readTree(Files.readString(writer.write("abc-1"))).path("hooks").path("SessionStart").get(0)
                 .path("hooks").get(0);
 
         assertThat(handler.path("type").asString()).isEqualTo("command");
-        assertThat(handler.path("command").asString()).startsWith("curl");
+        assertThat(handler.path("command").asString()).isEqualTo("curl");
         assertThat(handler.path("async").asBoolean()).isTrue();
-        assertThat(handler.path("args").get(handler.path("args").size() - 1).asString()).isEqualTo(URL);
-        assertThat(handler.path("args").toString()).contains("--data-binary", "@-");
+        assertThat(handler.path("args").toString()).contains("-K", "--data-binary", "@-", "abc-1.json.hook.curl").doesNotContain(URL);
+        assertThat(Files.readString(ownDir().resolve("abc-1.json.hook.curl"))).isEqualTo("url = \"" + URL + "\"\n");
     }
 
     @Test
-    void statusLineCommandPostsItsStdinToTheStatusLineEndpoint() throws Exception {
+    void onPosixStatusLineCommandPostsItsStdinToTheStatusLineEndpoint() throws Exception {
         var statusLine = mapper.readTree(Files.readString(writer.write("abc-1"))).path("statusLine");
 
         assertThat(statusLine.path("type").asString()).isEqualTo("command");
-        assertThat(statusLine.path("command").asString()).startsWith("curl").contains("\"--data-binary\" \"@-\"")
-                .endsWith("\"" + STATUS_LINE_URL + "\"");
+        assertThat(statusLine.path("command").asString()).startsWith("curl ").contains("\"-K\"", "\"--data-binary\" \"@-\"", "abc-1.json.status.curl")
+                .doesNotContain(STATUS_LINE_URL);
+        assertThat(Files.readString(ownDir().resolve("abc-1.json.status.curl"))).isEqualTo("url = \"" + STATUS_LINE_URL + "\"\n");
+    }
+
+    @Test
+    void onWindowsTheUrlStaysAnArgumentAndNoCurlFileIsWritten() throws Exception {
+        var json = mapper.readTree(Files.readString(windowsWriter.write("abc-1")));
+
+        var handler = json.path("hooks").path("SessionStart").get(0).path("hooks").get(0);
+        assertThat(handler.path("command").asString()).isEqualTo("curl.exe");
+        assertThat(handler.path("args").toString()).contains(URL).doesNotContain("-K", ".curl");
+        assertThat(json.path("statusLine").path("command").asString()).startsWith("curl.exe ").contains("\"" + STATUS_LINE_URL + "\"")
+                .doesNotContain("-K", ".curl");
+        try (var files = Files.list(ownDir())) {
+            assertThat(files.map(file -> file.getFileName().toString())).containsExactly("abc-1.json");
+        }
     }
 
     @Test
@@ -89,15 +124,31 @@ class HookSettingsWriterTest {
         writer.delete("abc-1");
 
         assertThat(file).doesNotExist();
+        assertThat(ownDir()).isEmptyDirectory();
         assertThatThrownBy(() -> writer.write("../evil")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    void staleFilesFromEarlierRunsAreRemovedAtStartup() throws Exception {
-        var stale = writer.write("abc-1");
+    void startupRemovesTheFilesOfDeadProcessesAndLooseOldOnesButKeepsLiveOnes() throws Exception {
+        var live = writer.write("abc-1");
+        var deadDir = Files.createDirectories(dataDir.resolve("hooks").resolve(DEAD_PID));
+        var deadFile = Files.writeString(deadDir.resolve("old.json"), "{}");
+        var loose = Files.writeString(dataDir.resolve("hooks").resolve("legacy.json"), "{}");
 
         writer.deleteStaleFiles();
 
-        assertThat(stale).doesNotExist();
+        assertThat(deadDir).doesNotExist();
+        assertThat(deadFile).doesNotExist();
+        assertThat(loose).doesNotExist();
+        assertThat(live).exists();
+    }
+
+    @Test
+    void aSecondWriterInTheSameProcessLeavesTheRunningOnesFilesAlone() throws Exception {
+        var live = writer.write("abc-1");
+
+        new HookSettingsWriter(server, new AppProperties(dataDir), mapper, false).deleteStaleFiles();
+
+        assertThat(live).exists();
     }
 }

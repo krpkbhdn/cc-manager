@@ -35,8 +35,8 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
         val view = state.viewOf(project.id)
         val session = (view.selected as? ProjectTab.Session)?.ccmSessionId
         return when (shortcut) {
-            AppShortcut.NEW_SESSION -> handled { state.launch(project.id, LaunchMode.NEW) }
-            AppShortcut.CLOSE_SESSION -> session != null && handled { state.requestCloseSession(project.id, session) }
+            AppShortcut.NEW_SESSION -> handled { state.sessions.launch(project.id, LaunchMode.NEW) }
+            AppShortcut.CLOSE_SESSION -> session != null && handled { state.sessions.requestClose(project.id, session) }
             AppShortcut.NEXT_TAB -> handled { state.select(project.id, view.cycle(1).selected) }
             AppShortcut.PREVIOUS_TAB -> handled { state.select(project.id, view.cycle(-1).selected) }
             AppShortcut.GIT_TAB -> handled { state.openGit(project.id) }
@@ -44,6 +44,7 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
             AppShortcut.GIT_COMMIT -> handled { state.openGit(project.id)?.requestCommitFocus() }
             AppShortcut.GIT_BRANCHES -> handled { state.openGit(project.id)?.branchPopupOpen = true }
             AppShortcut.GIT_PUSH -> handled { state.gitOf(project.id)?.push() }
+            AppShortcut.PROJECT_SETTINGS -> handled { state.openProjectSettings(project) }
             AppShortcut.ACTIVITY_TAB -> handled { state.select(project.id, ProjectTab.Activity) }
             AppShortcut.FOCUS_TERMINAL -> session != null && handled { state.terminal.focus(session) }
             else -> false
@@ -51,7 +52,7 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
     }
 
     private fun openProject(slot: Int): Boolean {
-        val project = state.projects.getOrNull(slot - 1) ?: return false
+        val project = state.projects.all.getOrNull(slot - 1) ?: return false
         state.navigate(Route.Project(project.id))
         return true
     }
@@ -62,9 +63,11 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
         return true
     }
 
-    private fun currentProject(): Project? = (state.route as? Route.Project)?.let { route -> state.projects.firstOrNull { it.id == route.id } }
+    private fun currentProject(): Project? = (state.route as? Route.Project)?.let { route -> state.projects.all.firstOrNull { it.id == route.id } }
 
-    private fun modalOpen() = state.confirm != null || state.renaming != null || state.pickerOpen
+    private fun modalOpen() = state.confirm != null || state.projects.renaming != null || state.projects.pickerOpen || state.projectSettings != null ||
+        state.taskDialogProjectId != null || state.teams.dialog != null || state.agents.log != null || state.plugins.pending != null || state.mcp.adding || state.skills.creating ||
+        currentProject()?.let { state.gitOf(it.id)?.dialog } != null
 
     private fun handled(action: () -> Unit): Boolean {
         action()

@@ -27,6 +27,27 @@ public record ModelSelection(String model, String effort) {
         }
     }
 
+    /** Reads stored values: a part that fails today's rules is dropped on its own, the other part is kept. */
+    public static ModelSelection stored(String model, String effort) {
+        return new ModelSelection(validModel(model), validEffort(effort));
+    }
+
+    private static String validModel(String model) {
+        try {
+            return new ModelSelection(model, null).model();
+        } catch (IllegalArgumentException stale) {
+            return null;
+        }
+    }
+
+    private static String validEffort(String effort) {
+        try {
+            return new ModelSelection(null, effort).effort();
+        } catch (IllegalArgumentException stale) {
+            return null;
+        }
+    }
+
     /** The claude command line flags that apply this selection; empty for the default. */
     public List<String> arguments() {
         var flags = new ArrayList<String>();

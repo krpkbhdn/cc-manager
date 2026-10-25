@@ -53,6 +53,22 @@ class GitConflictServiceTest {
     }
 
     @Test
+    void aFileNameWithGlobCharactersResolvesOnlyThatFile() {
+        repo.commit("[id].tsx", "main\n", "main route");
+        repo.commit("i.tsx", "i\n", "other file");
+        repo.git("checkout", "-q", "feature");
+        repo.commit("[id].tsx", "feature\n", "feature route");
+        repo.git("checkout", "-q", "main");
+        conflictingMerge();
+        repo.write("i.tsx", "unsaved edit\n");
+
+        service.resolve(repo.root(), "[id].tsx", ConflictSide.OURS);
+
+        assertThat(repo.read("[id].tsx")).isEqualTo("main\n");
+        assertThat(repo.read("i.tsx")).isEqualTo("unsaved edit\n");
+    }
+
+    @Test
     void duringARebaseOursIsStillTheBranchBeingRebasedNotTheTarget() {
         conflictingRebase();
 

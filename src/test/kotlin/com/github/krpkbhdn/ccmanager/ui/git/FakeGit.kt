@@ -9,6 +9,7 @@ import com.github.krpkbhdn.ccmanager.git.GitHistoryService
 import com.github.krpkbhdn.ccmanager.git.GitIndexService
 import com.github.krpkbhdn.ccmanager.git.GitLog
 import com.github.krpkbhdn.ccmanager.git.GitLogService
+import com.github.krpkbhdn.ccmanager.git.GraphState
 import com.github.krpkbhdn.ccmanager.git.GitMisc
 import com.github.krpkbhdn.ccmanager.git.GitStashService
 import com.github.krpkbhdn.ccmanager.git.GitStatus
@@ -43,12 +44,13 @@ class FakeRepoData(
     /** One-shot failure thrown by the next mutating call. */
     @Volatile var failure: GitException? = null
     val calls: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
+    val logContinuations: MutableList<GraphState?> = java.util.Collections.synchronizedList(mutableListOf())
     val patches: MutableList<Pair<String, Boolean>> = java.util.Collections.synchronizedList(mutableListOf())
     val watchers: MutableList<Runnable> = java.util.Collections.synchronizedList(mutableListOf())
     var progressDelayMillis: Long = 0
 
     fun status() = if (!repository) GitStatus.notARepository() else GitStatus(
-        true, branch, rows.firstOrNull()?.commit()?.hash() ?: "0".repeat(HASH_LENGTH), branch == null, upstream, ahead, behind, operation, stashes.size, changes.toList(),
+        true, branch, rows.firstOrNull()?.commit()?.hash() ?: "0".repeat(HASH_LENGTH), branch == null, upstream, ahead, behind, operation, stashes.size, stashes.firstOrNull()?.hash(), changes.toList(),
     )
 
     fun fire() = watchers.toList().forEach { it.run() }
@@ -139,6 +141,11 @@ class FakeGit(val data: FakeRepoData) {
             val page = matching.drop(query.skip()).take(query.limit())
             return GitLog.Page(page, matching.size > query.skip() + page.size)
         }
+        override fun log(repo: Path, query: GitLog.Query, previous: GraphState?): StatefulPage {
+            data.logContinuations += previous
+            val page = log(repo, query)
+            return StatefulPage(page, GraphState(emptyList(), query.skip() + page.rows().size))
+        }
         override fun details(repo: Path, hash: String): GitLog.Details {
             val commit = data.rows.map { it.commit() }.firstOrNull { it.hash() == hash || hash == "HEAD" } ?: data.rows.first().commit()
             return GitLog.Details(commit, data.detailFiles)
@@ -148,13 +155,13 @@ class FakeGit(val data: FakeRepoData) {
     private fun stashes() = object : GitStashService(GitRunner()) {
         override fun list(repo: Path) = data.stashes.toList()
         override fun push(repo: Path, message: String, includeUntracked: Boolean) = mutate("stash $message untracked=$includeUntracked") {
-            data.stashes.add(0, GitMisc.Stash(0, message.ifBlank { "WIP on ${data.branch}" }, data.branch ?: "HEAD", Instant.now()))
+            data.stashes.add(0, GitMisc.Stash(0, message.ifBlank { "WIP on ${data.branch}" }, data.branch ?: "HEAD", Instant.now(), "h${data.stashes.size}"))
             data.changes.clear()
         }
-        override fun apply(repo: Path, index: Int) = mutate("stashApply $index") {}
-        override fun pop(repo: Path, index: Int) = mutate("stashPop $index") { data.stashes.removeIf { it.index() == index } }
-        override fun drop(repo: Path, index: Int) = mutate("stashDrop $index") { data.stashes.removeIf { it.index() == index } }
-        override fun show(repo: Path, index: Int) = GitDiff(true, data.detailFiles)
+        override fun apply(repo: Path, index: Int, hash: String) = mutate("stashApply $index") {}
+        override fun pop(repo: Path, index: Int, hash: String) = mutate("stashPop $index") { data.stashes.removeIf { it.index() == index } }
+        override fun drop(repo: Path, index: Int, hash: String) = mutate("stashDrop $index") { data.stashes.removeIf { it.index() == index } }
+        override fun show(repo: Path, hash: String) = GitDiff(true, data.detailFiles)
     }
 
     private fun history() = object : GitHistoryService(GitRunner()) {

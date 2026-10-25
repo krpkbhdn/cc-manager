@@ -5,10 +5,8 @@ import com.github.krpkbhdn.ccmanager.git.GitMisc.Stash;
 import com.github.krpkbhdn.ccmanager.workspace.GitDiff;
 import com.github.krpkbhdn.ccmanager.workspace.GitDiff.ChangeType;
 import com.github.krpkbhdn.ccmanager.workspace.GitDiff.FileDiff;
-import com.github.krpkbhdn.ccmanager.workspace.GitDiffService;
 import com.github.krpkbhdn.ccmanager.workspace.UnifiedDiffParser;
 import java.nio.file.Path;
-import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -19,11 +17,12 @@ import org.springframework.stereotype.Service;
 @Service
 public class GitStashService {
 
-    private static final String LIST_FORMAT = "--format=%x1e%gd%x1f%gs%x1f%cI";
+    private static final String LIST_FORMAT = "--format=%x1e%gd%x1f%gs%x1f%cI%x1f%H";
     private static final Pattern INDEX = Pattern.compile("stash@\\{(\\d+)}");
     private static final Pattern SUBJECT = Pattern.compile("^(?:WIP on|On) ([^:]+): (.*)$", Pattern.DOTALL);
+    static final String STASH_CHANGED = "The stash list changed, refresh";
     private static final String NOTHING_TO_STASH = "No local changes to save";
-    private static final int FIELD_COUNT = 3;
+    private static final int FIELD_COUNT = 4;
 
     private final GitRunner git;
 
@@ -47,7 +46,7 @@ public class GitStashService {
         var subject = SUBJECT.matcher(fields[1]);
         var found = subject.matches();
         return new Stash(index.matches() ? Integer.parseInt(index.group(1)) : 0, found ? subject.group(2) : fields[1],
-                found ? subject.group(1) : null, OffsetDateTime.parse(fields[2].strip()).toInstant());
+                found ? subject.group(1) : null, GitLogParser.instant(fields[2].strip()), fields[3].strip());
     }
 
     public void push(Path repo, String message, boolean includeUntracked) {
@@ -63,21 +62,32 @@ public class GitStashService {
         }
     }
 
-    public void apply(Path repo, int index) {
+    public void apply(Path repo, int index, String hash) {
+        requireUnchanged(repo, index, hash);
         git.out(repo, "stash", "apply", ref(index));
     }
 
-    public void pop(Path repo, int index) {
+    public void pop(Path repo, int index, String hash) {
+        requireUnchanged(repo, index, hash);
         git.out(repo, "stash", "pop", ref(index));
     }
 
-    public void drop(Path repo, int index) {
+    public void drop(Path repo, int index, String hash) {
+        requireUnchanged(repo, index, hash);
         git.out(repo, "stash", "drop", ref(index));
     }
 
-    /** Tracked changes of the entry, plus its untracked files (stored as the entry's third parent) as UNTRACKED. */
-    public GitDiff show(Path repo, int index) {
-        var ref = ref(index);
+    /** The list shown to the user may be stale (another session stashed), so positions alone are not trusted. */
+    private void requireUnchanged(Path repo, int index, String hash) {
+        var current = git.tryRun(repo, "rev-parse", "--verify", "--quiet", ref(index));
+        if (!current.ok() || !current.stdout().strip().equals(hash)) {
+            throw new GitException(Kind.OTHER, STASH_CHANGED, "");
+        }
+    }
+
+    /** Tracked changes of the entry (addressed by hash, positions shift), plus its untracked files (stored as the entry's third parent) as UNTRACKED. */
+    public GitDiff show(Path repo, String hash) {
+        var ref = hash;
         var files = new ArrayList<>(parseDiff(git.out(repo, "diff", "--no-color", "--no-ext-diff", "-M", ref + "^1", ref)));
         if (git.tryRun(repo, "rev-parse", "--verify", "--quiet", ref + "^3").ok()) {
             parseDiff(git.out(repo, "show", "--format=", "--no-color", "--no-ext-diff", "--root", ref + "^3")).stream()
@@ -88,12 +98,12 @@ public class GitStashService {
     }
 
     private static List<FileDiff> parseDiff(String diff) {
-        return UnifiedDiffParser.parse(diff, GitDiffService.MAX_LINES_PER_FILE, GitDiffService.MAX_TOTAL_LINES);
+        return UnifiedDiffParser.parse(diff, UnifiedDiffParser.MAX_LINES_PER_FILE, UnifiedDiffParser.MAX_TOTAL_LINES);
     }
 
     private static FileDiff asUntracked(FileDiff file) {
         return new FileDiff(file.path(), file.oldPath(), ChangeType.UNTRACKED, file.additions(), file.deletions(), file.binary(),
-                file.lines());
+                file.lines(), file.fileMode());
     }
 
     private static String ref(int index) {

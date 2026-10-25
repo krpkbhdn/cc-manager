@@ -43,7 +43,7 @@ private const val HASH_MIN_WIDTH = 760f
 
 /** One history line: graph, ref chips and subject, author, age and short hash; cheap enough for thousands of rows. */
 @Composable
-fun LogRowView(row: GitLog.Row, previous: GitLog.Row?, laneCount: Int, selected: Boolean, columns: LogColumns, now: Instant, onClick: () -> Unit) {
+fun LogRowView(row: GitLog.Row, previous: GitLog.Row?, laneCount: Int, selected: Boolean, columns: LogColumns, now: () -> Instant, onClick: () -> Unit) {
     val commit = row.commit()
     val laneColor = graphColor(row.color(), colors.dark)
     Pressable(onClick, Modifier.fillMaxWidth(), RoundedCornerShape(Radius.sm), base = if (selected) colors.accentSoft else Color.Transparent) {
@@ -53,7 +53,7 @@ fun LogRowView(row: GitLog.Row, previous: GitLog.Row?, laneCount: Int, selected:
             Label(commit.subject(), Modifier.weight(1f), color = colors.textPrimary, style = Type.small, tooltipWhenTruncated = true)
             if (columns.author) Label(commit.authorName(), Modifier.width(authorWidth).padding(start = Spacing.sm), color = colors.textSecondary, style = Type.small)
             if (columns.date) WithTooltip(absoluteDate(commit.authorDate())) {
-                Label(commitAge(commit.authorDate(), now), Modifier.width(dateWidth).padding(start = Spacing.sm), color = colors.textTertiary, style = Type.small)
+                Label(commitAge(commit.authorDate(), now()), Modifier.width(dateWidth).padding(start = Spacing.sm), color = colors.textTertiary, style = Type.small)
             }
             if (columns.hash) Label(commit.shortHash(), Modifier.width(hashWidth), color = colors.textTertiary, style = Type.monoSmall)
         }

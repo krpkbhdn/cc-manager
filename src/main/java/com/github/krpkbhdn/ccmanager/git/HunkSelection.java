@@ -67,24 +67,45 @@ final class HunkSelection {
     }
 
     private List<String> block(List<Unit> removals, List<Unit> additions) {
-        var removalLines = removals.stream().map(unit -> change(unit, "-", !forUnstaging)).toList();
-        var additionLines = additions.stream().map(unit -> change(unit, "+", forUnstaging)).toList();
+        var removalLines = removals.stream().map(unit -> change(unit, "-", !forUnstaging, false)).toList();
+        var additionLines = additions.stream().map(unit -> change(unit, "+", forUnstaging, false)).toList();
         var result = new ArrayList<String>();
         if (forUnstaging) {
             var position = firstSelected(additions);
             additionLines.subList(0, position).forEach(result::addAll);
-            removalLines.forEach(result::addAll);
+            var contextFollows = additions.subList(position, additions.size()).stream().anyMatch(unit -> !selected.contains(unit.index()));
+            removals.forEach(unit -> result.addAll(change(unit, "-", false, contextFollows)));
             additionLines.subList(position, additionLines.size()).forEach(result::addAll);
         } else {
             var position = lastSelected(removals) + 1;
-            removalLines.subList(0, position).forEach(result::addAll);
+            if (needsLineBreak(removals, additions, position)) {
+                var last = removals.getLast();
+                removalLines.subList(0, position - 1).forEach(result::addAll);
+                result.add("-" + last.line().text());
+                result.addAll(last.marker());
+                if (additions.stream().noneMatch(unit -> selected.contains(unit.index()) && unit.line().text().equals(last.line().text()))) {
+                    result.add("+" + last.line().text());
+                }
+            } else {
+                removalLines.subList(0, position).forEach(result::addAll);
+            }
             additionLines.forEach(result::addAll);
             removalLines.subList(position, removalLines.size()).forEach(result::addAll);
         }
         return result;
     }
 
-    private List<String> change(Unit unit, String sign, boolean unselectedStaysContext) {
+    /** An untouched last line without a final newline, followed by selected additions, must itself gain its newline or they would be glued to it. */
+    private boolean needsLineBreak(List<Unit> removals, List<Unit> additions, int position) {
+        if (position != removals.size() || removals.isEmpty()) {
+            return false;
+        }
+        var last = removals.getLast();
+        return !last.marker().isEmpty() && !selected.contains(last.index()) && additions.stream().anyMatch(unit -> selected.contains(unit.index()));
+    }
+
+    /** A restored last line loses its "no newline" marker when lines follow it, since it then does end with a newline. */
+    private List<String> change(Unit unit, String sign, boolean unselectedStaysContext, boolean dropMarker) {
         var lines = new ArrayList<String>();
         if (selected.contains(unit.index())) {
             touchedChange = true;
@@ -94,7 +115,9 @@ final class HunkSelection {
         } else {
             return List.of();
         }
-        lines.addAll(unit.marker());
+        if (!dropMarker) {
+            lines.addAll(unit.marker());
+        }
         return lines;
     }
 
