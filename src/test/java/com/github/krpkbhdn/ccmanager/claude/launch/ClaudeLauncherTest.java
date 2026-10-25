@@ -69,4 +69,16 @@ class ClaudeLauncherTest {
         verify(sessions).markEnded("ccm-1", -1);
         verify(hooks).delete("ccm-1");
     }
+
+    @Test
+    void setupSpawnFailureIsReportedLikeAnyOtherLaunch() throws Exception {
+        Path notExecutable = Files.createFile(directory.resolve("claude-fake"));
+        when(installation.current()).thenReturn(new ClaudeInstallation(true, notExecutable, "1", null, null));
+        when(sessions.register(1)).thenReturn("ccm-1");
+        when(hooks.write("ccm-1")).thenReturn(new SessionFiles(directory.resolve("s.json"), directory.resolve("m.json")));
+
+        assertThatThrownBy(() -> launcher.launchSetup(1, "Read it.", directory))
+                .isInstanceOf(IllegalStateException.class).hasMessageStartingWith("Could not start Claude");
+        verify(sessions).markEnded("ccm-1", -1);
+    }
 }

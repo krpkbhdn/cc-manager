@@ -74,7 +74,7 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
     private fun currentProject(): Project? = (state.route as? Route.Project)?.let { route -> state.projects.all.firstOrNull { it.id == route.id } }
 
     private fun modalOpen() = state.confirm != null || state.projects.renaming != null || state.projects.pickerOpen || state.projectSettings != null ||
-        state.taskDialogProjectId != null || state.teams.dialog != null || state.agents.log != null || state.plugins.pending != null || state.mcp.adding || state.skills.creating ||
+        state.taskDialogProjectId != null || state.teams.dialog != null || state.agents.log != null || state.plugins.pending != null || state.mcp.adding || state.skills.creating || state.author.offer != null || state.author.manage != null || state.author.report != null ||
         currentProject()?.let { state.gitOf(it.id)?.dialog } != null
 
     private fun handled(action: () -> Unit): Boolean {

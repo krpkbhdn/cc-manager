@@ -11,6 +11,7 @@ import com.github.krpkbhdn.ccmanager.notification.AppNotification
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.team.Team
+import com.github.krpkbhdn.ccmanager.ui.author.AuthorProfileState
 import com.github.krpkbhdn.ccmanager.ui.extensions.ExtensionContext
 import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.PluginsState
 import com.github.krpkbhdn.ccmanager.ui.projectsettings.ProjectSettingsSection
@@ -124,6 +125,15 @@ class AppState(
     val mcp = McpState(backend.mcp, null, scope, { confirm = it }, notifications::toast)
     private val skillHost = SkillHost(::openDirectory, ::openInIde) { ideAvailable }
     val skills = SkillsState(backend.skills, null, scope, { confirm = it }, notifications::toast, skillHost)
+    val author = AuthorProfileState(
+        backend.author, scope,
+        sessionProject = { (route as? Route.Project)?.let { projects.find(it.id) } ?: projects.all.firstOrNull() },
+        projectOf = projects::find,
+        launchSetup = sessions::launchSetup,
+        mcpOf = { path -> if (path == null) mcp else McpState(backend.mcp, path, scope, { confirm = it }, notifications::toast) },
+        reportError = notifications::reportError,
+        toast = notifications::toast,
+    )
     val update = UpdateState(backend.updates, scope, notifications::reportError, ::requestQuit) { exitApp() }
     var exitApp: () -> Unit = {}
     val agents = AgentsState(backend.transcripts, scope, { live }, ::showSessionTerminal)
@@ -143,6 +153,7 @@ class AppState(
         unsubscribers += backend.notifications.subscribe { notification -> scope.launch { notifications.receive(notification) } }
         backend.sound?.setEnabled(settings.notificationSound)
         teams.start()
+        author.offerAtStart()
         runs.start()
         shells.detect()
         update.start()
@@ -215,6 +226,7 @@ class AppState(
 
     fun navigate(target: Route) {
         route = target
+        (target as? Route.Project)?.let { author.offerForProject(it.id) }
         notificationsOpen = false
         usageOpen = false
         modelPickerOpen = false

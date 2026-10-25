@@ -66,6 +66,7 @@ import org.mockito.ArgumentMatchers.anyInt
 import org.mockito.ArgumentMatchers.anyLong
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.mock
+import com.github.krpkbhdn.ccmanager.author.AuthorProfileService
 import org.mockito.Mockito.`when`
 
 private fun ago(seconds: Long): Instant = Instant.now().minusSeconds(seconds)
@@ -284,7 +285,7 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         val shellLauncher = mock(ShellLauncher::class.java)
         `when`(shellLauncher.launch(anyLong(), any())).thenThrow(IllegalStateException("Preview mode: shells cannot be started here."))
 
-        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), TranscriptService(JsonMapper.builder().build(), previewTranscriptDir), runConfigurationService(), runService(), shellDetector, shellLauncher, terminal = terminal)
+        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), TranscriptService(JsonMapper.builder().build(), previewTranscriptDir), runConfigurationService(), runService(), shellDetector, shellLauncher, mock(AuthorProfileService::class.java), terminal = terminal)
     }
 
     private fun installationNow() = if (claudeInstalled) {

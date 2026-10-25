@@ -56,6 +56,12 @@ public class ClaudeLauncher {
                 (files, exe, selection) -> ClaudeCommand.teamArguments(exe, files, plugin.directory(), team, task));
     }
 
+    /** A session that finishes the author's setup; the prompt points at the staged profile. */
+    public LaunchedSession launchSetup(long projectId, String prompt, Path profileDirectory) {
+        return start(projectId, "claude (author setup)",
+                (files, exe, selection) -> ClaudeCommand.setupArguments(exe, files, plugin.directory(), prompt, profileDirectory));
+    }
+
     /** claude attach ID for a background agent. */
     public LaunchedSession attach(long projectId, String backgroundSessionId) {
         return start(projectId, "attach " + backgroundSessionId,

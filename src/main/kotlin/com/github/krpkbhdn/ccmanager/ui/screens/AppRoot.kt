@@ -58,6 +58,9 @@ import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillsScreen
 import com.github.krpkbhdn.ccmanager.ui.run.RunConfigurationDialog
 import com.github.krpkbhdn.ccmanager.ui.teams.RoleDialog
 import com.github.krpkbhdn.ccmanager.ui.teams.StartTaskDialog
+import com.github.krpkbhdn.ccmanager.ui.author.AuthorConfigurationDialog
+import com.github.krpkbhdn.ccmanager.ui.author.AuthorOfferDialog
+import com.github.krpkbhdn.ccmanager.ui.author.AuthorReportPanel
 import com.github.krpkbhdn.ccmanager.ui.teams.StartTaskActions
 import com.github.krpkbhdn.ccmanager.ui.teams.TeamsScreen
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
@@ -98,6 +101,9 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
         state.projectSettings?.let { ProjectSettingsDialog(it, state::closeProjectSettings) }
         state.plugins.pending?.let { PluginCommandDialog(it, state.plugins.job == null, state.plugins::confirmPending, state.plugins::dismissPending) }
         state.agents.log?.let { SubagentLogHost(state.agents, { state.now }, it) }
+        state.author.offer?.let { AuthorOfferDialog(it, state.author) }
+        state.author.manage?.let { open -> AuthorConfigurationDialog(open, open.projectId?.let { state.projects.find(it)?.name }, state.author) }
+        state.author.report?.let { AuthorReportPanel(it, state.author::closeReport) }
         state.confirm?.let { ConfirmDialog(it) { state.confirm = null } }
         state.projects.renaming?.let { RenameDialog(it, { name -> state.projects.rename(it.project, name) }, { state.projects.renaming = null }) }
         if (state.projects.pickerOpen) FolderPickerDialog(initial = null, onDismiss = { state.projects.pickerOpen = false }, onPicked = state.projects::addAt)

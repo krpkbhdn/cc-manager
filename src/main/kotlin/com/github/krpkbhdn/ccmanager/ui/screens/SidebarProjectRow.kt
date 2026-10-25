@@ -59,6 +59,7 @@ class ProjectActions(
     val onRemove: () -> Unit,
     val onOpenFolder: () -> Unit,
     val onSettings: () -> Unit,
+    val onAuthorConfig: () -> Unit,
 )
 
 fun AppState.projectActions(project: Project) = ProjectActions(
@@ -68,12 +69,14 @@ fun AppState.projectActions(project: Project) = ProjectActions(
     onRemove = { projects.requestRemove(project) },
     onOpenFolder = { openFolder(project) },
     onSettings = { openProjectSettings(project) },
+    onAuthorConfig = { author.openManage(project.id) },
 )
 
 fun projectMenu(actions: ProjectActions): List<MenuEntry> = listOf(
     MenuEntry("Start task with team", Icons.Users) { actions.onStartTask() },
     MenuEntry("Open folder", Icons.FolderOpen) { actions.onOpenFolder() },
     MenuEntry("Project settings", Icons.Settings) { actions.onSettings() },
+    MenuEntry("Author configuration", Icons.Sparkles) { actions.onAuthorConfig() },
     MenuEntry("Rename", Icons.Edit) { actions.onRename() },
     MenuEntry("Remove from manager", Icons.Trash, danger = true) { actions.onRemove() },
 )

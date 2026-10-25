@@ -2,6 +2,7 @@ package com.github.krpkbhdn.ccmanager.ui.state
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.github.krpkbhdn.ccmanager.author.AuthorProfileService
 import com.github.krpkbhdn.ccmanager.claude.hook.HookEventStore
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService
 import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgentService
@@ -88,6 +89,7 @@ class Backend(
     val runs: RunService,
     val shellDetector: ShellDetector,
     val shellLauncher: ShellLauncher,
+    val author: AuthorProfileService,
     val terminal: TerminalPort = HostTerminalPort,
     val updates: UpdateService? = null,
     val sound: NotificationSoundService? = null,
@@ -115,6 +117,7 @@ class Backend(
             runs = context.getBean(RunService::class.java),
             shellDetector = context.getBean(ShellDetector::class.java),
             shellLauncher = context.getBean(ShellLauncher::class.java),
+            author = context.getBean(AuthorProfileService::class.java),
             updates = context.getBean(UpdateService::class.java),
             sound = context.getBean(NotificationSoundService::class.java),
         )

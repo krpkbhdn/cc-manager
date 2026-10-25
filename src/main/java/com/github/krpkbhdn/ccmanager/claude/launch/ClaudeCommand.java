@@ -48,6 +48,14 @@ public final class ClaudeCommand {
         return command;
     }
 
+    /** The author setup session: the staged profile is readable through --add-dir and the first prompt only points at it. */
+    static List<String> setupArguments(Path executable, SessionFiles files, Path pluginDir, String prompt, Path profileDirectory) {
+        List<String> command = base(executable, files);
+        addClaudeManager(command, files, pluginDir);
+        command.addAll(List.of("--add-dir", profileDirectory.toAbsolutePath().toString(), "--", prompt));
+        return command;
+    }
+
     static List<String> attachArguments(Path executable, SessionFiles files, String backgroundSessionId) {
         List<String> command = base(executable, files);
         command.add("attach");

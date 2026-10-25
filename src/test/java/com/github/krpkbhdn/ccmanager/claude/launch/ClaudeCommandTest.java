@@ -50,6 +50,15 @@ class ClaudeCommandTest {
     }
 
     @Test
+    void setupLaunchAddsTheProfileDirectoryAndEndsWithThePromptAfterTheSeparator() {
+        var profile = Path.of("profile").toAbsolutePath();
+
+        assertThat(ClaudeCommand.setupArguments(EXE, FILES, PLUGIN, "Read it.", profile))
+                .containsSequence(CLAUDE_MANAGER_FLAGS)
+                .endsWith("--add-dir", profile.toString(), "--", "Read it.");
+    }
+
+    @Test
     void attachAppendsSubcommandAndId() {
         assertThat(ClaudeCommand.attachArguments(EXE, FILES, "ab12")).endsWith("attach", "ab12");
     }
