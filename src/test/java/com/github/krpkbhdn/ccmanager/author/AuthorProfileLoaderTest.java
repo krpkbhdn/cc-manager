@@ -28,7 +28,8 @@ class AuthorProfileLoaderTest {
         var team = loader.teamTemplates().getFirst();
 
         assertThat(team.name()).isEqualTo("Dev team");
-        assertThat(team.roles()).extracting(role -> role.name()).containsExactly("architect", "developer", "tester");
+        assertThat(team.roles()).extracting(role -> role.name()).containsExactly("architect", "researcher", "developer", "tester", "debater");
+        assertThat(team.roles()).filteredOn(role -> role.lead()).hasSize(1);
     }
 
     @Test

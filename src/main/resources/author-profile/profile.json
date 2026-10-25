@@ -26,5 +26,5 @@
     "prompt": "project/session-prompt.md",
     "extensions": {"marketplaces": [], "plugins": [], "skills": [], "mcpServers": []}
   },
-  "teams": {"version": 1, "title": "Agent teams", "summary": "The author's agent teams.", "templates": ["teams/dev-team.json"]}
+  "teams": {"version": 2, "title": "Agent teams", "summary": "The author's agent teams.", "templates": ["teams/dev-team.json"]}
 }
