@@ -44,7 +44,7 @@ private val stems = listOf("sql", "docker", "k8s", "api", "test", "docs", "lint"
 private val tails = listOf("helper", "toolkit", "assistant", "inspector", "bridge", "reviewer", "kit")
 
 /** Plugin catalogue for the preview: a few installs across scopes, a generated catalogue, three marketplaces. */
-class FakePlugins : PluginService(mock(ClaudeCli::class.java), ExtensionProperties(30, 180, 90)) {
+class FakePlugins : PluginService(mock(ClaudeCli::class.java), ExtensionProperties(30, 180, 90, 300)) {
     private val random = Random(7)
     private var installs = mutableListOf(
         install("frontend-design@claude-plugins-official", "1.2.0", ExtensionScope.USER, true),

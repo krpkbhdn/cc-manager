@@ -9,6 +9,9 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 
@@ -23,11 +26,13 @@ public class McpService {
 
     private final ClaudeCli cli;
     private final McpConfigReader configReader;
+    private final McpCredentialReader credentials;
     private final ExtensionProperties properties;
 
-    McpService(ClaudeCli cli, McpConfigReader configReader, ExtensionProperties properties) {
+    McpService(ClaudeCli cli, McpConfigReader configReader, McpCredentialReader credentials, ExtensionProperties properties) {
         this.cli = cli;
         this.configReader = configReader;
+        this.credentials = credentials;
         this.properties = properties;
     }
 
@@ -76,6 +81,31 @@ public class McpService {
             root.path(field).forEach(value -> values.add(value.asString("")));
         }
         return values.stream().filter(value -> !value.isBlank()).sorted(Comparator.comparingInt(String::length).reversed()).toList();
+    }
+
+    /** Names of servers with a stored OAuth token; empty when unknown. Never exposes the tokens. */
+    public Set<String> loggedInServers() {
+        return credentials.loggedInServers();
+    }
+
+    /**
+     * Browser OAuth sign-in in a pseudo terminal (claude refuses without one): blocks until the redirect arrives or the
+     * login timeout passes. Interrupting the thread kills the process, which is how a caller cancels.
+     * @param onSignInUrl called once with the sign-in page claude prints for when the browser did not open
+     */
+    public void login(String name, Path projectDirectory, Consumer<String> onSignInUrl) {
+        var arguments = List.of("mcp", "login", requireValidName(name));
+        var urlReported = new AtomicBoolean();
+        var result = cli.executeInTerminal(projectDirectory, properties.mcpLoginTimeout(), arguments, output ->
+                McpLoginOutput.signInUrl(output).filter(url -> urlReported.compareAndSet(false, true)).ifPresent(onSignInUrl));
+        if (!result.succeeded()) {
+            var text = McpLoginOutput.failureText(result.stdout() + "\n" + result.stderr());
+            throw new ExtensionException("claude mcp login failed: " + (text.isBlank() ? "exit code " + result.exitCode() : text), text);
+        }
+    }
+
+    public void logout(String name, Path projectDirectory) {
+        cli.executeChecked(projectDirectory, properties.queryTimeout(), List.of("mcp", "logout", requireValidName(name)));
     }
 
     public void remove(String name, ExtensionScope scope, Path projectDirectory) {

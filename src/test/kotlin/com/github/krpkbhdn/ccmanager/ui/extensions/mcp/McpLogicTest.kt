@@ -114,4 +114,35 @@ class McpLogicTest {
 
         assertThat(groups.plugins.single().removable).isFalse()
     }
+
+    @Test
+    fun authenticateIsOfferedOnlyWhereClaudeSaysAuthenticationIsNeeded() {
+        assertThat(canAuthenticate(McpStatus.NEEDS_AUTHENTICATION)).isTrue()
+        assertThat(McpStatus.entries.filter { canAuthenticate(it) }).containsExactly(McpStatus.NEEDS_AUTHENTICATION)
+        assertThat(canAuthenticate(null)).isFalse()
+    }
+
+    @Test
+    fun logOutIsOfferedOnlyForAServerWithAStoredToken() {
+        val loggedIn = setOf("github", "plugin:context7:context7")
+
+        assertThat(canLogOut("github", loggedIn)).isTrue()
+        assertThat(canLogOut("plugin:context7:context7", loggedIn)).isTrue()
+        assertThat(canLogOut("git", loggedIn)).isFalse()
+        assertThat(canLogOut("claude.ai Canva", loggedIn)).isFalse()
+        assertThat(canLogOut("github", emptySet())).isFalse()
+    }
+
+    @Test
+    fun connectorsAreAReadOnlyGroupWithoutThePrefix() {
+        val health = listOf(McpHealth("claude.ai Canva", "https://api.anthropic.com/v1/pages/mcp", McpStatus.NEEDS_AUTHENTICATION, ""), McpHealth("plugin:a:b", "x", McpStatus.CONNECTED, ""))
+
+        val groups = mcpGroups(emptyList(), health, inProject)
+
+        assertThat(groups.connectors.map { it.displayName }).containsExactly("Canva")
+        assertThat(groups.connectors.single().removable).isFalse()
+        assertThat(groups.plugins.map { it.name }).containsExactly("plugin:a:b")
+        assertThat(canAuthenticate(health.first().status)).isTrue()
+        assertThat(canLogOut("claude.ai Canva", emptySet())).isFalse()
+    }
 }

@@ -15,11 +15,15 @@ import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.ExtensionFailure
 import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.UNEXPECTED_ERROR
 import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.failureOf
 import com.github.krpkbhdn.ccmanager.ui.state.ConfirmRequest
+import java.awt.Desktop
+import java.net.URI
 import java.nio.file.Path
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 
 enum class HealthCheck { IDLE, RUNNING, DONE, FAILED }
@@ -52,6 +56,12 @@ class McpState(
         private set
     var healthMessage by mutableStateOf("")
         private set
+    var loggedIn by mutableStateOf<Set<String>>(emptySet())
+        private set
+    var signInUrl by mutableStateOf<String?>(null)
+        private set
+    var signingIn by mutableStateOf<String?>(null)
+        private set
     var loaded by mutableStateOf(false)
         private set
     var loading by mutableStateOf(false)
@@ -65,6 +75,7 @@ class McpState(
         get() = mutations.failure
         set(value) { mutations.failure = value }
     private var healthRun = 0
+    private var signInJob: Job? = null
 
     fun ensureLoaded() {
         if (!loaded && !loading) refresh()
@@ -96,6 +107,7 @@ class McpState(
         healthCheck = HealthCheck.RUNNING
         scope.launch {
             try {
+                loggedIn = withContext(Dispatchers.IO) { service.loggedInServers() }
                 val result = withContext(Dispatchers.IO) { service.health(projectPath) }
                 if (run == healthRun) { health = result; healthCheck = HealthCheck.DONE }
             } catch (e: CancellationException) {
@@ -107,6 +119,58 @@ class McpState(
     }
 
     fun statusOf(name: String): McpHealth? = health.firstOrNull { it.name == name }
+
+    fun canAuthenticate(name: String) = signingIn == null && canAuthenticate(statusOf(name)?.status)
+
+    fun canLogOut(name: String) = job == null && canLogOut(name, loggedIn)
+
+    /** Runs `claude mcp login`, which waits for the browser; [cancelSignIn] interrupts the thread and so kills the process. */
+    fun signIn(name: String) {
+        if (signingIn != null) return
+        signingIn = name
+        failure = null
+        signInJob = scope.launch {
+            try {
+                withContext(Dispatchers.IO) { runInterruptible { service.login(name, projectPath) { signInUrl = it } } }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: RuntimeException) {
+                failure = failureOf("Signing in to $name", e)
+            } finally {
+                signingIn = null
+                signInUrl = null
+                signInJob = null
+                recheck(name)
+            }
+        }
+    }
+
+    fun cancelSignIn() {
+        signInJob?.cancel()
+    }
+
+    /** Fallback when the browser did not open on its own; only web addresses are handed to the system. */
+    fun openSignInPage() {
+        val url = signInUrl?.takeIf { it.startsWith("https://") || it.startsWith("http://") } ?: return
+        try {
+            Desktop.getDesktop().browse(URI(url))
+        } catch (e: Exception) {
+            notify(NotificationKind.ERROR, "Could not open the sign-in page", "Open your browser and try signing in again.")
+        }
+    }
+
+    fun requestLogOut(entry: McpEntry) {
+        val message = "Clears the stored sign-in of ${entry.name}. You will have to authenticate again to use it."
+        confirm(ConfirmRequest("Log out of ${entry.displayName}?", message, "Log out") {
+            mutations.run("Logging out of ${entry.displayName}", entry.key, { service.logout(entry.name, projectPath) }) { recheck(entry.name) }
+        })
+    }
+
+    /** Forgets the stale status of [name] so it shows as checking, then re-checks health, which also re-reads the stored sign-ins. */
+    private fun recheck(name: String) {
+        health = health.filterNot { it.name == name }
+        checkHealth()
+    }
 
     fun loadDetails(entry: McpEntry) {
         if (details[entry.key] is RawDetails.Loaded || details[entry.key] == RawDetails.Loading) return

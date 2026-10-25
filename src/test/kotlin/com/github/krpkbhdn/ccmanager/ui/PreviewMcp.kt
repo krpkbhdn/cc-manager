@@ -15,6 +15,8 @@ import org.mockito.Mockito.doAnswer
 
 private const val HEALTH_DELAY_MILLIS = 2_500L
 private const val WRITE_DELAY_MILLIS = 700L
+private const val LOGIN_DELAY_MILLIS = 1_500L
+private const val WAITING_FOREVER_MILLIS = 3_600_000L
 
 /** MCP servers for the preview: user, project and local servers over all transports, one pending .mcp.json server, plugin servers. */
 class FakeMcp {
@@ -31,7 +33,7 @@ class FakeMcp {
         McpServerConfig("figma", ExtensionScope.PROJECT, "sse", "https://mcp.figma.com/sse", McpApproval.DISABLED),
         McpServerConfig("dev-db", ExtensionScope.LOCAL, "stdio", "docker", McpApproval.NOT_REQUIRED),
     )
-    private val statuses = mapOf(
+    private val statuses = mutableMapOf(
         "github" to (McpStatus.CONNECTED to "Connected"),
         "context7" to (McpStatus.CONNECTED to "Connected"),
         "playwright" to (McpStatus.CONNECTED to "Connected"),
@@ -43,18 +45,38 @@ class FakeMcp {
         "figma" to (McpStatus.UNKNOWN to "Disabled"),
         "dev-db" to (McpStatus.FAILED to "Failed to connect"),
     )
+    private val loggedIn = mutableSetOf("github")
     private val pluginServers = listOf(
         McpHealth("plugin:frontend-design:preview", "npx -y @frontend-design/preview-mcp", McpStatus.CONNECTED, "Connected"),
         McpHealth("plugin:code-review:github", "https://api.githubcopilot.com/mcp/", McpStatus.NEEDS_AUTHENTICATION, "Needs authentication"),
+        McpHealth("claude.ai Claude Docs", "https://api.anthropic.com/v1/pages/mcp", McpStatus.CONNECTED, "Connected"),
+        McpHealth("claude.ai Canva", "https://api.anthropic.com/v1/pages/mcp", McpStatus.NEEDS_AUTHENTICATION, "Needs authentication"),
         McpHealth("plugin:postgres-tools:pg", "uvx postgres-mcp", McpStatus.FAILED, "Failed to connect"),
     )
 
     val service: McpService = mock(McpService::class.java).also { mock ->
         `when`(mock.servers(any())).thenAnswer { visible(it.getArgument(0)) }
         `when`(mock.health(any())).thenAnswer { Thread.sleep(healthDelayMillis); health(it.getArgument(0)) }
+        `when`(mock.loggedInServers()).thenAnswer { loggedIn.toSet() }
+        doAnswer { login(it.getArgument(0), it.getArgument<java.util.function.Consumer<String>>(2)) }.`when`(mock).login(anyString(), any(), any())
+        doAnswer { logout(it.getArgument(0)) }.`when`(mock).logout(anyString(), any())
         `when`(mock.details(anyString(), any())).thenAnswer { details(it.getArgument(0)) }
         doAnswer { Thread.sleep(WRITE_DELAY_MILLIS); added(it.getArgument(0), it.getArgument(1), it.getArgument(2)) }.`when`(mock).add(anyString(), anyString(), any(), any())
         doAnswer { Thread.sleep(WRITE_DELAY_MILLIS); configured.removeIf { s -> s.name == it.getArgument<String>(0) && s.scope == it.getArgument(1) } }.`when`(mock).remove(anyString(), any(), any())
+    }
+
+    /** The "sentry" sign-in never finishes by itself, so the waiting state and Cancel can be shown; any other server signs in. */
+    private fun login(name: String, onSignInUrl: java.util.function.Consumer<String>) {
+        if (name == "sentry") onSignInUrl.accept("https://sentry.io/oauth/authorize?client_id=ccm&state=preview")
+        Thread.sleep(if (name == "sentry") WAITING_FOREVER_MILLIS else LOGIN_DELAY_MILLIS)
+        loggedIn += name
+        statuses[name] = McpStatus.CONNECTED to "Connected"
+    }
+
+    private fun logout(name: String) {
+        Thread.sleep(WRITE_DELAY_MILLIS)
+        loggedIn -= name
+        statuses[name] = McpStatus.NEEDS_AUTHENTICATION to "Needs authentication"
     }
 
     private fun visible(project: Path?) = configured.filter { project != null || it.scope == ExtensionScope.USER }
@@ -74,6 +96,7 @@ class FakeMcp {
         "github" -> "github:\n  Scope: User config (available in all your projects)\n  Status: Connected\n  Type: http\n  URL: https://api.githubcopilot.com/mcp/\n  Headers:\n    Authorization: Bearer ghp_4f8a91c2d77e0b35a6c1\n    X-MCP-Toolsets: repos,issues,pull_requests\n\nTo remove this server, run: claude mcp remove \"github\" -s user"
         "context7" -> "context7:\n  Scope: User config (available in all your projects)\n  Status: Connected\n  Type: stdio\n  Command: npx\n  Args: -y @upstash/context7-mcp\n  Environment:\n    CONTEXT7_API_KEY=ctx7sk-82b1f5e0-4c1d-47aa-9d5e\n\nTo remove this server, run: claude mcp remove \"context7\" -s user"
         "sentry" -> "sentry:\n  Scope: User config (available in all your projects)\n  Status: Needs authentication\n  Type: sse\n  URL: https://mcp.sentry.dev/sse\n\nTo remove this server, run: claude mcp remove \"sentry\" -s user"
+        "claude.ai Canva" -> "claude.ai Canva:\n  Status: ! Needs authentication\n  Type: http\n  URL: https://api.anthropic.com/v1/pages/mcp"
         else -> "$name:\n  Status: Connected\n  Type: stdio\n  Command: node\n  Args: server.js --port 7421\n  Environment:\n    API_TOKEN=tok_91ac03e7f1\n"
     }
 }

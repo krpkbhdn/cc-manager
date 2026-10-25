@@ -21,6 +21,8 @@ import com.github.krpkbhdn.ccmanager.ui.components.Glyph
 import com.github.krpkbhdn.ccmanager.ui.components.IconButton
 import com.github.krpkbhdn.ccmanager.ui.components.Label
 import com.github.krpkbhdn.ccmanager.ui.components.Spinner
+import com.github.krpkbhdn.ccmanager.ui.components.AppButton
+import com.github.krpkbhdn.ccmanager.ui.extensions.BusyLabel
 import com.github.krpkbhdn.ccmanager.ui.extensions.ListCard
 import com.github.krpkbhdn.ccmanager.ui.extensions.ScopeBadge
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
@@ -94,9 +96,10 @@ fun McpRow(entry: McpEntry, state: McpState) {
             }
             Label(entry.target.ifBlank { "No target" }, color = colors.textTertiary, style = Type.monoSmall, tooltipWhenTruncated = true)
         }
-        entry.scope?.let { ScopeBadge(it) } ?: Chip("Plugin", colors.neutral)
+        entry.scope?.let { ScopeBadge(it) } ?: Chip(if (entry.connector) "Connector" else "Plugin", colors.neutral)
         entry.approval.label()?.let { Chip(it, entry.approval.tint()) }
         HealthMark(state, entry.name)
+        SignInAction(entry, state)
         if (entry.removable) IconButton(Icons.Trash, { state.requestRemove(entry) }, tooltip = "Remove", tint = colors.danger, enabled = state.job == null)
     }
 }
@@ -106,5 +109,14 @@ fun TransportBadge(entry: McpEntry) {
     val icon = entry.transport?.icon ?: Icons.Plug
     Box(Modifier.size(transportBox).clip(RoundedCornerShape(Radius.md)).background(colors.accent.copy(alpha = Alpha.SOFT)), contentAlignment = Alignment.Center) {
         Glyph(icon, colors.accent, size = IconSize.xlarge)
+    }
+}
+
+/** Compact sign-in affordance beside the status; shown only while the server needs authentication, or while its sign-in runs. */
+@Composable
+private fun SignInAction(entry: McpEntry, state: McpState) {
+    when {
+        state.signingIn == entry.name -> BusyLabel("Signing in")
+        state.canAuthenticate(entry.name) -> AppButton("Sign in", { state.signIn(entry.name) }, icon = Icons.LogIn, compact = true, tooltip = "Authenticate ${entry.displayName} in your browser")
     }
 }

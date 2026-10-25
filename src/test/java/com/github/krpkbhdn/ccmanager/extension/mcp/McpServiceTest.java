@@ -9,6 +9,7 @@ import com.github.krpkbhdn.ccmanager.extension.ExtensionProperties;
 import com.github.krpkbhdn.ccmanager.extension.ExtensionScope;
 import com.github.krpkbhdn.ccmanager.extension.RecordingCli;
 import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class McpServiceTest {
@@ -16,7 +17,7 @@ class McpServiceTest {
     private static final Path PROJECT = Path.of("/work/project");
     private final RecordingCli cli = new RecordingCli();
     private final McpService service =
-            new McpService(cli, mock(McpConfigReader.class), new ExtensionProperties(30, 180, 90));
+            new McpService(cli, mock(McpConfigReader.class), mock(McpCredentialReader.class), new ExtensionProperties(30, 180, 90, 300));
 
     @Test
     void addPassesTheJsonAsOneArgumentInTheProjectDirectory() {
@@ -58,6 +59,28 @@ class McpServiceTest {
                     assertThat(e.getMessage()).doesNotContain("SECRET").contains("<config>");
                     assertThat(e.output()).doesNotContain("SECRET");
                 });
+    }
+
+    @Test
+    void loginUsesTheProjectDirectoryAndRejectsFlagLikeNames() {
+        service.login("claude.ai Canva", PROJECT, url -> {});
+        service.logout("plugin:context7:context7", PROJECT);
+
+        assertThat(cli.calls).containsExactly(List.of("mcp", "login", "claude.ai Canva"), List.of("mcp", "logout", "plugin:context7:context7"));
+        assertThat(cli.directories).containsExactly(PROJECT, PROJECT);
+        assertThatThrownBy(() -> service.login("--no-browser", PROJECT, url -> {})).isInstanceOf(ExtensionException.class);
+    }
+
+    @Test
+    void loginRunsInATerminalReportsTheSignInPageOnceAndExplainsFailures() {
+        var urls = new java.util.ArrayList<String>();
+        cli.answering(1, "Couldn't complete authentication: boom\n[mcp-sdk] noise\nIf the browser didn't open, visit:\n  https://x.test/auth?s=1\nWaiting for authorization", "");
+
+        assertThatThrownBy(() -> service.login("s", PROJECT, urls::add))
+                .isInstanceOf(ExtensionException.class)
+                .hasMessage("claude mcp login failed: Couldn't complete authentication: boom");
+        assertThat(cli.terminalCalls).containsExactly(List.of("mcp", "login", "s"));
+        assertThat(urls).containsExactly("https://x.test/auth?s=1");
     }
 
     @Test

@@ -5,6 +5,7 @@ import com.github.krpkbhdn.ccmanager.extension.ExtensionScope
 import com.github.krpkbhdn.ccmanager.extension.mcp.McpApproval
 import com.github.krpkbhdn.ccmanager.extension.mcp.McpHealth
 import com.github.krpkbhdn.ccmanager.extension.mcp.McpServerConfig
+import com.github.krpkbhdn.ccmanager.extension.mcp.McpStatus
 import com.github.krpkbhdn.ccmanager.ui.extensions.ExtensionContext
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import tools.jackson.databind.json.JsonMapper
@@ -94,28 +95,36 @@ data class McpEntry(
     val target: String,
     val approval: McpApproval,
     val inherited: Boolean,
+    val connector: Boolean = false,
 ) {
-    val fromPlugin: Boolean get() = scope == null
+    val fromPlugin: Boolean get() = scope == null && !connector
     val key: String get() = mcpKey(scope, name)
-    val removable: Boolean get() = !inherited && !fromPlugin
-    val displayName: String get() = if (fromPlugin) name.removePrefix(PLUGIN_PREFIX).substringAfter(':') else name
+    val removable: Boolean get() = !inherited && scope != null
+    val displayName: String get() = when {
+        connector -> name.removePrefix(McpHealth.CONNECTOR_PREFIX)
+        fromPlugin -> name.removePrefix(PLUGIN_PREFIX).substringAfter(':')
+        else -> name
+    }
     val pluginName: String get() = name.removePrefix(PLUGIN_PREFIX).substringBefore(':')
 }
 
-data class McpGroups(val own: List<McpEntry>, val inherited: List<McpEntry>, val plugins: List<McpEntry>) {
-    val size: Int get() = own.size + inherited.size + plugins.size
+data class McpGroups(val own: List<McpEntry>, val inherited: List<McpEntry>, val plugins: List<McpEntry>, val connectors: List<McpEntry>) {
+    val size: Int get() = own.size + inherited.size + plugins.size + connectors.size
+    val all: List<McpEntry> get() = own + inherited + plugins + connectors
 }
 
-/** Own servers (project before local), user servers inherited into a project, and plugin servers seen only in [health]. */
+/** Own servers (project before local), user servers inherited into a project, plugin servers and claude.ai connectors seen only in [health]. */
 fun mcpGroups(servers: List<McpServerConfig>, health: List<McpHealth>, context: ExtensionContext): McpGroups {
     val entries = servers.filter { context.sees(it.scope, context.projectPath) }.map {
         McpEntry(it.name, it.scope, transportOf(it.transport), it.target, it.approval, inherited = !context.owns(it.scope, context.projectPath))
     }
     val plugins = health.filter { it.fromPlugin() }.map { McpEntry(it.name, null, null, it.target, McpApproval.NOT_REQUIRED, inherited = false) }
+    val connectors = health.filter { it.fromConnector() }.map { McpEntry(it.name, null, McpTransport.HTTP, it.target, McpApproval.NOT_REQUIRED, inherited = false, connector = true) }
     return McpGroups(
         entries.filterNot { it.inherited }.sortedWith(compareBy<McpEntry> { it.scope }.thenBy { it.name.lowercase() }),
         entries.filter { it.inherited }.sortedBy { it.name.lowercase() },
         plugins.sortedBy { it.name.lowercase() },
+        connectors.sortedBy { it.name.lowercase() },
     )
 }
 
@@ -146,3 +155,9 @@ private fun maskEntry(line: String): String {
     if (separator < 0) return line
     return line.substring(0, separator + 1) + (if (line[separator] == ':') " " else "") + MASK
 }
+
+/** Authenticate is offered only for a server claude reports as needing it, whether configured, inherited, from a plugin or a connector. */
+fun canAuthenticate(status: McpStatus?): Boolean = status == McpStatus.NEEDS_AUTHENTICATION
+
+/** Log out is offered only when a stored token belongs to exactly this server. */
+fun canLogOut(name: String, loggedIn: Set<String>): Boolean = name in loggedIn

@@ -14,7 +14,7 @@ class PluginServiceTest {
 
     private static final Path PROJECT = Path.of("/work/project");
     private final RecordingCli cli = new RecordingCli();
-    private final PluginService service = new PluginService(cli, new ExtensionProperties(30, 180, 90));
+    private final PluginService service = new PluginService(cli, new ExtensionProperties(30, 180, 90, 300));
 
     @Test
     void detailsRunInTheProjectDirectoryOfTheInstallation() {

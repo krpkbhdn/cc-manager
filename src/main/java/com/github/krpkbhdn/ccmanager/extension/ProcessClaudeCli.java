@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -26,6 +27,19 @@ class ProcessClaudeCli implements ClaudeCli {
 
     @Override
     public CommandRunner.Result execute(Path directory, Duration timeout, List<String> arguments) {
+        return run(timeout, arguments, command -> CommandRunner.run(command, directory, timeout));
+    }
+
+    @Override
+    public CommandRunner.Result executeInTerminal(Path directory, Duration timeout, List<String> arguments, Consumer<String> onOutput) {
+        return run(timeout, arguments, command -> PtyCommandRunner.run(command, directory, timeout, onOutput));
+    }
+
+    private interface Launch {
+        CommandRunner.Result start(List<String> command) throws IOException;
+    }
+
+    private CommandRunner.Result run(Duration timeout, List<String> arguments, Launch launch) {
         var current = installation.current();
         if (!current.installed() || current.executable() == null) {
             throw new ExtensionException(current.problem() == null ? "Claude Code is not installed" : current.problem());
@@ -34,9 +48,9 @@ class ProcessClaudeCli implements ClaudeCli {
         command.add(current.executable().toString());
         arguments.forEach(argument -> command.add(host.windows() ? WindowsArgument.quote(argument) : argument));
         try {
-            var result = CommandRunner.run(command, directory, timeout);
+            var result = launch.start(command);
             if (result.timedOut()) {
-                throw new ExtensionException("claude " + String.join(" ", arguments.subList(0, Math.min(2, arguments.size()))) + " timed out after " + timeout.toSeconds() + " s");
+                throw new ExtensionException("claude " + String.join(" ", arguments.subList(0, Math.min(DESCRIBED_ARGUMENTS, arguments.size()))) + " timed out after " + timeout.toSeconds() + " s");
             }
             return result;
         } catch (IOException e) {

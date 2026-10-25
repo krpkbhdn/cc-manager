@@ -36,7 +36,7 @@ import com.github.krpkbhdn.ccmanager.ui.theme.colors
 fun McpPage(context: ExtensionContext, state: McpState, modifier: Modifier = Modifier) {
     LaunchedEffect(Unit) { state.ensureLoaded() }
     val groups = remember(state.servers, state.health, context) { mcpGroups(state.servers, state.health, context) }
-    val selected = (groups.own + groups.inherited + groups.plugins).firstOrNull { it.key == state.selected }
+    val selected = groups.all.firstOrNull { it.key == state.selected }
     LaunchedEffect(selected?.key) { selected?.let { state.loadDetails(it) } }
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
@@ -91,6 +91,7 @@ private fun McpList(context: ExtensionContext, state: McpState, groups: McpGroup
         items(groups.own, key = { it.key }) { row(it) }
         listSection("inherited", "Inherited from user", groups.inherited, { it.key }, row)
         listSection("plugins", "From plugins", groups.plugins, { it.key }, row)
+        listSection("connectors", "claude.ai connectors", groups.connectors, { it.key }, row)
     }
 }
 

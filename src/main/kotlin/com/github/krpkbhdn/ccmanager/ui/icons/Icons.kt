@@ -108,6 +108,8 @@ object Icons {
     val CircleDot = lucide("circle-dot")
     val User = lucide("user")
     val Globe = lucide("globe")
+    val LogIn = lucide("log-in")
+    val LogOut = lucide("log-out")
     val Hash = lucide("hash")
     val Link = lucide("link")
     val Users = lucide("users")
