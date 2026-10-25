@@ -134,7 +134,7 @@ class HookSettingsWriterTest {
         assertThat(files.mcpConfig()).isEqualTo(ownDir().resolve("abc-1.mcp.json"));
         assertThat(mapper.readTree(Files.readString(files.mcpConfig())).path("mcpServers").path("cc-manager").toString())
                 .isEqualTo("{\"type\":\"http\",\"url\":\"" + MCP_URL + "\"}");
-        assertThat(mapper.readTree(Files.readString(files.settings())).path("permissions").path("allow").toString()).isEqualTo("[\"mcp__cc-manager\"]");
+        assertThat(mapper.readTree(Files.readString(files.settings())).path("permissions").path("allow").toString()).isEqualTo("[\"mcp__cc-manager__list_run_configurations\"]");
     }
 
     @Test

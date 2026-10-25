@@ -43,6 +43,8 @@ class FakeRepoData(
 ) {
     /** One-shot failure thrown by the next mutating call. */
     @Volatile var failure: GitException? = null
+    @Volatile var topLevel: Path? = null
+    val statusRepos: MutableList<Path> = java.util.Collections.synchronizedList(mutableListOf())
     val calls: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
     val logContinuations: MutableList<GraphState?> = java.util.Collections.synchronizedList(mutableListOf())
     val patches: MutableList<Pair<String, Boolean>> = java.util.Collections.synchronizedList(mutableListOf())
@@ -70,7 +72,11 @@ class FakeGit(val data: FakeRepoData) {
     val backend = GitBackend(status(), index(), branches(), sync(), log(), stashes(), history(), conflicts(), watcher())
 
     private fun status() = object : GitStatusService(GitRunner()) {
-        override fun status(repo: Path) = data.status()
+        override fun topLevel(folder: Path): Path = data.topLevel ?: folder
+        override fun status(repo: Path): GitStatus {
+            data.statusRepos.add(repo)
+            return data.status()
+        }
         override fun diff(repo: Path, path: String, staged: Boolean): GitDiff.FileDiff =
             (if (staged) data.stagedDiffs[path] else data.unstagedDiffs[path] ?: data.stagedDiffs[path])
                 ?: GitDiff.FileDiff(path, null, GitDiff.ChangeType.MODIFIED, 0, 0, false, emptyList())

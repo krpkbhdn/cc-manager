@@ -162,11 +162,13 @@ class ProposalDialogKeysTest {
     }
 
     @Test
-    fun permissionStartsOnAllowOnceSoEnterAllowsOnce() {
+    fun permissionStartsOnTheReasonSoEnterDoesNotAllowButCtrlEnterDoes() {
         val proposal = PermissionProposal("p", "s", Instant.now(), "", "Bash", mapper.readTree("""{"command":"ls"}"""), emptyList())
         val scene = ProposalDialogHarness(proposal) { context, title -> PermissionDialog(proposal, title, context) }.also { harness = it }
 
         scene.press(Key.Enter)
+        scene.assertNoAnswer()
+        scene.press(Key.Enter, ctrl = true)
 
         assertThat(scene.answered()).isEqualTo(PermissionAllow.once())
     }

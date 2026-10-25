@@ -25,6 +25,7 @@ import com.github.krpkbhdn.ccmanager.ui.components.Glyph
 import com.github.krpkbhdn.ccmanager.ui.components.Label
 import com.github.krpkbhdn.ccmanager.ui.components.Pressable
 import com.github.krpkbhdn.ccmanager.ui.components.WithTooltip
+import com.github.krpkbhdn.ccmanager.ui.state.Keys
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.state.QuickAction
 import com.github.krpkbhdn.ccmanager.ui.state.quickActions
@@ -37,6 +38,7 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
 private val chipHeight = 28.dp
+private const val DRAFT_NOTE = ". A half-typed prompt is cleared first."
 private val COMPACT_BELOW = 800.dp
 
 private fun iconOf(action: QuickAction): ImageVector = when (action.label) {
@@ -70,7 +72,7 @@ fun QuickActionsBar(visible: Boolean, enabled: Boolean, onSend: (String) -> Unit
 @Composable
 private fun QuickActionChip(action: QuickAction, enabled: Boolean, compact: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(Radius.pill)
-    WithTooltip(if (compact) "${action.label}  ${action.hint}" else action.hint) {
+    WithTooltip((if (compact) "${action.label}  ${action.hint}" else action.hint) + if (action.keys.endsWith(Keys.ENTER)) DRAFT_NOTE else "") {
         Pressable(onClick, Modifier.height(chipHeight).alpha(if (enabled) 1f else Alpha.DISABLED).border(1.dp, colors.border, shape), shape, colors.surface, colors.surfaceHover, enabled) {
             Row(
                 Modifier.padding(horizontal = if (compact) Spacing.md - 2.dp else Spacing.md - 1.dp).height(chipHeight),

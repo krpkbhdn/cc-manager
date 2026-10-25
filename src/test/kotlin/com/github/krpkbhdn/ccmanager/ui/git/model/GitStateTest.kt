@@ -56,6 +56,15 @@ class GitStateTest {
     }
 
     @Test
+    fun `a project in a repository subfolder works on the repository top level`() {
+        val data = SampleRepos.busy().also { it.topLevel = Path.of("top") }
+        val (git, _) = open(data)
+
+        assertThat(git.repo).isEqualTo(Path.of("top"))
+        assertThat(data.statusRepos).containsOnly(Path.of("top"))
+    }
+
+    @Test
     fun `staging a file moves it between the lists after the refresh`() {
         val (git, data) = open()
 
@@ -166,6 +175,7 @@ class GitStateTest {
     @Test
     fun `a watcher event refreshes the status`() {
         val (git, data) = open()
+        await { data.watchers.isNotEmpty() }
         assertThat(git.status!!.behind()).isEqualTo(1)
 
         data.behind = 5

@@ -12,7 +12,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import com.github.krpkbhdn.ccmanager.claude.proposal.PermissionProposal
 import com.github.krpkbhdn.ccmanager.ui.components.AppCheckbox
 import com.github.krpkbhdn.ccmanager.ui.components.AppTextField
@@ -25,9 +24,9 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
 private const val COLLAPSED_LINES = 12
-private const val HINTS = "Tab moves · Enter activates · Ctrl+Enter allows"
+private const val HINTS = "Tab moves · Ctrl+Enter allows"
 
-/** Any tool call that needs approval: what it does, optional "remember" choices from Claude's own suggestions, and a reason for denying. Focus starts on Allow. */
+/** Any tool call that needs approval: what it does, optional "remember" choices from Claude's own suggestions, and a reason for denying. Focus starts on the reason, so a stray Enter never allows. */
 @Composable
 internal fun PermissionDialog(proposal: PermissionProposal, title: FrameTitle, context: ProposalContext) {
     val draft = remember { context.draft { PermissionDraft(proposal) } }
@@ -36,13 +35,13 @@ internal fun PermissionDialog(proposal: PermissionProposal, title: FrameTitle, c
         title, context, PERMISSION_WIDTH, focus, HINTS,
         actions = {
             DialogButton("Deny", { context.answer(draft.deny()) })
-            DialogButton("Allow", { context.answer(draft.allow()) }, Modifier.focusRequester(focus), ButtonVariant.PRIMARY)
+            DialogButton("Allow", { context.answer(draft.allow()) }, variant = ButtonVariant.PRIMARY)
         },
         onCtrlEnter = { context.answer(draft.allow()) },
     ) {
         permissionSummary(proposal.toolName(), proposal.toolInput()).forEach { SummaryBlockView(it) }
         if (proposal.suggestions().isNotEmpty()) Remember(proposal, draft)
-        AppTextField(draft.reason, Modifier.fillMaxWidth(), placeholder = "Tell Claude what to do instead (optional)")
+        AppTextField(draft.reason, Modifier.fillMaxWidth(), placeholder = "Tell Claude what to do instead (optional)", focusRequester = focus)
     }
 }
 

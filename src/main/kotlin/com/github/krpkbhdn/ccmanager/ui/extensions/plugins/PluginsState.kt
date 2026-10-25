@@ -195,8 +195,8 @@ class PluginsState(
         })
     }
 
-    fun addMarketplace(source: String, target: ExtensionScope = ExtensionScope.USER, projectPath: Path? = null) {
-        act("Adding ${source.trim()}", ADD_MARKETPLACE_KEY, reloadCatalog = true, call = { service.addMarketplace(source.trim(), target, projectPath) })
+    fun addMarketplace(source: String, target: ExtensionScope = ExtensionScope.USER, projectPath: Path? = null, onAdded: () -> Unit = {}) {
+        act("Adding ${source.trim()}", ADD_MARKETPLACE_KEY, reloadCatalog = true, call = { service.addMarketplace(source.trim(), target, projectPath) }, onSuccess = { onAdded() })
     }
 
     fun updateMarketplace(name: String?) {
@@ -236,8 +236,7 @@ class PluginsState(
     }
 
     private fun <T> act(label: String, key: String, reloadCatalog: Boolean = false, call: () -> T, onSuccess: (T) -> Unit = {}) {
-        mutations.run(label, key, { call() to snapshot() }) { (result, fresh) ->
-            apply(fresh)
+        mutations.runThenReload(label, key, "Could not read plugins", call, ::snapshot, { loadFailure = it }, ::apply) { result ->
             details.clear()
             onSuccess(result)
             if (reloadCatalog) {

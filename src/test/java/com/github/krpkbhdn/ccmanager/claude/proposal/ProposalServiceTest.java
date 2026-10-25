@@ -79,6 +79,14 @@ class ProposalServiceTest {
     }
 
     @Test
+    void holdForASessionThatIsAlreadyGoneReleasesAtOnce() throws Exception {
+        var request = event("gone", HookEventType.PERMISSION_REQUEST, "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"ls\"}}");
+
+        assertThat(released(service.hold(request))).isTrue();
+        assertThat(service.pending()).isEmpty();
+    }
+
+    @Test
     void dismissReleasesTheHeldCallWithAnEmptyBody() throws Exception {
         var held = holdBash();
 
@@ -94,7 +102,9 @@ class ProposalServiceTest {
         holdBash();
         holdBash("{\"tool_name\":\"Edit\",\"agent_id\":\"sub-1\",\"tool_input\":{}}");
         var otherSession = registry.register(2L);
-        service.hold(event(otherSession, HookEventType.PERMISSION_REQUEST, "{\"tool_name\":\"Write\"}"));
+        var otherRequest = event(otherSession, HookEventType.PERMISSION_REQUEST, "{\"tool_name\":\"Write\"}");
+        registry.on(otherRequest);
+        service.hold(otherRequest);
 
         assertThat(service.pending()).hasSize(3);
         assertThat(service.pending(session)).hasSize(2);
@@ -113,16 +123,28 @@ class ProposalServiceTest {
         var main = holdBash();
         var subagent = holdBash("{\"tool_name\":\"Bash\",\"agent_id\":\"sub-1\",\"tool_input\":{}}");
 
-        service.on(event(session, HookEventType.POST_TOOL_USE, "{\"tool_name\":\"Edit\"}"));
+        service.on(event(session, HookEventType.POST_TOOL_USE, "{\"tool_name\":\"Edit\",\"tool_input\":{\"command\":\"ls\"}}"));
         assertThat(service.pending()).hasSize(2);
-        service.on(event("other-session", HookEventType.POST_TOOL_USE, "{\"tool_name\":\"Bash\"}"));
+        service.on(event("other-session", HookEventType.POST_TOOL_USE, "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"ls\"}}"));
         assertThat(service.pending()).hasSize(2);
-        service.on(event(session, HookEventType.POST_TOOL_USE_FAILURE, "{\"tool_name\":\"Bash\"}"));
+        service.on(event(session, HookEventType.POST_TOOL_USE_FAILURE, "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"ls\"}}"));
 
         assertThat(released(main)).isTrue();
         assertThat(service.pending()).hasSize(1);
-        service.on(event(session, HookEventType.PERMISSION_DENIED, "{\"tool_name\":\"Bash\",\"agent_id\":\"sub-1\"}"));
+        service.on(event(session, HookEventType.PERMISSION_DENIED, "{\"tool_name\":\"Bash\",\"agent_id\":\"sub-1\",\"tool_input\":{}}"));
         assertThat(released(subagent)).isTrue();
+    }
+
+    @Test
+    void postToolUseSettlesOnlyTheParallelProposalWithTheSameInput() throws Exception {
+        var first = holdBash("{\"tool_name\":\"WebFetch\",\"tool_input\":{\"url\":\"https://a\"}}");
+        var second = holdBash("{\"tool_name\":\"WebFetch\",\"tool_input\":{\"url\":\"https://b\"}}");
+
+        service.on(event(session, HookEventType.POST_TOOL_USE, "{\"tool_name\":\"WebFetch\",\"tool_input\":{\"url\":\"https://a\"}}"));
+
+        assertThat(released(first)).isTrue();
+        assertThat(second).isNotDone();
+        assertThat(service.pending()).hasSize(1);
     }
 
     @Test

@@ -39,14 +39,13 @@ object TerminalHost {
     fun send(ccmSessionId: String, text: String) {
         val terminal = terminals[ccmSessionId] ?: return
         terminal.session.send(text)
-        if (text == "\r") terminal.connector.forgetEnter()
     }
 
     fun ctrlCWithin(ccmSessionId: String, windowMillis: Long): Boolean =
         terminals[ccmSessionId]?.connector?.ctrlCWithin(windowMillis) == true
 
     fun enterWithin(ccmSessionId: String, windowMillis: Long): Boolean =
-        terminals[ccmSessionId]?.connector?.enterWithin(windowMillis) == true
+        terminals[ccmSessionId]?.session?.enterWithin(windowMillis) == true
 
     /** Moves the keyboard focus into the terminal when it is on screen. */
     fun focus(ccmSessionId: String) {

@@ -33,7 +33,7 @@ private val dialogWidth = 560.dp
 
 /** Create or edit one run configuration; the backend's validation messages are shown under the fields. */
 @Composable
-fun RunConfigurationDialog(form: RunDialogState, runs: RunState) {
+fun RunConfigurationDialog(form: RunDialogState, runs: RunState, dataDir: Path) {
     var error by remember { mutableStateOf<String?>(null) }
     var picking by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
@@ -54,7 +54,7 @@ fun RunConfigurationDialog(form: RunDialogState, runs: RunState) {
     }
     if (picking) {
         val current = runCatching { Path.of(form.directory.text.toString().trim()) }.getOrNull()
-        FolderPickerDialog(current, { picking = false }) { form.directory.setTextAndPlaceCursorAtEnd(it.toString()); picking = false }
+        FolderPickerDialog(current, dataDir, { picking = false }) { form.directory.setTextAndPlaceCursorAtEnd(it.toString()); picking = false }
     }
 }
 

@@ -160,9 +160,10 @@ class AuthorProfileState(
 
     private fun showResult(result: AuthorInstallReport, project: Project?) {
         val lines = result.components().flatMap { it.outcome().report() }
+        val mcpByPath = HashMap<Path?, McpState>()
         val signIns = result.components().flatMap { component ->
             val path = if (component.component() == AuthorComponent.PROJECT_SETUP) project?.path else null
-            component.outcome().signInNeeded().map { AuthorSignIn(it, mcpOf(path)) }
+            component.outcome().signInNeeded().map { AuthorSignIn(it, mcpByPath.getOrPut(path) { mcpOf(path) }) }
         }
         if (result.components().any { it.failed() } || signIns.isNotEmpty()) {
             report = AuthorReport(lines, signIns)

@@ -4,6 +4,7 @@ import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeCommand;
 import com.github.krpkbhdn.ccmanager.claude.launch.PtySpawner;
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession;
 import com.github.krpkbhdn.ccmanager.claude.launch.WindowsArgument;
+import com.github.krpkbhdn.ccmanager.project.ProjectService;
 import com.github.krpkbhdn.ccmanager.workspace.HostEnvironment;
 import com.github.krpkbhdn.ccmanager.workspace.ProcessTree;
 import com.pty4j.PtyProcess;
@@ -11,12 +12,16 @@ import com.pty4j.PtyProcessBuilder;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,6 +32,7 @@ import org.springframework.stereotype.Service;
 public class RunService {
 
     private static final Logger log = LoggerFactory.getLogger(RunService.class);
+    private static final Duration RESTART_EXIT_WAIT = Duration.ofSeconds(5);
 
     private final RunConfigurationService configurations;
     private final RunShell shell;
@@ -35,11 +41,12 @@ public class RunService {
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
     private final AtomicLong counter = new AtomicLong();
 
-    public RunService(RunConfigurationService configurations, RunShell shell, HostEnvironment host) {
+    public RunService(RunConfigurationService configurations, ProjectService projects, RunShell shell, HostEnvironment host) {
         this.configurations = configurations;
         this.shell = shell;
         this.host = host;
         configurations.subscribe(this::dropRunsOfDeletedConfigurations);
+        projects.subscribe(this::dropRunsOfDeletedConfigurations);
     }
 
     /** Restarts the configuration when it is already running.
@@ -50,7 +57,7 @@ public class RunService {
         if (!Files.isDirectory(configuration.directory())) {
             throw new IllegalStateException("The run directory is missing: " + configuration.directory());
         }
-        stop(configurationId);
+        stopAndAwaitExit(configurationId);
         var runId = "run-" + configurationId + "-" + counter.incrementAndGet();
         PtyProcess process;
         try {
@@ -70,6 +77,21 @@ public class RunService {
         var run = runs.get(configurationId);
         if (run != null && run.running()) {
             ProcessTree.kill(run.process());
+        }
+    }
+
+    private void stopAndAwaitExit(long configurationId) {
+        var previous = runs.get(configurationId);
+        stop(configurationId);
+        if (previous == null) {
+            return;
+        }
+        try {
+            previous.process().onExit().get(RESTART_EXIT_WAIT.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException | TimeoutException e) {
+            log.warn("Previous run of configuration {} did not exit in time", configurationId);
         }
     }
 
@@ -99,9 +121,13 @@ public class RunService {
     }
 
     private String[] arguments(String command) {
-        var invocation = shell.invocation(command);
-        var windowsQuoting = host.windows();
-        return invocation.stream().map(argument -> windowsQuoting ? WindowsArgument.quote(argument) : argument).toArray(String[]::new);
+        return quotedForWindows(shell.invocation(command), host.windows());
+    }
+
+    /** cmd.exe parses its own command line and does not understand the backslash-escaped quotes, so its command goes through as is. */
+    static String[] quotedForWindows(List<String> invocation, boolean windows) {
+        var verbatim = !windows || RunShell.isCmd(invocation.getFirst());
+        return invocation.stream().map(argument -> verbatim ? argument : WindowsArgument.quote(argument)).toArray(String[]::new);
     }
 
     private void watchExit(long configurationId, String runId, PtyProcess process) {

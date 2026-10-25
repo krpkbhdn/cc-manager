@@ -27,10 +27,7 @@ class RecentFolders(private val file: Path, private val limit: Int = DEFAULT_LIM
     companion object {
         const val DEFAULT_LIMIT = 8
         private const val FILE_NAME = "recent-folders.txt"
-        private const val DATA_DIR = ".cc-manager"
 
-        fun defaultDataDir(): Path = Path.of(System.getProperty("user.home"), DATA_DIR)
-
-        fun inDefaultDataDir(): RecentFolders = RecentFolders(defaultDataDir().resolve(FILE_NAME))
+        fun inDataDir(dataDir: Path): RecentFolders = RecentFolders(dataDir.resolve(FILE_NAME))
     }
 }

@@ -3,9 +3,11 @@ package com.github.krpkbhdn.ccmanager.run;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.github.krpkbhdn.ccmanager.project.ProjectService;
 import com.github.krpkbhdn.ccmanager.workspace.SystemHostEnvironment;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.flywaydb.core.Flyway;
@@ -26,6 +28,7 @@ class RunServiceTest {
     Path temp;
 
     RunConfigurationService configurations;
+    ProjectService projects;
     RunService runs;
     long projectId;
 
@@ -37,8 +40,9 @@ class RunServiceTest {
         jdbc.sql("INSERT INTO project (name, path, created_at) VALUES ('app', ?, 'now')").param(temp.toString()).update();
         projectId = jdbc.sql("SELECT id FROM project").query(Long.class).single();
         configurations = new RunConfigurationService(jdbc);
+        projects = new ProjectService(jdbc);
         var host = new SystemHostEnvironment();
-        runs = new RunService(configurations, new RunShell(host), host);
+        runs = new RunService(configurations, projects, new RunShell(host), host);
     }
 
     @AfterEach
@@ -90,6 +94,27 @@ class RunServiceTest {
 
         assertThat(runs.current(configuration.id())).isEmpty();
         assertThat(launched.process().waitFor(TIMEOUT.toSeconds(), TimeUnit.SECONDS)).isTrue();
+    }
+
+    @Test
+    void removingTheProjectStopsAndForgetsItsRuns() throws Exception {
+        var configuration = configurations.save(projectId, "long", LONG_COMMAND, temp);
+        var launched = runs.start(configuration.id());
+
+        projects.remove(projectId);
+
+        assertThat(runs.current(configuration.id())).isEmpty();
+        assertThat(launched.process().waitFor(TIMEOUT.toSeconds(), TimeUnit.SECONDS)).isTrue();
+    }
+
+    @Test
+    void cmdReceivesTheCommandVerbatimWhileOtherWindowsShellsGetQuotedArguments() {
+        var command = "npm run x -- --name \"a b\"";
+
+        assertThat(RunService.quotedForWindows(List.of("cmd.exe", "/c", command), true)).containsExactly("cmd.exe", "/c", command);
+        assertThat(RunService.quotedForWindows(List.of("bash.exe", "-c", command), true))
+                .containsExactly("bash.exe", "-c", "\"npm run x -- --name \\\"a b\\\"\"");
+        assertThat(RunService.quotedForWindows(List.of("/bin/sh", "-lc", command), false)).containsExactly("/bin/sh", "-lc", command);
     }
 
     @Test

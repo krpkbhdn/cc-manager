@@ -8,7 +8,10 @@ import java.nio.file.Path;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
-/** Windows only: a detached script waits for this process to exit, runs the per-user MSI upgrade and starts the app again. */
+/**
+ * Windows only: a detached script waits for this process to exit, runs the per-user MSI upgrade and starts the app again.
+ * The paths are script arguments because cmd reads the script in the OEM code page, which mangles non-ASCII user names.
+ */
 @Component
 class UpdateInstaller {
 
@@ -32,14 +35,14 @@ class UpdateInstaller {
         }
         try {
             var script = Files.createTempFile("cc-manager-update", ".cmd");
-            Files.writeString(script, script(ProcessHandle.current().pid(), msi, Path.of(appExecutable)));
-            CommandRunner.startDetached(List.of("cmd.exe", "/c", "start", "\"\"", "/min", script.toString()));
+            Files.writeString(script, script(ProcessHandle.current().pid()));
+            CommandRunner.startDetached(List.of("cmd.exe", "/c", "start", "\"\"", "/min", script.toString(), msi.toString(), appExecutable));
         } catch (IOException e) {
             throw new IllegalStateException("Could not start the installer: " + e.getMessage(), e);
         }
     }
 
-    static String script(long pid, Path msi, Path appExecutable) {
+    static String script(long pid) {
         return """
                 @echo off
                 :wait
@@ -48,9 +51,9 @@ class UpdateInstaller {
                   timeout /t 1 /nobreak >nul
                   goto wait
                 )
-                msiexec /i "%s" /passive /norestart
-                start "" "%s"
+                msiexec /i "%%~1" /passive /norestart
+                start "" "%%~2"
                 del "%%~f0"
-                """.formatted(pid, pid, msi, appExecutable);
+                """.formatted(pid, pid);
     }
 }

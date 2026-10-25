@@ -59,7 +59,7 @@ private const val WINDOW_ICON_SIZE = 256
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun ApplicationScope.AppWindow(backend: Backend, onShutdown: () -> Unit, settingsStore: UiSettingsStore = UiSettingsStore.inUserHome()) {
+fun ApplicationScope.AppWindow(backend: Backend, onShutdown: () -> Unit, settingsStore: UiSettingsStore = UiSettingsStore.inDataDir(backend.dataDir)) {
     val scope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Main) }
     val state = remember { AppState(backend, scope, settingsStore).also { it.start() } }
     DisposableEffect(Unit) { onDispose { state.dispose(); scope.cancel() } }
@@ -81,9 +81,12 @@ fun ApplicationScope.AppWindow(backend: Backend, onShutdown: () -> Unit, setting
         if (exiting.compareAndSet(false, true)) {
             visible = false
             thread(name = "AppShutdown") {
-                TerminalHost.closeAll()
-                onShutdown()
-                SwingUtilities.invokeLater { exitApplication() }
+                try {
+                    TerminalHost.closeAll()
+                    onShutdown()
+                } finally {
+                    SwingUtilities.invokeLater { exitApplication() }
+                }
             }
         }
     }

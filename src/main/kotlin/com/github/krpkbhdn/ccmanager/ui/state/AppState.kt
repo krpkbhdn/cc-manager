@@ -49,7 +49,7 @@ private const val ACTIVITY_LIMIT = 300
 class AppState(
     private val backend: Backend,
     private val scope: CoroutineScope,
-    private val settingsStore: UiSettingsStore = UiSettingsStore.inUserHome(),
+    private val settingsStore: UiSettingsStore = UiSettingsStore.inDataDir(backend.dataDir),
 ) {
     var settings by mutableStateOf(settingsStore.load())
         private set
@@ -323,9 +323,10 @@ class AppState(
 
     /** Starts a lead session for [team] with [task] as its first prompt and opens its terminal. */
     fun startTask(project: Project, team: Team, task: String, makeDefault: Boolean) {
-        taskDialogProjectId = null
-        if (makeDefault) teams.setProjectDefault(project.id, team.id)
-        sessions.launchTeam(project.id, team, task)
+        sessions.launchTeam(project.id, team, task) {
+            taskDialogProjectId = null
+            if (makeDefault) teams.setProjectDefault(project.id, team.id)
+        }
     }
 
     private fun showSessionTerminal(ccmSessionId: String) {
@@ -349,6 +350,8 @@ class AppState(
 
     val terminal: TerminalPort get() = backend.terminal
 
+    val dataDir: Path get() = backend.dataDir
+
     suspend fun activityOf(ccmSessionId: String): List<ActivityEntry> =
         try {
             io { backend.hooks.recent(ccmSessionId, ACTIVITY_LIMIT) }
@@ -370,7 +373,9 @@ class AppState(
 
     private fun forgetRemovedProjects(projectIds: Set<Long>) {
         views.keys.retainAll(projectIds)
-        gitStates.keys.retainAll(projectIds)
+        gitStates.keys.filter { it !in projectIds }.forEach { gitStates.remove(it)?.close() }
+        backgroundAgents.keys.retainAll(projectIds)
+        runs.retainProjects(projectIds)
         (route as? Route.Project)?.takeIf { it.id !in projectIds }?.let { route = Route.Overview }
         sessionReload.request()
     }

@@ -48,4 +48,9 @@ class Refresher(scope: CoroutineScope, private val load: suspend () -> Unit) {
     fun request() {
         requests.trySend(Unit)
     }
+
+    /** Ends the consumer coroutine; later requests are ignored. */
+    fun close() {
+        requests.close()
+    }
 }

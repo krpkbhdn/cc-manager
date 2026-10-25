@@ -48,9 +48,9 @@ class SessionsState(
 
     fun launch(projectId: Long, mode: LaunchMode) = launchSession(projectId) { backend.launcher.launch(projectId, mode) }
 
-    /** Starts a lead session for [team] with [task] as its first prompt. */
-    fun launchTeam(projectId: Long, team: Team, task: String) =
-        launchSession(projectId, team) { backend.launcher.launchTeam(projectId, team, task) }
+    /** Starts a lead session for [team] with [task] as its first prompt; [onStarted] runs only when the session really started. */
+    fun launchTeam(projectId: Long, team: Team, task: String, onStarted: () -> Unit) =
+        launchSession(projectId, team, onStarted) { backend.launcher.launchTeam(projectId, team, task) }
 
     /** Starts the session that finishes the author's setup in [projectId]; [onStarted] runs only when the session really started. */
     fun launchSetup(projectId: Long, handoff: SessionHandoff, onStarted: () -> Unit) =
@@ -129,6 +129,8 @@ class SessionsState(
 
     fun close(projectId: Long, ccmSessionId: String) {
         attachedSessions.remove(ccmSessionId)
+        sessionTeams.remove(ccmSessionId)
+        unconfirmed.remove(ccmSessionId)
         onClosed(projectId, ccmSessionId)
         scope.launch { guarded { io { backend.terminal.close(ccmSessionId) } } }
     }

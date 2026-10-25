@@ -38,6 +38,28 @@ class GitStatusServiceTest {
     }
 
     @Test
+    void topLevelOfASubfolderIsTheRepositoryRootAndDiscardThereDeletesOnlyTheChangedFile() throws Exception {
+        var sandbox = GitCliSandbox.create(root);
+        sandbox.write("sub/a.txt", "x\n");
+        sandbox.write("a.txt", "keep\n");
+        var top = serviceFor(sandbox).topLevel(sandbox.repo.resolve("sub"));
+        assertThat(top.toRealPath()).isEqualTo(sandbox.repo.toRealPath());
+
+        new GitIndexService(sandbox.runner).discard(top, java.util.List.of("sub/a.txt"));
+
+        assertThat(sandbox.repo.resolve("sub/a.txt")).doesNotExist();
+        assertThat(sandbox.repo.resolve("a.txt")).exists();
+    }
+
+    @Test
+    void topLevelOfAFolderOutsideAnyRepositoryIsTheFolderItself() throws Exception {
+        var sandbox = GitCliSandbox.create(root);
+        var outside = java.nio.file.Files.createDirectory(root.resolve("outside"));
+
+        assertThat(serviceFor(sandbox).topLevel(outside)).isEqualTo(outside);
+    }
+
+    @Test
     void aMissingProjectFolderIsNotARepository() {
         var sandbox = GitCliSandbox.create(root);
 

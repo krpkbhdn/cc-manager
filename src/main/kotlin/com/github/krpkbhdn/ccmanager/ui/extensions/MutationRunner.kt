@@ -41,4 +41,17 @@ class MutationRunner(private val scope: CoroutineScope) {
             }
         }
     }
+
+    /** Like [run], but a failing [reload] after a successful [work] goes to [onLoadFailure] instead of turning the action into a failure. */
+    fun <T, R> runThenReload(
+        label: String, key: String, loadTitle: String, work: () -> T, reload: () -> R,
+        onLoadFailure: (ExtensionFailure) -> Unit, onReloaded: (R) -> Unit, onSuccess: (T) -> Unit = {},
+    ) {
+        run(label, key, {
+            work() to try { Result.success(reload()) } catch (e: RuntimeException) { Result.failure(e) }
+        }) { (result, reloaded) ->
+            reloaded.onSuccess(onReloaded).onFailure { onLoadFailure(failureOf(loadTitle, it as RuntimeException)) }
+            onSuccess(result)
+        }
+    }
 }

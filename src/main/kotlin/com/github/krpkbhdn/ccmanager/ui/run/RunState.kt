@@ -57,6 +57,11 @@ class RunState(
         reload.request()
     }
 
+    fun retainProjects(projectIds: Set<Long>) {
+        entries.keys.retainAll(projectIds)
+        selection.keys.retainAll(projectIds)
+    }
+
     fun entriesOf(projectId: Long): List<RunEntry> = entries[projectId].orEmpty()
 
     /** The chosen configuration, falling back to the first one when it was deleted or never chosen. */

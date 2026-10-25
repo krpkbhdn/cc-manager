@@ -1,7 +1,9 @@
 package com.github.krpkbhdn.ccmanager.git;
 
 import com.github.krpkbhdn.ccmanager.git.GitException.Kind;
+import com.github.krpkbhdn.ccmanager.workspace.CommandRunner;
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -111,8 +113,9 @@ public class GitRunner {
         builder.environment().putAll(extraEnvironment);
         try {
             var process = builder.start();
-            var stdout = async(() -> new String(readAll(process), StandardCharsets.UTF_8));
-            var stderr = async(() -> readLines(process, progress));
+            var stdout = new ByteArrayOutputStream();
+            var stderr = new StringBuffer();
+            var readers = CompletableFuture.allOf(CommandRunner.drain(process.getInputStream(), stdout), async(() -> readLines(process, progress, stderr)));
             var stdinWritten = async(() -> writeAndClose(process, stdin));
             if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
                 process.descendants().forEach(ProcessHandle::destroyForcibly);
@@ -120,7 +123,8 @@ public class GitRunner {
                 throw new GitException(Kind.TIMEOUT, "git " + GitFailure.subcommand(args) + " timed out", "");
             }
             stdinWritten.join();
-            return new Result(process.exitValue(), stdout.join(), stderr.join());
+            CommandRunner.awaitReaders(process, readers);
+            return new Result(process.exitValue(), stdout.toString(StandardCharsets.UTF_8), stderr.toString());
         } catch (IOException e) {
             throw new GitException(Kind.GIT_MISSING, "Git is not installed or not on PATH", String.valueOf(e.getMessage()));
         } catch (InterruptedException e) {
@@ -144,16 +148,7 @@ public class GitRunner {
         return null;
     }
 
-    private static byte[] readAll(Process process) {
-        try {
-            return process.getInputStream().readAllBytes();
-        } catch (IOException e) {
-            return new byte[0];
-        }
-    }
-
-    private static String readLines(Process process, Consumer<String> progress) {
-        var text = new StringBuilder();
+    private static Void readLines(Process process, Consumer<String> progress, StringBuffer text) {
         try (var reader = new BufferedReader(new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
             var line = new StringBuilder();
             int c;
@@ -167,9 +162,9 @@ public class GitRunner {
             }
             emit(line, progress);
         } catch (IOException e) {
-            return text.toString();
+            return null;
         }
-        return text.toString();
+        return null;
     }
 
     private static void emit(StringBuilder line, Consumer<String> progress) {

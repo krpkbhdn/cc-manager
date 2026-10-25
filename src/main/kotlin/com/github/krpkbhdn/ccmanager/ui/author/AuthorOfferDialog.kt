@@ -41,7 +41,7 @@ fun AuthorOfferDialog(offer: AuthorOffer, state: AuthorProfileState) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm, Alignment.End)) {
             AppButton("Later", state::closeOffer, enabled = !state.busy)
             AppButton("Decline", state::declineAll, enabled = !state.busy)
-            AppButton("Install", { state.install(offer.chosen(), offer.unchosen()) }, variant = ButtonVariant.PRIMARY, loading = state.busy)
+            AppButton("Install", { state.install(offer.chosen(), offer.unchosen()) }, variant = ButtonVariant.PRIMARY, enabled = offer.chosen().isNotEmpty(), loading = state.busy)
         }
     }
 }

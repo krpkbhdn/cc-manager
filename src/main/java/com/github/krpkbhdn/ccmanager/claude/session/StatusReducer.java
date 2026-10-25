@@ -80,8 +80,8 @@ final class StatusReducer {
                 draft.resolveAction();
                 rememberBackgroundLaunch(draft, event);
             });
-            case PERMISSION_REQUEST, ELICITATION -> state.edit(draft -> draft.requireAction(""));
-            case NOTIFICATION -> ActivityFormatter.needsAttention(event) ? state.edit(draft -> draft.requireAction("")) : state;
+            case PERMISSION_REQUEST, ELICITATION -> state.edit(draft -> draft.requireAction());
+            case NOTIFICATION -> ActivityFormatter.needsAttention(event) ? state.edit(draft -> draft.requireAction()) : state;
             case STOP, STOP_FAILURE -> state.edit(draft -> {
                 endTurn(draft);
                 listedRunningSubagents(event).stream().filter(id -> !id.isEmpty()).forEach(draft::markBackground);
@@ -118,7 +118,7 @@ final class StatusReducer {
         draft.turnOpen = true;
         draft.resolveAction();
         if (USER_DECISION_TOOLS.contains(event.text("tool_name"))) {
-            draft.requireAction(event.text("tool_use_id"));
+            draft.requireAction();
         }
     }
 

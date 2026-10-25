@@ -48,7 +48,11 @@ class ProcessClaudeCli implements ClaudeCli {
         var command = new ArrayList<String>();
         command.add(current.executable().toString());
         if (host.windows()) {
-            WindowsArgument.requireSafeForBatchFile(Stream.concat(command.stream(), arguments.stream()).toList());
+            try {
+                WindowsArgument.requireSafeForBatchFile(Stream.concat(command.stream(), arguments.stream()).toList());
+            } catch (IllegalStateException e) {
+                throw new ExtensionException(e.getMessage());
+            }
         }
         arguments.forEach(argument -> command.add(host.windows() ? WindowsArgument.quote(argument) : argument));
         try {

@@ -56,6 +56,7 @@ public class ProposalService {
             notifyListeners();
         });
         notifyListeners();
+        releaseOfEndedOrInterruptedSessions();
         return decision;
     }
 

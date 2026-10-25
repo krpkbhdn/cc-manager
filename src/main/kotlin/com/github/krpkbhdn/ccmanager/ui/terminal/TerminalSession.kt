@@ -28,6 +28,8 @@ private const val INITIAL_ROWS = 32
 internal const val DEFAULT_CELL_DP = 8
 private const val MIN_CELL_DP = 6
 private const val MAX_CELL_DP = 20
+private const val ENTER_BYTE: Byte = 0x0D
+private const val NANOS_PER_MILLI = 1_000_000L
 
 private fun Color.toJediColor() = com.jediterm.core.Color(toArgb() and 0xFFFFFF)
 
@@ -111,6 +113,13 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
 
     fun send(text: String) = emulator.write(text.toByteArray(Charsets.UTF_8))
 
+    @Volatile
+    private var lastEnterNanos = 0L
+
+    /** True when the user pressed Enter less than [windowMillis] ago: the turn it starts is not WORKING yet and Ctrl+C would abort it. */
+    fun enterWithin(windowMillis: Long): Boolean =
+        lastEnterNanos != 0L && System.nanoTime() - lastEnterNanos < windowMillis * NANOS_PER_MILLI
+
     /** Handles a key event; returns true when it was consumed here. */
     fun onKey(event: KeyInputEvent): Boolean {
         if (event.type == KeyInputEvent.Type.TYPED && suppressTyped && event.modifiersEx != 0) return true
@@ -123,6 +132,7 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
         val bytes = typedPair(event) ?: optionLetterBytes(event)?.also { suppressTyped = true } ?: keyBytes(event, emulator.terminal) ?: return false
         selection = null
         scrollToBottom()
+        if (bytes.size == 1 && bytes[0] == ENTER_BYTE) lastEnterNanos = System.nanoTime()
         emulator.write(bytes)
         return true
     }

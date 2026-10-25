@@ -53,6 +53,9 @@ public class TranscriptService {
         String custom = null;
         String generated = null;
         for (var line : tail(transcriptPath)) {
+            if (!line.contains("-title\"")) {
+                continue;
+            }
             try {
                 var node = mapper.readTree(line);
                 switch (node.path("type").asString("")) {

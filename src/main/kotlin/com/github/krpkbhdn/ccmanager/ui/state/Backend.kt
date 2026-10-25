@@ -10,6 +10,7 @@ import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
 import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalService
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry
+import com.github.krpkbhdn.ccmanager.config.AppProperties
 import com.github.krpkbhdn.ccmanager.claude.session.TranscriptService
 import com.github.krpkbhdn.ccmanager.notification.NotificationService
 import com.github.krpkbhdn.ccmanager.notification.NotificationSoundService
@@ -32,6 +33,7 @@ import com.github.krpkbhdn.ccmanager.usage.SessionUsageService
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import com.github.krpkbhdn.ccmanager.workspace.DirectoryOpener
 import com.github.krpkbhdn.ccmanager.workspace.IdeLauncher
+import java.nio.file.Path
 import org.springframework.context.ConfigurableApplicationContext
 
 /** The terminal widget layer, behind an interface so the UI can be previewed without a real PTY. */
@@ -95,6 +97,7 @@ class Backend(
     val terminal: TerminalPort = HostTerminalPort,
     val updates: UpdateService? = null,
     val sound: NotificationSoundService? = null,
+    val dataDir: Path = Path.of(System.getProperty("user.home"), ".cc-manager"),
 ) {
     companion object {
         fun from(context: ConfigurableApplicationContext) = Backend(
@@ -123,6 +126,7 @@ class Backend(
             proposals = context.getBean(ProposalService::class.java),
             updates = context.getBean(UpdateService::class.java),
             sound = context.getBean(NotificationSoundService::class.java),
+            dataDir = context.getBean(AppProperties::class.java).dataDir(),
         )
     }
 }

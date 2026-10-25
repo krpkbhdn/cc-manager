@@ -97,7 +97,7 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
         if (state.shortcutsOpen) ShortcutSheet { state.shortcutsOpen = false }
         (state.route as? Route.Project)?.let { state.gitOf(it.id) }?.let { GitDialogHost(it) }
         state.taskDialogProjectId?.let { id -> state.projects.all.firstOrNull { it.id == id } }?.let { StartTaskDialog(it, state.teams, startTaskActions(state, it)) }
-        state.runs.dialog?.let { RunConfigurationDialog(it, state.runs) }
+        state.runs.dialog?.let { RunConfigurationDialog(it, state.runs, state.dataDir) }
         state.teams.dialog?.let { open -> state.teams.find(open.teamId)?.let { RoleDialog(it, open, state.teams) } }
         state.projectSettings?.let { ProjectSettingsDialog(it, state::closeProjectSettings) }
         state.plugins.pending?.let { PluginCommandDialog(it, state.plugins.job == null, state.plugins::confirmPending, state.plugins::dismissPending) }
@@ -108,7 +108,7 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
         ProposalDialogHost(state)
         state.confirm?.let { ConfirmDialog(it) { state.confirm = null } }
         state.projects.renaming?.let { RenameDialog(it, { name -> state.projects.rename(it.project, name) }, { state.projects.renaming = null }) }
-        if (state.projects.pickerOpen) FolderPickerDialog(initial = null, onDismiss = { state.projects.pickerOpen = false }, onPicked = state.projects::addAt)
+        if (state.projects.pickerOpen) FolderPickerDialog(initial = null, dataDir = state.dataDir, onDismiss = { state.projects.pickerOpen = false }, onPicked = state.projects::addAt)
         if (dropTarget.hovering) DropOverlay()
     }
 }

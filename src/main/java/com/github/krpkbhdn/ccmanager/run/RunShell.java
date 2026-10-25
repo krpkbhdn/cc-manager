@@ -35,6 +35,10 @@ public class RunShell {
                 .orElseGet(() -> List.of(CMD, "/c", command));
     }
 
+    static boolean isCmd(String executable) {
+        return CMD.equalsIgnoreCase(executable);
+    }
+
     private Optional<Path> gitBash() {
         var configured = host.env(GIT_BASH_ENV);
         if (configured != null && !configured.isBlank() && host.isFile(Path.of(configured))) {

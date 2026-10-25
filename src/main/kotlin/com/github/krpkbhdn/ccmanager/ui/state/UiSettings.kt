@@ -118,9 +118,8 @@ class UiSettingsStore(private val file: Path?) {
     private fun Properties.flag(key: String, default: Boolean): Boolean = getProperty(key)?.toBooleanStrictOrNull() ?: default
 
     companion object {
-        private const val DIRECTORY = ".cc-manager"
         private const val FILE_NAME = "ui-settings.properties"
 
-        fun inUserHome(): UiSettingsStore = UiSettingsStore(Path.of(System.getProperty("user.home"), DIRECTORY, FILE_NAME))
+        fun inDataDir(dataDir: Path): UiSettingsStore = UiSettingsStore(dataDir.resolve(FILE_NAME))
     }
 }

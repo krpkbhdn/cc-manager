@@ -11,7 +11,7 @@ import java.util.function.Consumer;
 
 /**
  * Immutable state of one live session; the status is derived from the flags, never stored.
- * Empty strings mean "unknown". The title is the user-given name; the generated topic shows only without one. blockingToolUseId is set only while a question or plan-approval tool waits.
+ * Empty strings mean "unknown". The title is the user-given name; the generated topic shows only without one.
  */
 record SessionState(
         String ccmSessionId,
@@ -30,7 +30,6 @@ record SessionState(
         boolean turnOpen,
         boolean compacting,
         boolean needsAction,
-        String blockingToolUseId,
         Set<String> backgroundAgentIds) {
 
     private static final int MAX_SUBAGENTS = 50;
@@ -49,7 +48,6 @@ record SessionState(
         boolean turnOpen;
         boolean compacting;
         boolean needsAction;
-        String blockingToolUseId;
         Set<String> backgroundAgentIds;
 
         private Draft(SessionState s) {
@@ -65,7 +63,6 @@ record SessionState(
             turnOpen = s.turnOpen;
             compacting = s.compacting;
             needsAction = s.needsAction;
-            blockingToolUseId = s.blockingToolUseId;
             backgroundAgentIds = s.backgroundAgentIds;
         }
 
@@ -76,15 +73,13 @@ record SessionState(
             title = newTitle.isEmpty() ? title : newTitle;
         }
 
-        /** Waiting for the user; a tool use id marks a question or plan approval that its own PostToolUse resolves. */
-        void requireAction(String toolUseId) {
+        /** Waiting for the user. */
+        void requireAction() {
             needsAction = true;
-            blockingToolUseId = toolUseId.isEmpty() ? blockingToolUseId : toolUseId;
         }
 
         void resolveAction() {
             needsAction = false;
-            blockingToolUseId = "";
         }
 
         /** The launch call named this agent as a background one; its SubagentStart may come before or after that. */
@@ -119,12 +114,12 @@ record SessionState(
     }
 
     static SessionState initial(String ccmSessionId, long projectId, Instant now) {
-        return new SessionState(ccmSessionId, projectId, "", "", "", "", "", "", now, now, Map.of(), 0, "", false, false, false, "", Set.of());
+        return new SessionState(ccmSessionId, projectId, "", "", "", "", "", "", now, now, Map.of(), 0, "", false, false, false, Set.of());
     }
 
     SessionState withTopic(String newTopic) {
         return new SessionState(ccmSessionId, projectId, claudeSessionId, activity, permissionMode, model, title, newTopic, startedAt,
-                lastEventAt, subagents, backgroundTasks, error, turnOpen, compacting, needsAction, blockingToolUseId, backgroundAgentIds);
+                lastEventAt, subagents, backgroundTasks, error, turnOpen, compacting, needsAction, backgroundAgentIds);
     }
 
     SessionState edit(Consumer<Draft> change) {
@@ -132,7 +127,7 @@ record SessionState(
         change.accept(draft);
         return new SessionState(ccmSessionId, projectId, draft.claudeSessionId, draft.activity, draft.permissionMode, draft.model,
                 draft.title, topic, startedAt, draft.lastEventAt, bounded(draft.subagents), draft.backgroundTasks, draft.error,
-                draft.turnOpen, draft.compacting, draft.needsAction, draft.blockingToolUseId, boundedIds(draft.backgroundAgentIds));
+                draft.turnOpen, draft.compacting, draft.needsAction, boundedIds(draft.backgroundAgentIds));
     }
 
     /** Status with no staleness cutoff. */

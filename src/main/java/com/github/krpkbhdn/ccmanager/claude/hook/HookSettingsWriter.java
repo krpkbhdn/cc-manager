@@ -26,6 +26,7 @@ public class HookSettingsWriter {
     private static final String FILE_SUFFIX = ".json";
     private static final String MCP_SUFFIX = ".mcp.json";
     private static final String MCP_SERVER = "cc-manager";
+    private static final String LIST_RUN_CONFIGURATIONS_TOOL = "list_run_configurations";
     private static final String HOOK_CURL = "hook";
     private static final String STATUS_LINE_CURL = "status";
     private static final Pattern SAFE_ID = Pattern.compile("[A-Za-z0-9-]+");
@@ -134,11 +135,11 @@ public class HookSettingsWriter {
         var settings = mapper.createObjectNode();
         settings.set("hooks", hooks);
         settings.set("statusLine", statusLine(ccmSessionId));
-        settings.putObject("permissions").putArray("allow").add("mcp__" + MCP_SERVER);
+        settings.putObject("permissions").putArray("allow").add("mcp__" + MCP_SERVER + "__" + LIST_RUN_CONFIGURATIONS_TOOL);
         return settings;
     }
 
-    /** The server only edits cc-manager's run configurations (the user starts runs), so its tools are pre-approved. */
+    /** Only the read-only list tool is pre-approved; set and delete change a command the user later runs, so Claude asks first. */
     private ObjectNode mcpConfig(String ccmSessionId) {
         var config = mapper.createObjectNode();
         config.putObject("mcpServers").putObject(MCP_SERVER).put("type", "http").put("url", server.mcpUrl(ccmSessionId));

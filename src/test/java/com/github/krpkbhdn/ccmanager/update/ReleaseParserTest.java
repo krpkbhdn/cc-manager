@@ -55,11 +55,8 @@ class ReleaseParserTest {
 
     @Test
     void installerScriptWaitsForProcessThenUpgradesAndRestarts() {
-        var msi = Path.of("tmp", "app.msi");
-        var exe = Path.of("Apps", "app.exe");
+        var script = UpdateInstaller.script(42);
 
-        var script = UpdateInstaller.script(42, msi, exe);
-
-        assertThat(script).contains("PID eq 42").contains("msiexec /i \"" + msi + "\" /passive").contains("start \"\" \"" + exe + "\"");
+        assertThat(script).contains("PID eq 42").contains("msiexec /i \"%~1\" /passive").contains("start \"\" \"%~2\"");
     }
 }

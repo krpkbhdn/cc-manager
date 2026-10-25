@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.workspace;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -9,6 +10,8 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /** Runs a short-lived command with a hard timeout; stdout and stderr are drained concurrently. */
 public final class CommandRunner {
@@ -20,6 +23,7 @@ public final class CommandRunner {
         }
     }
 
+    private static final Duration READER_GRACE = Duration.ofSeconds(2);
     private static final ExecutorService PIPES = Executors.newVirtualThreadPerTaskExecutor();
 
     private CommandRunner() {}
@@ -32,14 +36,16 @@ public final class CommandRunner {
         }
         var process = builder.start();
         process.getOutputStream().close();
-        var stdout = CompletableFuture.supplyAsync(() -> read(process.getInputStream()), PIPES);
-        var stderr = CompletableFuture.supplyAsync(() -> read(process.getErrorStream()), PIPES);
+        var stdout = new ByteArrayOutputStream();
+        var stderr = new ByteArrayOutputStream();
+        var readers = CompletableFuture.allOf(drain(process.getInputStream(), stdout), drain(process.getErrorStream(), stderr));
         try {
-            var finished = process.waitFor(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+            var finished = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
             if (!finished) {
                 ProcessTree.kill(process);
             }
-            return new Result(finished ? process.exitValue() : -1, stdout.join(), stderr.join(), !finished);
+            awaitReaders(process, readers);
+            return new Result(finished ? process.exitValue() : -1, stdout.toString(StandardCharsets.UTF_8), stderr.toString(StandardCharsets.UTF_8), !finished);
         } catch (InterruptedException e) {
             ProcessTree.kill(process);
             Thread.currentThread().interrupt();
@@ -56,11 +62,43 @@ public final class CommandRunner {
         process.getOutputStream().close();
     }
 
-    private static String read(InputStream stream) {
-        try (stream) {
-            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            return "";
+    /**
+     * Gives the readers a short grace after the process ended: a grandchild (a git hook running {@code indexer &}) may keep the
+     * pipes open for good, so then the streams are closed off-thread and whatever was read so far is used.
+     */
+    public static void awaitReaders(Process process, CompletableFuture<?> readers) {
+        try {
+            readers.get(READER_GRACE.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            PIPES.execute(() -> closeQuietly(process.getInputStream(), process.getErrorStream()));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (java.util.concurrent.ExecutionException e) {
+            // a reader only fails on a closed pipe; its partial output is still in the buffer
+        }
+    }
+
+    public static CompletableFuture<Void> drain(InputStream stream, ByteArrayOutputStream into) {
+        return CompletableFuture.runAsync(() -> {
+            try (stream) {
+                var chunk = new byte[8192];
+                int count;
+                while ((count = stream.read(chunk)) != -1) {
+                    into.write(chunk, 0, count);
+                }
+            } catch (IOException e) {
+                // closed after the grace period; the buffer holds what arrived
+            }
+        }, PIPES);
+    }
+
+    private static void closeQuietly(InputStream... streams) {
+        for (var stream : streams) {
+            try {
+                stream.close();
+            } catch (IOException e) {
+                // nothing left to release
+            }
         }
     }
 }

@@ -54,8 +54,8 @@ private val compactRailBelow = 700.dp
 
 /** Movable, resizable, modal folder browser used to add a project; it is a native dialog window, so it can leave the main window and use any monitor. */
 @Composable
-fun FolderPickerDialog(initial: Path?, onDismiss: () -> Unit, onPicked: (Path) -> Unit) =
-    FolderPicker(initial, RecentFolders.inDefaultDataDir(), PickerWindowStore.inDefaultDataDir(), onDismiss, onPicked)
+fun FolderPickerDialog(initial: Path?, dataDir: Path, onDismiss: () -> Unit, onPicked: (Path) -> Unit) =
+    FolderPicker(initial, RecentFolders.inDataDir(dataDir), PickerWindowStore.inDataDir(dataDir), onDismiss, onPicked)
 
 /** The dialog with injectable stores, so tests and dev harnesses never touch the real data dir. */
 @OptIn(FlowPreview::class)

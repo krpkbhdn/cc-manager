@@ -10,6 +10,7 @@ import com.github.krpkbhdn.ccmanager.ui.components.AppButton
 import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant
 import com.github.krpkbhdn.ccmanager.ui.components.Label
 import com.github.krpkbhdn.ccmanager.ui.extensions.BusyLabel
+import com.github.krpkbhdn.ccmanager.ui.extensions.ExtensionFailureStrip
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
@@ -25,11 +26,13 @@ fun AuthorReportPanel(report: AuthorReport, onClose: () -> Unit) {
                 Label(signIn.server, Modifier.weight(1f), style = Type.bodyMedium)
                 if (signIn.mcp.signingIn == signIn.server) {
                     BusyLabel("Signing in")
+                    if (signIn.mcp.signInUrl != null) AppButton("Open sign-in page", { signIn.mcp.openSignInPage() }, icon = Icons.ExternalLink, compact = true)
                 } else {
                     AppButton("Sign in", { signIn.mcp.signIn(signIn.server) }, icon = Icons.LogIn, compact = true, enabled = signIn.mcp.signingIn == null)
                 }
             }
         }
+        report.signIns.map { it.mcp }.distinct().forEach { mcp -> mcp.failure?.let { ExtensionFailureStrip(it, onDismiss = { mcp.failure = null }) } }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { AppButton("Close", onClose, variant = ButtonVariant.PRIMARY) }
     }
 }

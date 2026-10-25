@@ -37,6 +37,15 @@ public class GitStatusService {
         this.git = git;
     }
 
+    /** The repository root containing {@code folder}; {@code folder} itself when it is not inside a repository. */
+    public Path topLevel(Path folder) {
+        if (!Files.isDirectory(folder)) {
+            return folder;
+        }
+        var result = git.tryRun(folder, "rev-parse", "--show-toplevel");
+        return result.ok() && !result.stdout().isBlank() ? Path.of(result.stdout().strip()) : folder;
+    }
+
     public GitStatus status(Path repo) {
         var gitDir = Files.isDirectory(repo) ? gitDirectory(repo) : null;
         if (gitDir == null) {
