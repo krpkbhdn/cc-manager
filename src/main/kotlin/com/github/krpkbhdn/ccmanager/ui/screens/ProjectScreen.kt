@@ -30,6 +30,9 @@ import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.ui.components.HorizontalRule
 import com.github.krpkbhdn.ccmanager.ui.components.IconButton
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
+import com.github.krpkbhdn.ccmanager.ui.run.RunControlActions
+import com.github.krpkbhdn.ccmanager.ui.run.RunTab
+import com.github.krpkbhdn.ccmanager.ui.run.RunTabActions
 import com.github.krpkbhdn.ccmanager.ui.shortcuts.AppShortcut
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.git.GitSystemActions
@@ -58,7 +61,10 @@ fun ProjectScreen(state: AppState, project: Project, modifier: Modifier = Modifi
         onDispose { unsubscribe?.run() }
     }
     val windowFocused = LocalWindowInfo.current.isWindowFocused
-    LaunchedEffect(windowFocused) { if (windowFocused) gitState?.refresh() }
+    LaunchedEffect(windowFocused) {
+        if (windowFocused) gitState?.refresh()
+    }
+    LaunchedEffect(project.id, windowFocused) { if (windowFocused) state.runs.track(project.id) }
     Column(modifier.fillMaxSize()) {
         ProjectHeader(
             project = project,
@@ -74,6 +80,15 @@ fun ProjectScreen(state: AppState, project: Project, modifier: Modifier = Modifi
                 onShowGit = { state.openGit(project.id) },
                 onShowChanges = { state.openGit(project.id, GitSubView.CHANGES) },
                 onOpenSettings = { state.openProjectSettings(project) },
+            ),
+            runEntries = state.runs.entriesOf(project.id),
+            runSelected = state.runs.selectedOf(project.id),
+            runActions = RunControlActions(
+                onSelect = { state.runs.select(project.id, it) },
+                onRun = state.runs::run,
+                onStop = state.runs::stop,
+                onAdd = { state.runs.openDialog(project.id) },
+                onEdit = { id -> state.runs.openDialog(project.id, state.runs.entriesOf(project.id).firstOrNull { it.id == id }?.configuration) },
             ),
         )
         Row(Modifier.fillMaxSize()) {
@@ -142,6 +157,10 @@ private fun MainContent(state: AppState, project: Project, view: ProjectView) {
     Crossfade(tab, animationSpec = Motion.base(), label = "projectTab") { shown ->
         when (shown) {
             ProjectTab.Git -> GitTabHost(state, project)
+            ProjectTab.Run -> RunTab(
+                state.runs.selectedOf(project.id), state.terminal,
+                RunTabActions(state.runs::run, state.runs::stop) { state.runs.openDialog(project.id) },
+            )
             else -> ActivityTabHost(state, view, project)
         }
     }
@@ -154,6 +173,7 @@ private fun tabSpecs(state: AppState, view: ProjectView): List<TabSpec> {
     }
     return sessions + listOf(
         TabSpec(ProjectTab.Git, "Git", null, Icons.Branch, closable = false),
+        TabSpec(ProjectTab.Run, "Run", null, Icons.Play, closable = false),
         TabSpec(ProjectTab.Activity, "Activity", null, Icons.Activity, closable = false),
     )
 }
@@ -169,7 +189,7 @@ private fun SessionTab(state: AppState, ccmSessionId: String) {
     }
 }
 
-private val TERMINAL_INSET = 10.dp
+internal val TERMINAL_INSET = 10.dp
 
 @Composable
 private fun GitTabHost(state: AppState, project: Project) {

@@ -19,6 +19,7 @@ import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.HealthCheck
 import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.McpState
 import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillHost
 import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillsState
+import com.github.krpkbhdn.ccmanager.ui.run.RunState
 import com.github.krpkbhdn.ccmanager.ui.teams.TeamsState
 import com.github.krpkbhdn.ccmanager.usage.RateLimitSnapshot
 import com.github.krpkbhdn.ccmanager.usage.SessionUsage
@@ -102,6 +103,13 @@ class AppState(
         requestConfirm = { confirm = it },
         reportError = notifications::reportError,
     )
+    val runs = RunState(
+        backend.runConfigurations, backend.runs, backend.terminal, scope,
+        projectPath = { projects.find(it)?.path },
+        showRunTab = { select(it, ProjectTab.Run) },
+        requestConfirm = { confirm = it },
+        reportError = notifications::reportError,
+    )
     val teams = TeamsState(backend.teams, scope, { confirm = it }, notifications::reportError)
     val plugins = PluginsState(backend.plugins, scope, { confirm = it }, notifications::toast)
     val mcp = McpState(backend.mcp, null, scope, { confirm = it }, notifications::toast)
@@ -126,6 +134,7 @@ class AppState(
         unsubscribers += backend.notifications.subscribe { notification -> scope.launch { notifications.receive(notification) } }
         backend.sound?.setEnabled(settings.notificationSound)
         teams.start()
+        runs.start()
         update.start()
         projectReload.request()
         sessionReload.request()
@@ -147,6 +156,7 @@ class AppState(
     fun dispose() {
         cancelProjectSettings()
         teams.dispose()
+        runs.dispose()
         unsubscribers.forEach { it.run() }
         unsubscribers.clear()
     }

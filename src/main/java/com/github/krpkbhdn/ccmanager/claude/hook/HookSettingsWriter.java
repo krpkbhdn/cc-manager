@@ -18,12 +18,14 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-/** Writes the per-session settings file passed as claude --settings FILE: the hooks and a statusLine that reports rate limits. */
+/** Writes the per-session files for claude: --settings (hooks, a statusLine that reports rate limits) and --mcp-config (cc-manager's own MCP server). */
 @Component
 public class HookSettingsWriter {
 
     private static final String HOOKS_DIR = "hooks";
     private static final String FILE_SUFFIX = ".json";
+    private static final String MCP_SUFFIX = ".mcp.json";
+    private static final String MCP_SERVER = "cc-manager";
     private static final String HOOK_CURL = "hook";
     private static final String STATUS_LINE_CURL = "status";
     private static final Pattern SAFE_ID = Pattern.compile("[A-Za-z0-9-]+");
@@ -78,8 +80,9 @@ public class HookSettingsWriter {
         }
     }
 
-    public Path write(String ccmSessionId) {
+    public SessionFiles write(String ccmSessionId) {
         var file = fileOf(ccmSessionId);
+        var mcpFile = mcpFileOf(ccmSessionId);
         try {
             restrictToOwner(Files.createDirectories(hooksDir), "rwx------");
             if (!windows) {
@@ -88,10 +91,12 @@ public class HookSettingsWriter {
             }
             Files.writeString(file, mapper.writeValueAsString(settings(ccmSessionId)));
             restrictToOwner(file, "rw-------");
+            Files.writeString(mcpFile, mapper.writeValueAsString(mcpConfig(ccmSessionId)));
+            restrictToOwner(mcpFile, "rw-------");
         } catch (IOException e) {
             throw new UncheckedIOException("Cannot write hook settings " + file, e);
         }
-        return file;
+        return new SessionFiles(file, mcpFile);
     }
 
     /** curl reads the secret URL from this file, so it never shows in a process list. Not used on Windows, see curlArgs. */
@@ -111,6 +116,7 @@ public class HookSettingsWriter {
     public void delete(String ccmSessionId) {
         try {
             Files.deleteIfExists(fileOf(ccmSessionId));
+            Files.deleteIfExists(mcpFileOf(ccmSessionId));
             Files.deleteIfExists(curlConfigOf(ccmSessionId, HOOK_CURL));
             Files.deleteIfExists(curlConfigOf(ccmSessionId, STATUS_LINE_CURL));
         } catch (IOException e) {
@@ -126,7 +132,15 @@ public class HookSettingsWriter {
         var settings = mapper.createObjectNode();
         settings.set("hooks", hooks);
         settings.set("statusLine", statusLine(ccmSessionId));
+        settings.putObject("permissions").putArray("allow").add("mcp__" + MCP_SERVER);
         return settings;
+    }
+
+    /** The server only edits cc-manager's run configurations (the user starts runs), so its tools are pre-approved. */
+    private ObjectNode mcpConfig(String ccmSessionId) {
+        var config = mapper.createObjectNode();
+        config.putObject("mcpServers").putObject(MCP_SERVER).put("type", "http").put("url", server.mcpUrl(ccmSessionId));
+        return config;
     }
 
     private ObjectNode handler(HookEventType type, String ccmSessionId) {
@@ -174,6 +188,10 @@ public class HookSettingsWriter {
 
     private Path curlConfigOf(String ccmSessionId, String kind) {
         return hooksDir.resolve(fileOf(ccmSessionId).getFileName() + "." + kind + ".curl");
+    }
+
+    private Path mcpFileOf(String ccmSessionId) {
+        return hooksDir.resolve(ccmSessionId + MCP_SUFFIX);
     }
 
     private Path fileOf(String ccmSessionId) {

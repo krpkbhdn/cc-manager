@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.claude.launch;
 
+import com.github.krpkbhdn.ccmanager.claude.hook.SessionFiles;
 import com.github.krpkbhdn.ccmanager.project.ModelSelection;
 import com.github.krpkbhdn.ccmanager.team.Team;
 import com.github.krpkbhdn.ccmanager.team.TeamAgentsJson;
@@ -11,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 /** Pure builders for the claude command line and the child environment. */
-final class ClaudeCommand {
+public final class ClaudeCommand {
 
     static final String ENV_TERM = "TERM";
     static final String ENV_COLORTERM = "COLORTERM";
@@ -26,8 +27,9 @@ final class ClaudeCommand {
 
     private ClaudeCommand() {}
 
-    static List<String> launchArguments(Path executable, Path settingsFile, LaunchMode mode, ModelSelection selection) {
-        List<String> command = base(executable, settingsFile);
+    static List<String> launchArguments(Path executable, SessionFiles files, Path pluginDir, LaunchMode mode, ModelSelection selection) {
+        List<String> command = base(executable, files);
+        addClaudeManager(command, files, pluginDir);
         command.addAll(selection.arguments());
         switch (mode) {
             case NEW -> { }
@@ -38,26 +40,33 @@ final class ClaudeCommand {
     }
 
     /** The lead runs with its role's model and effort, the other roles as --agents, and the task as the first prompt (after "--" so it is never read as a flag). */
-    static List<String> teamArguments(Path executable, Path settingsFile, Team team, String task) {
-        List<String> command = base(executable, settingsFile);
+    static List<String> teamArguments(Path executable, SessionFiles files, Path pluginDir, Team team, String task) {
+        List<String> command = base(executable, files);
+        addClaudeManager(command, files, pluginDir);
         team.lead().map(TeamRole::selection).ifPresent(selection -> command.addAll(selection.arguments()));
         command.addAll(List.of("--agents", TeamAgentsJson.agents(team), "--append-system-prompt", TeamAgentsJson.leadAddendum(team), "--", task));
         return command;
     }
 
-    static List<String> attachArguments(Path executable, Path settingsFile, String backgroundSessionId) {
-        List<String> command = base(executable, settingsFile);
+    static List<String> attachArguments(Path executable, SessionFiles files, String backgroundSessionId) {
+        List<String> command = base(executable, files);
         command.add("attach");
         command.add(backgroundSessionId);
         return command;
     }
 
     static Map<String, String> environment(Map<String, String> parent, String ccmSessionId) {
+        Map<String, String> env = terminalEnvironment(parent);
+        env.put(ENV_SESSION, ccmSessionId);
+        return env;
+    }
+
+    /** The parent environment without Claude-specific variables and with a color terminal. */
+    public static Map<String, String> terminalEnvironment(Map<String, String> parent) {
         Map<String, String> env = new HashMap<>(parent);
         INHERITED_ENV_TO_DROP.forEach(env::remove);
         env.put(ENV_TERM, TERM_VALUE);
         env.put(ENV_COLORTERM, COLORTERM_VALUE);
-        env.put(ENV_SESSION, ccmSessionId);
         return env;
     }
 
@@ -69,11 +78,16 @@ final class ClaudeCommand {
         };
     }
 
-    private static List<String> base(Path executable, Path settingsFile) {
+    /** --mcp-config is variadic, so a flag follows it. Not for attach, which is a subcommand. */
+    private static void addClaudeManager(List<String> command, SessionFiles files, Path pluginDir) {
+        command.addAll(List.of("--mcp-config", files.mcpConfig().toAbsolutePath().toString(), "--plugin-dir", pluginDir.toAbsolutePath().toString()));
+    }
+
+    private static List<String> base(Path executable, SessionFiles files) {
         List<String> command = new ArrayList<>();
         command.add(executable.toAbsolutePath().toString());
         command.add("--settings");
-        command.add(settingsFile.toAbsolutePath().toString());
+        command.add(files.settings().toAbsolutePath().toString());
         return command;
     }
 }

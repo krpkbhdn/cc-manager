@@ -15,6 +15,7 @@ sealed interface Route {
 sealed interface ProjectTab {
     data class Session(val ccmSessionId: String) : ProjectTab
     data object Git : ProjectTab
+    data object Run : ProjectTab
     data object Activity : ProjectTab
 }
 
@@ -35,8 +36,8 @@ data class ProjectView(
         else -> copy(selected = tab)
     }
 
-    /** Session tabs in strip order, then Git and Activity. */
-    fun tabs(): List<ProjectTab> = openSessions.map { ProjectTab.Session(it) } + ProjectTab.Git + ProjectTab.Activity
+    /** Session tabs in strip order, then Git, Run and Activity. */
+    fun tabs(): List<ProjectTab> = openSessions.map { ProjectTab.Session(it) } + ProjectTab.Git + ProjectTab.Run + ProjectTab.Activity
 
     /** Selects the tab [step] places away, wrapping around the strip. */
     fun cycle(step: Int): ProjectView {

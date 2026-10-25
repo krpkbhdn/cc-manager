@@ -104,6 +104,13 @@ private suspend fun captureTour(capture: Capture, state: AppState, world: Previe
     capture.take("3-diff")
     state.select(1, ProjectTab.Activity)
     capture.take("4-activity")
+    state.select(1, ProjectTab.Run)
+    capture.take("4a-run-tab")
+    state.runs.select(1, 2)
+    capture.take("4b-run-exited")
+    state.runs.openDialog(1, state.runs.selectedOf(1)?.configuration)
+    capture.take("4c-run-dialog")
+    state.runs.closeDialog()
     state.notificationsOpen = true
     capture.take("5-notifications")
     state.notificationsOpen = false

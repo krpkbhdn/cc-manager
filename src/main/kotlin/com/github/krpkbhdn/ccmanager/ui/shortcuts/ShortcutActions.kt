@@ -45,6 +45,7 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
             AppShortcut.GIT_BRANCHES -> handled { state.openGit(project.id)?.branchPopupOpen = true }
             AppShortcut.GIT_PUSH -> handled { state.gitOf(project.id)?.push() }
             AppShortcut.PROJECT_SETTINGS -> handled { state.openProjectSettings(project) }
+            AppShortcut.RUN -> state.runs.selectedOf(project.id)?.takeIf { !it.directoryMissing }?.let { entry -> handled { state.runs.run(entry.id) } } ?: false
             AppShortcut.ACTIVITY_TAB -> handled { state.select(project.id, ProjectTab.Activity) }
             AppShortcut.FOCUS_TERMINAL -> session != null && handled { state.terminal.focus(session) }
             else -> false

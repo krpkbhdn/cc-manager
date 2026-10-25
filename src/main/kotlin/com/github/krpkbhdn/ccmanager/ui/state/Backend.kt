@@ -12,6 +12,8 @@ import com.github.krpkbhdn.ccmanager.claude.session.TranscriptService
 import com.github.krpkbhdn.ccmanager.notification.NotificationService
 import com.github.krpkbhdn.ccmanager.notification.NotificationSoundService
 import com.github.krpkbhdn.ccmanager.project.ProjectService
+import com.github.krpkbhdn.ccmanager.run.RunConfigurationService
+import com.github.krpkbhdn.ccmanager.run.RunService
 import com.github.krpkbhdn.ccmanager.extension.mcp.McpService
 import com.github.krpkbhdn.ccmanager.extension.plugin.PluginService
 import com.github.krpkbhdn.ccmanager.extension.skill.SkillService
@@ -77,6 +79,8 @@ class Backend(
     val mcp: McpService,
     val skills: SkillService,
     val transcripts: TranscriptService,
+    val runConfigurations: RunConfigurationService,
+    val runs: RunService,
     val terminal: TerminalPort = HostTerminalPort,
     val updates: UpdateService? = null,
     val sound: NotificationSoundService? = null,
@@ -100,6 +104,8 @@ class Backend(
             mcp = context.getBean(McpService::class.java),
             skills = context.getBean(SkillService::class.java),
             transcripts = context.getBean(TranscriptService::class.java),
+            runConfigurations = context.getBean(RunConfigurationService::class.java),
+            runs = context.getBean(RunService::class.java),
             updates = context.getBean(UpdateService::class.java),
             sound = context.getBean(NotificationSoundService::class.java),
         )

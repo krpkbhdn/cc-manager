@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
+import com.github.krpkbhdn.ccmanager.ui.run.RunEntry
 import com.github.krpkbhdn.ccmanager.ui.shortcuts.AppShortcut
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
@@ -83,6 +84,9 @@ private fun projectActions(state: AppState): List<PaletteItem> {
         PaletteItem("open-folder", "Open folder", PaletteGroup.ACTIONS, here, Icons.FolderOpen) { state.openFolder(project) },
         PaletteItem("open-ide", "Open in IntelliJ IDEA", PaletteGroup.ACTIONS, here, Icons.Code) { state.openIde(project) },
         PaletteItem("project-settings", "Project settings", PaletteGroup.ACTIONS, "$here: plugins, MCP servers, skills", Icons.Settings, shortcut = AppShortcut.PROJECT_SETTINGS) { state.openProjectSettings(project) },
+        state.runs.selectedOf(project.id)?.let { runItem(state, it, here) },
+        state.runs.selectedOf(project.id)?.takeIf { it.running }?.let { entry -> PaletteItem("stop-run", "Stop ${entry.name}", PaletteGroup.ACTIONS, here, Icons.Stop) { state.runs.stop(entry.id) } },
+        PaletteItem("show-run", "Show run console", PaletteGroup.ACTIONS, here, Icons.SquareTerminal) { state.select(project.id, ProjectTab.Run) },
         PaletteItem("show-activity", "Show activity", PaletteGroup.ACTIONS, here, Icons.Activity, shortcut = AppShortcut.ACTIVITY_TAB) { state.select(project.id, ProjectTab.Activity) },
         PaletteItem("toggle-agents", "Toggle agents panel", PaletteGroup.ACTIONS, here, Icons.PanelRightClose, shortcut = AppShortcut.TOGGLE_AGENTS, run = state::toggleAgents),
         state.viewOf(project.id).focusedSession?.let { state.live.find(it) }?.let { session ->
@@ -90,3 +94,6 @@ private fun projectActions(state: AppState): List<PaletteItem> {
         },
     )
 }
+
+private fun runItem(state: AppState, entry: RunEntry, here: String) =
+    PaletteItem("run", (if (entry.running) "Restart " else "Run ") + entry.name, PaletteGroup.ACTIONS, here, Icons.Play, shortcut = AppShortcut.RUN) { state.runs.run(entry.id) }

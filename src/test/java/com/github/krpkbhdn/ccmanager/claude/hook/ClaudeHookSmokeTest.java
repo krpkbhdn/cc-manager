@@ -36,10 +36,10 @@ class ClaudeHookSmokeTest {
         var mapper = JsonMapper.builder().build();
         var events = new CopyOnWriteArrayList<HookEvent>();
         var server = new HookServer(mock(HookEventStore.class), event -> events.add((HookEvent) event), mapper,
-                new HookProperties(100, 1_048_576, 500));
+                new HookProperties(100, 1_048_576, 500), mock(com.github.krpkbhdn.ccmanager.claude.mcp.McpEndpoint.class));
         server.start();
         try {
-            var settings = new HookSettingsWriter(server, new AppProperties(workDir.resolve("data")), mapper).write(CCM_ID);
+            var settings = new HookSettingsWriter(server, new AppProperties(workDir.resolve("data")), mapper).write(CCM_ID).settings();
             writeProjectHook();
 
             var output = runClaude(settings);

@@ -5,8 +5,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
+import com.github.krpkbhdn.ccmanager.claude.mcp.McpEndpoint;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -24,12 +28,13 @@ class HookServerTest {
 
     private final HookEventStore store = mock(HookEventStore.class);
     private final ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+    private final McpEndpoint mcp = mock(McpEndpoint.class);
     private final HttpClient client = HttpClient.newHttpClient();
     private HookServer server;
 
     @BeforeEach
     void setUp() {
-        server = new HookServer(store, publisher, JsonMapper.builder().build(), new HookProperties(10, MAX_BODY, 500));
+        server = new HookServer(store, publisher, JsonMapper.builder().build(), new HookProperties(10, MAX_BODY, 500), mcp);
         server.start();
     }
 
@@ -100,6 +105,35 @@ class HookServerTest {
         assertThat(client.send(request, HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(405);
     }
 
+    @Test
+    void mcpPostIsAnsweredSynchronouslyWithJson() throws Exception {
+        when(mcp.handle("sess-1", "{\"id\":1}".getBytes(StandardCharsets.UTF_8))).thenReturn(Optional.of("{\"result\":{}}"));
+
+        var response = post(server.mcpUrl("sess-1"), "{\"id\":1}");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("Content-Type")).contains("application/json");
+        assertThat(response.body()).isEqualTo("{\"result\":{}}");
+    }
+
+    @Test
+    void mcpNotificationIsAcceptedWithoutBody() throws Exception {
+        when(mcp.handle("sess-1", "{}".getBytes(StandardCharsets.UTF_8))).thenReturn(Optional.empty());
+
+        var response = post(server.mcpUrl("sess-1"), "{}");
+
+        assertThat(response.statusCode()).isEqualTo(202);
+        assertThat(response.body()).isEmpty();
+    }
+
+    @Test
+    void mcpRejectsWrongSecretGetAndOversizedBody() throws Exception {
+        assertThat(post(server.mcpUrl("sess-1").replace("/mcp/", "/mcp/wrong"), "{}").statusCode()).isEqualTo(404);
+        var get = HttpRequest.newBuilder(URI.create(server.mcpUrl("sess-1"))).GET().build();
+        assertThat(client.send(get, HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(405);
+        assertThat(post(server.mcpUrl("sess-1"), "x".repeat(MAX_BODY + 1)).statusCode()).isEqualTo(413);
+        verifyNoInteractions(mcp);
+    }
     @Test
     void statusLinePostIsPublishedAsReportWithEmptyOk() throws Exception {
         var response = post(server.statusLineUrl("sess-1"), "{\"rate_limits\":{}}");

@@ -55,6 +55,7 @@ import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.PluginCommandDialog
 import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.PluginsScreen
 import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.McpScreen
 import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillsScreen
+import com.github.krpkbhdn.ccmanager.ui.run.RunConfigurationDialog
 import com.github.krpkbhdn.ccmanager.ui.teams.RoleDialog
 import com.github.krpkbhdn.ccmanager.ui.teams.StartTaskDialog
 import com.github.krpkbhdn.ccmanager.ui.teams.StartTaskActions
@@ -92,6 +93,7 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
         if (state.shortcutsOpen) ShortcutSheet { state.shortcutsOpen = false }
         (state.route as? Route.Project)?.let { state.gitOf(it.id) }?.let { GitDialogHost(it) }
         state.taskDialogProjectId?.let { id -> state.projects.all.firstOrNull { it.id == id } }?.let { StartTaskDialog(it, state.teams, startTaskActions(state, it)) }
+        state.runs.dialog?.let { RunConfigurationDialog(it, state.runs) }
         state.teams.dialog?.let { open -> state.teams.find(open.teamId)?.let { RoleDialog(it, open, state.teams) } }
         state.projectSettings?.let { ProjectSettingsDialog(it, state::closeProjectSettings) }
         state.plugins.pending?.let { PluginCommandDialog(it, state.plugins.job == null, state.plugins::confirmPending, state.plugins::dismissPending) }

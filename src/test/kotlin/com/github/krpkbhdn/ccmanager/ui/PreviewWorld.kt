@@ -39,6 +39,10 @@ import com.github.krpkbhdn.ccmanager.notification.NotificationService
 import com.github.krpkbhdn.ccmanager.project.ModelSelection
 import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.project.ProjectService
+import com.github.krpkbhdn.ccmanager.run.ActiveRun
+import com.github.krpkbhdn.ccmanager.run.RunConfiguration
+import com.github.krpkbhdn.ccmanager.run.RunConfigurationService
+import com.github.krpkbhdn.ccmanager.run.RunService
 import com.github.krpkbhdn.ccmanager.ui.git.FakeGit
 import com.github.krpkbhdn.ccmanager.ui.git.FakeRepoData
 import com.github.krpkbhdn.ccmanager.ui.git.SampleRepos
@@ -49,6 +53,8 @@ import com.github.krpkbhdn.ccmanager.workspace.IdeLauncher
 import java.nio.file.Path
 import java.time.Instant
 import java.util.Optional
+import java.util.OptionalInt
+import java.util.concurrent.ConcurrentHashMap
 import java.util.function.Consumer
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import org.jetbrains.jewel.ui.component.Text
@@ -62,6 +68,11 @@ import org.mockito.Mockito.`when`
 private fun ago(seconds: Long): Instant = Instant.now().minusSeconds(seconds)
 
 private val previewTranscriptDir: java.nio.file.Path by lazy { Files.createTempDirectory("ccm-projects") }
+
+/** A real folder so the run configurations of the first preview project do not show as missing. */
+private val previewProjectDir: Path by lazy {
+    Files.createTempDirectory("ccm-preview").resolve("cc-manager").also { Files.createDirectories(it.resolve(".claude/worktrees/feature-x")) }
+}
 
 private val previewTranscript: String by lazy {
     Files.createTempFile(previewTranscriptDir, "ccm-agent", ".jsonl").also {
@@ -109,7 +120,7 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
     )
 
     val projects: List<Project> = if (empty) emptyList() else listOf(
-        Project(1, "cc-manager", Path.of("C:/Users/dev/Work/cc-manager"), ago(9000), selection),
+        Project(1, "cc-manager", previewProjectDir, ago(9000), selection),
         Project(2, "billing-api", Path.of("C:/Users/dev/Work/billing-api"), ago(8000)),
         Project(3, "docs-site", Path.of("C:/Users/dev/Work/docs-site"), ago(7000)),
         Project(4, "infra-terraform", Path.of("C:/Users/dev/Work/infra-terraform"), ago(6000)),
@@ -184,7 +195,41 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         ActivityEntry(ago(4), HookEventType.STOP, null, "Turn finished"),
     )
 
+    private val runConfigurations = if (empty) emptyList() else listOf(
+        RunConfiguration(1, 1, "dev server", "npm run dev", previewProjectDir),
+        RunConfiguration(2, 1, "feature-x tests", "./gradlew test --continuous", previewProjectDir.resolve(".claude/worktrees/feature-x")),
+        RunConfiguration(3, 1, "old experiment", "make serve", previewProjectDir.resolve(".claude/worktrees/gone")),
+    )
+    private val activeRuns = ConcurrentHashMap<Long, ActiveRun>().apply {
+        if (!empty) {
+            put(1, ActiveRun(1, "run-1-1", "dev server", null, OptionalInt.empty()))
+            put(2, ActiveRun(2, "run-2-1", "feature-x tests", null, OptionalInt.of(1)))
+        }
+    }
+    private val runListeners = mutableListOf<Runnable>()
+
     fun fire() = changeListeners.toList().forEach { it.run() }
+
+    private fun runConfigurationService(): RunConfigurationService {
+        val service = mock(RunConfigurationService::class.java)
+        `when`(service.list(anyLong())).thenAnswer { runConfigurations.filter { c -> c.projectId() == it.getArgument<Long>(0) } }
+        `when`(service.subscribe(any())).thenAnswer { Runnable { } }
+        return service
+    }
+
+    private fun runService(): RunService {
+        val service = mock(RunService::class.java)
+        `when`(service.current(anyLong())).thenAnswer { Optional.ofNullable(activeRuns[it.getArgument<Long>(0)]) }
+        `when`(service.subscribe(any())).thenAnswer { runListeners += it.getArgument<Runnable>(0); Runnable { } }
+        `when`(service.start(anyLong())).thenAnswer {
+            val config = runConfigurations.first { c -> c.id() == it.getArgument<Long>(0) }
+            val runId = "run-${config.id()}-${System.nanoTime()}"
+            activeRuns[config.id()] = ActiveRun(config.id(), runId, config.name(), null, OptionalInt.empty())
+            runListeners.toList().forEach { listener -> listener.run() }
+            LaunchedSession(runId, config.projectId(), config.name(), null)
+        }
+        return service
+    }
 
     fun backend(terminal: TerminalPort): Backend {
         val projectService = mock(ProjectService::class.java)
@@ -231,7 +276,7 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         `when`(usage.all()).thenAnswer { sessionUsage }
         `when`(usage.subscribe(any())).thenAnswer { Runnable { } }
 
-        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), TranscriptService(JsonMapper.builder().build(), previewTranscriptDir), terminal = terminal)
+        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), TranscriptService(JsonMapper.builder().build(), previewTranscriptDir), runConfigurationService(), runService(), terminal = terminal)
     }
 
     private fun installationNow() = if (claudeInstalled) {

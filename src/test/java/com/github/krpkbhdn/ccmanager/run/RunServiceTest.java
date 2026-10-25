@@ -1,0 +1,99 @@
+package com.github.krpkbhdn.ccmanager.run;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.github.krpkbhdn.ccmanager.workspace.SystemHostEnvironment;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+
+/** Runs real shell commands in a PTY; the long-running one works under bash (sleep) and cmd (ping). */
+class RunServiceTest {
+
+    static final Duration TIMEOUT = Duration.ofSeconds(30);
+    static final String LONG_COMMAND = "sleep 60 || ping -n 60 127.0.0.1";
+
+    @TempDir
+    Path temp;
+
+    RunConfigurationService configurations;
+    RunService runs;
+    long projectId;
+
+    @BeforeEach
+    void setUp() {
+        var dataSource = new DriverManagerDataSource("jdbc:sqlite:" + temp.resolve("test.db") + "?foreign_keys=on");
+        Flyway.configure().dataSource(dataSource).load().migrate();
+        var jdbc = JdbcClient.create(dataSource);
+        jdbc.sql("INSERT INTO project (name, path, created_at) VALUES ('app', ?, 'now')").param(temp.toString()).update();
+        projectId = jdbc.sql("SELECT id FROM project").query(Long.class).single();
+        configurations = new RunConfigurationService(jdbc);
+        var host = new SystemHostEnvironment();
+        runs = new RunService(configurations, new RunShell(host), host);
+    }
+
+    @AfterEach
+    void tearDown() {
+        runs.stopAll();
+    }
+
+    @Test
+    void reportsTheExitCodeAndKeepsTheFinishedRun() throws Exception {
+        var configuration = configurations.save(projectId, "fail", "exit 3", temp);
+        var exited = new CountDownLatch(1);
+        runs.subscribe(() -> runs.current(configuration.id()).filter(run -> !run.running()).ifPresent(run -> exited.countDown()));
+
+        var launched = runs.start(configuration.id());
+
+        assertThat(exited.await(TIMEOUT.toSeconds(), TimeUnit.SECONDS)).isTrue();
+        var run = runs.current(configuration.id()).orElseThrow();
+        assertThat(run.runId()).isEqualTo(launched.ccmSessionId()).startsWith("run-" + configuration.id() + "-");
+        assertThat(run.exitCode()).hasValue(3);
+    }
+
+    @Test
+    void restartingUsesANewRunId() {
+        var configuration = configurations.save(projectId, "again", "exit 0", temp);
+
+        var first = runs.start(configuration.id());
+        var second = runs.start(configuration.id());
+
+        assertThat(second.ccmSessionId()).isNotEqualTo(first.ccmSessionId());
+    }
+
+    @Test
+    void stopKillsALongRunningCommand() throws Exception {
+        var configuration = configurations.save(projectId, "long", LONG_COMMAND, temp);
+
+        var launched = runs.start(configuration.id());
+        assertThat(runs.current(configuration.id()).orElseThrow().running()).isTrue();
+        runs.stop(configuration.id());
+
+        assertThat(launched.process().waitFor(TIMEOUT.toSeconds(), TimeUnit.SECONDS)).isTrue();
+    }
+
+    @Test
+    void deletingARunningConfigurationStopsAndForgetsIt() throws Exception {
+        var configuration = configurations.save(projectId, "long", LONG_COMMAND, temp);
+        var launched = runs.start(configuration.id());
+
+        configurations.delete(configuration.id());
+
+        assertThat(runs.current(configuration.id())).isEmpty();
+        assertThat(launched.process().waitFor(TIMEOUT.toSeconds(), TimeUnit.SECONDS)).isTrue();
+    }
+
+    @Test
+    void startFailsReadablyForAMissingConfiguration() {
+        assertThatThrownBy(() -> runs.start(12345)).isInstanceOf(IllegalStateException.class).hasMessageContaining("no longer exists");
+    }
+}

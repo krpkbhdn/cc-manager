@@ -31,7 +31,7 @@ class ProjectViewTest {
     fun `cycling walks sessions then diff and activity and wraps`() {
         val view = ProjectView().openSession("a").openSession("b")
 
-        assertThat(view.tabs()).containsExactly(ProjectTab.Session("a"), ProjectTab.Session("b"), ProjectTab.Git, ProjectTab.Activity)
+        assertThat(view.tabs()).containsExactly(ProjectTab.Session("a"), ProjectTab.Session("b"), ProjectTab.Git, ProjectTab.Run, ProjectTab.Activity)
         assertThat(view.cycle(1).selected).isEqualTo(ProjectTab.Git)
         assertThat(view.cycle(-1).selected).isEqualTo(ProjectTab.Session("a"))
         assertThat(view.select(ProjectTab.Activity).cycle(1).selected).isEqualTo(ProjectTab.Session("a"))
