@@ -10,7 +10,7 @@ plugins {
 }
 
 group = "com.github.krpkbhdn"
-version = "1.0.57"
+version = "1.0.58"
 
 java {
     toolchain {
@@ -85,9 +85,20 @@ compose.desktop {
         javaHome = javaToolchains.launcherFor(java.toolchain).get().metadata.installationPath.asFile.absolutePath
         jvmArgs += listOf("--enable-native-access=ALL-UNNAMED") + awtOpens
         nativeDistributions {
-            targetFormats(TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Dmg)
+            targetFormats(TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Deb, TargetFormat.Dmg)
             packageName = "Claude Code Manager"
             packageVersion = version.toString()
+            vendor = "krpkbhdn"
+            // Spring reflects over many JDK modules; a trimmed jlink image breaks it at runtime.
+            includeAllModules = true
+            windows {
+                menu = true
+                shortcut = true
+                dirChooser = true
+                perUserInstall = true
+                menuGroup = "Claude Code Manager"
+                upgradeUuid = "5b0f6a3e-7c1d-4e8a-9a52-3c1f0d2b7e41"
+            }
         }
     }
 }
