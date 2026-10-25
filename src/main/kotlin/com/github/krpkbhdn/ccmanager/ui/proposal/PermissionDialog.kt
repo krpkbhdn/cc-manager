@@ -24,6 +24,7 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
 private const val COLLAPSED_LINES = 12
+private const val COLLAPSED_CHARS = 2000
 private const val HINTS = "Tab moves · Tab to Deny · Ctrl+Enter allows"
 
 /** Any tool call that needs approval: what it does, optional "remember" choices from Claude's own suggestions, and a reason for denying. Focus starts on the reason, so a stray Enter never allows. */
@@ -69,8 +70,15 @@ private fun SummaryBlockView(block: SummaryBlock) {
 @Composable
 private fun CollapsibleMono(text: String) {
     var expanded by remember(text) { mutableStateOf(false) }
+    val lines = remember(text) { text.lines() }
+    val shortened = remember(text) { collapsed(text) }
+    MonoBlock(if (shortened != null && !expanded) shortened else text)
+    if (shortened != null) GhostButton(if (expanded) "Show less" else "Show all (${lines.size} lines)", { expanded = !expanded })
+}
+
+/** The cut-down preview of a long text (by lines or by characters), or null when it fits whole. */
+internal fun collapsed(text: String): String? {
     val lines = text.lines()
-    val long = lines.size > COLLAPSED_LINES
-    MonoBlock(if (long && !expanded) lines.take(COLLAPSED_LINES).joinToString("\n") + "\n…" else text)
-    if (long) GhostButton(if (expanded) "Show less" else "Show all ${lines.size} lines", { expanded = !expanded })
+    if (lines.size <= COLLAPSED_LINES && text.length <= COLLAPSED_CHARS) return null
+    return lines.take(COLLAPSED_LINES).joinToString("\n").take(COLLAPSED_CHARS) + "\n…"
 }

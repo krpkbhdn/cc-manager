@@ -22,6 +22,7 @@ data class FormField(
     val maximum: Double? = null,
     val minLength: Int? = null,
     val maxLength: Int? = null,
+    val valueKind: FieldKind = FieldKind.TEXT,
 )
 
 /** The fields of a flat object schema; types the form cannot show become text fields. */
@@ -29,6 +30,12 @@ fun formFields(schema: JsonNode): List<FormField> {
     val required = schema.path("required").values().map { node -> node.asString("") }.toSet()
     return schema.path("properties").properties().map { (key, property) ->
         val choices = choicesOf(property)
+        val valueKind = when (property.path("type").asString("")) {
+            "number" -> FieldKind.NUMBER
+            "integer" -> FieldKind.INTEGER
+            "boolean" -> FieldKind.BOOLEAN
+            else -> FieldKind.TEXT
+        }
         val kind = when {
             choices.isNotEmpty() -> FieldKind.CHOICE
             property.path("type").asString("") == "number" -> FieldKind.NUMBER
@@ -42,14 +49,16 @@ fun formFields(schema: JsonNode): List<FormField> {
             choices.map { it.first }, choices.map { it.second }, initial,
             property.path("minimum").asDouble(Double.NaN).takeUnless { it.isNaN() }, property.path("maximum").asDouble(Double.NaN).takeUnless { it.isNaN() },
             property.path("minLength").asInt(-1).takeIf { it >= 0 }, property.path("maxLength").asInt(-1).takeIf { it >= 0 },
+            valueKind,
         )
     }
 }
 
-/** Value to label pairs of an `enum` or a `oneOf` of `{const, title}`. */
+/** Value to label pairs of an `enum` (labelled by `enumNames` when present) or a `oneOf` of `{const, title}`. */
 private fun choicesOf(property: JsonNode): List<Pair<String, String>> {
     val enumValues = property.path("enum").values().map { node -> node.asString("") }
-    if (enumValues.isNotEmpty()) return enumValues.map { it to it }
+    val names = property.path("enumNames").values().map { node -> node.asString("") }
+    if (enumValues.isNotEmpty()) return enumValues.mapIndexed { i, value -> value to (names.getOrNull(i)?.ifEmpty { null } ?: value) }
     return property.path("oneOf").values().map { option ->
         val value = option.path("const").asString("")
         value to option.path("title").asString(value)
@@ -89,11 +98,13 @@ fun formContent(fields: List<FormField>, values: Map<String, String>): ObjectNod
     val content = mapper.createObjectNode()
     for (field in fields) {
         val value = values[field.key].orEmpty().trim()
+        val kind = if (field.kind == FieldKind.CHOICE) field.valueKind else field.kind
         when {
             field.kind == FieldKind.BOOLEAN -> content.put(field.key, value.toBoolean())
             value.isEmpty() -> Unit
-            field.kind == FieldKind.INTEGER -> content.put(field.key, value.toLong())
-            field.kind == FieldKind.NUMBER -> content.put(field.key, value.toDouble())
+            kind == FieldKind.BOOLEAN -> content.put(field.key, value.toBoolean())
+            kind == FieldKind.INTEGER -> value.toLongOrNull()?.let { content.put(field.key, it) } ?: content.put(field.key, value)
+            kind == FieldKind.NUMBER -> value.toDoubleOrNull()?.let { content.put(field.key, it) } ?: content.put(field.key, value)
             else -> content.put(field.key, value)
         }
     }

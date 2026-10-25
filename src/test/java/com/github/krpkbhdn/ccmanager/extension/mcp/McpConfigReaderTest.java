@@ -97,4 +97,27 @@ class McpConfigReaderTest {
 
         assertThat(new McpConfigReader(host).read(null)).extracting(McpServerConfig::name).containsExactly("custom");
     }
+
+    @Test
+    void userSettingsApproveAllButLocalSettingsOverrideIt() throws IOException {
+        Files.createDirectories(home.resolve(".claude"));
+        Files.createDirectories(project.resolve(".claude"));
+        Files.writeString(project.resolve(".mcp.json"), "{\"mcpServers\":{\"a\":{\"command\":\"x\"}}}");
+        Files.writeString(home.resolve(".claude/settings.json"), "{\"enableAllProjectMcpServers\":true}");
+
+        assertThat(reader(HostEnvironment.OperatingSystem.LINUX).read(project)).extracting(McpServerConfig::approval).containsExactly(McpApproval.APPROVED);
+
+        Files.writeString(project.resolve(".claude/settings.local.json"), "{\"enableAllProjectMcpServers\":false}");
+
+        assertThat(reader(HostEnvironment.OperatingSystem.LINUX).read(project)).extracting(McpServerConfig::approval).containsExactly(McpApproval.PENDING);
+    }
+
+    @Test
+    void malformedSettingsFilesDoNotHideTheServers() throws IOException {
+        Files.createDirectories(project.resolve(".claude"));
+        Files.writeString(project.resolve(".mcp.json"), "{\"mcpServers\":{\"a\":{\"command\":\"x\"}}}");
+        Files.writeString(project.resolve(".claude/settings.local.json"), "{ not json");
+
+        assertThat(reader(HostEnvironment.OperatingSystem.LINUX).read(project)).extracting(McpServerConfig::name).containsExactly("a");
+    }
 }

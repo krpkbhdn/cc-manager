@@ -78,4 +78,14 @@ class FormSchemaTest {
     fun emptySchemaGivesNoFields() {
         assertThat(formFields(JsonMapper.builder().build().readTree("{}"))).isEmpty()
     }
+
+    @Test
+    fun numericChoicesAreSentTypedAndEnumNamesLabelThem() {
+        val typed = formFields(
+            JsonMapper.builder().build().readTree("""{"properties":{"size":{"type":"integer","enum":[1,2],"enumNames":["Small","Large"]}}}"""),
+        )
+
+        assertThat(typed[0].optionLabels).containsExactly("Small", "Large")
+        assertThat(formContent(typed, mapOf("size" to "2")).get("size").isIntegralNumber).isTrue()
+    }
 }

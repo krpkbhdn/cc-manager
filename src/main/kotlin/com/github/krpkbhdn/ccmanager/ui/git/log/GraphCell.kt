@@ -49,7 +49,7 @@ private fun DrawScope.drawCubic(c: Cubic, color: Color, stroke: Stroke) {
 }
 
 private fun DrawScope.drawDot(center: Offset, color: Color, hollow: Boolean, surface: Color, radius: Float) {
-    if (hollow) {
+    if (hollow && radius > ringWidth.toPx()) {
         drawCircle(surface, radius, center)
         drawCircle(color, radius - ringWidth.toPx() / 2f, center, style = Stroke(ringWidth.toPx()))
     } else {

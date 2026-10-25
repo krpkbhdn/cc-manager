@@ -6,13 +6,13 @@ private const val WORD_START_BONUS = 12
 private const val FIRST_CHAR_BONUS = 6
 private const val GAP_PENALTY = 1
 
-/** Result of a successful fuzzy match: higher [score] is better, [positions] are matched indexes in the candidate. */
-data class FuzzyResult(val score: Int, val positions: List<Int>)
+/** Result of a successful fuzzy match: higher [score] is better. */
+data class FuzzyResult(val score: Int)
 
 /** Subsequence match with bonuses for word starts and consecutive runs; null when [query] does not fit [candidate]. */
 fun fuzzyMatch(query: String, candidate: String): FuzzyResult? {
     val needle = query.trim().lowercase().replace(" ", "")
-    if (needle.isEmpty()) return FuzzyResult(0, emptyList())
+    if (needle.isEmpty()) return FuzzyResult(0)
     val haystack = candidate.lowercase()
     val positions = mutableListOf<Int>()
     var score = 0
@@ -24,7 +24,7 @@ fun fuzzyMatch(query: String, candidate: String): FuzzyResult? {
         positions += found
         from = found + 1
     }
-    return FuzzyResult(score - positions.first() * GAP_PENALTY, positions)
+    return FuzzyResult(score - positions.first() * GAP_PENALTY)
 }
 
 private fun hitScore(haystack: String, index: Int, previous: Int?): Int {

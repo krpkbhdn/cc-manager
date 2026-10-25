@@ -32,6 +32,7 @@ class McpConfigReader {
     private static final String USER_CONFIG_FILE = ".claude.json";
     private static final String PROJECT_CONFIG_FILE = ".mcp.json";
     private static final String PROJECTS = "projects";
+    private static final String USER_SETTINGS_FILE = "settings.json";
     private static final String SETTINGS_FILE = ".claude/settings.json";
     private static final String SETTINGS_LOCAL_FILE = ".claude/settings.local.json";
 
@@ -55,7 +56,8 @@ class McpConfigReader {
         if (projectDirectory != null) {
             var projectEntry = projectEntry(userConfig, projectDirectory);
             servers.addAll(servers(projectEntry, ExtensionScope.LOCAL, McpApproval.NOT_REQUIRED));
-            var approvals = List.of(readFile(projectDirectory.resolve(SETTINGS_LOCAL_FILE)), readFile(projectDirectory.resolve(SETTINGS_FILE)), projectEntry);
+            var approvals = List.of(readApprovals(projectDirectory.resolve(SETTINGS_LOCAL_FILE)), readApprovals(projectDirectory.resolve(SETTINGS_FILE)), projectEntry,
+                    readApprovals(host.claudeConfigDirectory().resolve(USER_SETTINGS_FILE)));
             servers.addAll(servers(readFile(projectDirectory.resolve(PROJECT_CONFIG_FILE)), ExtensionScope.PROJECT, approvals));
         }
         return List.copyOf(servers);
@@ -92,7 +94,8 @@ class McpConfigReader {
         }).toList();
     }
 
-    /** @param sources approval holders, most specific first: local settings, shared settings, the ~/.claude.json project entry; disabled wins */
+    /** @param sources approval holders, most specific first: local settings, shared settings, the ~/.claude.json project entry, user settings; disabled wins */
+    // shortcut: managed (enterprise) settings are not read (OS-specific paths), add them when users report it
     private static McpApproval approval(List<JsonNode> sources, String name) {
         if (sources.stream().anyMatch(source -> names(source.path("disabledMcpjsonServers")).contains(name))) {
             return McpApproval.DISABLED;
@@ -105,6 +108,15 @@ class McpConfigReader {
 
     private static Set<String> names(JsonNode array) {
         return StreamSupport.stream(array.spliterator(), false).map(node -> node.asString("")).collect(Collectors.toSet());
+    }
+
+    /** Approval sources are optional hints: a broken settings file must not hide every server. */
+    private static JsonNode readApprovals(Path file) {
+        try {
+            return readFile(file);
+        } catch (RuntimeException e) {
+            return Json.parse("{}");
+        }
     }
 
     private static JsonNode readFile(Path file) {

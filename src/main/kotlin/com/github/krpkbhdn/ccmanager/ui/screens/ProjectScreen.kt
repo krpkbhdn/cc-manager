@@ -236,8 +236,8 @@ private fun GitTabHost(state: AppState, project: Project) {
     val ideAvailable = state.ideAvailable
     val system = remember(project, ideAvailable) {
         GitSystemActions(
-            openFolder = { path -> state.openDirectory(project.path.resolve(path).parent ?: project.path) },
-            openInIde = { path -> state.openInIde(project.path.resolve(path)) },
+            openFolder = { path -> state.openDirectory(git.repo.resolve(path).parent ?: git.repo) },
+            openInIde = { path -> state.openInIde(git.repo.resolve(path)) },
             ideAvailable = ideAvailable,
         )
     }

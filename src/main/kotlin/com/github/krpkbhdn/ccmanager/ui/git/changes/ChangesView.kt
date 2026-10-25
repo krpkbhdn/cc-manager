@@ -107,15 +107,14 @@ private fun listActions(git: GitState, system: GitSystemActions) = ChangeListAct
 @Composable
 private fun DiffArea(git: GitState, conflicted: Boolean, system: GitSystemActions, modifier: Modifier) {
     val ref = git.selected
-    val file by produceState<GitDiff.FileDiff?>(null, ref, git.status) {
-        if (value?.path != ref?.path) value = null
-        value = ref?.let { git.diffOf(it) }
+    val loaded by produceState<Pair<ChangeRef, GitDiff.FileDiff?>?>(null, ref, git.status) {
+        value = ref?.let { it to git.diffOf(it) }
     }
     Column(modifier.fillMaxHeight()) {
         if (conflicted && ref != null) ConflictBar(git, ref, system)
         val context = if (ref?.staged == true) DiffContext.STAGED else DiffContext.UNSTAGED
-        val current = file
-        GitDiffPane(current, context, Modifier.weight(1f), current?.let { hunkActions(git, it, context) }, loading = ref != null, busy = git.busy)
+        val current = loaded?.takeIf { it.first == ref }?.second
+        GitDiffPane(current, context, Modifier.weight(1f), current?.let { hunkActions(git, it, context) }, loading = ref != null && loaded?.first != ref, busy = git.busy)
     }
 }
 

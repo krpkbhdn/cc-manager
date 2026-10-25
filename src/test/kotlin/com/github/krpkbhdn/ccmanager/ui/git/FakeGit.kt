@@ -91,7 +91,6 @@ class FakeGit(val data: FakeRepoData) {
 
     private fun index() = object : GitIndexService(GitRunner()) {
         override fun stage(repo: Path, paths: List<String>) = mutate("stage ${paths.joinToString()}") { data.replace(paths) { it.copy(staged = if (it.unstaged() == GitStatus.Kind.UNTRACKED) GitStatus.Kind.ADDED else it.unstaged(), unstaged = GitStatus.Kind.NONE) } }
-        override fun stageAll(repo: Path) = mutate("stageAll") { data.replace(data.changes.map { it.path() }) { it.copy(staged = if (it.unstaged() == GitStatus.Kind.UNTRACKED) GitStatus.Kind.ADDED else if (it.hasUnstaged()) it.unstaged() else it.staged(), unstaged = GitStatus.Kind.NONE) } }
         override fun unstage(repo: Path, paths: List<String>) = mutate("unstage ${paths.joinToString()}") { data.replace(paths) { it.copy(unstaged = if (it.staged() == GitStatus.Kind.ADDED) GitStatus.Kind.UNTRACKED else it.staged(), staged = GitStatus.Kind.NONE) } }
         override fun discard(repo: Path, paths: List<String>) = mutate("discard ${paths.joinToString()}") { data.changes.removeAll { it.path() in paths && !it.hasStaged() } }
         override fun applyToIndex(repo: Path, patch: String, reverse: Boolean) = mutate("applyToIndex reverse=$reverse") { data.patches += patch to reverse }

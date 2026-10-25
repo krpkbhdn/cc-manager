@@ -32,6 +32,9 @@ public class GitConflictService {
      */
     public void resolve(Path repo, String path, ConflictSide side) {
         var file = literalPath(path);
+        if (git.out(repo, LITERAL_PATHSPECS, "ls-files", "-u", "--", file).isBlank()) {
+            throw new GitException(Kind.OTHER, "File is no longer conflicted: " + path, "");
+        }
         var gitSide = (side == ConflictSide.OURS) == (operation(repo) != Operation.REBASE) ? "--ours" : "--theirs";
         var checkout = git.tryRun(repo, LITERAL_PATHSPECS, "checkout", gitSide, "--", file);
         if (checkout.ok()) {

@@ -5,8 +5,10 @@ import java.time.Instant
 
 data class Headline(val title: String, val subtitle: String)
 
-/** Hero copy of the overview: attention first, then working sessions, then calm. */
-/** [answerable] counts the sessions whose question or approval can be answered in the app. */
+/**
+ * Hero copy of the overview: attention first, then working sessions, then calm.
+ * [answerable] counts the sessions whose question or approval can be answered in the app.
+ */
 fun overviewHeadline(attention: Int, working: Int, live: Int, answerable: Int = 0): Headline = when {
     attention > 0 -> Headline(
         if (attention == 1) "1 session needs you" else "$attention sessions need you",

@@ -204,4 +204,24 @@ class GitLogServiceTest {
         assertThat(List.of("--output=x", "-p")).allSatisfy(bad -> org.assertj.core.api.Assertions
                 .assertThatThrownBy(() -> service.details(repo.root(), bad)).isInstanceOf(GitException.class));
     }
+
+    @Test
+    void branchNamedLikeAFolderAndNotesRefsDoNotBreakOrPolluteTheLog() throws java.io.IOException {
+        repo.commit("a.txt", "1", "c1");
+        repo.git("branch", "docs");
+        java.nio.file.Files.createDirectories(repo.root().resolve("docs"));
+        repo.commit("docs/x.txt", "1", "c2");
+        repo.git("notes", "add", "-m", "note", "HEAD");
+
+        assertThat(service.log(repo.root(), all(0, 50)).rows()).hasSize(2);
+        assertThat(service.log(repo.root(), new Query("docs", null, null, null, 0, 50)).rows()).hasSize(1);
+    }
+
+    @Test
+    void showSignatureConfigDoesNotBreakParsing() {
+        repo.commit("a.txt", "1", "c1");
+        repo.git("config", "log.showSignature", "true");
+
+        assertThat(service.log(repo.root(), all(0, 50)).rows()).hasSize(1);
+    }
 }

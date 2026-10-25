@@ -39,10 +39,6 @@ public class GitIndexService {
         withPaths(repo, paths, List.of("add"));
     }
 
-    public void stageAll(Path repo) {
-        git.out(repo, "add", "-A");
-    }
-
     public void unstage(Path repo, List<String> paths) {
         withPaths(repo, paths, hasCommits(repo) ? List.of("restore", "--staged") : List.of("rm", "--cached", "-r", "-f", "-q"));
     }

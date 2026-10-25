@@ -119,7 +119,7 @@ private fun PathEditor(state: FolderPickerState, onFocusList: () -> Unit, modifi
                 event.type != KeyEventType.KeyDown -> false
                 event.key == Key.Enter -> true.also { scope.launch { if (state.commitTypedPath() == PathCheck.Valid) finish() } }
                 event.key == Key.Escape -> true.also { finish() }
-                event.key == Key.Tab && suggestions.isNotEmpty() && suggestionsFor == text -> true.also { acceptSuggestion(suggestions.first()) }
+                event.key == Key.Tab && suggestions.isNotEmpty() -> true.also { if (suggestionsFor == text) acceptSuggestion(suggestions.first()) }
                 else -> false
             }
         }

@@ -89,6 +89,9 @@ public class RunService {
         if (previous == null) {
             return;
         }
+        if (!previous.running()) {
+            return;
+        }
         var exits = new ArrayList<CompletableFuture<?>>();
         exits.add(previous.process().onExit());
         ProcessHandle.of(previous.process().pid()).ifPresent(handle -> handle.descendants().forEach(child -> exits.add(child.onExit())));

@@ -7,7 +7,6 @@ import com.github.krpkbhdn.ccmanager.claude.proposal.Proposal
 import com.github.krpkbhdn.ccmanager.claude.proposal.QuestionsProposal
 import tools.jackson.databind.JsonNode
 
-private const val SNIPPET_LIMIT = 400
 private const val HEADLINE_LIMIT = 140
 private const val MCP_PREFIX = "mcp__"
 private const val MCP_SEPARATOR = "__"
@@ -31,16 +30,17 @@ fun permissionSummary(toolName: String, input: JsonNode): List<SummaryBlock> = w
 private fun fileBlocks(toolName: String, input: JsonNode): List<SummaryBlock> {
     val path = input.text("file_path").ifEmpty { input.text("notebook_path") }
     val blocks = mutableListOf(SummaryBlock("File", path, true))
-    if (toolName == "Write") blocks += SummaryBlock("Content", input.text("content").snippet(), true)
+    if (toolName == "Write") blocks += SummaryBlock("Content", input.text("content"), true)
     if (toolName == "Edit") {
-        blocks += SummaryBlock("Replace", input.text("old_string").snippet(), true)
-        blocks += SummaryBlock("With", input.text("new_string").snippet(), true)
+        blocks += SummaryBlock("Replace", input.text("old_string"), true)
+        blocks += SummaryBlock("With", input.text("new_string"), true)
     }
-    if (toolName == "MultiEdit") blocks += SummaryBlock(null, "${input.path("edits").size()} edits", false)
+    if (toolName == "MultiEdit") input.path("edits").forEach { edit ->
+        blocks += SummaryBlock("Replace", edit.text("old_string"), true)
+        blocks += SummaryBlock("With", edit.text("new_string"), true)
+    }
     return blocks
 }
-
-private fun String.snippet() = if (length > SNIPPET_LIMIT) take(SNIPPET_LIMIT) + "…" else this
 
 private fun mcpLabel(toolName: String): String {
     val parts = toolName.removePrefix(MCP_PREFIX).split(MCP_SEPARATOR, limit = 2)

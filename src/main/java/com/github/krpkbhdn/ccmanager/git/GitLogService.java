@@ -81,17 +81,18 @@ public class GitLogService {
 
     private void addRevisions(Path repo, List<String> args, GitLog.Query query) {
         if (isBlank(query.branch())) {
-            args.addAll(List.of("--exclude=refs/stash", "--all"));
+            args.addAll(List.of("--exclude=refs/stash", "--exclude=refs/notes/*", "--all"));
         } else {
             GitRevisions.requireNotOption(query.branch());
             args.add(query.branch());
         }
+        args.add("--");
         if (!isBlank(query.path())) {
             var existingFile = isExistingFile(repo, query.path());
             if (existingFile || isSingleFile(query.path())) {
-                args.add("--follow");
+                args.add(args.size() - 1, "--follow");
             }
-            args.addAll(List.of("--", existingFile ? ":(literal)" + query.path() : query.path()));
+            args.add(existingFile ? ":(literal)" + query.path() : query.path());
         }
     }
 

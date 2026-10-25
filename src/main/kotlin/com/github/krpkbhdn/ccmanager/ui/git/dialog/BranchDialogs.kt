@@ -76,8 +76,8 @@ fun DeleteBranchDialog(git: GitState, dialog: GitDialog.DeleteBranch, onDismiss:
     ModalHost(onDismiss) {
         DialogBody("Delete branch", Icons.Trash, colors.danger) {
             Label("Delete ${dialog.branch.name()}?", color = colors.textPrimary)
-            if (ahead > 0) Label("It has $ahead unpushed commits.", color = colors.warning, style = Type.small)
-            if (dialog.branch.upstream() == null) Label("This branch was never pushed.", color = colors.textSecondary, style = Type.small)
+            if (ahead > 0) Label("It has $ahead unpushed ${if (ahead == 1) "commit" else "commits"}.", color = colors.warning, style = Type.small)
+            if (dialog.branch.upstream() == null) Label("It has no upstream branch.", color = colors.textSecondary, style = Type.small)
             CheckboxRow("Force delete", force, { force = it }, hint = "Delete even if the branch is not fully merged.")
             DialogActions("Delete", true, true, { onDismiss(); git.deleteBranch(dialog.branch.name(), force) }, onDismiss)
         }

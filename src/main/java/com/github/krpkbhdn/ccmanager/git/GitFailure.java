@@ -73,6 +73,14 @@ final class GitFailure {
 
     /** The git subcommand among global options such as --literal-pathspecs, for messages. */
     static String subcommand(List<String> args) {
-        return args.stream().filter(arg -> !arg.startsWith("-")).findFirst().orElse("command");
+        for (int i = 0; i < args.size(); i++) {
+            var arg = args.get(i);
+            if (arg.equals("-c")) {
+                i++;
+            } else if (!arg.startsWith("-")) {
+                return arg;
+            }
+        }
+        return "command";
     }
 }

@@ -24,20 +24,35 @@ class ProposalSummaryTest {
     }
 
     @Test
-    fun editAlwaysShowsBothSnippetsCutToTheLimit() {
+    fun editShowsBothStringsInFull() {
         val long = permissionSummary("Edit", json("""{"file_path":"A.java","old_string":"${"x".repeat(401)}","new_string":"b"}"""))
 
         assertThat(long.map { it.label }).containsExactly("File", "Replace", "With")
-        assertThat(long[1].text).isEqualTo("x".repeat(400) + "…")
+        assertThat(long[1].text).isEqualTo("x".repeat(401))
         assertThat(long[2].text).isEqualTo("b")
     }
 
     @Test
-    fun writeShowsTheContentCutToTheLimit() {
+    fun multiEditShowsEveryReplacement() {
+        val blocks = permissionSummary("MultiEdit", json("""{"file_path":"A.java","edits":[{"old_string":"a","new_string":"b"},{"old_string":"c","new_string":"d"}]}"""))
+
+        assertThat(blocks.map { it.label }).containsExactly("File", "Replace", "With", "Replace", "With")
+        assertThat(blocks.drop(1).map { it.text }).containsExactly("a", "b", "c", "d")
+    }
+
+    @Test
+    fun writeShowsTheFullContent() {
         val blocks = permissionSummary("Write", json("""{"file_path":"A.java","content":"${"y".repeat(500)}"}"""))
 
         assertThat(blocks.map { it.label }).containsExactly("File", "Content")
-        assertThat(blocks[1].text).isEqualTo("y".repeat(400) + "…")
+        assertThat(blocks[1].text).isEqualTo("y".repeat(500))
+    }
+
+    @Test
+    fun shortTextsAreNotCollapsedButLongOnesAre() {
+        assertThat(collapsed("a\nb")).isNull()
+        assertThat(collapsed((1..13).joinToString("\n"))).isEqualTo((1..12).joinToString("\n") + "\n…")
+        assertThat(collapsed("z".repeat(5000))).isEqualTo("z".repeat(2000) + "\n…")
     }
 
     @Test

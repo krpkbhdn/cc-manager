@@ -56,17 +56,6 @@ class GitIndexServiceTest {
     }
 
     @Test
-    void stagesDeletionsAndAllChanges() throws IOException {
-        prepareWithCommit();
-        Files.delete(sandbox.repo.resolve("a.txt"));
-        sandbox.write("b.txt", "b\n");
-
-        service.stageAll(sandbox.repo);
-
-        assertThat(staged().lines()).containsExactlyInAnyOrder("a.txt", "b.txt");
-    }
-
-    @Test
     void unstageWorksInRepositoryWithoutCommits() {
         prepare();
         sandbox.write("a.txt", "a\n");

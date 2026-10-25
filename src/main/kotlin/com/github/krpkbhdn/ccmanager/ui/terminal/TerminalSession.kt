@@ -19,7 +19,7 @@ import com.jediterm.terminal.emulator.mouse.MouseEventProcessingSettings
 import com.jediterm.terminal.emulator.mouse.MouseMode
 import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
-import java.awt.datatransfer.StringSelection
+import com.github.krpkbhdn.ccmanager.ui.components.copyToClipboard
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -167,7 +167,7 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
 
     fun copySelection() {
         val text = selection?.textIn(buffer)?.takeIf { it.isNotEmpty() } ?: return
-        Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null)
+        copyToClipboard(text)
         selection = null
     }
 
