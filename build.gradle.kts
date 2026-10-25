@@ -10,7 +10,7 @@ plugins {
 }
 
 group = "com.github.krpkbhdn"
-version = "1.2.2"
+version = "1.2.3"
 
 java {
     toolchain {
@@ -56,7 +56,11 @@ val awtOpens: List<String> = buildList {
     }
 }
 
+// Explicit override: claude does not count killed short dev runs as fullscreen start failures.
+val claudeFullscreen = mapOf("CLAUDE_CODE_NO_FLICKER" to "1")
+
 tasks.test {
+    environment(claudeFullscreen)
     useJUnitPlatform()
     jvmArgs("--enable-native-access=ALL-UNNAMED", *awtOpens.toTypedArray())
 }
@@ -65,6 +69,7 @@ tasks.register<JavaExec>("runPreview") {
     group = "application"
     description = "Boots the UI with fake services (flags: --light, --shots, --out=<dir>)"
     mainClass = "com.github.krpkbhdn.ccmanager.ui.PreviewMainKt"
+    environment(claudeFullscreen)
     classpath = sourceSets["test"].runtimeClasspath
     javaLauncher = javaToolchains.launcherFor(java.toolchain)
     jvmArgs("--enable-native-access=ALL-UNNAMED", *awtOpens.toTypedArray())

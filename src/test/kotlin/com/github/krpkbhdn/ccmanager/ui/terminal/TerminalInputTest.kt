@@ -22,7 +22,7 @@ class TerminalInputTest {
 
     private fun typed(char: Char, modifiers: Int = 0) = KeyInputEvent(KeyInputEvent.Type.TYPED, KeyEvent.VK_UNDEFINED, char, modifiers)
 
-    private fun command(event: KeyInputEvent) = commandFor(event, mac = false)
+    private fun command(event: KeyInputEvent, hasSelection: Boolean = false) = commandFor(event, hasSelection, mac = false)
 
     private fun bytes(event: KeyInputEvent): String? = keyBytes(event, terminal)?.toString(Charsets.ISO_8859_1)
 
@@ -126,8 +126,9 @@ class TerminalInputTest {
         assertThat(command(press(KeyEvent.VK_0, CTRL_DOWN_MASK))).isEqualTo(TerminalCommand.ResetZoom)
         assertThat(command(press(KeyEvent.VK_C, CTRL_DOWN_MASK or SHIFT_DOWN_MASK))).isEqualTo(TerminalCommand.Copy)
         assertThat(command(press(KeyEvent.VK_C, CTRL_DOWN_MASK))).isNull()
+        assertThat(command(press(KeyEvent.VK_C, CTRL_DOWN_MASK), hasSelection = true)).isEqualTo(TerminalCommand.Copy)
         assertThat(command(press(KeyEvent.VK_V, CTRL_DOWN_MASK or SHIFT_DOWN_MASK))).isEqualTo(TerminalCommand.Paste)
-        assertThat(command(press(KeyEvent.VK_V, CTRL_DOWN_MASK))).isNull()
+        assertThat(command(press(KeyEvent.VK_V, CTRL_DOWN_MASK))).isEqualTo(TerminalCommand.Paste)
         assertThat(command(press(KeyEvent.VK_INSERT, CTRL_DOWN_MASK))).isEqualTo(TerminalCommand.Copy)
         assertThat(command(press(KeyEvent.VK_INSERT, SHIFT_DOWN_MASK))).isEqualTo(TerminalCommand.Paste)
         assertThat(command(press(KeyEvent.VK_INSERT))).isNull()
@@ -137,10 +138,11 @@ class TerminalInputTest {
     @Test
     fun commandKeyDrivesCopyPasteAndZoomOnAMac() {
         val meta = java.awt.event.InputEvent.META_DOWN_MASK
-        assertThat(commandFor(press(KeyEvent.VK_C, meta), mac = true)).isEqualTo(TerminalCommand.Copy)
-        assertThat(commandFor(press(KeyEvent.VK_V, meta), mac = true)).isEqualTo(TerminalCommand.Paste)
-        assertThat(commandFor(press(KeyEvent.VK_EQUALS, meta), mac = true)).isEqualTo(TerminalCommand.Zoom(1))
-        assertThat(commandFor(press(KeyEvent.VK_C, CTRL_DOWN_MASK), mac = true)).isNull()
+        assertThat(commandFor(press(KeyEvent.VK_C, meta), hasSelection = false, mac = true)).isEqualTo(TerminalCommand.Copy)
+        assertThat(commandFor(press(KeyEvent.VK_V, meta), hasSelection = false, mac = true)).isEqualTo(TerminalCommand.Paste)
+        assertThat(commandFor(press(KeyEvent.VK_EQUALS, meta), hasSelection = false, mac = true)).isEqualTo(TerminalCommand.Zoom(1))
+        assertThat(commandFor(press(KeyEvent.VK_C, CTRL_DOWN_MASK), hasSelection = true, mac = true)).isNull()
+        assertThat(commandFor(press(KeyEvent.VK_V, CTRL_DOWN_MASK), hasSelection = true, mac = true)).isNull()
     }
 
     @Test

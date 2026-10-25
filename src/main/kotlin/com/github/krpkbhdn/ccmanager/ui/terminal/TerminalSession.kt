@@ -114,10 +114,9 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
     /** Handles a key event; returns true when it was consumed here. */
     fun onKey(event: KeyInputEvent): Boolean {
         if (event.type == KeyInputEvent.Type.TYPED && suppressTyped && event.modifiersEx != 0) return true
-        val command = commandFor(event)
-        if (command != null) {
+        val command = commandFor(event, selection != null)
+        if (command != null && perform(command)) {
             suppressTyped = true
-            perform(command)
             return true
         }
         if (event.type == KeyInputEvent.Type.PRESSED) suppressTyped = false
@@ -141,11 +140,15 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
         return String(charArrayOf(high, char)).toByteArray(Charsets.UTF_8)
     }
 
-    private fun perform(command: TerminalCommand) = when (command) {
-        is TerminalCommand.Zoom -> zoomBy(command.steps)
-        TerminalCommand.ResetZoom -> cellDp = DEFAULT_CELL_DP
-        TerminalCommand.Copy -> copySelection()
-        TerminalCommand.Paste -> paste()
+    /** False when the key should still reach the process: Ctrl+V with no text on the clipboard is an app's image paste. */
+    private fun perform(command: TerminalCommand): Boolean {
+        when (command) {
+            is TerminalCommand.Zoom -> zoomBy(command.steps)
+            TerminalCommand.ResetZoom -> cellDp = DEFAULT_CELL_DP
+            TerminalCommand.Copy -> copySelection()
+            TerminalCommand.Paste -> return paste()
+        }
+        return true
     }
 
     fun zoomBy(steps: Int) {
@@ -155,14 +158,17 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
     fun copySelection() {
         val text = selection?.textIn(buffer)?.takeIf { it.isNotEmpty() } ?: return
         Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null)
+        selection = null
     }
 
-    fun paste() {
+    /** Pastes the clipboard text; false when it holds none. */
+    fun paste(): Boolean {
         val clipboard = Toolkit.getDefaultToolkit().systemClipboard
         val text = runCatching { clipboard.getData(DataFlavor.stringFlavor) as? String }.getOrNull().orEmpty()
-        if (text.isEmpty()) return
+        if (text.isEmpty()) return false
         scrollToBottom()
         emulator.write(pasteBytes(text, modes.bracketedPaste))
+        return true
     }
 
     fun selectAll() {

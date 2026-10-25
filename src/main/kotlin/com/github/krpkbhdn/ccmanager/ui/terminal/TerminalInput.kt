@@ -34,21 +34,22 @@ private const val META = InputEvent.META_DOWN_MASK
 
 /**
  * Widget commands: zoom with +/-/0, copy and paste with Ctrl+Shift+C/V or Ctrl/Shift+Insert (Cmd+C/V on a Mac).
- * Plain Ctrl+letters stay with the process.
+ * Like Windows Terminal, plain Ctrl+C copies only while text is selected and plain Ctrl+V pastes; other Ctrl+letters stay with the process.
  */
-internal fun commandFor(event: KeyInputEvent, mac: Boolean = Platform.isMac): TerminalCommand? {
+internal fun commandFor(event: KeyInputEvent, hasSelection: Boolean, mac: Boolean = Platform.isMac): TerminalCommand? {
     if (event.type != KeyInputEvent.Type.PRESSED) return null
     val modifiers = event.modifiersEx
     val primary = modifiers and (if (mac) META else CTRL) != 0
     val shift = modifiers and SHIFT != 0
     if (modifiers and (ALT or (if (mac) CTRL else META)) != 0) return null
     val copyPasteChord = if (mac) primary && !shift else primary && shift
+    val plainCtrl = !mac && primary && !shift
     return when (event.keyCode) {
         KeyEvent.VK_EQUALS, KeyEvent.VK_PLUS, KeyEvent.VK_ADD -> TerminalCommand.Zoom(1).takeIf { primary }
         KeyEvent.VK_MINUS, KeyEvent.VK_SUBTRACT -> TerminalCommand.Zoom(-1).takeIf { primary && !shift }
         KeyEvent.VK_0, KeyEvent.VK_NUMPAD0 -> TerminalCommand.ResetZoom.takeIf { primary }
-        KeyEvent.VK_C -> TerminalCommand.Copy.takeIf { copyPasteChord }
-        KeyEvent.VK_V -> TerminalCommand.Paste.takeIf { copyPasteChord }
+        KeyEvent.VK_C -> TerminalCommand.Copy.takeIf { copyPasteChord || (plainCtrl && hasSelection) }
+        KeyEvent.VK_V -> TerminalCommand.Paste.takeIf { copyPasteChord || plainCtrl }
         KeyEvent.VK_INSERT -> if (primary && !shift) TerminalCommand.Copy else TerminalCommand.Paste.takeIf { shift && !primary }
         else -> null
     }
