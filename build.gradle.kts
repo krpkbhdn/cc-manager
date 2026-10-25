@@ -10,7 +10,7 @@ plugins {
 }
 
 group = "com.github.krpkbhdn"
-version = "1.0.58"
+version = "1.0.59"
 
 java {
     toolchain {
@@ -83,7 +83,7 @@ compose.desktop {
     application {
         mainClass = "com.github.krpkbhdn.ccmanager.ui.MainKt"
         javaHome = javaToolchains.launcherFor(java.toolchain).get().metadata.installationPath.asFile.absolutePath
-        jvmArgs += listOf("--enable-native-access=ALL-UNNAMED") + awtOpens
+        jvmArgs += listOf("--enable-native-access=ALL-UNNAMED", "-Dcc-manager.update.version=$version") + awtOpens
         nativeDistributions {
             targetFormats(TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Deb, TargetFormat.Dmg)
             packageName = "Claude Code Manager"

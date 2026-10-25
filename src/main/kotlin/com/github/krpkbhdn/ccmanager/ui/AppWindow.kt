@@ -53,7 +53,9 @@ fun ApplicationScope.AppWindow(backend: Backend, onShutdown: () -> Unit, setting
             position = if (bounds.x != null && bounds.y != null) WindowPosition(bounds.x.dp, bounds.y.dp) else WindowPosition.PlatformDefault,
         )
     }
-    val quit = { state.requestQuit { onShutdown(); exitApplication() } }
+    val exit = { onShutdown(); exitApplication() }
+    state.exitApp = exit
+    val quit = { state.requestQuit(exit) }
     MainWindow(state, windowState, WINDOW_TITLE, icon, quit)
 }
 

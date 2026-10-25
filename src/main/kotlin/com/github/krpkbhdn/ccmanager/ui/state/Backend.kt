@@ -15,6 +15,7 @@ import com.github.krpkbhdn.ccmanager.ui.git.model.GitBackend
 import com.github.krpkbhdn.ccmanager.ui.terminal.TerminalHost
 import com.github.krpkbhdn.ccmanager.ui.terminal.TerminalView
 import com.github.krpkbhdn.ccmanager.usage.RateLimitService
+import com.github.krpkbhdn.ccmanager.update.UpdateService
 import com.github.krpkbhdn.ccmanager.usage.SessionUsageService
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import com.github.krpkbhdn.ccmanager.workspace.DirectoryOpener
@@ -60,6 +61,7 @@ class Backend(
     val sessionUsage: SessionUsageService,
     val teams: TeamService,
     val terminal: TerminalPort = HostTerminalPort,
+    val updates: UpdateService? = null,
 ) {
     companion object {
         fun from(context: ConfigurableApplicationContext) = Backend(
@@ -76,6 +78,7 @@ class Backend(
             rateLimits = context.getBean(RateLimitService::class.java),
             sessionUsage = context.getBean(SessionUsageService::class.java),
             teams = context.getBean(TeamService::class.java),
+            updates = context.getBean(UpdateService::class.java),
         )
     }
 }

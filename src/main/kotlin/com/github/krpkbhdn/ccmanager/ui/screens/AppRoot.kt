@@ -34,6 +34,7 @@ import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation
 import com.github.krpkbhdn.ccmanager.claude.install.LoginState
 import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.ui.chrome.StatusBar
+import com.github.krpkbhdn.ccmanager.ui.chrome.UpdateBanner
 import com.github.krpkbhdn.ccmanager.ui.components.Banner
 import com.github.krpkbhdn.ccmanager.ui.components.ConfirmDialog
 import com.github.krpkbhdn.ccmanager.ui.components.DropOverlay
@@ -130,6 +131,7 @@ private fun MainLayout(state: AppState, installation: ClaudeInstallation) = BoxW
                 if (installation.login == LoginState.LOGGED_OUT && !state.loginBannerDismissed) {
                     Banner(SIGNED_OUT_MESSAGE, colors.warning, Icons.Alert) { IconButton(Icons.Close, { state.loginBannerDismissed = true }, tooltip = "Dismiss") }
                 }
+                UpdateBanner(state.update)
                 RouteContent(state)
             }
         }

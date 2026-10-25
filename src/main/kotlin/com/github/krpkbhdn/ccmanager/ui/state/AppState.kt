@@ -102,6 +102,8 @@ class AppState(
 
     private val events = MutableSharedFlow<AppNotification>(extraBufferCapacity = NOTIFICATION_CAP)
     val teams = TeamsState(backend.teams, scope, { confirm = it }, { reportError(it) })
+    val update = UpdateState(backend.updates, scope, ::reportError, ::requestQuit) { exitApp() }
+    var exitApp: () -> Unit = {}
     private val commandWriter = SessionCommandWriter(backend.terminal)
     private val unsubscribers = mutableListOf<Runnable>()
     private val gitStates = mutableMapOf<Long, GitState>()
@@ -123,6 +125,7 @@ class AppState(
         unsubscribers += backend.sessionUsage.subscribe { scope.launch { sessionUsage = backend.sessionUsage.all() } }
         unsubscribers += backend.notifications.subscribe { notification -> scope.launch { receive(notification) } }
         teams.start()
+        update.start()
         projectReload.request()
         sessionReload.request()
         scope.launch { rateLimits = backend.rateLimits.current().orElse(null) }
