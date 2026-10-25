@@ -82,7 +82,7 @@ private fun Drawer(state: AppState) {
     ) {
         VerticalRule()
         Column(Modifier.weight(1f)) {
-            DrawerHeader(state.unreadCount, state::markAllRead) { state.notificationsOpen = false }
+            DrawerHeader(state.unreadCount, state::markAllRead, state.settings.notificationSound, state::toggleNotificationSound) { state.notificationsOpen = false }
             HorizontalRule()
             if (state.notifications.isEmpty()) {
                 EmptyState(Icons.CircleCheck, "You are all caught up", "Finished work and requests for your decision will be listed here.", tint = colors.success)
@@ -94,9 +94,10 @@ private fun Drawer(state: AppState) {
 }
 
 @Composable
-private fun DrawerHeader(unread: Int, onMarkAllRead: () -> Unit, onClose: () -> Unit) {
+private fun DrawerHeader(unread: Int, onMarkAllRead: () -> Unit, soundOn: Boolean, onToggleSound: () -> Unit, onClose: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.md), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         Label("Notifications", Modifier.weight(1f), style = Type.subtitle)
+        GhostButton(if (soundOn) "Sound on" else "Sound off", onToggleSound, icon = Icons.Bell)
         GhostButton("Mark all read", onMarkAllRead, enabled = unread > 0)
         IconButton(Icons.Close, onClose, tooltip = "Close", hint = "Esc")
     }

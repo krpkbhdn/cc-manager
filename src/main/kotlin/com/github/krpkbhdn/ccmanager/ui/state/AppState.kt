@@ -141,6 +141,7 @@ class AppState(
         unsubscribers += backend.rateLimits.subscribe { scope.launch { rateLimits = backend.rateLimits.current().orElse(null) } }
         unsubscribers += backend.sessionUsage.subscribe { scope.launch { sessionUsage = backend.sessionUsage.all() } }
         unsubscribers += backend.notifications.subscribe { notification -> scope.launch { receive(notification) } }
+        backend.sound?.setEnabled(settings.notificationSound)
         teams.start()
         update.start()
         projectReload.request()
@@ -275,9 +276,12 @@ class AppState(
     fun updateSettings(transform: (UiSettings) -> UiSettings) {
         settings = transform(settings)
         settingsStore.save(settings)
+        backend.sound?.setEnabled(settings.notificationSound)
     }
 
     fun toggleSidebar() = updateSettings { it.copy(sidebarCollapsed = !it.sidebarCollapsed) }
+
+    fun toggleNotificationSound() = updateSettings { it.copy(notificationSound = !it.notificationSound) }
 
     fun toggleAgents() = updateSettings { it.copy(agentsOpen = !it.agentsOpen) }
 

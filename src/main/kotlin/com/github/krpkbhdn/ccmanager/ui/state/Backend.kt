@@ -10,6 +10,7 @@ import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry
 import com.github.krpkbhdn.ccmanager.claude.session.TranscriptService
 import com.github.krpkbhdn.ccmanager.notification.NotificationService
+import com.github.krpkbhdn.ccmanager.notification.NotificationSoundService
 import com.github.krpkbhdn.ccmanager.project.ProjectService
 import com.github.krpkbhdn.ccmanager.extension.mcp.McpService
 import com.github.krpkbhdn.ccmanager.extension.plugin.PluginService
@@ -70,6 +71,7 @@ class Backend(
     val transcripts: TranscriptService,
     val terminal: TerminalPort = HostTerminalPort,
     val updates: UpdateService? = null,
+    val sound: NotificationSoundService? = null,
 ) {
     companion object {
         fun from(context: ConfigurableApplicationContext) = Backend(
@@ -91,6 +93,7 @@ class Backend(
             skills = context.getBean(SkillService::class.java),
             transcripts = context.getBean(TranscriptService::class.java),
             updates = context.getBean(UpdateService::class.java),
+            sound = context.getBean(NotificationSoundService::class.java),
         )
     }
 }
