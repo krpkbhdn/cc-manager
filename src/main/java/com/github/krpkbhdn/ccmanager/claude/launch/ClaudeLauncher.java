@@ -109,7 +109,13 @@ public class ClaudeLauncher {
 
     private static String[] platformArguments(List<String> command) {
         var windows = System.getProperty("os.name").startsWith("Windows");
-        return command.stream().map(argument -> windows ? WindowsArgument.quote(argument) : argument).toArray(String[]::new);
+        if (!windows) {
+            return command.toArray(String[]::new);
+        }
+        WindowsArgument.requireSafeForBatchFile(command);
+        var quoted = command.stream().map(WindowsArgument::quote).toArray(String[]::new);
+        WindowsArgument.requireFitsCommandLine(quoted);
+        return quoted;
     }
 
     private void watchExit(String ccmSessionId, PtyProcess process) {

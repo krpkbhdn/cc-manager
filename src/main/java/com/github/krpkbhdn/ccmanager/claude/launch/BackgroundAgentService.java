@@ -2,12 +2,11 @@ package com.github.krpkbhdn.ccmanager.claude.launch;
 
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation;
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService;
+import com.github.krpkbhdn.ccmanager.workspace.CommandRunner;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -16,7 +15,7 @@ import org.springframework.stereotype.Service;
 public class BackgroundAgentService {
 
     private static final Logger log = LoggerFactory.getLogger(BackgroundAgentService.class);
-    private static final long TIMEOUT_SECONDS = 10;
+    private static final Duration TIMEOUT = Duration.ofSeconds(10);
 
     private final ClaudeInstallationService installation;
 
@@ -35,31 +34,15 @@ public class BackgroundAgentService {
         } catch (IOException | RuntimeException e) {
             log.debug("Listing background agents failed", e);
             return List.of();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return List.of();
         }
     }
 
-    private String run(Path executable, Path directory) throws IOException, InterruptedException {
-        Process process = new ProcessBuilder(executable.toString(), "agents", "--json", "--cwd", directory.toString())
-                .redirectError(ProcessBuilder.Redirect.DISCARD)
-                .start();
-        process.getOutputStream().close();
-        CompletableFuture<String> output = CompletableFuture.supplyAsync(() -> readAll(process));
-        if (!process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-            process.destroyForcibly();
+    private String run(Path executable, Path directory) throws IOException {
+        var result = CommandRunner.run(List.of(executable.toString(), "agents", "--json", "--cwd", WindowsArgument.directoryArgument(executable.toString(), directory)), null, TIMEOUT);
+        if (result.timedOut()) {
             log.debug("claude agents timed out");
             return "";
         }
-        return output.join();
-    }
-
-    private static String readAll(Process process) {
-        try {
-            return new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            return "";
-        }
+        return result.stdout();
     }
 }

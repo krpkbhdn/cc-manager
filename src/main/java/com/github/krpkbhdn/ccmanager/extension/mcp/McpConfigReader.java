@@ -39,9 +39,16 @@ class McpConfigReader {
         this.host = host;
     }
 
+    /** Claude keeps .claude.json in CLAUDE_CONFIG_DIR when that is set, else directly in the home directory. */
+    private Path userConfigFile() {
+        var configured = host.env("CLAUDE_CONFIG_DIR");
+        var directory = configured == null || configured.isBlank() ? host.home() : host.claudeConfigDirectory();
+        return directory.resolve(USER_CONFIG_FILE);
+    }
+
     /** User servers, plus local and project ones when a project directory is given. */
     List<McpServerConfig> read(Path projectDirectory) {
-        var userConfig = readFile(host.home().resolve(USER_CONFIG_FILE));
+        var userConfig = readFile(userConfigFile());
         var servers = new ArrayList<>(servers(userConfig, ExtensionScope.USER, McpApproval.NOT_REQUIRED));
         if (projectDirectory != null) {
             var projectEntry = projectEntry(userConfig, projectDirectory);

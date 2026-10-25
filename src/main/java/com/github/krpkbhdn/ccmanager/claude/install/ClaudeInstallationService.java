@@ -2,7 +2,6 @@ package com.github.krpkbhdn.ccmanager.claude.install;
 
 import com.github.krpkbhdn.ccmanager.workspace.CommandRunner;
 import com.github.krpkbhdn.ccmanager.workspace.HostEnvironment;
-import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -35,12 +34,7 @@ public class ClaudeInstallationService {
         this.locator = locator;
     }
 
-    @PostConstruct
-    void detectAtStartup() {
-        recheck();
-    }
-
-    /** Cached result of the last detection (detected eagerly at startup). */
+    /** Cached result of the last detection (detected on first use). */
     public ClaudeInstallation current() {
         var cached = current;
         return cached != null ? cached : recheck();

@@ -3,7 +3,9 @@ package com.github.krpkbhdn.ccmanager.git;
 import com.github.krpkbhdn.ccmanager.git.GitLog.Commit;
 import com.github.krpkbhdn.ccmanager.git.GitLog.Ref;
 import com.github.krpkbhdn.ccmanager.git.GitLog.RefKind;
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -44,7 +46,16 @@ final class GitLogParser {
         var parents = fields[1].isBlank() ? List.<String>of() : List.of(fields[1].split(" "));
         var body = fields.length == FIELD_COUNT ? truncate(fields[7].strip(), maxBodyChars) : "";
         return new Commit(hash, hash.substring(0, Math.min(SHORT_HASH_LENGTH, hash.length())), parents, fields[2], fields[3],
-                OffsetDateTime.parse(fields[4]).toInstant(), fields[6], body, parseRefs(fields[5]));
+                instant(fields[4]), fields[6], body, parseRefs(fields[5]));
+    }
+
+    /** git prints whatever offset a commit stores, even ones java.time rejects (+51:00); those fall back to the epoch. */
+    static Instant instant(String isoStrict) {
+        try {
+            return OffsetDateTime.parse(isoStrict).toInstant();
+        } catch (DateTimeParseException e) {
+            return Instant.EPOCH;
+        }
     }
 
     private static String truncate(String body, int maxBodyChars) {

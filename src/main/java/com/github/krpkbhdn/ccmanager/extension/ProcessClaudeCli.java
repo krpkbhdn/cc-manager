@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -46,6 +47,9 @@ class ProcessClaudeCli implements ClaudeCli {
         }
         var command = new ArrayList<String>();
         command.add(current.executable().toString());
+        if (host.windows()) {
+            WindowsArgument.requireSafeForBatchFile(Stream.concat(command.stream(), arguments.stream()).toList());
+        }
         arguments.forEach(argument -> command.add(host.windows() ? WindowsArgument.quote(argument) : argument));
         try {
             var result = launch.start(command);

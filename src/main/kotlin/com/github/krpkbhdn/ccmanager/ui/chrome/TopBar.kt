@@ -98,11 +98,11 @@ internal fun ThemeToggle(state: AppState) {
 internal fun NotificationBell(state: AppState) {
     Box {
         IconButton(Icons.Bell, { state.notificationsOpen = !state.notificationsOpen }, tooltip = "Notifications", hint = AppShortcut.NOTIFICATIONS.hint(), active = state.notificationsOpen)
-        if (state.unreadCount > 0) {
+        if (state.notifications.unreadCount > 0) {
             Box(
                 Modifier.align(Alignment.TopEnd).offset(badgeOffsetX, badgeOffsetY).clip(RoundedCornerShape(Radius.pill)).background(colors.danger).padding(horizontal = Spacing.xs + 1.dp),
                 contentAlignment = Alignment.Center,
-            ) { Label(state.unreadCount.coerceAtMost(MAX_BADGE).toString(), color = Color.White, style = Type.numericCaption) }
+            ) { Label(state.notifications.unreadCount.coerceAtMost(MAX_BADGE).toString(), color = Color.White, style = Type.numericCaption) }
         }
     }
 }

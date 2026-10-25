@@ -139,6 +139,49 @@ class GitIndexServiceTest {
     }
 
     @Test
+    void discardOnlyUnlinksAJunctionOrSymlinkPointingOutsideTheRepository() throws IOException, InterruptedException {
+        prepareWithCommit();
+        var outsideDirectory = Files.createDirectory(root.resolve("elsewhere"));
+        Files.writeString(outsideDirectory.resolve("keep.txt"), "keep");
+        createDirectoryLink(sandbox.repo.resolve("ext"), outsideDirectory);
+
+        service.discard(sandbox.repo, List.of("ext"));
+
+        assertThat(sandbox.repo.resolve("ext")).doesNotExist();
+        assertThat(outsideDirectory.resolve("keep.txt")).hasContent("keep");
+    }
+
+    @Test
+    void discardRefusesAnUntrackedNestedRepository() {
+        prepareWithCommit();
+        sandbox.write("lib/.git/HEAD", "ref: refs/heads/main\n");
+        sandbox.write("lib/code.txt", "history\n");
+
+        assertThatThrownBy(() -> service.discard(sandbox.repo, List.of("lib"))).isInstanceOf(GitException.class).hasMessageContaining("nested repository");
+
+        assertThat(sandbox.repo.resolve("lib/code.txt")).exists();
+    }
+
+    @Test
+    void applyToIndexRefusesAPatchDecodedFromInvalidUtf8() {
+        prepareWithCommit();
+
+        assertThatThrownBy(() -> service.applyToIndex(sandbox.repo, "+bad � line\n", false))
+                .isInstanceOf(GitException.class)
+                .hasMessageContaining("stage the whole file");
+    }
+
+    /** A junction on Windows (works without developer mode), a symbolic link elsewhere. */
+    private static void createDirectoryLink(Path link, Path target) throws IOException, InterruptedException {
+        if (System.getProperty("os.name").startsWith("Windows")) {
+            var exit = new ProcessBuilder("cmd", "/c", "mklink", "/J", link.toString(), target.toString()).redirectErrorStream(true).start().waitFor();
+            assertThat(exit).as("mklink /J").isZero();
+        } else {
+            Files.createSymbolicLink(link, target);
+        }
+    }
+
+    @Test
     void commitReturnsShortHashAndStoresMultiLineMessage() {
         prepareWithCommit();
         sandbox.write("b.txt", "b\n");

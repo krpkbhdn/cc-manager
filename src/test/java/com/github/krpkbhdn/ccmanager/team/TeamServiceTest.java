@@ -3,7 +3,9 @@ package com.github.krpkbhdn.ccmanager.team;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.github.krpkbhdn.ccmanager.project.ModelSelection;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.flywaydb.core.Flyway;
@@ -53,12 +55,58 @@ class TeamServiceTest {
     }
 
     @Test
-    void createStoresRolesInOrderAndSetsLeadRole() {
+    void createStoresRolesInOrder() {
         var team = service.create("Squad", List.of(role("dev", false), role("boss", true)));
 
         assertThat(team.roles()).extracting(TeamRole::name).containsExactly("dev", "boss");
-        assertThat(jdbc.sql("SELECT lead_role_id FROM team WHERE id = ?").param(team.id()).query(Long.class).single())
-                .isEqualTo(team.lead().orElseThrow().id());
+    }
+
+    @Test
+    void createRejectsRolesWhoseTextExceedsTheCommandLineBudget() {
+        var heavy = new ArrayList<RoleDraft>();
+        for (int i = 0; i < 4; i++) {
+            heavy.add(new RoleDraft("dev-" + i, "d", "x".repeat(RoleDraft.MAX_PROMPT), "sonnet", "medium", null, i == 0));
+        }
+
+        assertThatThrownBy(() -> service.create("Squad", heavy)).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("shorten");
+    }
+
+    @Test
+    void storedRoleWithRetiredEffortStillLoadsWithoutIt() {
+        var team = service.create("Squad", List.of(role("boss", true)));
+        jdbc.sql("UPDATE team_role SET effort = 'retired' WHERE team_id = ?").param(team.id()).update();
+
+        assertThat(service.find(team.id()).orElseThrow().lead().orElseThrow().selection()).isEqualTo(new ModelSelection("sonnet", null));
+    }
+
+    @Test
+    void storedRoleWithRetiredEffortKeepsItsModelAndToolList() {
+        var team = service.create("Squad", List.of(new RoleDraft("boss", "d", "p", "opus", "low", "Read, Grep", true)));
+        jdbc.sql("UPDATE team_role SET effort = 'retired' WHERE team_id = ?").param(team.id()).update();
+
+        var lead = service.find(team.id()).orElseThrow().lead().orElseThrow();
+
+        assertThat(lead.selection()).isEqualTo(new ModelSelection("opus", null));
+        assertThat(lead.draft().tools()).isEqualTo("Read, Grep");
+    }
+
+    @Test
+    void storedToolsKeepValidEntriesAndNeverFallBackToAllTools() {
+        var team = service.create("Squad", List.of(new RoleDraft("boss", "d", "p", null, null, "Read", true)));
+        jdbc.sql("UPDATE team_role SET tools = 'Read, bad tool!, Bash' WHERE team_id = ?").param(team.id()).update();
+        assertThat(service.find(team.id()).orElseThrow().lead().orElseThrow().draft().tools()).isEqualTo("Read, Bash");
+
+        jdbc.sql("UPDATE team_role SET tools = '!!, ??' WHERE team_id = ?").param(team.id()).update();
+        assertThat(service.find(team.id()).orElseThrow().lead().orElseThrow().draft().tools()).isEqualTo("Read");
+    }
+
+    @Test
+    void aStoredRoleThatFailsNameValidationIsSkippedWithoutBreakingTheList() {
+        var team = service.create("Squad", List.of(role("boss", true), role("qa", false)));
+        jdbc.sql("UPDATE team_role SET name = 'Bad Name' WHERE team_id = ? AND name = 'qa'").param(team.id()).update();
+
+        assertThat(service.list()).extracting(Team::name).contains("Squad");
+        assertThat(service.find(team.id()).orElseThrow().roles()).extracting(TeamRole::name).containsExactly("boss");
     }
 
     @Test

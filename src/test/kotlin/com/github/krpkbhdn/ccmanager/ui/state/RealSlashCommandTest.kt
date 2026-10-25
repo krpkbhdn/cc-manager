@@ -6,6 +6,7 @@ import com.github.krpkbhdn.ccmanager.CcManagerApplication
 import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
+import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry
 import com.github.krpkbhdn.ccmanager.project.ModelSelection
 import com.github.krpkbhdn.ccmanager.project.ProjectService
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.io.TempDir
 
 private const val WAIT_MILLIS = 90_000L
 private const val SETTLE_MILLIS = 3_000L
+private const val ENTER_KEY = "\r"
 private val userSettings: Path = Path.of(System.getProperty("user.home"), ".claude", "settings.json")
 
 /**
@@ -60,18 +62,21 @@ class RealSlashCommandTest {
                 val id = session.ccmSessionId()
                 await("session registered") { registry.find(id).map { it.claudeSessionId() != null }.orElse(false) }
                 Thread.sleep(SETTLE_MILLIS)
-                runBlocking { writer.run(id, "say hi in two words") }
-                await("first statusLine") { usage.of(id).isPresent }
+                assertThat(runBlocking { writer.run(id, "say hi in two words") }).isTrue()
+                await("turn started") { status(registry, id) == AgentStatus.WORKING }
+                await("turn finished") { status(registry, id) == AgentStatus.IDLE && usage.of(id).isPresent }
                 println("LAUNCHED_WITH ${usage.of(id).get().modelName()} ${usage.of(id).get().effort()}")
                 assertThat(usage.of(id).get().modelName()).containsIgnoringCase("haiku")
                 assertThat(usage.of(id).get().effort()).isEqualTo("low")
 
-                runBlocking { writer.run(id, modelCommand("sonnet")) }
+                assertThat(runBlocking { writer.run(id, modelCommand("sonnet")) }).isTrue()
+                Thread.sleep(SETTLE_MILLIS)
+                port.send(id, ENTER_KEY) // with history claude asks "Switch model?" first, option 1 is preselected
                 await("model switched") { modelReported(usage.of(id).get().modelName(), "sonnet") }
-                runBlocking { writer.run(id, effortCommand("high")) }
+                assertThat(runBlocking { writer.run(id, effortCommand("high")) }).isTrue()
                 await("effort switched") { usage.of(id).get().effort() == "high" }
                 println("AFTER_COMMANDS ${usage.of(id).get().modelName()} ${usage.of(id).get().effort()}")
-                runBlocking { writer.run(id, "/exit") }
+                assertThat(runBlocking { writer.run(id, "/exit") }).isTrue()
                 await("exit") { registry.find(id).isEmpty }
             }
         } finally {
@@ -90,5 +95,7 @@ class RealSlashCommandTest {
 /** Nobody reads the PTY in a test, and an unread console output buffer eventually stalls claude's rendering. */
 private fun drain(session: LaunchedSession) {
     val input = session.process().inputStream
-    Thread { runCatching { val buffer = ByteArray(8192); while (input.read(buffer) >= 0) Unit } }.apply { isDaemon = true }.start()
+    Thread { runCatching { val buffer = ByteArray(8192); while (input.read(buffer) >= 0) {} } }.apply { isDaemon = true }.start()
 }
+
+private fun status(registry: SessionRegistry, id: String): AgentStatus? = registry.find(id).map { it.status() }.orElse(null)

@@ -33,7 +33,7 @@ public class GitBranchService {
 
     /** Checks out a local branch; a remote name like "origin/feature" creates a tracking local branch. {@code autoStash} stashes and re-applies local changes. */
     public void checkout(Path repo, String branch, boolean autoStash) {
-        refs.requireNotOptionLike(branch);
+        GitRevisions.requireNotOption(branch);
         var command = checkoutCommand(repo, branch);
         if (!autoStash) {
             git.out(repo, command);
@@ -43,19 +43,19 @@ public class GitBranchService {
         try {
             git.out(repo, command);
         } catch (GitException e) {
-            if (stashed) {
-                popStash(repo, e);
+            if (stashed != null) {
+                popStash(repo, stashed, e);
             }
             throw e;
         }
-        if (stashed) {
-            popStash(repo, null);
+        if (stashed != null) {
+            popStash(repo, stashed, null);
         }
     }
 
     /** Detached HEAD at any commit-ish. */
     public void checkoutCommit(Path repo, String commitish) {
-        refs.requireNotOptionLike(commitish);
+        GitRevisions.requireNotOption(commitish);
         git.out(repo, "checkout", "--detach", commitish);
     }
 
@@ -63,20 +63,20 @@ public class GitBranchService {
         refs.requireValidNewName(repo, name);
         var command = new ArrayList<>(checkout ? List.of("checkout", "-b", name) : List.of("branch", name));
         if (startPoint != null) {
-            refs.requireNotOptionLike(startPoint);
+            GitRevisions.requireNotOption(startPoint);
             command.add(startPoint);
         }
         git.out(repo, command.toArray(String[]::new));
     }
 
     public void rename(Path repo, String oldName, String newName) {
-        refs.requireNotOptionLike(oldName);
+        GitRevisions.requireNotOption(oldName);
         refs.requireValidNewName(repo, newName);
         git.out(repo, "branch", "-m", oldName, newName);
     }
 
     public void delete(Path repo, String name, boolean force) {
-        refs.requireNotOptionLike(name);
+        GitRevisions.requireNotOption(name);
         if (refs.current(repo).filter(name::equals).isPresent()) {
             throw new GitException(Kind.OTHER, "Cannot delete the checked-out branch '" + name + "'; switch to another branch first", "");
         }
@@ -85,26 +85,26 @@ public class GitBranchService {
 
     /** Deletes a branch on the remote (git push remote --delete). */
     public void deleteRemote(Path repo, String remote, String name) {
-        refs.requireNotOptionLike(remote);
-        refs.requireNotOptionLike(name);
-        git.run(repo, GitRunner.SYNC_TIMEOUT, null, null, List.of("push", remote, "--delete", name));
+        GitRevisions.requireNotOption(remote);
+        GitRevisions.requireNotOption(name);
+        git.run(repo, git.properties().syncTimeout(), null, null, List.of("push", remote, "--delete", name));
     }
 
     public void setUpstream(Path repo, String branch, String upstream) {
-        refs.requireNotOptionLike(branch);
-        refs.requireNotOptionLike(upstream);
+        GitRevisions.requireNotOption(branch);
+        GitRevisions.requireNotOption(upstream);
         git.out(repo, "branch", "--set-upstream-to=" + upstream, branch);
     }
 
     /** Merges {@code branch} into the current branch. A conflict surfaces as GitException(CONFLICT); the repo stays in the merging state. */
     public void merge(Path repo, String branch, MergeMode mode) {
-        refs.requireNotOptionLike(branch);
+        GitRevisions.requireNotOption(branch);
         git.out(repo, "merge", mergeFlag(mode), branch);
     }
 
     /** Rebases the current branch onto {@code onto}. A conflict surfaces as GitException(CONFLICT); the rebase stays stopped. */
     public void rebase(Path repo, String onto) {
-        refs.requireNotOptionLike(onto);
+        GitRevisions.requireNotOption(onto);
         git.out(repo, "rebase", onto);
     }
 
@@ -127,20 +127,29 @@ public class GitBranchService {
                 : new String[] {"checkout", "-b", localName, "--track", branch};
     }
 
-    private boolean stashLocalChanges(Path repo) {
+    /** The hash of the autostash entry, or null when nothing was stashed. */
+    private String stashLocalChanges(Path repo) {
         var before = git.tryRun(repo, "rev-parse", "-q", "--verify", STASH_REF).stdout();
         git.out(repo, "stash", "push", "-u", "-m", AUTOSTASH_MESSAGE);
         var after = git.tryRun(repo, "rev-parse", "-q", "--verify", STASH_REF);
-        return after.ok() && !after.stdout().equals(before);
+        return after.ok() && !after.stdout().equals(before) ? after.stdout().strip() : null;
     }
 
     /** Re-applies the autostash; a conflict keeps the stash and is reported, after a failed checkout the original error wins. */
-    private void popStash(Path repo, GitException checkoutFailure) {
-        var result = git.tryRun(repo, "stash", "pop");
-        if (result.ok() || checkoutFailure != null) {
-            return;
+    private void popStash(Path repo, String stashHash, GitException checkoutFailure) {
+        var top = git.tryRun(repo, "rev-parse", "-q", "--verify", STASH_REF).stdout().strip();
+        var output = GitStashService.STASH_CHANGED;
+        if (top.equals(stashHash)) {
+            var result = git.tryRun(repo, "stash", "pop");
+            if (result.ok()) {
+                return;
+            }
+            output = (result.stderr() + "\n" + result.stdout()).strip();
         }
-        var output = (result.stderr() + "\n" + result.stdout()).strip();
+        if (checkoutFailure != null) {
+            var message = checkoutFailure.getMessage() + "; your local changes are kept in the stash (" + AUTOSTASH_MESSAGE + ")";
+            throw new GitException(checkoutFailure.kind(), message, checkoutFailure.output());
+        }
         var message = "Switched branch, but re-applying your local changes failed; they are kept in the stash";
         throw new GitException(output.contains("CONFLICT") ? Kind.CONFLICT : GitFailure.classify(output), message, output);
     }

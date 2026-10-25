@@ -20,12 +20,14 @@ class ProjectServiceTest {
     Path temp;
 
     ProjectService service;
+    JdbcClient jdbc;
 
     @BeforeEach
     void setUp() {
         var dataSource = new DriverManagerDataSource("jdbc:sqlite:" + temp.resolve("test.db"));
         Flyway.configure().dataSource(dataSource).load().migrate();
-        service = new ProjectService(JdbcClient.create(dataSource));
+        jdbc = JdbcClient.create(dataSource);
+        service = new ProjectService(jdbc);
     }
 
     private Path directory(String name) throws IOException {
@@ -40,6 +42,22 @@ class ProjectServiceTest {
         assertThat(project.path()).isEqualTo(temp.resolve("alpha").toRealPath());
         assertThat(service.find(project.id())).contains(project);
         assertThat(service.list()).containsExactly(project);
+    }
+
+    @Test
+    void storedEffortThatFailsCurrentRulesFallsBackToDefault() throws IOException {
+        var project = service.add(directory("alpha"));
+        jdbc.sql("UPDATE project SET effort = 'retired' WHERE id = ?").param(project.id()).update();
+
+        assertThat(service.list()).extracting(Project::modelSelection).containsExactly(ModelSelection.DEFAULT);
+    }
+
+    @Test
+    void staleEffortKeepsAValidStoredModel() throws IOException {
+        var project = service.add(directory("alpha"));
+        jdbc.sql("UPDATE project SET model = 'opus', effort = 'retired' WHERE id = ?").param(project.id()).update();
+
+        assertThat(service.list()).extracting(Project::modelSelection).containsExactly(new ModelSelection("opus", null));
     }
 
     @Test

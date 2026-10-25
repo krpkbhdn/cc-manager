@@ -39,7 +39,7 @@ private const val NO_REPLY_NOTE = "Limits appear after a session of a Pro or Max
 @Composable
 internal fun UsagePanel(state: AppState, onDismiss: () -> Unit) {
     val windows = usageWindowDetails(state.rateLimits, state.now)
-    val rows = sessionUsageRows(state.live.sessions, state.sessionUsage, state::projectName)
+    val rows = sessionUsageRows(state.live.sessions, state.sessionUsage, state.projects::nameOf)
     AnchoredPopup(onDismiss, alignEnd = true, modifier = Modifier.width(panelWidth)) {
         Column(Modifier.padding(Spacing.lg), verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

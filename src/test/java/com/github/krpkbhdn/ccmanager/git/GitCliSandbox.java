@@ -24,8 +24,12 @@ final class GitCliSandbox {
     }
 
     static GitCliSandbox create(Path root) {
-        Assumptions.assumeTrue(GitRunner.isAvailable(), "git is not installed");
-        var runner = isolatedRunner(root);
+        return create(root, GitProperties.defaults());
+    }
+
+    static GitCliSandbox create(Path root, GitProperties properties) {
+        Assumptions.assumeTrue(HistoryTestRepo.gitAvailable(), "git is not installed");
+        var runner = isolatedRunner(root, properties);
         var sandbox = new GitCliSandbox(root, root.resolve("work"), runner);
         sandbox.initialise(sandbox.repo, false);
         return sandbox;
@@ -106,10 +110,10 @@ final class GitCliSandbox {
         runner.out(directory, "config", "core.autocrlf", "false");
     }
 
-    private static GitRunner isolatedRunner(Path root) {
+    private static GitRunner isolatedRunner(Path root, GitProperties properties) {
         try {
             var emptyConfig = Files.createFile(root.resolve("empty.gitconfig")).toString();
-            return new GitRunner(Map.of("GIT_CONFIG_GLOBAL", emptyConfig, "GIT_CONFIG_SYSTEM", emptyConfig,
+            return new GitRunner(properties, Map.of("GIT_CONFIG_GLOBAL", emptyConfig, "GIT_CONFIG_SYSTEM", emptyConfig,
                     "GIT_CONFIG_NOSYSTEM", "1"));
         } catch (IOException e) {
             throw new UncheckedIOException(e);

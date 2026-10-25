@@ -75,6 +75,7 @@ internal fun TerminalSessionView(session: TerminalSession, modifier: Modifier, t
 
     FitToView(session, painter, geometry, viewSize)
     AnimateScroll(session)
+    LaunchedEffect(session) { snapshotFlow { session.frame }.collect { session.syncView() } }
     DisposableEffect(session) { onDispose { session.focused = false } }
     LaunchedEffect(session) { runCatching { session.focusRequester.requestFocus() } }
 

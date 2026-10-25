@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.git;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
@@ -18,9 +19,17 @@ class GitWatcherTest {
 
     private static final long WAIT_MILLIS = 5000;
     private static final long QUIET_MILLIS = 800;
+    private static final boolean WINDOWS = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
 
-    private final GitWatcher watcher = new GitWatcher(new GitRunner(), Duration.ofMillis(60));
+    private static final GitProperties PROPERTIES = watcherProperties();
+    private final GitWatcher watcher = new GitWatcher(new GitRunner(PROPERTIES));
     private HistoryTestRepo repo;
+
+    private static GitProperties watcherProperties() {
+        var defaults = GitProperties.defaults();
+        return new GitProperties(defaults.commandTimeout(), defaults.syncTimeout(), Duration.ofMillis(60), 50,
+                defaults.maxDiffLines(), defaults.maxUntrackedBytes());
+    }
 
     @BeforeEach
     void setUp(@TempDir Path directory) {
@@ -84,6 +93,19 @@ class GitWatcherTest {
         calls.set(0);
         sleep(QUIET_MILLIS);
         repo.git("branch", "feature/deep/other");
+
+        assertThat(eventually(() -> calls.get() >= 1)).isTrue();
+    }
+
+    @Test
+    void aLinkedWorktreeSeesRefChangesOfTheCommonGitDirectory(@TempDir Path elsewhere) {
+        var worktree = elsewhere.resolve("linked");
+        repo.git("worktree", "add", "-q", "-b", "linked", worktree.toString());
+        var calls = new AtomicInteger();
+        watcher.subscribe(worktree, calls::incrementAndGet);
+        sleep(200);
+
+        repo.git("branch", "created-in-the-main-checkout");
 
         assertThat(eventually(() -> calls.get() >= 1)).isTrue();
     }
@@ -176,8 +198,56 @@ class GitWatcherTest {
     }
 
     @Test
+    void onWindowsAFolderCanBeMovedWhileWatchedAndADeepChangeStillNotifies() throws IOException {
+        assumeTrue(WINDOWS);
+        repo.write("src/main/deep/a.txt", "1");
+        var calls = new AtomicInteger();
+        watcher.subscribe(repo.root(), calls::incrementAndGet);
+        sleep(200);
+
+        Files.move(repo.root().resolve("src/main"), repo.root().resolve("src/moved"));
+        assertThat(repo.root().resolve("src/moved/deep/a.txt")).exists();
+        var afterMove = calls.get();
+        repo.write("src/moved/deep/a.txt", "2");
+
+        assertThat(eventually(() -> calls.get() > afterMove)).isTrue();
+    }
+
+    @Test
+    void onWindowsARefTwoNewFoldersDeepInsideTheGitDirectoryStillNotifies() throws IOException {
+        assumeTrue(WINDOWS);
+        var calls = new AtomicInteger();
+        watcher.subscribe(repo.root(), calls::incrementAndGet);
+        sleep(200);
+        var deep = repo.root().resolve(".git/refs/heads/user/x");
+        Files.createDirectories(deep);
+        sleep(QUIET_MILLIS);
+        var before = calls.get();
+
+        Files.writeString(deep.resolve("y"), "0000000000000000000000000000000000000000\n");
+
+        assertThat(eventually(() -> calls.get() > before)).isTrue();
+    }
+
+    @Test
+    void onWindowsChangesInsideIgnoredFoldersAtAnyDepthDoNotNotify() throws IOException {
+        assumeTrue(WINDOWS);
+        repo.write("module/build/out.txt", "0");
+        var calls = new AtomicInteger();
+        watcher.subscribe(repo.root(), calls::incrementAndGet);
+        sleep(200);
+        var before = calls.get();
+
+        repo.write("module/build/out.txt", "1");
+        sleep(QUIET_MILLIS);
+
+        assertThat(calls.get()).isEqualTo(before);
+    }
+
+    @Test
     void hugeTreesFallBackToWatchingOnlyTheRoot(@TempDir Path huge) throws IOException {
-        for (var i = 0; i <= GitWatcher.MAX_TREE_DIRECTORIES; i++) {
+        assumeFalse(WINDOWS, "Windows watches the whole tree with one recursive handle");
+        for (var i = 0; i <= PROPERTIES.maxWatchedDirectories(); i++) {
             Files.createDirectories(huge.resolve("d" + i));
         }
         var calls = new AtomicInteger();

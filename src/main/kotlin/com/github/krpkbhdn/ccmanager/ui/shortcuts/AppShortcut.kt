@@ -50,7 +50,7 @@ enum class AppShortcut(val label: String, private val windows: List<KeyChord>, p
     TOGGLE_AGENTS("Toggle agents rail", listOf(ctrlShift(VK_J)), listOf(cmd(VK_J))),
     TOGGLE_QUICK_ACTIONS("Toggle quick actions", listOf(ctrlShift(VK_Q)), listOf(cmd(VK_U))),
     TOGGLE_THEME("Toggle theme", listOf(ctrlShift(VK_L)), listOf(cmdShift(VK_L))),
-    OVERVIEW("Overview", listOf(alt(VK_0)), listOf(cmd(VK_0))),
+    OVERVIEW("Overview", listOf(alt(VK_0)), listOf(cmdShift(VK_0))),
     PROJECT_1("Project 1", listOf(alt(VK_1)), listOf(cmd(VK_1))),
     PROJECT_2("Project 2", listOf(alt(VK_2)), listOf(cmd(VK_2))),
     PROJECT_3("Project 3", listOf(alt(VK_3)), listOf(cmd(VK_3))),

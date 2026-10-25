@@ -2,7 +2,6 @@ package com.github.krpkbhdn.ccmanager.git;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.github.krpkbhdn.ccmanager.git.GitException.Kind;
 import java.nio.charset.StandardCharsets;
@@ -19,10 +18,11 @@ class GitRunnerTest {
     Path root;
 
     @Test
-    void reportsGitAsAvailable() {
-        assumeTrue(GitRunner.isAvailable());
+    void aMissingWorkingDirectoryIsNotReportedAsMissingGit() {
+        var sandbox = GitCliSandbox.create(root);
 
-        assertThat(GitRunner.isAvailable()).isTrue();
+        assertThatThrownBy(() -> sandbox.runner.out(root.resolve("deleted-project"), "status"))
+                .isInstanceOfSatisfying(GitException.class, e -> assertThat(e.kind()).isEqualTo(Kind.NOT_A_REPOSITORY));
     }
 
     @Test
@@ -71,7 +71,7 @@ class GitRunnerTest {
 
         var target = root.resolve("copy").toString();
 
-        sandbox.runner.run(root, GitRunner.DEFAULT_TIMEOUT, lines::add, null, List.of("clone", "--progress", root.resolve("origin.git").toString(), target));
+        sandbox.runner.run(root, sandbox.runner.properties().commandTimeout(), lines::add, null, List.of("clone", "--progress", root.resolve("origin.git").toString(), target));
 
         assertThat(lines).anyMatch(line -> line.startsWith("Cloning into"));
     }

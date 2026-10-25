@@ -16,6 +16,7 @@ public record GitStatus(
         int behind,
         Operation operation,
         int stashCount,
+        String stashTop,
         List<Change> changes) {
 
     /** A merge/rebase/cherry-pick/revert that is stopped and waiting for the user. */
@@ -40,6 +41,6 @@ public record GitStatus(
     }
 
     public static GitStatus notARepository() {
-        return new GitStatus(false, null, null, false, null, 0, 0, Operation.NONE, 0, List.of());
+        return new GitStatus(false, null, null, false, null, 0, 0, Operation.NONE, 0, null, List.of());
     }
 }

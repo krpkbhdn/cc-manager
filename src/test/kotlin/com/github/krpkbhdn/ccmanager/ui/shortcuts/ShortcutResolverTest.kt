@@ -1,6 +1,9 @@
 package com.github.krpkbhdn.ccmanager.ui.shortcuts
 
+import java.awt.event.KeyEvent.VK_0
 import java.awt.event.KeyEvent.VK_1
+import java.awt.event.KeyEvent.VK_EQUALS
+import java.awt.event.KeyEvent.VK_MINUS
 import java.awt.event.KeyEvent.VK_C
 import java.awt.event.KeyEvent.VK_ESCAPE
 import java.awt.event.KeyEvent.VK_F1
@@ -41,6 +44,16 @@ class ShortcutResolverTest {
         assertThat(windows(ctrlShift(VK_C), terminal = true)).isNull()
         assertThat(windows(ctrlShift(VK_V), terminal = true)).isNull()
         assertThat(windows(ctrlShift(VK_C), terminal = false)).isNull()
+    }
+
+    @Test
+    fun `terminal zoom chords are never claimed`() {
+        listOf(false, true).forEach { mac ->
+            val primary = if (mac) { code: Int -> cmd(code) } else { code: Int -> ctrl(code) }
+            listOf(VK_0, VK_EQUALS, VK_MINUS).forEach {
+                assertThat(ShortcutResolver.resolve(primary(it), mac, terminalFocused = true)).isNull()
+            }
+        }
     }
 
     @Test

@@ -30,7 +30,7 @@ class McpCredentialReader {
     }
 
     Set<String> loggedInServers() {
-        var file = host.home().resolve(".claude").resolve(CREDENTIALS_FILE);
+        var file = host.claudeConfigDirectory().resolve(CREDENTIALS_FILE);
         if (!Files.isRegularFile(file)) {
             return Set.of();
         }

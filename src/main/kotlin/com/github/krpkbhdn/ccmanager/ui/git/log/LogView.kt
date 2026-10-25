@@ -39,7 +39,7 @@ private const val SKELETON_ROWS = 10
 
 /** History with graph on the left, the selected commit on the right; pages in as the list scrolls. */
 @Composable
-fun LogView(git: GitState, now: Instant, modifier: Modifier = Modifier) {
+fun LogView(git: GitState, now: () -> Instant, modifier: Modifier = Modifier) {
     val log = git.log
     LaunchedEffect(Unit) { if (!log.loaded) log.reload() }
     Column(modifier.fillMaxSize()) {
@@ -59,7 +59,7 @@ fun LogView(git: GitState, now: Instant, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun LogList(git: GitState, now: Instant, modifier: Modifier) {
+private fun LogList(git: GitState, now: () -> Instant, modifier: Modifier) {
     val log = git.log
     val rows = log.rows
     when {

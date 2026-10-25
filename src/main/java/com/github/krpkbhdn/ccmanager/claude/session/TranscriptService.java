@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.claude.session;
 
 import com.github.krpkbhdn.ccmanager.claude.session.TranscriptEntry.Kind;
+import com.github.krpkbhdn.ccmanager.workspace.HostEnvironment;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
@@ -30,8 +31,8 @@ public class TranscriptService {
     private final Path projectsRoot;
 
     @Autowired
-    public TranscriptService(JsonMapper mapper) {
-        this(mapper, Path.of(System.getProperty("user.home"), ".claude", "projects"));
+    public TranscriptService(JsonMapper mapper, HostEnvironment host) {
+        this(mapper, host.claudeConfigDirectory().resolve("projects"));
     }
 
     public TranscriptService(JsonMapper mapper, Path projectsRoot) {

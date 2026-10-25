@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 
 private const val UNEXPECTED_ERROR = "Something went wrong"
 private const val LOAD_FAILED = "Could not read the repository"
+private const val GIT_BUSY = "Git is busy"
 
 /** Wraps anything that is not already a [GitException] so the UI has one failure type to show. */
 internal fun asGitException(e: RuntimeException): GitException =
@@ -84,6 +85,7 @@ class GitState(
 
     private val refresher = Refresher(scope) { reload() }
     private var retry: (() -> Unit)? = null
+    private var jobCount = 0
     private var refsSignature = ""
     private var commitFocusHandled = 0
 
@@ -134,8 +136,9 @@ class GitState(
         onSuccess: (T) -> Unit = {},
         call: GitBackend.((String) -> Unit) -> T,
     ) {
-        if (job != null) return
+        job?.let { return host.notify(NotificationKind.INFO, GIT_BUSY, "Wait for ${it.label.lowercase()} to finish") }
         job = GitJob(label)
+        jobCount++
         scope.launch {
             val outcome = attempt(label, handle, { act(label, handle, onSuccess, call) }, call)
             job = null
@@ -152,7 +155,8 @@ class GitState(
 
     private suspend fun <T> attempt(label: String, handle: (GitException) -> Boolean, again: () -> Unit, call: GitBackend.((String) -> Unit) -> T): Success<T>? =
         try {
-            Success(withContext(Dispatchers.IO) { git.call { line -> scope.launch { job = job?.copy(progress = line) } } })
+            val thisJob = jobCount
+            Success(withContext(Dispatchers.IO) { git.call { line -> scope.launch { if (thisJob == jobCount) job = job?.copy(progress = line) } } })
         } catch (e: CancellationException) {
             throw e
         } catch (e: RuntimeException) {
@@ -198,7 +202,7 @@ class GitState(
         val signature = current.head().orEmpty() + currentBranches.joinToString { it.name() + it.commit() }
         if (signature != refsSignature && log.loaded) log.reload()
         refsSignature = signature
-        if (current.repository() && (firstLoad || current.stashCount() != stashes.size)) loadAuxiliary()
+        if (current.repository() && (firstLoad || current.stashCount() != stashes.size || current.stashTop() != stashes.firstOrNull()?.hash())) loadAuxiliary()
     }
 
     private class Auxiliary(val remotes: List<GitMisc.Remote>, val identity: GitMisc.Identity?, val stashes: List<GitMisc.Stash>, val tags: List<GitMisc.Tag>)

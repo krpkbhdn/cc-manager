@@ -37,14 +37,14 @@ private fun sessionItems(state: AppState): List<PaletteItem> =
             id = "session-${session.ccmSessionId}",
             title = sessionTitle(session),
             group = PaletteGroup.SESSIONS,
-            subtitle = state.projectName(session.projectId),
+            subtitle = state.projects.nameOf(session.projectId),
             status = session.status,
             run = { state.openSession(session.ccmSessionId) },
         )
     }
 
 private fun projectItems(state: AppState): List<PaletteItem> =
-    state.projects.map { project ->
+    state.projects.all.map { project ->
         PaletteItem(
             id = "project-${project.id}",
             title = project.name,
@@ -73,20 +73,20 @@ private fun globalActions(state: AppState, systemDark: Boolean): List<PaletteIte
 
 private fun projectActions(state: AppState): List<PaletteItem> {
     val route = state.route as? Route.Project ?: return emptyList()
-    val project = state.projects.firstOrNull { it.id == route.id } ?: return emptyList()
+    val project = state.projects.all.firstOrNull { it.id == route.id } ?: return emptyList()
     val here = "in ${project.name}"
     return listOfNotNull(
-        PaletteItem("launch", "Launch Claude", PaletteGroup.ACTIONS, here, Icons.Play, shortcut = AppShortcut.NEW_SESSION) { state.launch(project.id, LaunchMode.NEW) },
+        PaletteItem("launch", "Launch Claude", PaletteGroup.ACTIONS, here, Icons.Play, shortcut = AppShortcut.NEW_SESSION) { state.sessions.launch(project.id, LaunchMode.NEW) },
         PaletteItem("start-task", "Start task with team", PaletteGroup.ACTIONS, here, Icons.Users) { state.taskDialogProjectId = project.id },
-        PaletteItem("continue", "Continue last session", PaletteGroup.ACTIONS, here, Icons.ArrowRight) { state.launch(project.id, LaunchMode.CONTINUE) },
-        PaletteItem("resume", "Resume a session", PaletteGroup.ACTIONS, here, Icons.Rewind) { state.launch(project.id, LaunchMode.RESUME_PICKER) },
+        PaletteItem("continue", "Continue last session", PaletteGroup.ACTIONS, here, Icons.ArrowRight) { state.sessions.launch(project.id, LaunchMode.CONTINUE) },
+        PaletteItem("resume", "Resume a session", PaletteGroup.ACTIONS, here, Icons.Rewind) { state.sessions.launch(project.id, LaunchMode.RESUME_PICKER) },
         PaletteItem("open-folder", "Open folder", PaletteGroup.ACTIONS, here, Icons.FolderOpen) { state.openFolder(project) },
         PaletteItem("open-ide", "Open in IntelliJ IDEA", PaletteGroup.ACTIONS, here, Icons.Code) { state.openIde(project) },
         PaletteItem("project-settings", "Project settings", PaletteGroup.ACTIONS, "$here: plugins, MCP servers, skills", Icons.Settings, shortcut = AppShortcut.PROJECT_SETTINGS) { state.openProjectSettings(project) },
         PaletteItem("show-activity", "Show activity", PaletteGroup.ACTIONS, here, Icons.Activity, shortcut = AppShortcut.ACTIVITY_TAB) { state.select(project.id, ProjectTab.Activity) },
         PaletteItem("toggle-agents", "Toggle agents panel", PaletteGroup.ACTIONS, here, Icons.PanelRightClose, shortcut = AppShortcut.TOGGLE_AGENTS, run = state::toggleAgents),
         state.viewOf(project.id).focusedSession?.let { state.live.find(it) }?.let { session ->
-            PaletteItem("switch-model", "Switch model", PaletteGroup.ACTIONS, "$here, opens Claude's picker (Alt+P)", Icons.Cpu) { state.openClaudeModelPicker(session) }
+            PaletteItem("switch-model", "Switch model", PaletteGroup.ACTIONS, "$here, opens Claude's picker (Alt+P)", Icons.Cpu) { state.sessions.openClaudeModelPicker(session) }
         },
     )
 }

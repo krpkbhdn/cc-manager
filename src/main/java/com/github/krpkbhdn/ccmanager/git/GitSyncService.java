@@ -45,7 +45,7 @@ public class GitSyncService {
     public void push(Path repo, PushOptions options, Consumer<String> progress) {
         var args = new ArrayList<>(List.of("push", "--progress"));
         if (options.forceWithLease()) {
-            args.add("--force-with-lease");
+            args.addAll(List.of("--force-with-lease", "--force-if-includes"));
         }
         if (options.tags()) {
             args.add("--tags");
@@ -58,7 +58,7 @@ public class GitSyncService {
     }
 
     private void network(Path repo, Consumer<String> progress, String... args) {
-        git.run(repo, GitRunner.SYNC_TIMEOUT, progress, null, Arrays.asList(args));
+        git.run(repo, git.properties().syncTimeout(), progress, null, Arrays.asList(args));
     }
 
     private String remoteFor(Path repo, String branch) {

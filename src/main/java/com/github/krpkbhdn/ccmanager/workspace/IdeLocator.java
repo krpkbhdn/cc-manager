@@ -31,7 +31,7 @@ public class IdeLocator {
 
     List<Candidate> candidates(HostEnvironment host) {
         var result = new ArrayList<Candidate>();
-        host.pathCandidates(PATH_LAUNCHERS).forEach(path -> result.add(executable(host, path)));
+        host.pathCandidates(PATH_LAUNCHERS).forEach(path -> result.add(executable(path)));
         switch (host.os()) {
             case WINDOWS -> addWindows(host, result);
             case MACOS -> addMac(host, result);
@@ -42,7 +42,7 @@ public class IdeLocator {
 
     private static void addWindows(HostEnvironment host, List<Candidate> result) {
         var localAppData = pathOf(host.env("LOCALAPPDATA"), host.home().resolve("AppData").resolve("Local"));
-        result.add(executable(host, localAppData.resolve("JetBrains").resolve("Toolbox").resolve("scripts").resolve("idea.cmd")));
+        result.add(executable(localAppData.resolve("JetBrains").resolve("Toolbox").resolve("scripts").resolve("idea.cmd")));
         var programFiles = pathOf(host.env("ProgramFiles"), Path.of(WINDOWS_DEFAULT_PROGRAM_FILES));
         addInstalled(host, result, programFiles.resolve("JetBrains"), INSTALL_DIRECTORY_PREFIX, "bin/idea64.exe");
         addInstalled(host, result, localAppData.resolve("Programs"), INSTALL_DIRECTORY_PREFIX, "bin/idea64.exe");
@@ -55,12 +55,12 @@ public class IdeLocator {
                 result.add(new Candidate(directory.resolve(application + ".app"), List.of("open", "-a", application)));
             }
         }
-        result.add(executable(host, toolboxScript(host)));
+        result.add(executable(toolboxScript(host)));
     }
 
     private static void addLinux(HostEnvironment host, List<Candidate> result) {
-        result.add(executable(host, toolboxScript(host)));
-        LINUX_FIXED.forEach(path -> result.add(executable(host, path)));
+        result.add(executable(toolboxScript(host)));
+        LINUX_FIXED.forEach(path -> result.add(executable(path)));
         addInstalled(host, result, Path.of("/opt"), "idea", "bin/idea.sh");
     }
 
@@ -71,13 +71,11 @@ public class IdeLocator {
     private static void addInstalled(HostEnvironment host, List<Candidate> result, Path parent, String prefix, String relativeLauncher) {
         host.childDirectoriesStartingWith(parent, prefix).stream()
                 .sorted((left, right) -> compare(versionOf(right), versionOf(left)))
-                .forEach(dir -> result.add(executable(host, dir.resolve(relativeLauncher))));
+                .forEach(dir -> result.add(executable(dir.resolve(relativeLauncher))));
     }
 
-    private static Candidate executable(HostEnvironment host, Path launcher) {
-        var name = launcher.getFileName().toString().toLowerCase(java.util.Locale.ROOT);
-        var needsShell = host.windows() && (name.endsWith(".cmd") || name.endsWith(".bat"));
-        return new Candidate(launcher, needsShell ? List.of("cmd", "/c", launcher.toString()) : List.of(launcher.toString()));
+    private static Candidate executable(Path launcher) {
+        return new Candidate(launcher, List.of(launcher.toString()));
     }
 
     private static Path pathOf(String value, Path fallback) {

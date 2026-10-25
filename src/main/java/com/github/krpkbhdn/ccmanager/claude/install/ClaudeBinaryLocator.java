@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 
-/** Lists where the claude binary may live: PATH first, then the native installer and package-manager locations. */
+/** Lists where the claude binary may live: PATH first, then the native installer and package-manager locations; a native claude.exe anywhere beats a .cmd shim. */
 @Component
 public class ClaudeBinaryLocator {
 
@@ -23,9 +23,12 @@ public class ClaudeBinaryLocator {
     /** Candidates in lookup order; a GUI-launched process may have a reduced PATH, so fallbacks matter. */
     public List<Path> candidates(HostEnvironment host) {
         var names = host.windows() ? WINDOWS_NAMES : UNIX_NAMES;
-        var result = new ArrayList<>(host.pathCandidates(names));
         var nativeDirectory = host.home().resolve(".local").resolve("bin");
-        names.forEach(name -> result.add(nativeDirectory.resolve(name)));
+        var result = new ArrayList<Path>();
+        for (var name : names) {
+            result.addAll(host.pathCandidates(List.of(name)));
+            result.add(nativeDirectory.resolve(name));
+        }
         if (!host.windows()) {
             UNIX_FALLBACK_DIRECTORIES.forEach(dir -> result.add(dir.resolve("claude")));
         }

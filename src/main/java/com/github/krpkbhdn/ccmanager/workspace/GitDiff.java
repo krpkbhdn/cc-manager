@@ -11,5 +11,11 @@ public record GitDiff(boolean gitRepository, List<FileDiff> files) {
 
     public record Line(LineKind kind, String text, Integer oldNumber, Integer newNumber) {}
 
-    public record FileDiff(String path, String oldPath, ChangeType change, int additions, int deletions, boolean binary, List<Line> lines) {}
+    /** @param fileMode octal mode from a "new file mode" / "deleted file mode" header, null when the diff carried none */
+    public record FileDiff(String path, String oldPath, ChangeType change, int additions, int deletions, boolean binary, List<Line> lines, String fileMode) {
+
+        public FileDiff(String path, String oldPath, ChangeType change, int additions, int deletions, boolean binary, List<Line> lines) {
+            this(path, oldPath, change, additions, deletions, binary, lines, null);
+        }
+    }
 }

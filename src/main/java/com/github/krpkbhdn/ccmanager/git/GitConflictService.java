@@ -3,8 +3,8 @@ package com.github.krpkbhdn.ccmanager.git;
 import com.github.krpkbhdn.ccmanager.git.GitException.Kind;
 import com.github.krpkbhdn.ccmanager.git.GitMisc.ConflictSide;
 import com.github.krpkbhdn.ccmanager.git.GitStatus.Operation;
-import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class GitConflictService {
 
+    private static final String LITERAL_PATHSPECS = "--literal-pathspecs";
     private static final String[] NO_EDITOR = {"-c", "core.editor=true", "-c", "sequence.editor=true"};
 
     private final GitRunner git;
@@ -30,20 +31,25 @@ public class GitConflictService {
      * back. A side that deleted the file resolves to deleting it.
      */
     public void resolve(Path repo, String path, ConflictSide side) {
+        var file = literalPath(path);
         var gitSide = (side == ConflictSide.OURS) == (operation(repo) != Operation.REBASE) ? "--ours" : "--theirs";
-        var checkout = git.tryRun(repo, "checkout", gitSide, "--", path);
+        var checkout = git.tryRun(repo, LITERAL_PATHSPECS, "checkout", gitSide, "--", file);
         if (checkout.ok()) {
-            git.out(repo, "add", "--", path);
+            git.out(repo, LITERAL_PATHSPECS, "add", "--", file);
         } else if (checkout.stderr().contains("does not have")) {
-            git.out(repo, "rm", "--quiet", "--force", "--", path);
+            git.out(repo, LITERAL_PATHSPECS, "rm", "--quiet", "--force", "--", file);
         } else {
-            git.out(repo, "checkout", gitSide, "--", path);
+            git.out(repo, LITERAL_PATHSPECS, "checkout", gitSide, "--", file);
         }
     }
 
     /** The file was edited by hand (or in the IDE): stage it as resolved. */
     public void markResolved(Path repo, String path) {
-        git.out(repo, "add", "--", path);
+        git.out(repo, LITERAL_PATHSPECS, "add", "--", literalPath(path));
+    }
+
+    private static String literalPath(String path) {
+        return RepositoryPaths.validate(List.of(path)).getFirst();
     }
 
     /** merge --continue / rebase --continue / cherry-pick --continue / revert --continue, whichever is in progress. */
@@ -76,17 +82,7 @@ public class GitConflictService {
     }
 
     private Operation operation(Path repo) {
-        var gitDir = Path.of(git.out(repo, "rev-parse", "--absolute-git-dir").strip());
-        if (Files.exists(gitDir.resolve("rebase-merge")) || Files.exists(gitDir.resolve("rebase-apply"))) {
-            return Operation.REBASE;
-        }
-        if (Files.exists(gitDir.resolve("MERGE_HEAD"))) {
-            return Operation.MERGE;
-        }
-        if (Files.exists(gitDir.resolve("CHERRY_PICK_HEAD"))) {
-            return Operation.CHERRY_PICK;
-        }
-        return Files.exists(gitDir.resolve("REVERT_HEAD")) ? Operation.REVERT : Operation.NONE;
+        return RepositoryOperations.detect(Path.of(git.out(repo, "rev-parse", "--absolute-git-dir").strip()));
     }
 
     private Operation requireOperation(Path repo) {

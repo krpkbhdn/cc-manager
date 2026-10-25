@@ -120,4 +120,19 @@ class SkillServiceTest {
         var stray = new Skill("s", "d", ExtensionScope.USER, "", project.resolve("elsewhere/SKILL.md"));
         assertThatThrownBy(() -> service.delete(stray)).isInstanceOf(ExtensionException.class);
     }
+
+    @Test
+    void honoursClaudeConfigDirForListingCreatingAndDeletingUserSkills() {
+        var configDirectory = project.resolve("custom-config");
+        var host = new FakeHostEnvironment(HostEnvironment.OperatingSystem.LINUX, home).withEnv("CLAUDE_CONFIG_DIR", configDirectory.toString());
+        when(plugins.installed()).thenReturn(List.of());
+        var service = new SkillService(host, plugins);
+
+        var created = service.create(ExtensionScope.USER, null, "mine", "d");
+
+        assertThat(created.file()).isEqualTo(configDirectory.resolve("skills/mine/SKILL.md"));
+        assertThat(service.list(null)).extracting(Skill::name).containsExactly("mine");
+        service.delete(created);
+        assertThat(created.directory()).doesNotExist();
+    }
 }

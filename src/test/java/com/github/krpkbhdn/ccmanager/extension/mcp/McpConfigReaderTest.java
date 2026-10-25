@@ -66,4 +66,12 @@ class McpConfigReaderTest {
 
         assertThat(reader(HostEnvironment.OperatingSystem.LINUX).read(null)).extracting(McpServerConfig::name).containsExactly("u");
     }
+
+    @Test
+    void readsTheUserConfigFromClaudeConfigDirWhenSet() throws IOException {
+        Files.writeString(project.resolve(".claude.json"), "{\"mcpServers\":{\"custom\":{\"command\":\"x\"}}}");
+        var host = new FakeHostEnvironment(HostEnvironment.OperatingSystem.LINUX, home).withEnv("CLAUDE_CONFIG_DIR", project.toString());
+
+        assertThat(new McpConfigReader(host).read(null)).extracting(McpServerConfig::name).containsExactly("custom");
+    }
 }

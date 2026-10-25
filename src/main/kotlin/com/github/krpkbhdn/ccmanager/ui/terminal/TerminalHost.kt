@@ -2,10 +2,11 @@ package com.github.krpkbhdn.ccmanager.ui.terminal
 
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry
+import com.github.krpkbhdn.ccmanager.workspace.ProcessTree
 import com.pty4j.PtyProcess
 import java.util.concurrent.ConcurrentHashMap
 
-private class OpenTerminal(val session: TerminalSession, val process: PtyProcess)
+private class OpenTerminal(val session: TerminalSession, val process: PtyProcess, val connector: PtyTtyConnector)
 
 /**
  * Owns one [TerminalSession] per opened session so tabs survive navigation. The UI calls [configure] once at
@@ -26,12 +27,18 @@ object TerminalHost {
         terminals.computeIfAbsent(session.ccmSessionId()) { createTerminal(session) }
     }
 
-    fun isOpen(ccmSessionId: String): Boolean = terminals.containsKey(ccmSessionId)
-
     /** Types text into the session console exactly as if the user typed it (CR = Enter, ESC = Esc). */
     fun send(ccmSessionId: String, text: String) {
-        terminals[ccmSessionId]?.session?.send(text)
+        val terminal = terminals[ccmSessionId] ?: return
+        terminal.session.send(text)
+        if (text == "\r") terminal.connector.forgetEnter()
     }
+
+    fun ctrlCWithin(ccmSessionId: String, windowMillis: Long): Boolean =
+        terminals[ccmSessionId]?.connector?.ctrlCWithin(windowMillis) == true
+
+    fun enterWithin(ccmSessionId: String, windowMillis: Long): Boolean =
+        terminals[ccmSessionId]?.connector?.enterWithin(windowMillis) == true
 
     /** Moves the keyboard focus into the terminal when it is on screen. */
     fun focus(ccmSessionId: String) {
@@ -45,24 +52,19 @@ object TerminalHost {
         terminal.session.close()
     }
 
+    fun closeAll() = terminals.keys.toList().forEach(::close)
+
     internal fun sessionOf(ccmSessionId: String): TerminalSession? = terminals[ccmSessionId]?.session
 
     internal fun anyFocused(): Boolean = terminals.values.any { it.session.focused }
 
     private fun killProcessTree(process: PtyProcess) {
-        if (!process.isAlive) return
-        if (System.getProperty("os.name").startsWith("Windows")) {
-            // pty4j's Windows process has no ProcessHandle, so descendants() is unsupported
-            runCatching { ProcessBuilder("taskkill", "/PID", process.pid().toString(), "/T", "/F").start().waitFor() }
-        } else {
-            process.descendants().forEach { it.destroyForcibly() }
-        }
-        process.destroyForcibly()
+        if (process.isAlive) ProcessTree.kill(process)
     }
 
     private fun createTerminal(session: LaunchedSession): OpenTerminal {
         val id = session.ccmSessionId()
         val connector = PtyTtyConnector(session.process(), session.label()) { registry?.markInterrupted(id) }
-        return OpenTerminal(TerminalSession(connector), session.process())
+        return OpenTerminal(TerminalSession(connector), session.process(), connector)
     }
 }

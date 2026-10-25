@@ -36,6 +36,12 @@ interface TerminalPort {
     /** Moves the keyboard focus into the session's terminal, if it has one. */
     fun focus(ccmSessionId: String) {}
 
+    /** True when a Ctrl+C reached the session less than [windowMillis] ago. */
+    fun ctrlCWithin(ccmSessionId: String, windowMillis: Long): Boolean = false
+
+    /** True when the user pressed Enter less than [windowMillis] ago, before the hook marks the session WORKING. */
+    fun enterWithin(ccmSessionId: String, windowMillis: Long): Boolean = false
+
     @Composable
     fun View(ccmSessionId: String, modifier: Modifier)
 }
@@ -45,6 +51,8 @@ object HostTerminalPort : TerminalPort {
     override fun send(ccmSessionId: String, text: String) = TerminalHost.send(ccmSessionId, text)
     override fun close(ccmSessionId: String) = TerminalHost.close(ccmSessionId)
     override fun focus(ccmSessionId: String) = TerminalHost.focus(ccmSessionId)
+    override fun ctrlCWithin(ccmSessionId: String, windowMillis: Long) = TerminalHost.ctrlCWithin(ccmSessionId, windowMillis)
+    override fun enterWithin(ccmSessionId: String, windowMillis: Long) = TerminalHost.enterWithin(ccmSessionId, windowMillis)
 
     @Composable
     override fun View(ccmSessionId: String, modifier: Modifier) = TerminalView(ccmSessionId, modifier, dark = colors.dark, background = colors.terminal)

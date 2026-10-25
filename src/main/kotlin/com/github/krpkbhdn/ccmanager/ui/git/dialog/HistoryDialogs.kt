@@ -53,12 +53,12 @@ fun SaveStashDialog(git: GitState, onDismiss: () -> Unit) {
     var untracked by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
-    val submit = { onDismiss(); git.stashPush(message.text.toString().trim(), untracked) }
-    ModalHost(onDismiss, takeFocus = false) {
+    val submit = { if (!git.busy) { onDismiss(); git.stashPush(message.text.toString().trim(), untracked) } }
+    ModalHost(onDismiss, takeFocus = false, hasInput = { message.text.isNotEmpty() }) {
         DialogBody("Stash changes", Icons.Archive, colors.accent) {
             LabeledField("Message (optional)") { AppTextField(message, Modifier.fillMaxWidth(), placeholder = "What is parked here", focusRequester = focus, onSubmit = submit) }
             CheckboxRow("Include untracked files", untracked, { untracked = it })
-            DialogActions("Stash", true, false, submit, onDismiss)
+            DialogActions("Stash", !git.busy, false, submit, onDismiss)
         }
     }
 }
@@ -70,9 +70,9 @@ fun NewTagDialog(git: GitState, dialog: GitDialog.NewTag, onDismiss: () -> Unit)
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
     val problem = name.text.toString().takeIf { it.isNotEmpty() }?.let { branchNameProblem(it, git.tags.map { tag -> tag.name() }) }
-    val valid = name.text.isNotBlank() && problem == null
+    val valid = name.text.isNotBlank() && problem == null && !git.busy
     val submit = { if (valid) { onDismiss(); git.createTag(name.text.toString(), dialog.commit, message.text.toString().trim()) } }
-    ModalHost(onDismiss, takeFocus = false) {
+    ModalHost(onDismiss, takeFocus = false, hasInput = { name.text.isNotEmpty() || message.text.isNotEmpty() }) {
         DialogBody("New tag", Icons.Tag, colors.warning) {
             LabeledField("Name", problem) { AppTextField(name, Modifier.fillMaxWidth(), placeholder = "v1.2.0", focusRequester = focus, mono = true, onSubmit = submit) }
             LabeledField("Message (makes it an annotated tag)") { AppTextField(message, Modifier.fillMaxWidth(), placeholder = "Optional", onSubmit = submit) }

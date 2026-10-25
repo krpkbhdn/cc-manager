@@ -1,7 +1,6 @@
 package com.github.krpkbhdn.ccmanager.ui.state
 
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
-import com.github.krpkbhdn.ccmanager.workspace.GitDiff
 import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
@@ -35,9 +34,6 @@ class FormatsTest {
 
     @Test
     fun `counts are pluralised`() {
-        assertThat(sessionCountLabel(0)).isEqualTo("No sessions")
-        assertThat(sessionCountLabel(1)).isEqualTo("1 session")
-        assertThat(sessionCountLabel(3)).isEqualTo("3 sessions")
         assertThat(backgroundTasksLabel(1)).isEqualTo("1 background task")
         assertThat(backgroundTasksLabel(2)).isEqualTo("2 background tasks")
     }
@@ -53,11 +49,6 @@ class FormatsTest {
         assertThat(permissionModeLabel("acceptEdits")).isEqualTo("Accept edits")
         assertThat(permissionModeLabel("custom")).isEqualTo("custom")
         assertThat(permissionModeLabel(null)).isNull()
-    }
-
-    @Test
-    fun `change types map to git letters`() {
-        assertThat(GitDiff.ChangeType.entries.map(::changeLetter)).containsExactly("A", "M", "D", "R", "U")
     }
 
     @Test

@@ -31,8 +31,18 @@ class ModelChoicesTest {
         assertThat(effectiveModelLabel(null, null)).isNull()
     }
 
-    private fun session(status: AgentStatus) =
-        SessionSnapshot("s1", 1, "c1", status, "", "default", null, null, Instant.EPOCH, Instant.EPOCH, emptyList(), 0, null)
+    private fun session(status: AgentStatus, claudeSessionId: String? = "c1") =
+        SessionSnapshot("s1", 1, claudeSessionId, status, "", "default", null, null, Instant.EPOCH, Instant.EPOCH, emptyList(), 0, null)
+
+    @Test
+    fun anAttachedSessionBeforeSessionStartIsNotBlocked() {
+        assertThat((modelTarget(session(AgentStatus.IDLE, null), false, attached = true) as ModelTarget.Running).blockedReason).isNull()
+    }
+
+    @Test
+    fun aSessionBeforeSessionStartIsBlocked() {
+        assertThat((modelTarget(session(AgentStatus.IDLE, null), false) as ModelTarget.Running).blockedReason).isEqualTo(STARTING_MESSAGE)
+    }
 
     @Test
     fun noSessionMeansOnlyTheNextLaunchDefaultChanges() {

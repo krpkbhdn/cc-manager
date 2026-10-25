@@ -47,12 +47,6 @@ fun statusLabel(status: AgentStatus): String = when (status) {
     AgentStatus.NEEDS_ACTION -> "Needs action"
 }
 
-fun sessionCountLabel(count: Int): String = when (count) {
-    0 -> "No sessions"
-    1 -> "1 session"
-    else -> "$count sessions"
-}
-
 fun backgroundTasksLabel(count: Int): String = if (count == 1) "1 background task" else "$count background tasks"
 
 fun sessionTitle(session: SessionSnapshot): String =
@@ -75,14 +69,6 @@ private val permissionModeLabels = mapOf(
 
 fun permissionModeLabel(mode: String?): String? = mode?.let { permissionModeLabels[it] ?: it }
 
-fun changeLetter(change: GitDiff.ChangeType): String = when (change) {
-    GitDiff.ChangeType.ADDED -> "A"
-    GitDiff.ChangeType.MODIFIED -> "M"
-    GitDiff.ChangeType.DELETED -> "D"
-    GitDiff.ChangeType.RENAMED -> "R"
-    GitDiff.ChangeType.UNTRACKED -> "U"
-}
-
 fun changeLabel(change: GitDiff.ChangeType): String = when (change) {
     GitDiff.ChangeType.ADDED -> "Added"
     GitDiff.ChangeType.MODIFIED -> "Modified"
@@ -94,10 +80,6 @@ fun changeLabel(change: GitDiff.ChangeType): String = when (change) {
 fun fileName(path: String): String = path.substringAfterLast('/')
 
 fun parentDirectory(path: String): String = path.substringBeforeLast('/', "")
-
-fun totalAdditions(diff: GitDiff): Int = diff.files().sumOf { it.additions() }
-
-fun totalDeletions(diff: GitDiff): Int = diff.files().sumOf { it.deletions() }
 
 private val osInstallCommands = listOf(
     "macOS / Linux" to "curl -fsSL https://claude.ai/install.sh | bash",

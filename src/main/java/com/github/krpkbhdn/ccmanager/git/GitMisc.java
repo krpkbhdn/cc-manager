@@ -7,7 +7,7 @@ public final class GitMisc {
 
     private GitMisc() {}
 
-    public record Stash(int index, String message, String branch, Instant date) {}
+    public record Stash(int index, String message, String branch, Instant date, String hash) {}
 
     public record Tag(String name, String commit, String message, boolean annotated) {}
 

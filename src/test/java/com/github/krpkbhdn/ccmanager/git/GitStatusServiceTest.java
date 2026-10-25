@@ -38,6 +38,13 @@ class GitStatusServiceTest {
     }
 
     @Test
+    void aMissingProjectFolderIsNotARepository() {
+        var sandbox = GitCliSandbox.create(root);
+
+        assertThat(serviceFor(sandbox).status(root.resolve("deleted-project")).repository()).isFalse();
+    }
+
+    @Test
     void nonRepositoryIsReportedWithoutException() {
         var sandbox = GitCliSandbox.create(root);
 
@@ -189,7 +196,7 @@ class GitStatusServiceTest {
         sandbox.write("a.txt", "a\n");
         sandbox.commitAll("a");
         sandbox.writeBytes("blob.bin", new byte[] {1, 0, 2, 0, 3});
-        sandbox.writeBytes("big.txt", new byte[(int) GitStatusService.MAX_UNTRACKED_BYTES + 1]);
+        sandbox.writeBytes("big.txt", new byte[(int) sandbox.runner.properties().maxUntrackedBytes() + 1]);
         var service = serviceFor(sandbox);
 
         assertThat(service.diff(sandbox.repo, "blob.bin", false).binary()).isTrue();

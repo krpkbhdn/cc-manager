@@ -25,8 +25,6 @@ import org.springframework.stereotype.Service;
 @Service
 public class GitStatusService {
 
-    static final int MAX_DIFF_LINES = 2000;
-    static final long MAX_UNTRACKED_BYTES = 1024 * 1024;
     static final String TOO_LARGE_MARKER = "File too large to show";
 
     private static final String NULL_DEVICE = "/dev/null";
@@ -40,14 +38,14 @@ public class GitStatusService {
     }
 
     public GitStatus status(Path repo) {
-        var gitDir = gitDirectory(repo);
+        var gitDir = Files.isDirectory(repo) ? gitDirectory(repo) : null;
         if (gitDir == null) {
             return GitStatus.notARepository();
         }
         var parsed = PorcelainStatusParser.parse(
                 git.out(repo, "status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all"));
         return new GitStatus(true, parsed.branch(), parsed.head(), parsed.detached(), parsed.upstream(), parsed.ahead(),
-                parsed.behind(), RepositoryOperations.detect(gitDir), stashCount(repo), parsed.changes());
+                parsed.behind(), RepositoryOperations.detect(gitDir), stashCount(repo), stashTop(repo), parsed.changes());
     }
 
     /** Diff of one path: {@code staged} = index vs HEAD, otherwise worktree vs index (untracked files shown as additions). */
@@ -87,10 +85,13 @@ public class GitStatusService {
     /** A path-limited diff cannot see a rename, so the source is looked up in the whole staged name-status list. */
     private Optional<String> stagedRenameSource(Path repo, String path) {
         var fields = git.out(repo, "diff", "--cached", "-M", "--name-status", "-z").split("\0");
-        for (var i = 0; i + 2 < fields.length; i++) {
-            if (fields[i].startsWith("R") && fields[i + 2].equals(path)) {
+        var i = 0;
+        while (i < fields.length) {
+            var renamed = fields[i].startsWith("R");
+            if (renamed && i + 2 < fields.length && fields[i + 2].equals(path)) {
                 return Optional.of(fields[i + 1]);
             }
+            i += renamed || fields[i].startsWith("C") ? 3 : 2;
         }
         return Optional.empty();
     }
@@ -120,6 +121,11 @@ public class GitStatusService {
         return result.ok() ? repo.resolve(result.stdout().strip()) : null;
     }
 
+    private String stashTop(Path repo) {
+        var result = git.tryRun(repo, "rev-parse", "--verify", "--quiet", STASH_REF);
+        return result.ok() ? result.stdout().strip() : null;
+    }
+
     private int stashCount(Path repo) {
         var result = git.tryRun(repo, "rev-list", "--walk-reflogs", "--count", STASH_REF);
         return result.ok() ? Integer.parseInt(result.stdout().strip()) : 0;
@@ -138,22 +144,22 @@ public class GitStatusService {
         return firstFile(result.stdout(), path, ChangeType.UNTRACKED);
     }
 
-    private static boolean tooLarge(Path file) {
+    private boolean tooLarge(Path file) {
         try {
-            return Files.size(file) > MAX_UNTRACKED_BYTES;
+            return Files.size(file) > git.properties().maxUntrackedBytes();
         } catch (IOException e) {
             return false;
         }
     }
 
-    private static FileDiff firstFile(String diff, String path, ChangeType emptyChange) {
-        var files = UnifiedDiffParser.parse(diff, MAX_DIFF_LINES, MAX_DIFF_LINES, true);
+    private FileDiff firstFile(String diff, String path, ChangeType emptyChange) {
+        var files = UnifiedDiffParser.parse(diff, git.properties().maxDiffLines(), git.properties().maxDiffLines(), true);
         if (files.isEmpty()) {
             return new FileDiff(path, null, emptyChange, 0, 0, false, List.of());
         }
         var file = files.getFirst();
         return emptyChange == ChangeType.UNTRACKED
-                ? new FileDiff(path, null, ChangeType.UNTRACKED, file.additions(), file.deletions(), file.binary(), file.lines())
+                ? new FileDiff(path, null, ChangeType.UNTRACKED, file.additions(), file.deletions(), file.binary(), file.lines(), file.fileMode())
                 : file;
     }
 }

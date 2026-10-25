@@ -77,4 +77,5 @@ internal fun settle(connector: ScriptedConnector, session: TerminalSession) {
         stable = if (frame == lastFrame && !connector.hasUnreadOutput()) stable + 1 else 0
         lastFrame = frame
     }
+    session.syncView()
 }

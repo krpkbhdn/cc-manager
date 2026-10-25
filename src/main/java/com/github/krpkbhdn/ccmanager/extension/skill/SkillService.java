@@ -5,12 +5,11 @@ import com.github.krpkbhdn.ccmanager.extension.ExtensionScope;
 import com.github.krpkbhdn.ccmanager.extension.plugin.InstalledPlugin;
 import com.github.krpkbhdn.ccmanager.extension.plugin.PluginService;
 import com.github.krpkbhdn.ccmanager.workspace.HostEnvironment;
+import com.github.krpkbhdn.ccmanager.workspace.TreeDeleter;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
@@ -80,7 +79,8 @@ public class SkillService {
         var directory = skill.directory();
         var inSkillsFolder = directory.getParent() != null && directory.getParent().getFileName().toString().equals(SKILLS_DIRECTORY)
                 && directory.getParent().getParent() != null
-                && directory.getParent().getParent().getFileName().toString().equals(CLAUDE_DIRECTORY);
+                && (directory.getParent().getParent().getFileName().toString().equals(CLAUDE_DIRECTORY)
+                || directory.getParent().equals(skillsRoot(ExtensionScope.USER, null)));
         if (skill.readOnly() || !inSkillsFolder || !Files.isRegularFile(skill.file())) {
             throw new ExtensionException("Only a user or project skill can be deleted");
         }
@@ -91,16 +91,16 @@ public class SkillService {
         } catch (IOException e) {
             throw new ExtensionException("Cannot delete " + directory + ": " + e.getMessage());
         }
-        try (Stream<Path> tree = Files.walk(directory)) {
-            tree.sorted(Comparator.reverseOrder()).forEach(SkillService::deleteQuietly);
-        } catch (IOException | UncheckedIOException e) {
+        try {
+            TreeDeleter.delete(directory);
+        } catch (IOException e) {
             throw new ExtensionException("Cannot delete " + directory + ": " + e.getMessage());
         }
     }
 
     private Path skillsRoot(ExtensionScope scope, Path projectDirectory) {
         return switch (scope) {
-            case USER -> host.home().resolve(CLAUDE_DIRECTORY).resolve(SKILLS_DIRECTORY);
+            case USER -> host.claudeConfigDirectory().resolve(SKILLS_DIRECTORY);
             case PROJECT -> ExtensionScope.PROJECT.workingDirectory(projectDirectory).resolve(CLAUDE_DIRECTORY).resolve(SKILLS_DIRECTORY);
             case LOCAL -> throw new ExtensionException("Skills exist only in user and project scope");
         };
@@ -158,14 +158,6 @@ public class SkillService {
         }
         if (description.isBlank()) {
             throw new ExtensionException("The description must not be empty");
-        }
-    }
-
-    private static void deleteQuietly(Path path) {
-        try {
-            Files.delete(path);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
         }
     }
 }

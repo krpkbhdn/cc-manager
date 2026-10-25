@@ -41,7 +41,7 @@ private val heroDot = 12.dp
 /** Mission control: what needs the user first, then every project at a glance. */
 @Composable
 fun OverviewScreen(state: AppState, modifier: Modifier = Modifier) {
-    if (state.projects.isEmpty()) {
+    if (state.projects.all.isEmpty()) {
         OverviewEmpty(state::requestAddProject, modifier)
         return
     }
@@ -58,8 +58,8 @@ fun OverviewScreen(state: AppState, modifier: Modifier = Modifier) {
         ) {
             fullWidth { OverviewHero(state, attention.size) }
             if (attention.isNotEmpty()) attentionCards(attention, state)
-            fullWidth { SectionTitle("Projects", state.projects.size) }
-            items(state.projects, key = { it.id }) { project ->
+            fullWidth { SectionTitle("Projects", state.projects.all.size) }
+            items(state.projects.all, key = { it.id }) { project ->
                 ProjectCard(
                     project = project,
                     status = state.live.statusOf(project.id),
@@ -82,7 +82,7 @@ private fun LazyGridScope.fullWidth(content: @Composable () -> Unit) {
 private fun LazyGridScope.attentionCards(attention: List<SessionSnapshot>, state: AppState) {
     items(attention, key = { "attention-${it.ccmSessionId}" }, span = { GridItemSpan(maxLineSpan) }) { session ->
         AttentionCard(
-            projectName = state.projectName(session.projectId),
+            projectName = state.projects.nameOf(session.projectId),
             session = session,
             now = state.now,
             onOpen = { state.openSession(session.ccmSessionId) },

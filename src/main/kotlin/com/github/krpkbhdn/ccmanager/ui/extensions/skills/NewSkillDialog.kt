@@ -30,7 +30,7 @@ fun NewSkillDialog(context: ExtensionContext, state: SkillsState) {
     val canCreate = nameText.isNotEmpty() && nameError == null && skillDescriptionProblem(description.text.toString()) == null && state.job == null
     val create = { if (canCreate) state.create(scope, nameText, description.text.toString()) }
     val dismiss = { state.creating = false }
-    ModalHost(dismiss, width = dialogWidth) {
+    ModalHost(dismiss, width = dialogWidth, hasInput = { name.text.isNotEmpty() || description.text.isNotEmpty() }) {
         DialogBody("New skill", Icons.Book, colors.accent, actions = { DialogActions("Create skill", canCreate, false, create, dismiss) }) {
             FormField("Name", error = nameError, hint = "Also the folder name and the /command, for example code-review") {
                 AppTextField(name, Modifier.fillMaxWidth(), placeholder = "skill-name", mono = true)

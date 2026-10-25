@@ -50,4 +50,13 @@ class McpCredentialReaderTest {
         write("{\"mcpOAuth\":[1,\"x\"]}");
         assertThat(reader().loggedInServers()).isEmpty();
     }
+
+    @Test
+    void readsCredentialsFromClaudeConfigDirWhenSet() throws IOException {
+        var configDirectory = Files.createDirectories(home.resolve("elsewhere"));
+        Files.writeString(configDirectory.resolve(".credentials.json"), "{\"mcpOAuth\":{\"a|1\":{\"serverName\":\"github\",\"accessToken\":\"t\"}}}");
+        var host = new FakeHostEnvironment(HostEnvironment.OperatingSystem.LINUX, home).withEnv("CLAUDE_CONFIG_DIR", configDirectory.toString());
+
+        assertThat(new McpCredentialReader(host).loggedInServers()).containsExactly("github");
+    }
 }

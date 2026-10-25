@@ -39,10 +39,11 @@ sealed interface ModelTarget {
     data class Running(val ccmSessionId: String, val blockedReason: String?) : ModelTarget
 }
 
-fun modelTarget(session: SessionSnapshot?, applying: Boolean): ModelTarget {
+fun modelTarget(session: SessionSnapshot?, applying: Boolean, attached: Boolean = false): ModelTarget {
     if (session == null) return ModelTarget.NextLaunch
     val reason = when {
         applying -> "Applying the change…"
+        session.claudeSessionId == null && !attached ->STARTING_MESSAGE
         session.status == AgentStatus.WORKING -> "Claude is working. Change the model when the session is free."
         session.status == AgentStatus.NEEDS_ACTION -> "Claude is waiting for you. Answer first, then change the model."
         else -> null

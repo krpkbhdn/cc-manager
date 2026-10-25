@@ -36,7 +36,7 @@ public class NotificationService {
     private final AtomicLong nextId = new AtomicLong(1);
 
     public NotificationService(SessionRegistry registry) {
-        registry.subscribe(() -> onSessionsChanged(registry.sessions()));
+        registry.subscribe(() -> onSessionsChanged(registry));
     }
 
     /** Newest last, in-memory, capped. */
@@ -50,9 +50,10 @@ public class NotificationService {
         return () -> listeners.remove(listener);
     }
 
-    private void onSessionsChanged(List<SessionSnapshot> sessions) {
+    private void onSessionsChanged(SessionRegistry registry) {
         var created = new ArrayList<AppNotification>();
         synchronized (this) {
+            var sessions = registry.sessions();
             seen.keySet().retainAll(sessions.stream().map(SessionSnapshot::ccmSessionId).collect(Collectors.toSet()));
             sessions.forEach(session -> observe(session).ifPresent(created::add));
         }

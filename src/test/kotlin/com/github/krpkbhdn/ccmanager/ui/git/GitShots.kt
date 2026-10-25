@@ -110,8 +110,8 @@ private val shots = listOf(
     Shot("role-tools-custom", prepare = { state, _, _ -> editRole(state, 1) { it.tools = ToolSelection.parse("Read, Grep, Glob, Edit, mcp__github__*, mcp__db__query") } }),
     Shot("task-dialog", prepare = { state, _, _ -> waitFor { state.teams.teams.isNotEmpty() }; state.taskDialogProjectId = 1 }),
     Shot("task-dialog-no-teams", prepare = { state, _, _ -> waitFor { state.teams.teams.isNotEmpty() }; state.teams.teams.forEach { state.teams.requestDeleteTeam(it); state.confirm?.onConfirm?.invoke() }; state.confirm = null; waitFor { state.teams.teams.isEmpty() }; state.taskDialogProjectId = 1 }),
-    Shot("session-team", prepare = { state, _, _ -> waitFor { state.teams.teams.isNotEmpty() }; state.sessionTeams["s-working"] = state.teams.teams.first(); state.openSession("s-working") }),
-    Shot("agents-roles", prepare = { state, _, _ -> waitFor { state.teams.teams.isNotEmpty() }; state.sessionTeams["s-working"] = state.teams.teams.first() }),
+    Shot("session-team", prepare = { state, _, _ -> waitFor { state.teams.teams.isNotEmpty() }; state.sessions.sessionTeams["s-working"] = state.teams.teams.first(); state.openSession("s-working") }),
+    Shot("agents-roles", prepare = { state, _, _ -> waitFor { state.teams.teams.isNotEmpty() }; state.sessions.sessionTeams["s-working"] = state.teams.teams.first() }),
     Shot("agents-rail", prepare = { state, _, _ -> state.openSession("s-agents") }),
     Shot("agents-rail-finished", prepare = { state, _, _ -> state.openSession("s-agents"); state.agents.toggleFinished("s-agents") }),
     Shot("agents-log", prepare = { state, _, _ -> openAgentLog(state, 2) }),
@@ -206,7 +206,7 @@ private fun render(shot: Shot, dark: Boolean, width: Int, height: Int, out: Path
         it.start()
         it.setThemeMode(if (dark) ThemeMode.DARK else ThemeMode.LIGHT)
     }
-    waitFor { state.projects.isNotEmpty() && state.installation != null }
+    waitFor { state.projects.all.isNotEmpty() && state.installation != null }
     state.navigate(Route.Project(1))
     val git = state.openGit(1, shot.view)!!
     git.attach()
@@ -235,7 +235,8 @@ private fun render(shot: Shot, dark: Boolean, width: Int, height: Int, out: Path
         }
     } finally {
         scope.cancel()
-        scene.close()
+        // Compose RectManager intermittently throws when a popup or banner scene is disposed before its last layout; the PNGs are already written.
+        runCatching { scene.close() }
     }
 }
 
@@ -281,7 +282,7 @@ private fun openPlugins(state: AppState, tab: PluginsTab) {
 }
 
 private fun openProjectSettings(state: AppState, section: ProjectSettingsSection): ProjectSettingsState {
-    state.openProjectSettings(state.projects.first { it.id == 1L }, section)
+    state.openProjectSettings(state.projects.all.first { it.id == 1L }, section)
     val settings = state.projectSettings!!
     settings.plugins.ensureLoaded()
     settings.plugins.loadCatalog()

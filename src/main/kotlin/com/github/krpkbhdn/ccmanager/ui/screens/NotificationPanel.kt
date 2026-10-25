@@ -82,9 +82,9 @@ private fun Drawer(state: AppState) {
     ) {
         VerticalRule()
         Column(Modifier.weight(1f)) {
-            DrawerHeader(state.unreadCount, state::markAllRead, state.settings.notificationSound, state::toggleNotificationSound) { state.notificationsOpen = false }
+            DrawerHeader(state.notifications.unreadCount, state.notifications::markAllRead, state.settings.notificationSound, state::toggleNotificationSound) { state.notificationsOpen = false }
             HorizontalRule()
-            if (state.notifications.isEmpty()) {
+            if (state.notifications.items.isEmpty()) {
                 EmptyState(Icons.CircleCheck, "You are all caught up", "Finished work and requests for your decision will be listed here.", tint = colors.success)
             } else {
                 NotificationList(state)
@@ -108,8 +108,8 @@ private fun NotificationList(state: AppState) {
     val list = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), list, verticalArrangement = Arrangement.spacedBy(Spacing.xxs), contentPadding = androidx.compose.foundation.layout.PaddingValues(Spacing.sm)) {
-            items(state.notifications.asReversed(), key = { it.id }) { notification ->
-                NotificationRow(notification, state.projectName(notification.projectId), relativeTime(notification.at, state.now), notification.id > state.readUpTo, Modifier.animateItem()) {
+            items(state.notifications.items.asReversed(), key = { it.id }) { notification ->
+                NotificationRow(notification, state.projects.nameOf(notification.projectId), relativeTime(notification.at, state.now), notification.id > state.notifications.readUpTo, Modifier.animateItem()) {
                     state.openNotification(notification)
                 }
             }

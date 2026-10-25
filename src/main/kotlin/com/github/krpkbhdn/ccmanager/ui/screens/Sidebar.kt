@@ -121,14 +121,14 @@ private fun ProjectsSection(state: AppState, collapsed: Boolean, modifier: Modif
         if (!collapsed) {
             Row(Modifier.fillMaxWidth().padding(start = Spacing.sm, top = Spacing.lg, bottom = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
                 Label("Projects", Modifier.weight(1f), color = colors.textTertiary, style = Type.overline)
-                CountBadge(state.projects.size)
+                CountBadge(state.projects.all.size)
             }
         } else {
             HorizontalRule(Modifier.padding(vertical = Spacing.sm, horizontal = Spacing.sm))
         }
         Box(Modifier.weight(1f)) {
             LazyColumn(Modifier.animateContentSize(), list, verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
-                items(state.projects, key = { it.id }) { project ->
+                items(state.projects.all, key = { it.id }) { project ->
                     val sessions = state.live.of(project.id)
                     ProjectRow(
                         project = project,
@@ -139,8 +139,8 @@ private fun ProjectsSection(state: AppState, collapsed: Boolean, modifier: Modif
                         gitSummary = state.gitSummaryOf(project.id),
                         actions = ProjectActions(
                             onOpen = { state.navigate(Route.Project(project.id)) },
-                            onRename = { state.renaming = RenameRequest(project) },
-                            onRemove = { state.requestRemove(project) },
+                            onRename = { state.projects.renaming = RenameRequest(project) },
+                            onRemove = { state.projects.requestRemove(project) },
                             onOpenFolder = { state.openFolder(project) },
                             onSettings = { state.openProjectSettings(project) },
                         ),

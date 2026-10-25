@@ -24,6 +24,12 @@ public interface HostEnvironment {
     /** @return direct child directories of parent whose name starts with prefix, in no particular order */
     List<Path> childDirectoriesStartingWith(Path parent, String prefix);
 
+    /** Claude Code's configuration directory: CLAUDE_CONFIG_DIR when set, else ~/.claude. */
+    default Path claudeConfigDirectory() {
+        var configured = env("CLAUDE_CONFIG_DIR");
+        return configured == null || configured.isBlank() ? home().resolve(".claude") : Path.of(configured);
+    }
+
     default boolean windows() {
         return os() == OperatingSystem.WINDOWS;
     }

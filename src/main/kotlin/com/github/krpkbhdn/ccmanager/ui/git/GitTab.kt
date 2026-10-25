@@ -42,7 +42,7 @@ private const val MONO_PROGRESS_LINES = 1
 
 /** The project's Git tab: toolbar, banners, a section switcher and the section itself, all driven by one [GitState]. */
 @Composable
-fun GitTab(git: GitState, system: GitSystemActions, now: Instant, modifier: Modifier = Modifier) {
+fun GitTab(git: GitState, system: GitSystemActions, now: () -> Instant, modifier: Modifier = Modifier) {
     val status = git.status
     val loadError = git.loadError
     Box(modifier.fillMaxSize()) {
@@ -61,7 +61,7 @@ fun GitTab(git: GitState, system: GitSystemActions, now: Instant, modifier: Modi
 }
 
 @Composable
-private fun Sections(git: GitState, system: GitSystemActions, now: Instant) {
+private fun Sections(git: GitState, system: GitSystemActions, now: () -> Instant) {
     HorizontalRule()
     Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
         SegmentedControl(segments(git), git.view, git::show)

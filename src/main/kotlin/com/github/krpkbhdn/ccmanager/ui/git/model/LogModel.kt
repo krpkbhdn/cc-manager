@@ -5,6 +5,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.github.krpkbhdn.ccmanager.git.GitException
 import com.github.krpkbhdn.ccmanager.git.GitLog
+import com.github.krpkbhdn.ccmanager.git.GitLogService
+import com.github.krpkbhdn.ccmanager.git.GraphState
 import com.github.krpkbhdn.ccmanager.ui.git.log.LogFilter
 import java.nio.file.Path
 import kotlinx.coroutines.CancellationException
@@ -37,14 +39,17 @@ class LogModel(
     var loaded = false
         private set
     private var generation = 0
+    private var graphState: GraphState? = null
 
     fun reload() {
         loaded = true
         val ticket = ++generation
         loading = true
         scope.launch {
-            val page = fetch(0) ?: return@launch finish(ticket)
+            val result = fetch(0, null) ?: return@launch finish(ticket)
             if (ticket == generation) {
+                val page = result.page()
+                graphState = result.next()
                 rows = page.rows()
                 hasMore = page.hasMore()
                 if (selected != null && rows.none { it.commit().hash() == selected }) clearSelection()
@@ -58,9 +63,12 @@ class LogModel(
         val ticket = generation
         loading = true
         scope.launch {
-            val page = fetch(rows.size)
-            if (page != null && ticket == generation) {
-                rows = rows + page.rows()
+            val result = fetch(rows.size, graphState)
+            if (result != null && ticket == generation) {
+                val page = result.page()
+                graphState = result.next()
+                val shown = rows.mapTo(HashSet()) { it.commit().hash() }
+                rows = rows + page.rows().filter { it.commit().hash() !in shown }
                 hasMore = page.hasMore()
             }
             finish(ticket)
@@ -100,9 +108,9 @@ class LogModel(
         selectedFile = null
     }
 
-    private suspend fun fetch(skip: Int): GitLog.Page? =
+    private suspend fun fetch(skip: Int, previous: GraphState?): GitLogService.StatefulPage? =
         try {
-            withContext(Dispatchers.IO) { git.log.log(repo, filter.toQuery(skip)) }
+            withContext(Dispatchers.IO) { git.log.log(repo, filter.toQuery(skip), previous) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: RuntimeException) {

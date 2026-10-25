@@ -50,7 +50,7 @@ private val fileRowHeight = 26.dp
 
 /** The selected commit: message, author, hash, parents as links, changed files and the diff of the chosen file. */
 @Composable
-fun CommitDetailsPane(git: GitState, now: Instant, modifier: Modifier = Modifier) {
+fun CommitDetailsPane(git: GitState, now: () -> Instant, modifier: Modifier = Modifier) {
     val log = git.log
     val details = log.details?.takeIf { it.commit().hash() == log.selected }
     when {
@@ -67,13 +67,13 @@ fun CommitDetailsPane(git: GitState, now: Instant, modifier: Modifier = Modifier
 }
 
 @Composable
-private fun CommitHeader(commit: GitLog.Commit, now: Instant, onParent: (String) -> Unit) {
+private fun CommitHeader(commit: GitLog.Commit, now: () -> Instant, onParent: (String) -> Unit) {
     Column(Modifier.heightIn(max = headerMaxHeight).verticalScroll(rememberScrollState()).padding(Spacing.lg), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         Label(commit.subject(), color = colors.textPrimary, style = Type.heading, maxLines = 3)
         if (commit.body().orEmpty().isNotBlank()) Label(commit.body().orEmpty().trim(), color = colors.textSecondary, style = Type.small, maxLines = 12)
         RefChips(commit.refs(), colors.accent)
         Label("${commit.authorName()}  <${commit.authorEmail()}>", color = colors.textSecondary, style = Type.small, tooltipWhenTruncated = true)
-        Label("${absoluteDate(commit.authorDate())}  ·  ${commitAge(commit.authorDate(), now)}", color = colors.textTertiary, style = Type.small)
+        Label("${absoluteDate(commit.authorDate())}  ·  ${commitAge(commit.authorDate(), now())}", color = colors.textTertiary, style = Type.small)
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
             CopyChip(commit.shortHash(), copyText = commit.hash(), label = "Copy full hash")
             commit.parents().forEach { parent -> ParentLink(parent.take(SHORT_PARENT)) { onParent(parent) } }
@@ -94,7 +94,7 @@ private fun ParentLink(short: String, onClick: () -> Unit) {
 @Composable
 internal fun DiffFileList(files: List<GitDiff.FileDiff>, selected: String?, onSelect: (String) -> Unit) {
     LazyColumn(Modifier.heightIn(max = filesMaxHeight).fillMaxWidth(), contentPadding = androidx.compose.foundation.layout.PaddingValues(Spacing.xs)) {
-        items(files, key = { it.path }) { file ->
+        items(files, key = { "${it.change}:${it.path}" }) { file ->
             Pressable({ onSelect(file.path) }, Modifier.fillMaxWidth(), RoundedCornerShape(Radius.sm), base = if (file.path == selected) colors.accentSoft else Color.Transparent) {
                 Row(Modifier.padding(horizontal = Spacing.sm).heightIn(min = fileRowHeight), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     KindBadge(kindOf(file.change))

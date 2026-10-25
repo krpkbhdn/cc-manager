@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.git;
 
 import com.github.krpkbhdn.ccmanager.git.GitException.Kind;
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -41,7 +42,7 @@ final class RepositoryPaths {
                     || GIT_DIRECTORY.equalsIgnoreCase(normalized.getName(0).toString())) {
                 throw rejected(path);
             }
-            return normalized.toString().replace('\\', '/');
+            return File.separatorChar == '\\' ? normalized.toString().replace('\\', '/') : normalized.toString();
         } catch (InvalidPathException e) {
             throw rejected(path);
         }

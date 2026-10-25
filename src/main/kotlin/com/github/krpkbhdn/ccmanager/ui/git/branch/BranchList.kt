@@ -56,7 +56,7 @@ fun BranchList(git: GitState, query: String, onPicked: () -> Unit, modifier: Mod
     val state = rememberLazyListState()
     Box(modifier) {
         LazyColumn(Modifier.fillMaxSize(), state, contentPadding = PaddingValues(Spacing.xs)) {
-            items(items, key = { if (it is BranchListItem.Entry) "b-${it.branch.name()}" else "h-${(it as BranchListItem.Heading).title}" }) { item ->
+            items(items, key = { if (it is BranchListItem.Entry) "b-${it.branch.remote()}-${it.branch.name()}" else "h-${(it as BranchListItem.Heading).title}" }) { item ->
                 when (item) {
                     is BranchListItem.Heading -> Heading(item)
                     is BranchListItem.Entry -> BranchRow(git, item.branch, onPicked)

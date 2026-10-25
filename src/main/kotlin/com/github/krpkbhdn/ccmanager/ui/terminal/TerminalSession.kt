@@ -20,6 +20,8 @@ import com.jediterm.terminal.emulator.mouse.MouseMode
 import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.StringSelection
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 private const val INITIAL_COLUMNS = 120
 private const val INITIAL_ROWS = 32
@@ -33,9 +35,11 @@ private fun Color.toJediColor() = com.jediterm.core.Color(toArgb() and 0xFFFFFF)
  * One terminal as the UI sees it. Everything that must survive navigation lives here (emulator, scrollback,
  * selection, zoom); the composable only draws it. [frame] changes whenever the screen has to be redrawn.
  */
-internal class TerminalSession(connector: TtyConnector) {
+internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCROLLBACK_LINES) {
     private val frameState = mutableLongStateOf(0)
     private var knownHistory = 0
+    private val pendingGrowth = AtomicInteger()
+    private val historyShrank = AtomicBoolean()
     private var suppressTyped = false
     private var highSurrogate: Char? = null
 
@@ -53,7 +57,7 @@ internal class TerminalSession(connector: TtyConnector) {
     val focusRequester = FocusRequester()
     val frame: Long get() = frameState.longValue
 
-    private val emulator = TerminalEmulator(connector, INITIAL_COLUMNS, INITIAL_ROWS, defaultStyle(), ::onEmulatorFrame)
+    private val emulator = TerminalEmulator(connector, INITIAL_COLUMNS, INITIAL_ROWS, defaultStyle(), ::onEmulatorFrame, scrollbackCap)
 
     val buffer get() = emulator.buffer
     val modes get() = emulator.modes
@@ -76,10 +80,17 @@ internal class TerminalSession(connector: TtyConnector) {
 
     private fun onEmulatorFrame() {
         val history = scrollbackLines
-        val grown = history - knownHistory
+        if (history < knownHistory) historyShrank.set(true)
+        pendingGrowth.addAndGet(history - knownHistory + emulator.takeDiscardedLines())
         knownHistory = history
-        if (grown != 0) keepViewOnContent(grown)
         frameState.longValue++
+    }
+
+    /** Moves scroll position and selection with the content; runs on the UI thread, which owns that state. */
+    fun syncView() {
+        if (historyShrank.getAndSet(false)) selection = null
+        val grown = pendingGrowth.getAndSet(0)
+        if (grown != 0) keepViewOnContent(grown)
     }
 
     private fun keepViewOnContent(grown: Int) {

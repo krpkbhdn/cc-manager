@@ -25,13 +25,13 @@ class IdeLocatorTest {
     }
 
     @Test
-    void windowsToolboxCmdScriptRunsThroughCmd() {
+    void windowsToolboxCmdScriptRunsDirectlySoAmpersandsInPathsStaySafe() {
         var script = Path.of("C:\\Users\\u\\AppData\\Local\\JetBrains\\Toolbox\\scripts\\idea.cmd");
         var host = new FakeHostEnvironment(OperatingSystem.WINDOWS, home)
                 .withEnv("LOCALAPPDATA", "C:\\Users\\u\\AppData\\Local")
                 .withFile(script);
 
-        assertThat(locator.find(host)).contains(java.util.List.of("cmd", "/c", script.toString()));
+        assertThat(locator.find(host)).contains(java.util.List.of(script.toString()));
     }
 
     @Test

@@ -43,6 +43,7 @@ fun nameProblem(name: String, existing: Collection<String>): String? = when {
 fun formProblem(form: ServerForm): String? = when {
     form.transport == McpTransport.STDIO && form.command.isBlank() -> "Enter the command that starts the server"
     form.transport != McpTransport.STDIO && !isHttpUrl(form.url) -> "Enter a full URL starting with http:// or https://"
+    form.pairs.map { it.first.trim() }.filter { it.isNotEmpty() }.let { it.size != it.toSet().size } -> "Each variable or header name can be used only once"
     else -> null
 }
 

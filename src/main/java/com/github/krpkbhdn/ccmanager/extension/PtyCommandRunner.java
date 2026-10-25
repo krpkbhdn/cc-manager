@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.extension;
 
 import com.github.krpkbhdn.ccmanager.workspace.CommandRunner;
+import com.github.krpkbhdn.ccmanager.workspace.ProcessTree;
 import com.pty4j.PtyProcess;
 import com.pty4j.PtyProcessBuilder;
 import java.io.ByteArrayOutputStream;
@@ -49,12 +50,12 @@ final class PtyCommandRunner {
         try {
             var finished = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
             if (!finished) {
-                kill(process);
+                ProcessTree.kill(process);
             }
             reader.join(READER_GRACE);
             return new CommandRunner.Result(finished ? process.exitValue() : -1, snapshot(output), "", !finished);
         } catch (InterruptedException e) {
-            kill(process);
+            ProcessTree.kill(process);
             Thread.currentThread().interrupt();
             throw new IOException("Interrupted while running " + command.getFirst(), e);
         }
@@ -88,14 +89,5 @@ final class PtyCommandRunner {
         synchronized (output) {
             return output.toString();
         }
-    }
-
-    private static void kill(PtyProcess process) {
-        try {
-            process.descendants().forEach(ProcessHandle::destroyForcibly);
-        } catch (UnsupportedOperationException e) {
-            // no process handles on this pty implementation; destroying the root below is all that is possible
-        }
-        process.destroyForcibly();
     }
 }

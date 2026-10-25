@@ -58,7 +58,8 @@ fun AddServerDialog(context: ExtensionContext, state: McpState) {
     val contentError = if (mode == InputMode.FORM) formProblem(form) else jsonProblem(json)
     val canAdd = nameText.isNotEmpty() && nameError == null && contentError == null && state.job == null
     val dismiss = { state.adding = false }
-    ModalHost(dismiss, width = dialogWidth) {
+    val hasInput = { name.text.isNotEmpty() || command.text.isNotEmpty() || url.text.isNotEmpty() || pasted.text.isNotEmpty() || pairs.isNotEmpty() }
+    ModalHost(dismiss, width = dialogWidth, hasInput = hasInput) {
         DialogBody("Add MCP server", Icons.Server, colors.accent, actions = { DialogActions("Add server", canAdd, false, { state.add(nameText, json, scope) }, dismiss) }) {
             SegmentedControl(InputMode.entries.map { Segment(it, it.label) }, mode, { mode = it })
             FormField("Name", error = nameError, hint = "How Claude refers to the server, for example github") {

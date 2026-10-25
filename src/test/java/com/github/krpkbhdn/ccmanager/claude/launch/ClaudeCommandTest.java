@@ -7,6 +7,7 @@ import com.github.krpkbhdn.ccmanager.team.RoleDraft;
 import com.github.krpkbhdn.ccmanager.team.Team;
 import com.github.krpkbhdn.ccmanager.team.TeamAgentsJson;
 import com.github.krpkbhdn.ccmanager.team.TeamRole;
+import com.github.krpkbhdn.ccmanager.team.TeamService;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +17,7 @@ class ClaudeCommandTest {
 
     private static final Path EXE = Path.of("claude").toAbsolutePath();
     private static final Path SETTINGS = Path.of("s.json").toAbsolutePath();
+    private static final int WINDOWS_COMMAND_LINE_LIMIT = 32_767;
 
     @Test
     void newSessionHasOnlySettings() {
@@ -68,6 +70,35 @@ class ClaudeCommandTest {
         assertThat(command).containsSubsequence("--settings", SETTINGS.toString(), "--model", "opus", "--effort", "high", "--agents")
                 .contains(TeamAgentsJson.agents(team), TeamAgentsJson.leadAddendum(team))
                 .endsWith("--append-system-prompt", TeamAgentsJson.leadAddendum(team), "--", "-fix it");
+    }
+
+    @Test
+    void largestValidTeamFitsTheWindowsCommandLine() {
+        var roles = new java.util.ArrayList<RoleDraft>();
+        var promptLength = (TeamService.MAX_TOTAL_TEXT - TeamService.MAX_ROLES * RoleDraft.MAX_DESCRIPTION) / TeamService.MAX_ROLES;
+        for (int i = 0; i < TeamService.MAX_ROLES; i++) {
+            roles.add(new RoleDraft("role-" + i, "d".repeat(RoleDraft.MAX_DESCRIPTION), "p".repeat(promptLength), "sonnet", "low", null, i == 0));
+        }
+        TeamService.validate("Big", roles);
+        var team = new Team(1, "Big", java.util.stream.IntStream.range(0, roles.size()).mapToObj(i -> new TeamRole(i, roles.get(i), i)).toList());
+
+        var commandLine = ClaudeCommand.teamArguments(EXE, SETTINGS, team, "task").stream().map(WindowsArgument::quote).collect(java.util.stream.Collectors.joining(" "));
+
+        assertThat(commandLine.length()).isLessThan(WINDOWS_COMMAND_LINE_LIMIT);
+    }
+
+    @Test
+    void quoteHeavyPromptsWithALongTaskExceedTheWindowsCommandLineWithAClearError() {
+        var roles = new java.util.ArrayList<RoleDraft>();
+        for (int i = 0; i < TeamService.MAX_ROLES; i++) {
+            roles.add(new RoleDraft("role-" + i, "d".repeat(RoleDraft.MAX_DESCRIPTION), "\"p\"\n".repeat(500), "sonnet", "low", null, i == 0));
+        }
+        var team = new Team(1, "Big", java.util.stream.IntStream.range(0, roles.size()).mapToObj(i -> new TeamRole(i, roles.get(i), i)).toList());
+
+        var quoted = ClaudeCommand.teamArguments(EXE, SETTINGS, team, "t".repeat(6000)).stream().map(WindowsArgument::quote).toArray(String[]::new);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> WindowsArgument.requireFitsCommandLine(quoted))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("Shorten the task");
     }
 
     @Test

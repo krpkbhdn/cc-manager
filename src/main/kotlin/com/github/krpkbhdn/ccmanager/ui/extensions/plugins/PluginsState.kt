@@ -14,6 +14,7 @@ import com.github.krpkbhdn.ccmanager.extension.plugin.PluginInstallResult
 import com.github.krpkbhdn.ccmanager.extension.plugin.PluginService
 import com.github.krpkbhdn.ccmanager.extension.plugin.ShownCommand
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
+import com.github.krpkbhdn.ccmanager.ui.extensions.MutationRunner
 import com.github.krpkbhdn.ccmanager.ui.state.ConfirmRequest
 import java.nio.file.Path
 import kotlinx.coroutines.CancellationException
@@ -78,13 +79,14 @@ class PluginsState(
         private set
     var catalogFailure by mutableStateOf<ExtensionFailure?>(null)
         private set
-    var job by mutableStateOf<PluginJob?>(null)
-        private set
-    var failure by mutableStateOf<ExtensionFailure?>(null)
+    private val mutations = MutationRunner(scope)
+    val job get() = mutations.job
+    var failure: ExtensionFailure?
+        get() = mutations.failure
+        set(value) { mutations.failure = value }
     var pending by mutableStateOf<PendingCommand?>(null)
         private set
-    /** Bumped when a mutation starts and when it applies its snapshot, so a refresh that began earlier cannot overwrite it. */
-    private var epoch = 0
+    private var catalogRun = 0
     var tab by mutableStateOf(PluginsTab.INSTALLED)
     var selectedInstalled by mutableStateOf<String?>(null)
     var selectedAvailable by mutableStateOf<String?>(null)
@@ -96,11 +98,11 @@ class PluginsState(
 
     fun refresh(reloadCatalog: Boolean = true) {
         loading = true
-        val seen = epoch
+        val seen = mutations.epoch
         scope.launch {
             try {
                 val fresh = withContext(Dispatchers.IO) { snapshot() }
-                if (seen == epoch) apply(fresh)
+                if (seen == mutations.epoch) apply(fresh)
                 loadFailure = null
             } catch (e: CancellationException) {
                 throw e
@@ -116,17 +118,23 @@ class PluginsState(
 
     fun loadCatalog(force: Boolean = false) {
         if (catalogLoading || (!force && catalog.isNotEmpty())) return
+        startCatalogLoad(force)
+    }
+
+    /** Starts a load even while one runs; only the newest load applies its result. */
+    private fun startCatalogLoad(force: Boolean) {
+        val run = ++catalogRun
         catalogLoading = true
         scope.launch {
             try {
-                catalog = withContext(Dispatchers.IO) { if (force) service.refreshAvailable() else service.available() }
-                catalogFailure = null
+                val loadedCatalog = withContext(Dispatchers.IO) { if (force) service.refreshAvailable() else service.available() }
+                if (run == catalogRun) { catalog = loadedCatalog; catalogFailure = null }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: RuntimeException) {
-                catalogFailure = failureOf("Could not load the marketplace", e)
+                if (run == catalogRun) catalogFailure = failureOf("Could not load the marketplace", e)
             } finally {
-                catalogLoading = false
+                if (run == catalogRun) catalogLoading = false
             }
         }
     }
@@ -228,27 +236,13 @@ class PluginsState(
     }
 
     private fun <T> act(label: String, key: String, reloadCatalog: Boolean = false, call: () -> T, onSuccess: (T) -> Unit = {}) {
-        if (job != null) return
-        job = PluginJob(label, key)
-        epoch++
-        failure = null
-        scope.launch {
-            try {
-                val outcome = withContext(Dispatchers.IO) { call() to snapshot() }
-                epoch++
-                apply(outcome.second)
-                details.clear()
-                onSuccess(outcome.first)
-                if (reloadCatalog) {
-                    catalog = emptyList()
-                    loadCatalog()
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: RuntimeException) {
-                failure = failureOf(label, e)
-            } finally {
-                job = null
+        mutations.run(label, key, { call() to snapshot() }) { (result, fresh) ->
+            apply(fresh)
+            details.clear()
+            onSuccess(result)
+            if (reloadCatalog) {
+                catalog = emptyList()
+                startCatalogLoad(force = true)
             }
         }
     }

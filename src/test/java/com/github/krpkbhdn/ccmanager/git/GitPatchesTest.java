@@ -3,6 +3,7 @@ package com.github.krpkbhdn.ccmanager.git;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.github.krpkbhdn.ccmanager.workspace.GitDiff.ChangeType;
 import com.github.krpkbhdn.ccmanager.workspace.GitDiff.FileDiff;
 import com.github.krpkbhdn.ccmanager.workspace.GitDiff.Line;
 import com.github.krpkbhdn.ccmanager.workspace.GitDiff.LineKind;
@@ -152,7 +153,7 @@ class GitPatchesTest {
         var partly = diff("partly.txt", false);
         index.applyToIndex(sandbox.repo, GitPatches.lines(partly, 0, Set.of(lineIndex(partly, LineKind.REMOVED, "2"))), false);
 
-        assertThat(sandbox.git("ls-files")).doesNotContain("gone.txt").contains("partly.txt");
+        assertThat(sandbox.git("ls-files")).doesNotContain("gone.txt", "dev/null").contains("partly.txt");
         assertThat(indexContent("partly.txt")).isEqualTo("1\n3\n");
     }
 
@@ -243,5 +244,82 @@ class GitPatchesTest {
         assertThatThrownBy(() -> GitPatches.lines(diff, 0, Set.of())).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("No added or removed");
         assertThatThrownBy(() -> GitPatches.hunk(diff("blob.bin", false), 0)).isInstanceOf(IllegalArgumentException.class);
         assertThat(List.of(diff.lines().getFirst().kind())).containsExactly(LineKind.HUNK);
+    }
+
+    @Test
+    void unstagesPartOfAStagedDeletionWithoutCreatingDevNull() {
+        prepare();
+        commitFile("gone.txt", "1\n2\n3\n");
+        sandbox.git("rm", "-q", "gone.txt");
+        var staged = diff("gone.txt", true);
+
+        index.applyToIndex(sandbox.repo, GitPatches.linesForUnstaging(staged, 0, Set.of(lineIndex(staged, LineKind.REMOVED, "2"))), true);
+
+        assertThat(sandbox.git("ls-files")).doesNotContain("dev/null");
+        assertThat(indexContent("gone.txt")).isEqualTo("2\n");
+    }
+
+    @Test
+    void stagingOnlyAnAppendedLineAfterAnUnterminatedLastLineKeepsTheLinesApart() {
+        prepare();
+        commitFile("a.txt", "p\nq");
+        sandbox.write("a.txt", "p\nq\nR");
+        var diff = diff("a.txt", false);
+
+        index.applyToIndex(sandbox.repo, GitPatches.lines(diff, 0, Set.of(lineIndex(diff, LineKind.ADDED, "R"))), false);
+
+        assertThat(indexContent("a.txt")).isEqualTo("p\nq\nR");
+    }
+
+    @Test
+    void stagingBothTheTerminatedLastLineAndTheAppendedOneDoesNotDuplicate() {
+        prepare();
+        commitFile("a.txt", "p\nq");
+        sandbox.write("a.txt", "p\nq\nR");
+        var diff = diff("a.txt", false);
+
+        index.applyToIndex(sandbox.repo,
+                GitPatches.lines(diff, 0, Set.of(lineIndex(diff, LineKind.ADDED, "q"), lineIndex(diff, LineKind.ADDED, "R"))), false);
+
+        assertThat(indexContent("a.txt")).isEqualTo("p\nq\nR");
+    }
+
+    @Test
+    void unstagingARemovedUnterminatedLastLineKeepsTheLinesAfterItApart() {
+        prepare();
+        commitFile("a.txt", "a\nb");
+        sandbox.write("a.txt", "a\nB\nc\n");
+        sandbox.git("add", "a.txt");
+        var staged = diff("a.txt", true);
+
+        index.applyToIndex(sandbox.repo, GitPatches.linesForUnstaging(staged, 0, Set.of(lineIndex(staged, LineKind.REMOVED, "b"))), true);
+
+        assertThat(indexContent("a.txt")).isEqualTo("a\nb\nB\nc\n");
+    }
+
+    @Test
+    void unstagingARemovedUnterminatedLastLineWithItsReplacementKeepsTheMarker() {
+        prepare();
+        commitFile("a.txt", "a\nb");
+        sandbox.write("a.txt", "a\nB");
+        sandbox.git("add", "a.txt");
+        var staged = diff("a.txt", true);
+
+        index.applyToIndex(sandbox.repo, GitPatches.linesForUnstaging(staged, 0,
+                Set.of(lineIndex(staged, LineKind.REMOVED, "b"), lineIndex(staged, LineKind.ADDED, "B"))), true);
+
+        assertThat(indexContent("a.txt")).isEqualTo("a\nb");
+    }
+
+    @Test
+    void newFileKeepsItsExecutableModeInTheIndex() {
+        prepare();
+        var script = new FileDiff("run.sh", null, ChangeType.UNTRACKED, 1, 0, false,
+                List.of(new Line(LineKind.HUNK, "@@ -0,0 +1 @@", null, null), new Line(LineKind.ADDED, "echo", null, 1)), "100755");
+        sandbox.write("run.sh", "echo\n");
+
+        index.applyToIndex(sandbox.repo, GitPatches.hunk(script, 0), false);
+
+        assertThat(sandbox.git("ls-files", "-s", "run.sh")).startsWith("100755");
     }
 }

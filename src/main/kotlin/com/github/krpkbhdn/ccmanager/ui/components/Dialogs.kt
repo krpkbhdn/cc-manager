@@ -57,7 +57,10 @@ private val dialogWidth = 420.dp
 private val dialogIconBox = 40.dp
 private const val MESSAGE_LINES = 5
 
-/** Scrim plus a centred, animated surface; Esc (unless [escapeDismisses] is off) and clicks outside the card call [onDismiss]. */
+/**
+ * Scrim plus a centred, animated surface; Esc (unless [escapeDismisses] is off) and clicks outside the card call [onDismiss],
+ * except while [hasInput] says the form holds typed input: then only the dialog's own Cancel closes it.
+ */
 @Composable
 fun ModalHost(
     onDismiss: () -> Unit,
@@ -65,8 +68,10 @@ fun ModalHost(
     width: Dp = dialogWidth,
     takeFocus: Boolean = true,
     escapeDismisses: Boolean = true,
+    hasInput: () -> Boolean = { false },
     content: @Composable () -> Unit,
 ) {
+    val dismissByGesture = { if (!hasInput()) onDismiss() }
     val focus = remember { FocusRequester() }
     var shown by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { shown = true; if (takeFocus) focus.requestFocus() }
@@ -75,10 +80,10 @@ fun ModalHost(
         modifier.fillMaxSize()
             .background(colors.scrim.copy(alpha = colors.scrim.alpha * fade))
             .onPreviewKeyEvent { event ->
-                (escapeDismisses && event.type == KeyEventType.KeyDown && event.key == Key.Escape).also { if (it) onDismiss() }
+                (escapeDismisses && event.type == KeyEventType.KeyDown && event.key == Key.Escape).also { if (it) dismissByGesture() }
             }
             .focusRequester(focus).focusable()
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = dismissByGesture),
         contentAlignment = Alignment.Center,
     ) {
         Box(
