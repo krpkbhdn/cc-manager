@@ -99,9 +99,10 @@ fun DialogBody(title: String, icon: ImageVector, tint: Color, actions: @Composab
             Label(title, style = Type.subtitle)
         }
         val scroll = rememberScrollState()
+        // The scrollbar fills the box height, so it sits in a matchParentSize box that cannot stretch the card.
         Box(Modifier.weight(1f, fill = false)) {
             Column(Modifier.fillMaxWidth().verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(Spacing.lg)) { content() }
-            ThinScrollbar(scroll)
+            Box(Modifier.matchParentSize()) { ThinScrollbar(scroll) }
         }
         actions?.invoke()
     }

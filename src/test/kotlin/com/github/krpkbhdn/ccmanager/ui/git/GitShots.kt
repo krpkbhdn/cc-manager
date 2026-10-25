@@ -19,6 +19,7 @@ import com.github.krpkbhdn.ccmanager.ui.git.model.fetch
 import com.github.krpkbhdn.ccmanager.ui.git.model.push
 import com.github.krpkbhdn.ccmanager.ui.screens.AppRoot
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
+import com.github.krpkbhdn.ccmanager.ui.state.ConfirmRequest
 import com.github.krpkbhdn.ccmanager.ui.state.Route
 import com.github.krpkbhdn.ccmanager.ui.state.ThemeMode
 import com.github.krpkbhdn.ccmanager.ui.state.UiSettingsStore
@@ -50,12 +51,13 @@ import org.jetbrains.skia.EncodedImageFormat
 
 private const val FRAME_NANOS = 16_000_000L
 private const val SETTLE_FRAMES = 40
+private val CLOSE_FRAMES = listOf(1L, 4L, 10L, 40L)
 private const val POLL_MILLIS = 20L
 private const val SETTLE_MILLIS = 300L
 private const val WAIT_MILLIS = 8_000L
 private val defaultOut = "C:/Users/Bohdan/Work/Code/Personal/ccm-shots/git"
 
-private class Shot(val name: String, val view: GitSubView = GitSubView.CHANGES, val data: () -> FakeRepoData = SampleRepos::busy, val prepare: (AppState, GitState, FakeRepoData) -> Unit = { _, _, _ -> }, val limits: RateLimitSnapshot? = limitsAt(23.5, 41.2), val selection: ModelSelection = ModelSelection("opus", "high"))
+private class Shot(val name: String, val view: GitSubView = GitSubView.CHANGES, val data: () -> FakeRepoData = SampleRepos::busy, val prepare: (AppState, GitState, FakeRepoData) -> Unit = { _, _, _ -> }, val limits: RateLimitSnapshot? = limitsAt(23.5, 41.2), val selection: ModelSelection = ModelSelection("opus", "high"), val closing: ((AppState) -> Unit)? = null)
 
 private fun selectFile(path: String, staged: Boolean) = { _: AppState, git: GitState, _: FakeRepoData -> git.selected = ChangeRef(path, staged) }
 
@@ -141,6 +143,8 @@ private val shots = listOf(
     Shot("project-skills", prepare = { state, _, _ -> openProjectSettings(state, ProjectSettingsSection.SKILLS) }),
     Shot("project-skills-new", prepare = { state, _, _ -> openProjectSettings(state, ProjectSettingsSection.SKILLS).skills.creating = true }),
     Shot("skills-new-dialog", prepare = { state, _, _ -> openSkills(state); state.skills.creating = true }),
+    Shot("dialog-confirm", prepare = { state, _, _ -> state.confirm = ConfirmRequest("Remove project", "Remove ccm-sandbox from the list? Files on disk are not touched.", "Remove", true) {} }, closing = { it.confirm = null }),
+    Shot("dialog-new-skill-close", prepare = { state, _, _ -> openSkills(state); state.skills.creating = true }, closing = { it.skills.creating = false }),
 )
 
 private fun GitState.pushNow() { push(); waitFor { error != null } }
@@ -214,10 +218,21 @@ private fun render(shot: Shot, dark: Boolean, width: Int, height: Int, out: Path
         repeat(SETTLE_FRAMES) { shotLoop.pump(); scene.render(frame++ * FRAME_NANOS) }
         waitFor(SETTLE_MILLIS) { false }
         repeat(SETTLE_FRAMES) { shotLoop.pump(); scene.render(frame++ * FRAME_NANOS) }
-        val bytes = scene.render(frame * FRAME_NANOS).encodeToData(EncodedImageFormat.PNG)!!.bytes
-        val file = out.resolve("${shot.name}-${if (dark) "dark" else "light"}-${width}x$height.png")
-        Files.write(file, bytes)
-        println("wrote $file")
+        fun write(suffix: String) {
+            val bytes = scene.render(frame * FRAME_NANOS).encodeToData(EncodedImageFormat.PNG)!!.bytes
+            val file = out.resolve("${shot.name}$suffix-${if (dark) "dark" else "light"}-${width}x$height.png")
+            Files.write(file, bytes)
+            println("wrote $file")
+        }
+        write("")
+        shot.closing?.let { close ->
+            close(state)
+            val closedAt = frame
+            CLOSE_FRAMES.forEach { target ->
+                while (frame < closedAt + target) { shotLoop.pump(); scene.render(frame++ * FRAME_NANOS) }
+                write("-close$target")
+            }
+        }
     } finally {
         scope.cancel()
         scene.close()

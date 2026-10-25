@@ -35,7 +35,7 @@ class NotificationSoundServiceTest {
     private NotificationSoundService service = create(played::add);
 
     private NotificationSoundService create(java.util.function.Consumer<NotificationSound> sink) {
-        return new NotificationSoundService(notifications, (sound, volume) -> sink.accept(sound), new NotificationSoundProperties(true, 0.5, INTERVAL), clock);
+        return new NotificationSoundService(notifications, (sound, volume) -> sink.accept(sound), new NotificationSoundProperties(true, 0.5, INTERVAL, Duration.ZERO), clock);
     }
 
     private void raise(NotificationKind kind) {
