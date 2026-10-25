@@ -11,7 +11,7 @@ import java.util.function.Consumer;
 
 /**
  * Immutable state of one live session; the status is derived from the flags, never stored.
- * Empty strings mean "unknown". blockingToolUseId is set only while a question or plan-approval tool waits.
+ * Empty strings mean "unknown". The title is the user-given name; the generated topic shows only without one. blockingToolUseId is set only while a question or plan-approval tool waits.
  */
 record SessionState(
         String ccmSessionId,
@@ -21,6 +21,7 @@ record SessionState(
         String permissionMode,
         String model,
         String title,
+        String topic,
         Instant startedAt,
         Instant lastEventAt,
         Map<String, SubagentSnapshot> subagents,
@@ -118,14 +119,19 @@ record SessionState(
     }
 
     static SessionState initial(String ccmSessionId, long projectId, Instant now) {
-        return new SessionState(ccmSessionId, projectId, "", "", "", "", "", now, now, Map.of(), 0, "", false, false, false, "", Set.of());
+        return new SessionState(ccmSessionId, projectId, "", "", "", "", "", "", now, now, Map.of(), 0, "", false, false, false, "", Set.of());
+    }
+
+    SessionState withTopic(String newTopic) {
+        return new SessionState(ccmSessionId, projectId, claudeSessionId, activity, permissionMode, model, title, newTopic, startedAt,
+                lastEventAt, subagents, backgroundTasks, error, turnOpen, compacting, needsAction, blockingToolUseId, backgroundAgentIds);
     }
 
     SessionState edit(Consumer<Draft> change) {
         var draft = new Draft(this);
         change.accept(draft);
         return new SessionState(ccmSessionId, projectId, draft.claudeSessionId, draft.activity, draft.permissionMode, draft.model,
-                draft.title, startedAt, draft.lastEventAt, bounded(draft.subagents), draft.backgroundTasks, draft.error,
+                draft.title, topic, startedAt, draft.lastEventAt, bounded(draft.subagents), draft.backgroundTasks, draft.error,
                 draft.turnOpen, draft.compacting, draft.needsAction, draft.blockingToolUseId, boundedIds(draft.backgroundAgentIds));
     }
 
@@ -150,7 +156,7 @@ record SessionState(
     SessionSnapshot toSnapshot(Instant now, Duration staleAfter) {
         var agents = subagents.values().stream().map(agent -> agent.withStale(now, staleAfter)).toList();
         return new SessionSnapshot(ccmSessionId, projectId, nullIfEmpty(claudeSessionId), status(now, staleAfter), nullIfEmpty(activity),
-                nullIfEmpty(permissionMode), nullIfEmpty(model), nullIfEmpty(title), startedAt, lastEventAt,
+                nullIfEmpty(permissionMode), nullIfEmpty(model), nullIfEmpty(title.isEmpty() ? topic : title), startedAt, lastEventAt,
                 agents, backgroundTasks, nullIfEmpty(error));
     }
 

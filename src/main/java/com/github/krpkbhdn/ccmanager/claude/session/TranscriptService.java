@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -42,6 +43,35 @@ public class TranscriptService {
 
     /** Last entries, empty when the path is missing, outside the projects directory, or unreadable. */
     public List<TranscriptEntry> read(String transcriptPath) {
+        var entries = new ArrayList<TranscriptEntry>();
+        tail(transcriptPath).forEach(line -> entries.addAll(entriesOf(line)));
+        return List.copyOf(entries.subList(Math.max(0, entries.size() - MAX_ENTRIES), entries.size()));
+    }
+
+    /** Latest user-given title, else the latest generated one; empty when the transcript has none. */
+    public Optional<String> title(String transcriptPath) {
+        String custom = null;
+        String generated = null;
+        for (var line : tail(transcriptPath)) {
+            try {
+                var node = mapper.readTree(line);
+                switch (node.path("type").asString("")) {
+                    case "custom-title" -> custom = nonBlank(node.path("customTitle").asString("")).orElse(custom);
+                    case "ai-title" -> generated = nonBlank(node.path("aiTitle").asString("")).orElse(generated);
+                    default -> { }
+                }
+            } catch (RuntimeException e) {
+                continue;
+            }
+        }
+        return Optional.ofNullable(custom != null ? custom : generated);
+    }
+
+    private static Optional<String> nonBlank(String value) {
+        return Optional.of(value.strip()).filter(text -> !text.isEmpty());
+    }
+
+    private List<String> tail(String transcriptPath) {
         if (transcriptPath == null || transcriptPath.isBlank()) {
             return List.of();
         }
@@ -50,9 +80,7 @@ public class TranscriptService {
             if (!file.startsWith(projectsRoot.toRealPath()) || !Files.isRegularFile(file)) {
                 return List.of();
             }
-            var entries = new ArrayList<TranscriptEntry>();
-            tailLines(file).forEach(line -> entries.addAll(entriesOf(line)));
-            return List.copyOf(entries.subList(Math.max(0, entries.size() - MAX_ENTRIES), entries.size()));
+            return tailLines(file);
         } catch (IOException | RuntimeException e) {
             return List.of();
         }

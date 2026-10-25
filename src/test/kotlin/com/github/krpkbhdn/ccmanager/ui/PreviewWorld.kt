@@ -139,7 +139,11 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         )
     }
 
-    val sessions: List<SessionSnapshot> = (if (empty) emptyList() else baseSessions()) + extraSessions
+    private val crowdedSessions = if (!many || empty) emptyList() else (1..8).map { n ->
+        SessionSnapshot("s-crowd-$n", 1, "cc$n", if (n % 3 == 0) AgentStatus.NEEDS_ACTION else AgentStatus.IDLE, "Finished", "default", "claude-opus-4-7", "Crowded tab number $n with a long topic", ago(600), ago(30L * n), emptyList(), 0, null)
+    }
+
+    val sessions: List<SessionSnapshot> = (if (empty) emptyList() else baseSessions()) + extraSessions + crowdedSessions
 
     private fun baseSessions() = listOf(
         SessionSnapshot(
@@ -157,7 +161,7 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         ),
         SessionSnapshot(
             "s-working", 1, "c1", AgentStatus.WORKING, "Running Bash: ./gradlew test", "acceptEdits", "claude-opus-4-7",
-            "Refactor session registry", ago(2400), ago(4),
+            "Refactor the session registry to read titles from the transcript", ago(2400), ago(4),
             listOf(
                 previewAgent("a1", "code-reviewer", SubagentState.WORKING, 60, "Read: SessionRegistry.java", calls = 7),
                 previewAgent("a2", "Explore", SubagentState.DONE, 300, ended = 240, message = "Found 12 usages of AgentStatus"),

@@ -3,7 +3,9 @@ package com.github.krpkbhdn.ccmanager.ui.state
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import java.nio.file.Path
 import java.time.Duration
+import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import java.time.Instant
+import java.time.ZoneOffset
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 
@@ -62,5 +64,21 @@ class FormatsTest {
     fun `install commands list the current platform first`() {
         assertThat(installCommands("Windows 11").first().second).contains("install.ps1")
         assertThat(installCommands("Linux").first().second).contains("install.sh")
+    }
+
+    private fun session(title: String?) =
+        SessionSnapshot("s1", 1, null, AgentStatus.IDLE, null, null, null, title, Instant.parse("2026-01-01T12:34:00Z"), Instant.EPOCH, emptyList(), 0, null)
+
+    @Test
+    fun `session without a topic is named by its start time`() {
+        assertThat(sessionName(session(null), ZoneOffset.UTC)).isEqualTo("Session · 12:34")
+        assertThat(sessionTitle(session("  "))).startsWith("Session · ")
+    }
+
+    @Test
+    fun `short topics stay and long topics are cut on a word boundary`() {
+        assertThat(sessionTitle(session("Fix login"))).isEqualTo("Fix login")
+        assertThat(sessionTitle(session("Refactor the session registry to read titles"))).isEqualTo("Refactor the session…")
+        assertThat(sessionTitle(session("A".repeat(40)))).isEqualTo("A".repeat(28) + "…")
     }
 }

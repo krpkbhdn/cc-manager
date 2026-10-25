@@ -100,6 +100,10 @@ private suspend fun captureTour(capture: Capture, state: AppState, world: Previe
     state.openSession("s-needs")
     state.openSession("s-working")
     capture.take("2-project-terminal")
+    if (flags.many) {
+        (1..8).forEach { state.openSession("s-crowd-$it") }
+        capture.take("2b-many-tabs")
+    }
     state.select(1, ProjectTab.Git)
     capture.take("3-diff")
     state.select(1, ProjectTab.Activity)

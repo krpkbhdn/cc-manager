@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.ui.components
 
+import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -122,6 +123,7 @@ fun Banner(message: String, tint: Color, icon: ImageVector, modifier: Modifier =
 data class MenuEntry(
     val label: String,
     val icon: ImageVector? = null,
+    val status: AgentStatus? = null,
     val hint: String? = null,
     val danger: Boolean = false,
     val enabled: Boolean = true,
@@ -174,6 +176,7 @@ private fun MenuItem(entry: MenuEntry, onDismiss: () -> Unit) {
     if (entry.dividerAbove) HorizontalRule(Modifier.padding(vertical = Spacing.xs))
     Pressable({ onDismiss(); entry.onSelect() }, Modifier.fillMaxWidth().alpha(if (entry.enabled) 1f else Alpha.DISABLED), shape = RoundedCornerShape(Radius.sm), enabled = entry.enabled) {
         Row(Modifier.padding(horizontal = Spacing.md - 2.dp, vertical = Spacing.sm - 1.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md - 2.dp)) {
+            entry.status?.let { StatusDot(it, size = 7.dp) }
             entry.icon?.let { Glyph(it, if (entry.danger) colors.danger else colors.textSecondary) }
             Label(entry.label, Modifier.weight(1f), color = tint, style = Type.body)
             entry.hint?.let { Label(it, color = colors.textTertiary, style = Type.monoSmall) }

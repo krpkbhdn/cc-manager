@@ -6,12 +6,14 @@ import com.github.krpkbhdn.ccmanager.workspace.GitDiff
 import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 private const val SECONDS_PER_MINUTE = 60L
 private const val MINUTES_PER_HOUR = 60L
 private const val HOURS_PER_DAY = 24L
 private const val JUST_NOW_SECONDS = 10L
-private const val SHORT_ID_LENGTH = 6
+private const val TITLE_MAX_LENGTH = 28
 private const val PATH_TAIL_SEGMENTS = 2
 
 /** "42s", "4m 05s", "2h 10m": compact elapsed time for live labels. */
@@ -49,8 +51,23 @@ fun statusLabel(status: AgentStatus): String = when (status) {
 
 fun backgroundTasksLabel(count: Int): String = if (count == 1) "1 background task" else "$count background tasks"
 
+private val startTimeFormat = DateTimeFormatter.ofPattern("HH:mm")
+
+/** Readable identifier of a session without a topic: its local start time. */
+fun sessionName(session: SessionSnapshot, zone: ZoneId = ZoneId.systemDefault()): String =
+    "Session · ${startTimeFormat.format(session.startedAt().atZone(zone))}"
+
+/** The topic cut to a short label, else [sessionName]. */
 fun sessionTitle(session: SessionSnapshot): String =
-    session.title()?.takeIf { it.isNotBlank() } ?: "Session ${session.ccmSessionId().take(SHORT_ID_LENGTH)}"
+    session.title()?.takeIf { it.isNotBlank() }?.let(::shortened) ?: sessionName(session)
+
+private fun shortened(topic: String): String {
+    val text = topic.trim()
+    if (text.length <= TITLE_MAX_LENGTH) return text
+    val cut = text.take(TITLE_MAX_LENGTH)
+    val atWord = cut.substringBeforeLast(' ', "").takeIf { it.length > TITLE_MAX_LENGTH / 2 } ?: cut
+    return atWord.trimEnd() + "…"
+}
 
 /** Last path segments, e.g. "Work/cc-manager", for a compact subtitle. */
 fun pathTail(path: Path, segments: Int = PATH_TAIL_SEGMENTS): String {

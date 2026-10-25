@@ -1,13 +1,20 @@
 package com.github.krpkbhdn.ccmanager.ui.screens
 
 import androidx.compose.foundation.border
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.runtime.LaunchedEffect
+import com.github.krpkbhdn.ccmanager.ui.components.ThinHorizontalScrollbar
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -46,6 +53,8 @@ data class TabSpec(val tab: ProjectTab, val label: String, val status: AgentStat
 private val pillHeight = 30.dp
 private val pillMaxWidth = 220.dp
 private val closeSize = 20.dp
+private val scrollbarDrop = 8.dp
+private val tabScrollbarThickness = 3.dp
 
 /** Pill tabs for sessions, diff and activity; [trailing] holds panel toggles on the right. */
 @Composable
@@ -61,9 +70,16 @@ fun ProjectTabStrip(
 ) {
     Row(modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-            Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
-                tabs.filter { it.closable }.forEach { spec -> TabPill(spec, spec.tab == selected, { onSelect(spec.tab) }, { onClose(spec.tab) }) }
+            val scroll = rememberScrollState()
+            val closable = tabs.filter { it.closable }
+            BoxWithConstraints(Modifier.weight(1f, fill = false)) {
+                val rowWidth = maxWidth
+                Row(Modifier.wheelScrollsHorizontally(scroll).horizontalScroll(scroll), horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+                    closable.forEach { spec -> TabPill(spec, spec.tab == selected, { onSelect(spec.tab) }, { onClose(spec.tab) }, rowWidth) }
+                }
+                if (scroll.maxValue > 0) Box(Modifier.matchParentSize().offset(y = scrollbarDrop)) { ThinHorizontalScrollbar(scroll, tabScrollbarThickness) }
             }
+            if (scroll.maxValue > 0) TabOverflowButton(closable, selected, onSelect)
             IconButton(Icons.Plus, onNewSession, Modifier.padding(horizontal = Spacing.xs), tooltip = "Start another session", hint = AppShortcut.NEW_SESSION.hint())
             if (shellMenu.isNotEmpty()) NewShellButton(shellMenu)
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
@@ -84,12 +100,14 @@ private fun NewShellButton(menu: List<MenuEntry>) {
 }
 
 @Composable
-private fun TabPill(spec: TabSpec, selected: Boolean, onSelect: () -> Unit, onClose: () -> Unit) {
+private fun TabPill(spec: TabSpec, selected: Boolean, onSelect: () -> Unit, onClose: () -> Unit, maxWidth: Dp = Dp.Infinity) {
     val shape = RoundedCornerShape(Radius.md)
     val tint = if (selected) colors.textPrimary else colors.textSecondary
+    val requester = remember { BringIntoViewRequester() }
+    LaunchedEffect(selected) { if (selected) requester.bringIntoView() }
     Pressable(
         onSelect,
-        Modifier.height(pillHeight).then(if (selected) Modifier.border(1.dp, colors.borderStrong, shape) else Modifier),
+        Modifier.bringIntoViewRequester(requester).widthIn(max = maxWidth).height(pillHeight).then(if (selected) Modifier.border(1.dp, colors.borderStrong, shape) else Modifier),
         shape,
         base = if (selected) colors.surfaceRaised else Color.Transparent,
     ) { hovered ->
@@ -100,7 +118,7 @@ private fun TabPill(spec: TabSpec, selected: Boolean, onSelect: () -> Unit, onCl
         ) {
             spec.status?.let { StatusDot(it, size = 7.dp) }
             spec.icon?.let { Glyph(it, tint, size = IconSize.medium) }
-            Label(spec.label, Modifier.widthIn(max = pillMaxWidth), color = tint, style = if (selected) Type.smallMedium else Type.small, tooltipWhenTruncated = true)
+            Label(spec.label, Modifier.weight(1f, fill = false).widthIn(max = pillMaxWidth), color = tint, style = if (selected) Type.smallMedium else Type.small, tooltipWhenTruncated = true)
             if (spec.closable) {
                 if (hovered || selected) IconButton(Icons.Close, onClose, tint = colors.textTertiary, size = closeSize, tooltip = "Close tab", hint = AppShortcut.CLOSE_SESSION.hint()) else Box(Modifier.size(closeSize))
             }

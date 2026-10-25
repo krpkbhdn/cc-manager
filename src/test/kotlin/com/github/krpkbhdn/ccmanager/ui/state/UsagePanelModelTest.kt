@@ -45,7 +45,7 @@ class UsagePanelModelTest {
 
         val row = sessionUsageRows(listOf(session), usage) { "proj" }.single()
 
-        assertThat(row).isEqualTo(SessionUsageRow("s1", "Session s1", "proj", AgentStatus.IDLE, "Opus 4.7", "high", 42, "$1.50"))
+        assertThat(row).isEqualTo(SessionUsageRow("s1", sessionName(session), "proj", AgentStatus.IDLE, "Opus 4.7", "high", 42, "$1.50"))
     }
 
     @Test

@@ -71,4 +71,34 @@ class TranscriptServiceTest {
         assertThat(service(dir).read(dir.resolve("none.jsonl").toString())).isEmpty();
         assertThat(service(dir).read(null)).isEmpty();
     }
+
+    private String titleOf(String... lines) throws Exception {
+        var file = dir.resolve("t.jsonl");
+        Files.writeString(file, String.join("\n", lines) + "\n");
+        return service(dir).title(file.toString()).orElse(null);
+    }
+
+    @Test
+    void latestGeneratedTitleWins() throws Exception {
+        assertThat(titleOf(user("a"), "{\"type\":\"ai-title\",\"aiTitle\":\"First\"}", user("b"),
+                "{\"type\":\"ai-title\",\"aiTitle\":\"Second\"}")).isEqualTo("Second");
+    }
+
+    @Test
+    void customTitleBeatsGeneratedOne() throws Exception {
+        assertThat(titleOf("{\"type\":\"custom-title\",\"customTitle\":\"Mine\"}", "{\"type\":\"ai-title\",\"aiTitle\":\"Generated\"}"))
+                .isEqualTo("Mine");
+    }
+
+    @Test
+    void noTitleLineGivesEmpty() throws Exception {
+        assertThat(titleOf(user("a"))).isNull();
+        assertThat(service(dir).title(null)).isEmpty();
+    }
+
+    @Test
+    void malformedAndBlankTitleLinesAreSkipped() throws Exception {
+        assertThat(titleOf("{\"type\":\"ai-title\",\"aiTitle\":\"Good\"}", "{not json", "{\"type\":\"ai-title\",\"aiTitle\":\"  \"}"))
+                .isEqualTo("Good");
+    }
 }
