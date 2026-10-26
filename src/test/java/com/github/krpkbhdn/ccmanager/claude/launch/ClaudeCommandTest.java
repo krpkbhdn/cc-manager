@@ -100,6 +100,41 @@ class ClaudeCommandTest {
     }
 
     @Test
+    void teamLaunchWithModeCarriesTeamFlagsAndModeFlagButNoTask() {
+        var lead = new RoleDraft("boss", "d", "Lead it.", "opus", "high", null, true);
+        var team = new Team(1, "T", List.of(new TeamRole(1, lead, 0)));
+
+        for (var mode : LaunchMode.values()) {
+            var command = ClaudeCommand.launchArguments(EXE, FILES, PLUGIN, mode, ModelSelection.DEFAULT, team);
+
+            assertThat(command).containsSequence(CLAUDE_MANAGER_FLAGS)
+                    .containsSubsequence("--model", "opus", "--effort", "high", "--agents", TeamAgentsJson.agents(team), "--append-system-prompt", TeamAgentsJson.leadAddendum(team))
+                    .doesNotContain("--");
+        }
+        assertThat(ClaudeCommand.launchArguments(EXE, FILES, PLUGIN, LaunchMode.NEW, ModelSelection.DEFAULT, team)).endsWith(TeamAgentsJson.leadAddendum(team));
+        assertThat(ClaudeCommand.launchArguments(EXE, FILES, PLUGIN, LaunchMode.CONTINUE, ModelSelection.DEFAULT, team)).endsWith("--continue");
+        assertThat(ClaudeCommand.launchArguments(EXE, FILES, PLUGIN, LaunchMode.RESUME_PICKER, ModelSelection.DEFAULT, team)).endsWith("--resume");
+    }
+
+    @Test
+    void projectSelectionWinsPerFieldOverTheLeadInATeamLaunch() {
+        var lead = new RoleDraft("boss", "d", "Lead it.", "opus", "high", null, true);
+        var team = new Team(1, "T", List.of(new TeamRole(1, lead, 0)));
+
+        assertThat(ClaudeCommand.launchArguments(EXE, FILES, PLUGIN, LaunchMode.NEW, new ModelSelection("sonnet", null), team))
+                .containsSubsequence("--model", "sonnet", "--effort", "high", "--agents")
+                .doesNotContain("opus");
+    }
+
+    @Test
+    void labelNamesTheTeamAndTheMode() {
+        var team = new Team(1, "Dev", List.of());
+
+        assertThat(ClaudeCommand.label(LaunchMode.NEW, team)).isEqualTo("claude (Dev)");
+        assertThat(ClaudeCommand.label(LaunchMode.CONTINUE, team)).isEqualTo("claude (continue, Dev)");
+        assertThat(ClaudeCommand.label(LaunchMode.RESUME_PICKER, team)).isEqualTo("claude (resume, Dev)");
+    }
+    @Test
     void largestValidTeamFitsTheWindowsCommandLine() {
         var roles = new java.util.ArrayList<RoleDraft>();
         var promptLength = (TeamService.MAX_TOTAL_TEXT - TeamService.MAX_ROLES * RoleDraft.MAX_DESCRIPTION) / TeamService.MAX_ROLES;

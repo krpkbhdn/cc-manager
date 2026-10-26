@@ -62,6 +62,11 @@ public record ModelSelection(String model, String effort) {
         return flags;
     }
 
+    /** This selection where it sets a part, [fallback] for the parts it leaves unset. */
+    public ModelSelection orElse(ModelSelection fallback) {
+        return new ModelSelection(model != null ? model : fallback.model, effort != null ? effort : fallback.effort);
+    }
+
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.strip();
     }

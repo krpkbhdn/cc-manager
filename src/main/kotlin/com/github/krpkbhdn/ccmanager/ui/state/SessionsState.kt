@@ -26,6 +26,7 @@ class SessionsState(
     private val scope: CoroutineScope,
     private val live: () -> LiveSessions,
     private val usageOf: (String) -> SessionUsage?,
+    private val defaultTeam: (projectId: Long) -> Team?,
     private val onOpened: (projectId: Long, ccmSessionId: String) -> Unit,
     private val onClosed: (projectId: Long, ccmSessionId: String) -> Unit,
     private val showProject: (Long) -> Unit,
@@ -46,7 +47,12 @@ class SessionsState(
     /** Sessions whose last command was not applied: claude may be showing "Switch model?", so Ctrl+C must not go into it. */
     private val unconfirmed = mutableSetOf<String>()
 
-    fun launch(projectId: Long, mode: LaunchMode) = launchSession(projectId) { backend.launcher.launch(projectId, mode) }
+    fun launch(projectId: Long, mode: LaunchMode) {
+        val team = defaultTeam(projectId)
+        launchSession(projectId, team) {
+            if (team == null) backend.launcher.launch(projectId, mode) else backend.launcher.launch(projectId, mode, team)
+        }
+    }
 
     /** Starts a lead session for [team] with [task] as its first prompt; [onStarted] runs only when the session really started. */
     fun launchTeam(projectId: Long, team: Team, task: String, onStarted: () -> Unit) =
