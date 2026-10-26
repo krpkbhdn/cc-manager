@@ -1,0 +1,17 @@
+{
+  "format": [],
+  "minLines": 6,
+  "minTokens": 60,
+  "gitignore": true,
+  "ignore": [
+    "**/build/**",
+    "**/dist/**",
+    "**/node_modules/**",
+    "**/target/**",
+    "**/.gradle/**",
+    "**/graphify-out/**",
+    "**/jscpd-report/**"
+  ],
+  "reporters": ["console", "html"],
+  "output": "./jscpd-report"
+}

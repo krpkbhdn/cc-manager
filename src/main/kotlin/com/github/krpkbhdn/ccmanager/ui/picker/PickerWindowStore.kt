@@ -41,7 +41,7 @@ class PickerWindowStore(private val file: Path) {
         private const val PART_COUNT = 4
         private const val FILE_NAME = "picker-window.txt"
 
-        fun inDefaultDataDir(): PickerWindowStore = PickerWindowStore(RecentFolders.defaultDataDir().resolve(FILE_NAME))
+        fun inDataDir(dataDir: Path): PickerWindowStore = PickerWindowStore(dataDir.resolve(FILE_NAME))
 
         /** Keeps the size within the minimum and the biggest screen, and the title bar reachable on the screen the window mostly sits on. */
         fun clamp(bounds: PickerBounds, screens: List<Rectangle>): PickerBounds {

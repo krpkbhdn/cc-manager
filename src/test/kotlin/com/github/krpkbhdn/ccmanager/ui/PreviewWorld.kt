@@ -39,16 +39,25 @@ import com.github.krpkbhdn.ccmanager.notification.NotificationService
 import com.github.krpkbhdn.ccmanager.project.ModelSelection
 import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.project.ProjectService
+import com.github.krpkbhdn.ccmanager.run.ActiveRun
+import com.github.krpkbhdn.ccmanager.run.RunConfiguration
+import com.github.krpkbhdn.ccmanager.run.RunConfigurationService
+import com.github.krpkbhdn.ccmanager.run.RunService
 import com.github.krpkbhdn.ccmanager.ui.git.FakeGit
 import com.github.krpkbhdn.ccmanager.ui.git.FakeRepoData
 import com.github.krpkbhdn.ccmanager.ui.git.SampleRepos
 import com.github.krpkbhdn.ccmanager.ui.state.Backend
 import com.github.krpkbhdn.ccmanager.ui.state.TerminalPort
+import com.github.krpkbhdn.ccmanager.shell.ShellDetector
+import com.github.krpkbhdn.ccmanager.shell.ShellLauncher
+import com.github.krpkbhdn.ccmanager.shell.ShellProfile
 import com.github.krpkbhdn.ccmanager.workspace.DirectoryOpener
 import com.github.krpkbhdn.ccmanager.workspace.IdeLauncher
 import java.nio.file.Path
 import java.time.Instant
 import java.util.Optional
+import java.util.OptionalInt
+import java.util.concurrent.ConcurrentHashMap
 import java.util.function.Consumer
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import org.jetbrains.jewel.ui.component.Text
@@ -57,11 +66,17 @@ import org.mockito.ArgumentMatchers.anyInt
 import org.mockito.ArgumentMatchers.anyLong
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.mock
+import com.github.krpkbhdn.ccmanager.author.AuthorProfileService
 import org.mockito.Mockito.`when`
 
 private fun ago(seconds: Long): Instant = Instant.now().minusSeconds(seconds)
 
 private val previewTranscriptDir: java.nio.file.Path by lazy { Files.createTempDirectory("ccm-projects") }
+
+/** A real folder so the run configurations of the first preview project do not show as missing. */
+private val previewProjectDir: Path by lazy {
+    Files.createTempDirectory("ccm-preview").resolve("cc-manager").also { Files.createDirectories(it.resolve(".claude/worktrees/feature-x")) }
+}
 
 private val previewTranscript: String by lazy {
     Files.createTempFile(previewTranscriptDir, "ccm-agent", ".jsonl").also {
@@ -94,6 +109,7 @@ fun limitsAt(fiveHourPercent: Double, sevenDayPercent: Double) = RateLimitSnapsh
 /** In-memory backend data for the dev preview; Mockito keeps it independent of the real services' constructors. */
 class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeRepoData = SampleRepos.busy(), val rateLimits: RateLimitSnapshot? = limitsAt(23.5, 41.2), selection: ModelSelection = ModelSelection("opus", "high")) {
     val fakeMcp = FakeMcp()
+    val proposals = PreviewProposals()
     val sessionUsage = mapOf(
         "s-working" to SessionUsage("s-working", "Opus 4.7", "xhigh", 62.0, 4.38, 2_400_000L, Instant.now()),
         "s-needs" to SessionUsage("s-needs", "Sonnet 5.5", "medium", 18.5, 0.42, 1_200_000L, Instant.now()),
@@ -109,7 +125,7 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
     )
 
     val projects: List<Project> = if (empty) emptyList() else listOf(
-        Project(1, "cc-manager", Path.of("C:/Users/dev/Work/cc-manager"), ago(9000), selection),
+        Project(1, "cc-manager", previewProjectDir, ago(9000), selection),
         Project(2, "billing-api", Path.of("C:/Users/dev/Work/billing-api"), ago(8000)),
         Project(3, "docs-site", Path.of("C:/Users/dev/Work/docs-site"), ago(7000)),
         Project(4, "infra-terraform", Path.of("C:/Users/dev/Work/infra-terraform"), ago(6000)),
@@ -123,7 +139,11 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         )
     }
 
-    val sessions: List<SessionSnapshot> = (if (empty) emptyList() else baseSessions()) + extraSessions
+    private val crowdedSessions = if (!many || empty) emptyList() else (1..8).map { n ->
+        SessionSnapshot("s-crowd-$n", 1, "cc$n", if (n % 3 == 0) AgentStatus.NEEDS_ACTION else AgentStatus.IDLE, "Finished", "default", "claude-opus-4-7", "Crowded tab number $n with a long topic", ago(600), ago(30L * n), emptyList(), 0, null)
+    }
+
+    val sessions: List<SessionSnapshot> = (if (empty) emptyList() else baseSessions()) + extraSessions + crowdedSessions
 
     private fun baseSessions() = listOf(
         SessionSnapshot(
@@ -141,7 +161,7 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         ),
         SessionSnapshot(
             "s-working", 1, "c1", AgentStatus.WORKING, "Running Bash: ./gradlew test", "acceptEdits", "claude-opus-4-7",
-            "Refactor session registry", ago(2400), ago(4),
+            "Refactor the session registry to read titles from the transcript", ago(2400), ago(4),
             listOf(
                 previewAgent("a1", "code-reviewer", SubagentState.WORKING, 60, "Read: SessionRegistry.java", calls = 7),
                 previewAgent("a2", "Explore", SubagentState.DONE, 300, ended = 240, message = "Found 12 usages of AgentStatus"),
@@ -184,7 +204,41 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         ActivityEntry(ago(4), HookEventType.STOP, null, "Turn finished"),
     )
 
+    private val runConfigurations = if (empty) emptyList() else listOf(
+        RunConfiguration(1, 1, "dev server", "npm run dev", previewProjectDir),
+        RunConfiguration(2, 1, "feature-x tests", "./gradlew test --continuous", previewProjectDir.resolve(".claude/worktrees/feature-x")),
+        RunConfiguration(3, 1, "old experiment", "make serve", previewProjectDir.resolve(".claude/worktrees/gone")),
+    )
+    private val activeRuns = ConcurrentHashMap<Long, ActiveRun>().apply {
+        if (!empty) {
+            put(1, ActiveRun(1, "run-1-1", "dev server", null, OptionalInt.empty()))
+            put(2, ActiveRun(2, "run-2-1", "feature-x tests", null, OptionalInt.of(1)))
+        }
+    }
+    private val runListeners = mutableListOf<Runnable>()
+
     fun fire() = changeListeners.toList().forEach { it.run() }
+
+    private fun runConfigurationService(): RunConfigurationService {
+        val service = mock(RunConfigurationService::class.java)
+        `when`(service.list(anyLong())).thenAnswer { runConfigurations.filter { c -> c.projectId() == it.getArgument<Long>(0) } }
+        `when`(service.subscribe(any())).thenAnswer { Runnable { } }
+        return service
+    }
+
+    private fun runService(): RunService {
+        val service = mock(RunService::class.java)
+        `when`(service.current(anyLong())).thenAnswer { Optional.ofNullable(activeRuns[it.getArgument<Long>(0)]) }
+        `when`(service.subscribe(any())).thenAnswer { runListeners += it.getArgument<Runnable>(0); Runnable { } }
+        `when`(service.start(anyLong())).thenAnswer {
+            val config = runConfigurations.first { c -> c.id() == it.getArgument<Long>(0) }
+            val runId = "run-${config.id()}-${System.nanoTime()}"
+            activeRuns[config.id()] = ActiveRun(config.id(), runId, config.name(), null, OptionalInt.empty())
+            runListeners.toList().forEach { listener -> listener.run() }
+            LaunchedSession(runId, config.projectId(), config.name(), null)
+        }
+        return service
+    }
 
     fun backend(terminal: TerminalPort): Backend {
         val projectService = mock(ProjectService::class.java)
@@ -231,7 +285,12 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         `when`(usage.all()).thenAnswer { sessionUsage }
         `when`(usage.subscribe(any())).thenAnswer { Runnable { } }
 
-        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), TranscriptService(JsonMapper.builder().build(), previewTranscriptDir), terminal = terminal)
+        val shellDetector = mock(ShellDetector::class.java)
+        `when`(shellDetector.detect()).thenReturn(listOf(ShellProfile("PowerShell", Path.of("pwsh.exe"), emptyList()), ShellProfile("Git Bash", Path.of("bash.exe"), listOf("--login", "-i"))))
+        val shellLauncher = mock(ShellLauncher::class.java)
+        `when`(shellLauncher.launch(anyLong(), any())).thenThrow(IllegalStateException("Preview mode: shells cannot be started here."))
+
+        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), TranscriptService(JsonMapper.builder().build(), previewTranscriptDir), runConfigurationService(), runService(), shellDetector, shellLauncher, mock(AuthorProfileService::class.java), proposals.service(), terminal = terminal)
     }
 
     private fun installationNow() = if (claudeInstalled) {

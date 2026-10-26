@@ -82,7 +82,7 @@ fun ActivityTab(entries: List<ActivityEntry>, hasSession: Boolean, onLaunch: (La
         return
     }
     val listState = rememberLazyListState()
-    LaunchedEffect(entries.size) { listState.scrollToItem(entries.lastIndex) }
+    LaunchedEffect(entries.lastOrNull()) { listState.scrollToItem(entries.lastIndex) }
     Box(modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), listState, contentPadding = PaddingValues(horizontal = Spacing.xl, vertical = Spacing.lg)) {
             items(entries.size) { index -> TimelineRow(entries[index], isFirst = index == 0, isLast = index == entries.lastIndex) }

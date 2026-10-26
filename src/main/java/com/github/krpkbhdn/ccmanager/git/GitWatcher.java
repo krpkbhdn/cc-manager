@@ -216,6 +216,7 @@ public class GitWatcher {
         }
         if (!key.reset()) {
             registrations.remove(key);
+            registration.watch().keys.remove(key);
         }
         if (changed) {
             registration.watch().changed();

@@ -152,4 +152,13 @@ class GitConflictServiceTest {
         assertThat(repo.root().resolve("a.txt")).doesNotExist();
         assertThat(repo.git("status", "--porcelain")).isEqualTo("D  a.txt");
     }
+
+    @Test
+    void resolvingAFileThatIsNoLongerConflictedFailsAndKeepsItsContent() {
+        conflictingMerge();
+        service.markResolved(repo.root(), "a.txt");
+
+        assertThatThrownBy(() -> service.resolve(repo.root(), "a.txt", ConflictSide.OURS))
+                .isInstanceOf(GitException.class).hasMessageContaining("no longer conflicted");
+    }
 }

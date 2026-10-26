@@ -17,6 +17,8 @@ import com.github.krpkbhdn.ccmanager.ui.git.model.GitState
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
 import com.github.krpkbhdn.ccmanager.ui.git.model.fetch
 import com.github.krpkbhdn.ccmanager.ui.git.model.push
+import com.github.krpkbhdn.ccmanager.claude.proposal.QuestionsProposal
+import com.github.krpkbhdn.ccmanager.ui.proposal.QuestionsDraft
 import com.github.krpkbhdn.ccmanager.ui.screens.AppRoot
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.ConfirmRequest
@@ -143,6 +145,14 @@ private val shots = listOf(
     Shot("project-skills", prepare = { state, _, _ -> openProjectSettings(state, ProjectSettingsSection.SKILLS) }),
     Shot("project-skills-new", prepare = { state, _, _ -> openProjectSettings(state, ProjectSettingsSection.SKILLS).skills.creating = true }),
     Shot("skills-new-dialog", prepare = { state, _, _ -> openSkills(state); state.skills.creating = true }),
+    Shot("proposal-questions", prepare = { state, _, _ -> state.openSession("s-agents") }),
+    Shot("proposal-permission", prepare = { state, _, _ -> state.openSession("s-needs") }),
+    Shot("proposal-plan", prepare = { state, _, _ -> state.openSession("s-infra") }),
+    Shot("proposal-form", prepare = { state, _, _ -> state.openSession("s-working") }),
+    Shot("proposal-questions-multi", prepare = { state, _, _ -> state.openSession("s-agents"); questions(state).apply { toggle(0, 1); goTo(1); toggle(1, 0); toggle(1, 2) } }),
+    Shot("proposal-questions-other", prepare = { state, _, _ -> state.openSession("s-agents"); questions(state).apply { goTo(2); toggleOther(2); other[2].edit { replace(0, length, "In the wiki") } } }),
+    Shot("proposal-hidden", prepare = { state, _, _ -> state.openSession("s-needs"); waitFor { state.proposalDialog != null }; state.proposals.hide(state.proposalDialog!!) }),
+    Shot("proposal-overview", prepare = { state, _, _ -> state.navigate(Route.Overview) }),
     Shot("dialog-confirm", prepare = { state, _, _ -> state.confirm = ConfirmRequest("Remove project", "Remove ccm-sandbox from the list? Files on disk are not touched.", "Remove", true) {} }, closing = { it.confirm = null }),
     Shot("dialog-new-skill-close", prepare = { state, _, _ -> openSkills(state); state.skills.creating = true }, closing = { it.skills.creating = false }),
 )
@@ -302,4 +312,10 @@ private fun openSkills(state: AppState) {
     state.navigate(Route.Skills)
     state.skills.ensureLoaded()
     waitFor { state.skills.loaded }
+}
+
+private fun questions(state: AppState): QuestionsDraft {
+    waitFor { state.proposalDialog != null }
+    val proposal = state.proposalDialog as QuestionsProposal
+    return state.proposals.draft(proposal) { QuestionsDraft(proposal.questions()) }
 }

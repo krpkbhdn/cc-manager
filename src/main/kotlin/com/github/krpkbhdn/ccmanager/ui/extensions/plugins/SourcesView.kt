@@ -46,7 +46,7 @@ private const val SOURCE_HINT = "GitHub owner/repo, a git URL or a local folder"
 @Composable
 fun SourcesView(state: PluginsState, modifier: Modifier = Modifier) {
     val source = rememberTextFieldState()
-    val add = { if (source.text.isNotBlank() && state.job == null) { state.addMarketplace(source.text.toString()); source.edit { replace(0, length, "") } } }
+    val add = { if (source.text.isNotBlank() && state.job == null) state.addMarketplace(source.text.toString()) { source.edit { replace(0, length, "") } } }
     val catalogSizes = state.catalog.groupingBy { it.marketplaceName }.eachCount()
     Column(modifier.fillMaxSize()) {
         Row(Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.md), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {

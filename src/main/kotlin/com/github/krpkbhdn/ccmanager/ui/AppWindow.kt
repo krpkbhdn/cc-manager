@@ -6,6 +6,8 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.LocalWindowExceptionHandlerFactory
 import androidx.compose.ui.window.WindowExceptionHandler
 import androidx.compose.ui.window.WindowExceptionHandlerFactory
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 import org.slf4j.LoggerFactory
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -57,7 +59,7 @@ private const val WINDOW_ICON_SIZE = 256
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun ApplicationScope.AppWindow(backend: Backend, onShutdown: () -> Unit, settingsStore: UiSettingsStore = UiSettingsStore.inUserHome()) {
+fun ApplicationScope.AppWindow(backend: Backend, onShutdown: () -> Unit, settingsStore: UiSettingsStore = UiSettingsStore.inDataDir(backend.dataDir)) {
     val scope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Main) }
     val state = remember { AppState(backend, scope, settingsStore).also { it.start() } }
     DisposableEffect(Unit) { onDispose { state.dispose(); scope.cancel() } }
@@ -74,7 +76,20 @@ fun ApplicationScope.AppWindow(backend: Backend, onShutdown: () -> Unit, setting
     var restoreRequests by remember { mutableIntStateOf(0) }
     val handledRestores = remember { intArrayOf(0) }
     val restore: () -> Unit = { visible = true; windowState.isMinimized = false; restoreRequests++ }
-    val exit = { TerminalHost.closeAll(); onShutdown(); exitApplication() }
+    val exiting = remember { AtomicBoolean(false) }
+    val exit = {
+        if (exiting.compareAndSet(false, true)) {
+            visible = false
+            thread(name = "AppShutdown") {
+                try {
+                    TerminalHost.closeAll()
+                    onShutdown()
+                } finally {
+                    SwingUtilities.invokeLater { exitApplication() }
+                }
+            }
+        }
+    }
     state.exitApp = exit
     val quit = { state.requestQuit(exit) }
     LaunchedEffect(Unit) { installMacQuitHandler({ state.live.sessions.isNotEmpty() }) { restore(); quit() } }

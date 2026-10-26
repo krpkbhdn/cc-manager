@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test
 class FuzzyMatchTest {
     @Test
     fun `empty query matches everything with a neutral score`() {
-        assertThat(fuzzyMatch("", "Add project")).isEqualTo(FuzzyResult(0, emptyList()))
+        assertThat(fuzzyMatch("", "Add project")).isEqualTo(FuzzyResult(0))
     }
 
     @Test
@@ -18,11 +18,6 @@ class FuzzyMatchTest {
     @Test
     fun `matching ignores case and spaces in the query`() {
         assertThat(fuzzyMatch("OPEN ide", "Open in IntelliJ IDEA")).isNotNull
-    }
-
-    @Test
-    fun `reports the matched positions`() {
-        assertThat(fuzzyMatch("dm", "docs-manager")!!.positions).containsExactly(0, 5)
     }
 
     @Test

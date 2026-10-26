@@ -54,7 +54,7 @@ import com.github.krpkbhdn.ccmanager.usage.SessionUsage
 
 private val pickerWidth = 420.dp
 private const val DEFAULT_EFFORT_LABEL = "Default"
-private const val RUNNING_NOTE = "Types /model and /effort into this session. Claude saves the choice as your default, as if you typed it. Clear any half-typed prompt first."
+private const val RUNNING_NOTE = "Types /model and /effort into this session. Claude saves the choice as your default, as if you typed it. A half-typed prompt is cleared first."
 private const val NEXT_LAUNCH_NOTE = "Used by sessions you start next. Default passes nothing, so Claude's own settings decide."
 private const val NO_MODEL_YET = "Model"
 private const val APPLYING = "Applying…"

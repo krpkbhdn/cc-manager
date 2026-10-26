@@ -2,9 +2,11 @@ package com.github.krpkbhdn.ccmanager.notification;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.Mockito.mock;
 
 import com.github.krpkbhdn.ccmanager.claude.session.SessionProperties;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
+import com.github.krpkbhdn.ccmanager.claude.session.TranscriptService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -31,7 +33,7 @@ class NotificationSoundServiceTest {
 
     private final List<NotificationSound> played = new ArrayList<>();
     private final MutableClock clock = new MutableClock();
-    private final NotificationService notifications = new NotificationService(new SessionRegistry(new SessionProperties(Duration.ofMinutes(10))));
+    private final NotificationService notifications = new NotificationService(new SessionRegistry(new SessionProperties(Duration.ofMinutes(10)), mock(TranscriptService.class)));
     private NotificationSoundService service = create(played::add);
 
     private NotificationSoundService create(java.util.function.Consumer<NotificationSound> sink) {

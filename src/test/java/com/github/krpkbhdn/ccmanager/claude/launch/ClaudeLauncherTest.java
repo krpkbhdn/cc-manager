@@ -8,6 +8,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.github.krpkbhdn.ccmanager.claude.hook.HookSettingsWriter;
+import com.github.krpkbhdn.ccmanager.claude.hook.SessionFiles;
+import com.github.krpkbhdn.ccmanager.claude.plugin.ClaudePluginWriter;
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation;
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
@@ -28,7 +30,7 @@ class ClaudeLauncherTest {
     private final ClaudeInstallationService installation = mock(ClaudeInstallationService.class);
     private final HookSettingsWriter hooks = mock(HookSettingsWriter.class);
     private final SessionRegistry sessions = mock(SessionRegistry.class);
-    private final ClaudeLauncher launcher = new ClaudeLauncher(projects, installation, hooks, sessions);
+    private final ClaudeLauncher launcher = new ClaudeLauncher(projects, installation, hooks, mock(ClaudePluginWriter.class), sessions);
 
     @TempDir
     Path directory;
@@ -59,12 +61,24 @@ class ClaudeLauncherTest {
         Path notExecutable = Files.createFile(directory.resolve("claude-fake"));
         when(installation.current()).thenReturn(new ClaudeInstallation(true, notExecutable, "1", null, null));
         when(sessions.register(1)).thenReturn("ccm-1");
-        when(hooks.write("ccm-1")).thenReturn(directory.resolve("s.json"));
+        when(hooks.write("ccm-1")).thenReturn(new SessionFiles(directory.resolve("s.json"), directory.resolve("m.json")));
 
         assertThatThrownBy(() -> launcher.launch(1, LaunchMode.NEW))
                 .isInstanceOf(IllegalStateException.class).hasMessageStartingWith("Could not start Claude");
 
         verify(sessions).markEnded("ccm-1", -1);
         verify(hooks).delete("ccm-1");
+    }
+
+    @Test
+    void setupSpawnFailureIsReportedLikeAnyOtherLaunch() throws Exception {
+        Path notExecutable = Files.createFile(directory.resolve("claude-fake"));
+        when(installation.current()).thenReturn(new ClaudeInstallation(true, notExecutable, "1", null, null));
+        when(sessions.register(1)).thenReturn("ccm-1");
+        when(hooks.write("ccm-1")).thenReturn(new SessionFiles(directory.resolve("s.json"), directory.resolve("m.json")));
+
+        assertThatThrownBy(() -> launcher.launchSetup(1, "Read it.", directory))
+                .isInstanceOf(IllegalStateException.class).hasMessageStartingWith("Could not start Claude");
+        verify(sessions).markEnded("ccm-1", -1);
     }
 }

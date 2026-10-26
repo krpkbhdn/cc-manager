@@ -24,6 +24,9 @@ import com.github.krpkbhdn.ccmanager.ui.components.ProjectAvatar
 import com.github.krpkbhdn.ccmanager.ui.components.SplitButton
 import com.github.krpkbhdn.ccmanager.ui.components.StatusChip
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
+import com.github.krpkbhdn.ccmanager.ui.run.RunControl
+import com.github.krpkbhdn.ccmanager.ui.run.RunControlActions
+import com.github.krpkbhdn.ccmanager.ui.run.RunEntry
 import com.github.krpkbhdn.ccmanager.ui.shortcuts.AppShortcut
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
@@ -44,7 +47,7 @@ class ProjectHeaderActions(
 
 /** Compact project header: identity and copyable path on the left, icon actions and the launch split button on the right. */
 @Composable
-fun ProjectHeader(project: Project, status: AgentStatus, ideAvailable: Boolean, launching: Boolean, gitSummary: GitSummary?, actions: ProjectHeaderActions, modifier: Modifier = Modifier) {
+fun ProjectHeader(project: Project, status: AgentStatus, ideAvailable: Boolean, launching: Boolean, gitSummary: GitSummary?, actions: ProjectHeaderActions, runEntries: List<RunEntry>, runSelected: RunEntry?, runActions: RunControlActions, modifier: Modifier = Modifier) {
     Column(modifier) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = Spacing.xl, vertical = Spacing.md),
@@ -66,6 +69,7 @@ fun ProjectHeader(project: Project, status: AgentStatus, ideAvailable: Boolean, 
                 IconButton(Icons.Settings, actions.onOpenSettings, tooltip = "Project settings", hint = AppShortcut.PROJECT_SETTINGS.hint())
                 IconButton(Icons.Diff, actions.onShowChanges, tooltip = "Review changes", hint = AppShortcut.GIT_CHANGES.hint())
             }
+            RunControl(runEntries, runSelected, runActions)
             AppButton("Start task", actions.onStartTask, icon = Icons.Users, tooltip = "Run a lead session with one of your agent teams")
             SplitButton(
                 text = "Launch Claude",

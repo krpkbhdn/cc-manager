@@ -52,7 +52,7 @@ fun CommitBox(git: GitState, stagedCount: Int, conflicts: Int, modifier: Modifie
     val ready = canCommit(message, stagedCount, draft.amend, git.busy, conflicts) && !identityMissing
     val commit = { thenPush: Boolean ->
         val sent = draft.message.text.toString()
-        if (ready) git.commit(draft.request(), thenPush) { if (draft.message.text.toString() == sent) draft.clear() }
+        if (ready) git.commit(draft.request(), thenPush) { draft.committed(sent) }
     }
     Column(modifier.padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         AppTextArea(draft.message, Modifier.fillMaxWidth(), placeholder = if (draft.amend) "Amend message" else "Message (Ctrl+Enter to commit)", focusRequester = focus, onSubmit = { commit(false) })

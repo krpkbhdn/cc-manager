@@ -38,6 +38,28 @@ class GitStatusServiceTest {
     }
 
     @Test
+    void topLevelOfASubfolderIsTheRepositoryRootAndDiscardThereDeletesOnlyTheChangedFile() throws Exception {
+        var sandbox = GitCliSandbox.create(root);
+        sandbox.write("sub/a.txt", "x\n");
+        sandbox.write("a.txt", "keep\n");
+        var top = serviceFor(sandbox).topLevel(sandbox.repo.resolve("sub"));
+        assertThat(top.toRealPath()).isEqualTo(sandbox.repo.toRealPath());
+
+        new GitIndexService(sandbox.runner).discard(top, java.util.List.of("sub/a.txt"));
+
+        assertThat(sandbox.repo.resolve("sub/a.txt")).doesNotExist();
+        assertThat(sandbox.repo.resolve("a.txt")).exists();
+    }
+
+    @Test
+    void topLevelOfAFolderOutsideAnyRepositoryIsTheFolderItself() throws Exception {
+        var sandbox = GitCliSandbox.create(root);
+        var outside = java.nio.file.Files.createDirectory(root.resolve("outside"));
+
+        assertThat(serviceFor(sandbox).topLevel(outside)).isEqualTo(outside);
+    }
+
+    @Test
     void aMissingProjectFolderIsNotARepository() {
         var sandbox = GitCliSandbox.create(root);
 
@@ -157,6 +179,22 @@ class GitStatusServiceTest {
         assertThat(status.repository()).isTrue();
         assertThat(status.branch()).isEqualTo("feature");
         assertThat(status.operation()).isEqualTo(Operation.NONE);
+    }
+
+    @Test
+    void diffIgnoresUserConfiguredPrefixes() {
+        var sandbox = GitCliSandbox.create(root);
+        sandbox.write("a.txt", "1\n");
+        sandbox.commitAll("base");
+        sandbox.git("config", "diff.mnemonicPrefix", "true");
+        sandbox.git("config", "diff.srcPrefix", "x/");
+        sandbox.git("config", "diff.dstPrefix", "y/");
+        sandbox.write("a.txt", "1\n2\n");
+
+        var diff = serviceFor(sandbox).diff(sandbox.repo, "a.txt", false);
+
+        assertThat(diff.path()).isEqualTo("a.txt");
+        assertThat(diff.lines()).filteredOn(l -> l.kind() == LineKind.ADDED).extracting(l -> l.text()).containsExactly("2");
     }
 
     @Test

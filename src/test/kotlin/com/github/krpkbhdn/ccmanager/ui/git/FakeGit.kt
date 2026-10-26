@@ -43,6 +43,10 @@ class FakeRepoData(
 ) {
     /** One-shot failure thrown by the next mutating call. */
     @Volatile var failure: GitException? = null
+    @Volatile var topLevel: Path? = null
+    @Volatile var topLevelFailure: GitException? = null
+    val watchedPaths: MutableList<Path> = java.util.Collections.synchronizedList(mutableListOf())
+    val statusRepos: MutableList<Path> = java.util.Collections.synchronizedList(mutableListOf())
     val calls: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
     val logContinuations: MutableList<GraphState?> = java.util.Collections.synchronizedList(mutableListOf())
     val patches: MutableList<Pair<String, Boolean>> = java.util.Collections.synchronizedList(mutableListOf())
@@ -70,7 +74,14 @@ class FakeGit(val data: FakeRepoData) {
     val backend = GitBackend(status(), index(), branches(), sync(), log(), stashes(), history(), conflicts(), watcher())
 
     private fun status() = object : GitStatusService(GitRunner()) {
-        override fun status(repo: Path) = data.status()
+        override fun topLevel(folder: Path): Path {
+            data.topLevelFailure?.let { data.topLevelFailure = null; throw it }
+            return data.topLevel ?: folder
+        }
+        override fun status(repo: Path): GitStatus {
+            data.statusRepos.add(repo)
+            return data.status()
+        }
         override fun diff(repo: Path, path: String, staged: Boolean): GitDiff.FileDiff =
             (if (staged) data.stagedDiffs[path] else data.unstagedDiffs[path] ?: data.stagedDiffs[path])
                 ?: GitDiff.FileDiff(path, null, GitDiff.ChangeType.MODIFIED, 0, 0, false, emptyList())
@@ -80,7 +91,6 @@ class FakeGit(val data: FakeRepoData) {
 
     private fun index() = object : GitIndexService(GitRunner()) {
         override fun stage(repo: Path, paths: List<String>) = mutate("stage ${paths.joinToString()}") { data.replace(paths) { it.copy(staged = if (it.unstaged() == GitStatus.Kind.UNTRACKED) GitStatus.Kind.ADDED else it.unstaged(), unstaged = GitStatus.Kind.NONE) } }
-        override fun stageAll(repo: Path) = mutate("stageAll") { data.replace(data.changes.map { it.path() }) { it.copy(staged = if (it.unstaged() == GitStatus.Kind.UNTRACKED) GitStatus.Kind.ADDED else if (it.hasUnstaged()) it.unstaged() else it.staged(), unstaged = GitStatus.Kind.NONE) } }
         override fun unstage(repo: Path, paths: List<String>) = mutate("unstage ${paths.joinToString()}") { data.replace(paths) { it.copy(unstaged = if (it.staged() == GitStatus.Kind.ADDED) GitStatus.Kind.UNTRACKED else it.staged(), staged = GitStatus.Kind.NONE) } }
         override fun discard(repo: Path, paths: List<String>) = mutate("discard ${paths.joinToString()}") { data.changes.removeAll { it.path() in paths && !it.hasStaged() } }
         override fun applyToIndex(repo: Path, patch: String, reverse: Boolean) = mutate("applyToIndex reverse=$reverse") { data.patches += patch to reverse }
@@ -183,6 +193,7 @@ class FakeGit(val data: FakeRepoData) {
 
     private fun watcher() = object : GitWatcher(GitRunner()) {
         override fun subscribe(repo: Path, onChange: Runnable): Runnable {
+            data.watchedPaths.add(repo)
             data.watchers += onChange
             return Runnable { data.watchers -= onChange }
         }

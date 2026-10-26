@@ -28,7 +28,9 @@ import kotlinx.coroutines.delay
 
 private const val CONFIRM_MILLIS = 1_400L
 
-fun copyToClipboard(text: String) = Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null)
+/** False when the system clipboard is busy (it throws on Windows) instead of crashing the window. */
+fun copyToClipboard(text: String): Boolean =
+    runCatching { Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null) }.isSuccess
 
 /**
  * Monospace chip showing [text]; clicking copies [copyText] and flips the icon to a check for a moment.

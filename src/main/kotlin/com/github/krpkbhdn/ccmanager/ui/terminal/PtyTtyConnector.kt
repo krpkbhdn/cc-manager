@@ -8,7 +8,6 @@ import java.nio.charset.StandardCharsets
 
 private const val ESCAPE_BYTE: Byte = 0x1B
 private const val CTRL_C_BYTE: Byte = 0x03
-private const val ENTER_BYTE: Byte = 0x0D
 private const val NANOS_PER_MILLI = 1_000_000L
 
 /** A write of exactly one ESC byte is the Esc key; escape sequences and Alt combos are longer. */
@@ -32,26 +31,13 @@ internal class PtyTtyConnector(
     @Volatile
     private var lastCtrlCNanos = 0L
 
-    @Volatile
-    private var lastEnterNanos = 0L
-
     /** True when a Ctrl+C was written less than [windowMillis] ago; a second one would make claude exit. */
-    fun ctrlCWithin(windowMillis: Long): Boolean = within(lastCtrlCNanos, windowMillis)
-
-    /** True when an Enter was written less than [windowMillis] ago: the turn it starts is not WORKING yet and Ctrl+C would abort it. */
-    fun enterWithin(windowMillis: Long): Boolean = within(lastEnterNanos, windowMillis)
-
-    /** The app's own Enter (a typed command) must not lock out the next command. */
-    fun forgetEnter() {
-        lastEnterNanos = 0L
-    }
-
-    private fun within(sinceNanos: Long, windowMillis: Long) = sinceNanos != 0L && System.nanoTime() - sinceNanos < windowMillis * NANOS_PER_MILLI
+    fun ctrlCWithin(windowMillis: Long): Boolean =
+        lastCtrlCNanos != 0L && System.nanoTime() - lastCtrlCNanos < windowMillis * NANOS_PER_MILLI
 
     override fun write(bytes: ByteArray) {
         if (isLoneEscape(bytes)) onEscape()
         if (bytes.size == 1 && bytes[0] == CTRL_C_BYTE) lastCtrlCNanos = System.nanoTime()
-        if (bytes.size == 1 && bytes[0] == ENTER_BYTE) lastEnterNanos = System.nanoTime()
         super.write(bytes)
     }
 }

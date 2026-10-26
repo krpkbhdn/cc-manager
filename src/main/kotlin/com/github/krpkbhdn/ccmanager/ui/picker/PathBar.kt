@@ -94,6 +94,7 @@ private fun PathEditor(state: FolderPickerState, onFocusList: () -> Unit, modifi
     val scope = rememberCoroutineScope()
     var check by remember { mutableStateOf(PathCheck.Valid) }
     var suggestions by remember { mutableStateOf(emptyList<Path>()) }
+    var suggestionsFor by remember { mutableStateOf("") }
     val text = state.pathText.text.toString()
     LaunchedEffect(Unit) { focus.requestFocus() }
     LaunchedEffect(text) {
@@ -101,6 +102,7 @@ private fun PathEditor(state: FolderPickerState, onFocusList: () -> Unit, modifi
         val result = withContext(Dispatchers.IO) { FolderRules.checkText(text) to FolderRules.suggestions(text) }
         check = result.first
         suggestions = result.second
+        suggestionsFor = text
     }
     fun finish() {
         state.stopEditingPath()
@@ -117,7 +119,7 @@ private fun PathEditor(state: FolderPickerState, onFocusList: () -> Unit, modifi
                 event.type != KeyEventType.KeyDown -> false
                 event.key == Key.Enter -> true.also { scope.launch { if (state.commitTypedPath() == PathCheck.Valid) finish() } }
                 event.key == Key.Escape -> true.also { finish() }
-                event.key == Key.Tab && suggestions.isNotEmpty() -> true.also { acceptSuggestion(suggestions.first()) }
+                event.key == Key.Tab && suggestions.isNotEmpty() -> true.also { if (suggestionsFor == text) acceptSuggestion(suggestions.first()) }
                 else -> false
             }
         }

@@ -18,16 +18,21 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-/** Writes the per-session settings file passed as claude --settings FILE: the hooks and a statusLine that reports rate limits. */
+/** Writes the per-session files for claude: --settings (hooks, a statusLine that reports rate limits) and --mcp-config (cc-manager's own MCP server). */
 @Component
 public class HookSettingsWriter {
 
     private static final String HOOKS_DIR = "hooks";
     private static final String FILE_SUFFIX = ".json";
+    private static final String MCP_SUFFIX = ".mcp.json";
+    private static final String MCP_SERVER = "cc-manager";
+    private static final String LIST_RUN_CONFIGURATIONS_TOOL = "list_run_configurations";
     private static final String HOOK_CURL = "hook";
     private static final String STATUS_LINE_CURL = "status";
     private static final Pattern SAFE_ID = Pattern.compile("[A-Za-z0-9-]+");
     private static final int HOOK_TIMEOUT_SECONDS = 5;
+    /** These calls are held until the user answers; HookProperties.decisionHold stays a bit below. */
+    private static final int DECISION_TIMEOUT_SECONDS = 600;
     private static final int CURL_MAX_SECONDS = 3;
     /** WorktreeCreate replaces git behaviour, MessageDisplay is a token firehose, the rest never fire in sessions. */
     private static final Set<HookEventType> NOT_SUBSCRIBED = EnumSet.of(HookEventType.SETUP, HookEventType.WORKTREE_CREATE,
@@ -78,8 +83,9 @@ public class HookSettingsWriter {
         }
     }
 
-    public Path write(String ccmSessionId) {
+    public SessionFiles write(String ccmSessionId) {
         var file = fileOf(ccmSessionId);
+        var mcpFile = mcpFileOf(ccmSessionId);
         try {
             restrictToOwner(Files.createDirectories(hooksDir), "rwx------");
             if (!windows) {
@@ -88,10 +94,12 @@ public class HookSettingsWriter {
             }
             Files.writeString(file, mapper.writeValueAsString(settings(ccmSessionId)));
             restrictToOwner(file, "rw-------");
+            Files.writeString(mcpFile, mapper.writeValueAsString(mcpConfig(ccmSessionId)));
+            restrictToOwner(mcpFile, "rw-------");
         } catch (IOException e) {
             throw new UncheckedIOException("Cannot write hook settings " + file, e);
         }
-        return file;
+        return new SessionFiles(file, mcpFile);
     }
 
     /** curl reads the secret URL from this file, so it never shows in a process list. Not used on Windows, see curlArgs. */
@@ -111,6 +119,7 @@ public class HookSettingsWriter {
     public void delete(String ccmSessionId) {
         try {
             Files.deleteIfExists(fileOf(ccmSessionId));
+            Files.deleteIfExists(mcpFileOf(ccmSessionId));
             Files.deleteIfExists(curlConfigOf(ccmSessionId, HOOK_CURL));
             Files.deleteIfExists(curlConfigOf(ccmSessionId, STATUS_LINE_CURL));
         } catch (IOException e) {
@@ -126,15 +135,26 @@ public class HookSettingsWriter {
         var settings = mapper.createObjectNode();
         settings.set("hooks", hooks);
         settings.set("statusLine", statusLine(ccmSessionId));
+        settings.putObject("permissions").putArray("allow").add("mcp__" + MCP_SERVER + "__" + LIST_RUN_CONFIGURATIONS_TOOL);
         return settings;
     }
 
-    private ObjectNode handler(HookEventType type, String ccmSessionId) {
-        return type == HookEventType.SESSION_START ? curlHandler(ccmSessionId) : httpHandler(server.hookUrl(ccmSessionId));
+    /** Only the read-only list tool is pre-approved; set and delete change a command the user later runs, so Claude asks first. */
+    private ObjectNode mcpConfig(String ccmSessionId) {
+        var config = mapper.createObjectNode();
+        config.putObject("mcpServers").putObject(MCP_SERVER).put("type", "http").put("url", server.mcpUrl(ccmSessionId));
+        return config;
     }
 
-    private ObjectNode httpHandler(String url) {
-        return mapper.createObjectNode().put("type", "http").put("url", url).put("timeout", HOOK_TIMEOUT_SECONDS);
+    private ObjectNode handler(HookEventType type, String ccmSessionId) {
+        if (type == HookEventType.SESSION_START) {
+            return curlHandler(ccmSessionId);
+        }
+        return httpHandler(server.hookUrl(ccmSessionId), type.awaitsDecision() ? DECISION_TIMEOUT_SECONDS : HOOK_TIMEOUT_SECONDS);
+    }
+
+    private ObjectNode httpHandler(String url, int timeoutSeconds) {
+        return mapper.createObjectNode().put("type", "http").put("url", url).put("timeout", timeoutSeconds);
     }
 
     /** SessionStart does not accept http handlers; async so a stalled curl can never delay startup. */
@@ -174,6 +194,10 @@ public class HookSettingsWriter {
 
     private Path curlConfigOf(String ccmSessionId, String kind) {
         return hooksDir.resolve(fileOf(ccmSessionId).getFileName() + "." + kind + ".curl");
+    }
+
+    private Path mcpFileOf(String ccmSessionId) {
+        return hooksDir.resolve(ccmSessionId + MCP_SUFFIX);
     }
 
     private Path fileOf(String ccmSessionId) {

@@ -6,11 +6,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.github.krpkbhdn.ccmanager.claude.hook.ActivityEntry
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation
+import com.github.krpkbhdn.ccmanager.claude.proposal.Proposal
 import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgent
 import com.github.krpkbhdn.ccmanager.notification.AppNotification
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.team.Team
+import com.github.krpkbhdn.ccmanager.ui.author.AuthorProfileState
 import com.github.krpkbhdn.ccmanager.ui.extensions.ExtensionContext
 import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.PluginsState
 import com.github.krpkbhdn.ccmanager.ui.projectsettings.ProjectSettingsSection
@@ -19,6 +21,8 @@ import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.HealthCheck
 import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.McpState
 import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillHost
 import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillsState
+import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalState
+import com.github.krpkbhdn.ccmanager.ui.run.RunState
 import com.github.krpkbhdn.ccmanager.ui.teams.TeamsState
 import com.github.krpkbhdn.ccmanager.usage.RateLimitSnapshot
 import com.github.krpkbhdn.ccmanager.usage.SessionUsage
@@ -45,7 +49,7 @@ private const val ACTIVITY_LIMIT = 300
 class AppState(
     private val backend: Backend,
     private val scope: CoroutineScope,
-    private val settingsStore: UiSettingsStore = UiSettingsStore.inUserHome(),
+    private val settingsStore: UiSettingsStore = UiSettingsStore.inDataDir(backend.dataDir),
 ) {
     var settings by mutableStateOf(settingsStore.load())
         private set
@@ -84,8 +88,8 @@ class AppState(
     val projects: ProjectsState = ProjectsState(
         backend, scope,
         hasRunningSessions = { live.of(it).isNotEmpty() },
-        sessionIdsOf = { id -> (viewOf(id).openSessions + live.of(id).map { it.ccmSessionId }).distinct() },
-        closeSession = { projectId, id -> sessions.close(projectId, id) },
+        sessionIdsOf = { id -> (viewOf(id).openSessions + viewOf(id).openShells + live.of(id).map { it.ccmSessionId }).distinct() },
+        closeSession = { projectId, id -> if (shells.owns(id)) shells.close(projectId, id) else sessions.close(projectId, id) },
         requestConfirm = { confirm = it },
         showProject = { navigate(Route.Project(it)) },
         onRemoved = { if (route == Route.Project(it)) route = Route.Overview },
@@ -102,11 +106,37 @@ class AppState(
         requestConfirm = { confirm = it },
         reportError = notifications::reportError,
     )
+    val runs = RunState(
+        backend.runConfigurations, backend.runs, backend.terminal, scope,
+        projectPath = { projects.find(it)?.path },
+        showRunTab = { select(it, ProjectTab.Run) },
+        requestConfirm = { confirm = it },
+        reportError = notifications::reportError,
+    )
+    val shells = ShellsState(
+        backend, scope,
+        openShellsOf = { viewOf(it).openShells },
+        lastChosen = { settings.lastShell },
+        onChosen = { name -> updateSettings { it.copy(lastShell = name) } },
+        onOpened = { projectId, id -> views[projectId] = viewOf(projectId).openShell(id); navigate(Route.Project(projectId)) },
+        onClosed = { projectId, id -> views[projectId]?.let { views[projectId] = it.closeShell(id) } },
+        reportError = notifications::reportError,
+    )
+    val proposals = ProposalState(backend.proposals, scope, notifications::reportError) { terminal.focus(it) }
     val teams = TeamsState(backend.teams, scope, { confirm = it }, notifications::reportError)
     val plugins = PluginsState(backend.plugins, scope, { confirm = it }, notifications::toast)
     val mcp = McpState(backend.mcp, null, scope, { confirm = it }, notifications::toast)
     private val skillHost = SkillHost(::openDirectory, ::openInIde) { ideAvailable }
     val skills = SkillsState(backend.skills, null, scope, { confirm = it }, notifications::toast, skillHost)
+    val author = AuthorProfileState(
+        backend.author, scope,
+        sessionProject = { (route as? Route.Project)?.let { projects.find(it.id) } ?: projects.all.firstOrNull() },
+        projectOf = projects::find,
+        launchSetup = sessions::launchSetup,
+        mcpOf = { path -> if (path == null) mcp else McpState(backend.mcp, path, scope, { confirm = it }, notifications::toast) },
+        reportError = notifications::reportError,
+        toast = notifications::toast,
+    )
     val update = UpdateState(backend.updates, scope, notifications::reportError, ::requestQuit) { exitApp() }
     var exitApp: () -> Unit = {}
     val agents = AgentsState(backend.transcripts, scope, { live }, ::showSessionTerminal)
@@ -118,6 +148,20 @@ class AppState(
 
     fun viewOf(projectId: Long): ProjectView = views[projectId] ?: ProjectView()
 
+    /** The proposal dialog to show: the oldest unhidden proposal of the session whose terminal tab is open. */
+    val proposalDialog: Proposal?
+        get() {
+            val project = route as? Route.Project ?: return null
+            val session = viewOf(project.id).selected as? ProjectTab.Session ?: return null
+            return proposals.dialogFor(session.ccmSessionId)
+        }
+
+    /** Opens the session and shows its proposals again, also those the user hid before. */
+    fun answerProposals(ccmSessionId: String) {
+        proposals.reopen(ccmSessionId)
+        openSession(ccmSessionId)
+    }
+
     fun start() {
         unsubscribers += backend.projects.subscribe { projectReload.request() }
         unsubscribers += backend.sessions.subscribe { sessionReload.request() }
@@ -126,6 +170,10 @@ class AppState(
         unsubscribers += backend.notifications.subscribe { notification -> scope.launch { notifications.receive(notification) } }
         backend.sound?.setEnabled(settings.notificationSound)
         teams.start()
+        author.offerAtStart()
+        runs.start()
+        shells.detect()
+        proposals.start()
         update.start()
         projectReload.request()
         sessionReload.request()
@@ -147,6 +195,8 @@ class AppState(
     fun dispose() {
         cancelProjectSettings()
         teams.dispose()
+        runs.dispose()
+        proposals.dispose()
         unsubscribers.forEach { it.run() }
         unsubscribers.clear()
     }
@@ -195,6 +245,7 @@ class AppState(
 
     fun navigate(target: Route) {
         route = target
+        (target as? Route.Project)?.let { author.offerForProject(it.id) }
         notificationsOpen = false
         usageOpen = false
         modelPickerOpen = false
@@ -272,9 +323,10 @@ class AppState(
 
     /** Starts a lead session for [team] with [task] as its first prompt and opens its terminal. */
     fun startTask(project: Project, team: Team, task: String, makeDefault: Boolean) {
-        taskDialogProjectId = null
-        if (makeDefault) teams.setProjectDefault(project.id, team.id)
-        sessions.launchTeam(project.id, team, task)
+        sessions.launchTeam(project.id, team, task) {
+            taskDialogProjectId = null
+            if (makeDefault) teams.setProjectDefault(project.id, team.id)
+        }
     }
 
     private fun showSessionTerminal(ccmSessionId: String) {
@@ -298,6 +350,8 @@ class AppState(
 
     val terminal: TerminalPort get() = backend.terminal
 
+    val dataDir: Path get() = backend.dataDir
+
     suspend fun activityOf(ccmSessionId: String): List<ActivityEntry> =
         try {
             io { backend.hooks.recent(ccmSessionId, ACTIVITY_LIMIT) }
@@ -319,7 +373,9 @@ class AppState(
 
     private fun forgetRemovedProjects(projectIds: Set<Long>) {
         views.keys.retainAll(projectIds)
-        gitStates.keys.retainAll(projectIds)
+        gitStates.keys.filter { it !in projectIds }.forEach { gitStates.remove(it)?.close() }
+        backgroundAgents.keys.retainAll(projectIds)
+        runs.retainProjects(projectIds)
         (route as? Route.Project)?.takeIf { it.id !in projectIds }?.let { route = Route.Overview }
         sessionReload.request()
     }

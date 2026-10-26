@@ -16,17 +16,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.ui.theme.Motion
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
-private val thickness = 6.dp
+private val defaultThickness = 6.dp
 private val minimalThumb = 32.dp
 private const val IDLE_ALPHA = 0.16f
 private const val HOVER_ALPHA = 0.38f
 
 @Composable
-private fun thinStyle(): ScrollbarStyle = ScrollbarStyle(
+private fun thinStyle(thickness: Dp = defaultThickness):ScrollbarStyle = ScrollbarStyle(
     minimalHeight = minimalThumb,
     thickness = thickness,
     shape = RoundedCornerShape(thickness),
@@ -52,6 +53,6 @@ fun BoxScope.ThinScrollbar(state: ScrollState) {
 }
 
 @Composable
-fun BoxScope.ThinHorizontalScrollbar(state: ScrollState) {
-    HorizontalScrollbar(rememberScrollbarAdapter(state), Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(2.dp), style = thinStyle())
+fun BoxScope.ThinHorizontalScrollbar(state: ScrollState, thickness: Dp = defaultThickness) {
+    HorizontalScrollbar(rememberScrollbarAdapter(state), Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(2.dp), style = thinStyle(thickness))
 }

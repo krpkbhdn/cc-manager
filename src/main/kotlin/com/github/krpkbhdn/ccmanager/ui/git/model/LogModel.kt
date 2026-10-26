@@ -9,15 +9,12 @@ import com.github.krpkbhdn.ccmanager.git.GitLogService
 import com.github.krpkbhdn.ccmanager.git.GraphState
 import com.github.krpkbhdn.ccmanager.ui.git.log.LogFilter
 import java.nio.file.Path
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /** Paged commit history with filter and the selected commit's details; stale responses are dropped by [generation]. */
 class LogModel(
-    private val repo: Path,
+    private val repo: () -> Path,
     private val git: GitBackend,
     private val scope: CoroutineScope,
     private val onError: (GitException) -> Unit,
@@ -87,14 +84,7 @@ class LogModel(
         selected = hash
         selectedFile = null
         scope.launch {
-            val loadedDetails = try {
-                withContext(Dispatchers.IO) { git.log.details(repo, hash) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: RuntimeException) {
-                onError(asGitException(e))
-                null
-            }
+            val loadedDetails = gitCall(onError) { git.log.details(repo(), hash) }
             if (selected == hash) {
                 details = loadedDetails
                 selectedFile = loadedDetails?.files()?.firstOrNull()?.path
@@ -109,14 +99,7 @@ class LogModel(
     }
 
     private suspend fun fetch(skip: Int, previous: GraphState?): GitLogService.StatefulPage? =
-        try {
-            withContext(Dispatchers.IO) { git.log.log(repo, filter.toQuery(skip), previous) }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: RuntimeException) {
-            onError(asGitException(e))
-            null
-        }
+        gitCall(onError) { git.log.log(repo(), filter.toQuery(skip), previous) }
 
     private fun finish(ticket: Int) {
         if (ticket == generation) loading = false

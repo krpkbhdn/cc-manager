@@ -54,7 +54,7 @@ public class GitLogService {
         GitRevisions.requireNotOption(hash);
         var commit = GitLogParser.parse(git.out(repo, "log", "-1", "--decorate=full", GitLogParser.FORMAT, hash), Integer.MAX_VALUE)
                 .getFirst();
-        var diff = git.out(repo, "show", "--format=", "-M", "--no-color", "--no-ext-diff", "-m", "--first-parent", "--root", hash);
+        var diff = git.out(repo, "show", "--format=", "-M", "--no-color", "--no-ext-diff", "-m", "--first-parent", "--root", GitRunner.SRC_PREFIX, GitRunner.DST_PREFIX, hash);
         var files = UnifiedDiffParser.parse(diff, UnifiedDiffParser.MAX_LINES_PER_FILE, UnifiedDiffParser.MAX_TOTAL_LINES);
         return new GitLog.Details(commit, files);
     }
@@ -81,17 +81,18 @@ public class GitLogService {
 
     private void addRevisions(Path repo, List<String> args, GitLog.Query query) {
         if (isBlank(query.branch())) {
-            args.addAll(List.of("--exclude=refs/stash", "--all"));
+            args.addAll(List.of("--exclude=refs/stash", "--exclude=refs/notes/*", "--all"));
         } else {
             GitRevisions.requireNotOption(query.branch());
             args.add(query.branch());
         }
+        args.add("--");
         if (!isBlank(query.path())) {
             var existingFile = isExistingFile(repo, query.path());
             if (existingFile || isSingleFile(query.path())) {
-                args.add("--follow");
+                args.add(args.size() - 1, "--follow");
             }
-            args.addAll(List.of("--", existingFile ? ":(literal)" + query.path() : query.path()));
+            args.add(existingFile ? ":(literal)" + query.path() : query.path());
         }
     }
 

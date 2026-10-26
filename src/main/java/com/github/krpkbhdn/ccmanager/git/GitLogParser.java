@@ -35,7 +35,7 @@ final class GitLogParser {
 
     static List<Commit> parse(String output, int maxBodyChars) {
         return Arrays.stream(output.split(RECORD_SEPARATOR))
-                .filter(record -> !record.isBlank())
+                .filter(record -> !record.isBlank() && FIELD_SEPARATOR.matcher(record).find())
                 .map(record -> parseRecord(record, maxBodyChars))
                 .toList();
     }

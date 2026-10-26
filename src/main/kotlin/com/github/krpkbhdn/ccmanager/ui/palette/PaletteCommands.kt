@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
+import com.github.krpkbhdn.ccmanager.ui.run.RunEntry
 import com.github.krpkbhdn.ccmanager.ui.shortcuts.AppShortcut
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
@@ -59,6 +60,7 @@ private fun globalActions(state: AppState, systemDark: Boolean): List<PaletteIte
     PaletteItem("add-project", "Add project", PaletteGroup.ACTIONS, "Pick a folder to manage", Icons.FolderPlus, shortcut = AppShortcut.ADD_PROJECT, run = state::requestAddProject),
     PaletteItem("overview", "Go to overview", PaletteGroup.ACTIONS, icon = Icons.Grid, shortcut = AppShortcut.OVERVIEW) { state.navigate(Route.Overview) },
     PaletteItem("teams", "Manage teams", PaletteGroup.ACTIONS, "Roles and models of your agent teams", Icons.Users) { state.navigate(Route.Teams) },
+    PaletteItem("author-config", "Author configuration", PaletteGroup.ACTIONS, "Install or update the author's Claude setup", Icons.Sparkles) { state.author.openManage((state.route as? Route.Project)?.id) },
     PaletteItem("plugins", "Open plugins", PaletteGroup.ACTIONS, "Install and manage Claude plugins", Icons.Plug) { state.navigate(Route.Plugins) },
     PaletteItem("mcp", "Open MCP servers", PaletteGroup.ACTIONS, "Servers that give Claude extra tools", Icons.Server) { state.navigate(Route.Mcp) },
     PaletteItem("skills", "Open skills", PaletteGroup.ACTIONS, "Instructions Claude loads on demand", Icons.Book) { state.navigate(Route.Skills) },
@@ -71,11 +73,20 @@ private fun globalActions(state: AppState, systemDark: Boolean): List<PaletteIte
     PaletteItem("toggle-sidebar", "Toggle sidebar", PaletteGroup.ACTIONS, icon = Icons.PanelLeftClose, shortcut = AppShortcut.TOGGLE_SIDEBAR, run = state::toggleSidebar),
 )
 
+private fun shellActions(state: AppState, projectId: Long, here: String): List<PaletteItem> {
+    val default = state.shells.default ?: return emptyList()
+    val openDefault = PaletteItem("open-terminal", "Open terminal", PaletteGroup.ACTIONS, "$here: ${default.name}", Icons.SquareTerminal, shortcut = AppShortcut.OPEN_TERMINAL) { state.shells.open(projectId, default) }
+    val perShell = state.shells.available.map { shell ->
+        PaletteItem("open-terminal-${shell.name}", "Open terminal: ${shell.name}", PaletteGroup.ACTIONS, here, Icons.SquareTerminal) { state.shells.open(projectId, shell) }
+    }
+    return listOf(openDefault) + perShell
+}
+
 private fun projectActions(state: AppState): List<PaletteItem> {
     val route = state.route as? Route.Project ?: return emptyList()
     val project = state.projects.all.firstOrNull { it.id == route.id } ?: return emptyList()
     val here = "in ${project.name}"
-    return listOfNotNull(
+    return shellActions(state, project.id, here) + listOfNotNull(
         PaletteItem("launch", "Launch Claude", PaletteGroup.ACTIONS, here, Icons.Play, shortcut = AppShortcut.NEW_SESSION) { state.sessions.launch(project.id, LaunchMode.NEW) },
         PaletteItem("start-task", "Start task with team", PaletteGroup.ACTIONS, here, Icons.Users) { state.taskDialogProjectId = project.id },
         PaletteItem("continue", "Continue last session", PaletteGroup.ACTIONS, here, Icons.ArrowRight) { state.sessions.launch(project.id, LaunchMode.CONTINUE) },
@@ -83,6 +94,9 @@ private fun projectActions(state: AppState): List<PaletteItem> {
         PaletteItem("open-folder", "Open folder", PaletteGroup.ACTIONS, here, Icons.FolderOpen) { state.openFolder(project) },
         PaletteItem("open-ide", "Open in IntelliJ IDEA", PaletteGroup.ACTIONS, here, Icons.Code) { state.openIde(project) },
         PaletteItem("project-settings", "Project settings", PaletteGroup.ACTIONS, "$here: plugins, MCP servers, skills", Icons.Settings, shortcut = AppShortcut.PROJECT_SETTINGS) { state.openProjectSettings(project) },
+        state.runs.selectedOf(project.id)?.let { runItem(state, it, here) },
+        state.runs.selectedOf(project.id)?.takeIf { it.running }?.let { entry -> PaletteItem("stop-run", "Stop ${entry.name}", PaletteGroup.ACTIONS, here, Icons.Stop) { state.runs.stop(entry.id) } },
+        PaletteItem("show-run", "Show run console", PaletteGroup.ACTIONS, here, Icons.SquareTerminal) { state.select(project.id, ProjectTab.Run) },
         PaletteItem("show-activity", "Show activity", PaletteGroup.ACTIONS, here, Icons.Activity, shortcut = AppShortcut.ACTIVITY_TAB) { state.select(project.id, ProjectTab.Activity) },
         PaletteItem("toggle-agents", "Toggle agents panel", PaletteGroup.ACTIONS, here, Icons.PanelRightClose, shortcut = AppShortcut.TOGGLE_AGENTS, run = state::toggleAgents),
         state.viewOf(project.id).focusedSession?.let { state.live.find(it) }?.let { session ->
@@ -90,3 +104,6 @@ private fun projectActions(state: AppState): List<PaletteItem> {
         },
     )
 }
+
+private fun runItem(state: AppState, entry: RunEntry, here: String) =
+    PaletteItem("run", (if (entry.running) "Restart " else "Run ") + entry.name, PaletteGroup.ACTIONS, here, Icons.Play, shortcut = AppShortcut.RUN) { state.runs.run(entry.id) }

@@ -1,0 +1,30 @@
+{
+  "files": ["common/session-prompt.md", "user/session-prompt.md", "user/claude-md-rules.md", "user/settings-fragment.json",
+            "user/skills/jscpd/SKILL.md", "user/skills/dry-refactoring/SKILL.md",
+            "project/session-prompt.md", "project/claude-md-rules.md", "project/jscpd.json", "teams/dev-team.json"],
+  "commonPrompt": "common/session-prompt.md",
+  "userSetup": {
+    "version": 1, "title": "Claude Code user setup",
+    "summary": "Plugin marketplaces, plugins, skills, user CLAUDE.md rules and settings, reviewed by Claude.",
+    "prompt": "user/session-prompt.md",
+    "extensions": {
+      "marketplaces": [
+        {"name": "claude-plugins-official", "source": "anthropics/claude-plugins-official"},
+        {"name": "ponytail", "source": "DietrichGebert/ponytail"},
+        {"name": "claude-code-skills", "source": "alirezarezvani/claude-skills"}],
+      "plugins": ["frontend-design@claude-plugins-official", "context7@claude-plugins-official", "playwright@claude-plugins-official",
+                  "claude-md-management@claude-plugins-official", "code-review@claude-plugins-official",
+                  "code-simplifier@claude-plugins-official", "feature-dev@claude-plugins-official",
+                  "postman@claude-plugins-official", "ponytail@ponytail"],
+      "skills": [{"name": "jscpd", "files": ["SKILL.md"]}, {"name": "dry-refactoring", "files": ["SKILL.md"]}],
+      "mcpServers": []
+    }
+  },
+  "projectSetup": {
+    "version": 1, "title": "Project setup",
+    "summary": "CLAUDE.md rules, graphify, jscpd, reviewed by Claude against this project.",
+    "prompt": "project/session-prompt.md",
+    "extensions": {"marketplaces": [], "plugins": [], "skills": [], "mcpServers": []}
+  },
+  "teams": {"version": 2, "title": "Agent teams", "summary": "The author's agent teams.", "templates": ["teams/dev-team.json"]}
+}

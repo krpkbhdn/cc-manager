@@ -2,19 +2,27 @@ package com.github.krpkbhdn.ccmanager.ui.state
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.github.krpkbhdn.ccmanager.author.AuthorProfileService
 import com.github.krpkbhdn.ccmanager.claude.hook.HookEventStore
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService
 import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgentService
 import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
+import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalService
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry
+import com.github.krpkbhdn.ccmanager.config.AppProperties
 import com.github.krpkbhdn.ccmanager.claude.session.TranscriptService
 import com.github.krpkbhdn.ccmanager.notification.NotificationService
 import com.github.krpkbhdn.ccmanager.notification.NotificationSoundService
 import com.github.krpkbhdn.ccmanager.project.ProjectService
+import com.github.krpkbhdn.ccmanager.run.RunConfigurationService
+import com.github.krpkbhdn.ccmanager.run.RunService
 import com.github.krpkbhdn.ccmanager.extension.mcp.McpService
 import com.github.krpkbhdn.ccmanager.extension.plugin.PluginService
 import com.github.krpkbhdn.ccmanager.extension.skill.SkillService
+import com.github.krpkbhdn.ccmanager.shell.LaunchedShell
+import com.github.krpkbhdn.ccmanager.shell.ShellDetector
+import com.github.krpkbhdn.ccmanager.shell.ShellLauncher
 import com.github.krpkbhdn.ccmanager.team.TeamService
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitBackend
 import com.github.krpkbhdn.ccmanager.ui.terminal.TerminalHost
@@ -25,11 +33,13 @@ import com.github.krpkbhdn.ccmanager.usage.SessionUsageService
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import com.github.krpkbhdn.ccmanager.workspace.DirectoryOpener
 import com.github.krpkbhdn.ccmanager.workspace.IdeLauncher
+import java.nio.file.Path
 import org.springframework.context.ConfigurableApplicationContext
 
 /** The terminal widget layer, behind an interface so the UI can be previewed without a real PTY. */
 interface TerminalPort {
     fun open(session: LaunchedSession)
+    fun openShell(shell: LaunchedShell) {}
     fun send(ccmSessionId: String, text: String)
     fun close(ccmSessionId: String)
 
@@ -48,6 +58,7 @@ interface TerminalPort {
 
 object HostTerminalPort : TerminalPort {
     override fun open(session: LaunchedSession) = TerminalHost.open(session)
+    override fun openShell(shell: LaunchedShell) = TerminalHost.open(shell)
     override fun send(ccmSessionId: String, text: String) = TerminalHost.send(ccmSessionId, text)
     override fun close(ccmSessionId: String) = TerminalHost.close(ccmSessionId)
     override fun focus(ccmSessionId: String) = TerminalHost.focus(ccmSessionId)
@@ -77,9 +88,16 @@ class Backend(
     val mcp: McpService,
     val skills: SkillService,
     val transcripts: TranscriptService,
+    val runConfigurations: RunConfigurationService,
+    val runs: RunService,
+    val shellDetector: ShellDetector,
+    val shellLauncher: ShellLauncher,
+    val author: AuthorProfileService,
+    val proposals: ProposalService,
     val terminal: TerminalPort = HostTerminalPort,
     val updates: UpdateService? = null,
     val sound: NotificationSoundService? = null,
+    val dataDir: Path = Path.of(System.getProperty("user.home"), ".cc-manager"),
 ) {
     companion object {
         fun from(context: ConfigurableApplicationContext) = Backend(
@@ -100,8 +118,15 @@ class Backend(
             mcp = context.getBean(McpService::class.java),
             skills = context.getBean(SkillService::class.java),
             transcripts = context.getBean(TranscriptService::class.java),
+            runConfigurations = context.getBean(RunConfigurationService::class.java),
+            runs = context.getBean(RunService::class.java),
+            shellDetector = context.getBean(ShellDetector::class.java),
+            shellLauncher = context.getBean(ShellLauncher::class.java),
+            author = context.getBean(AuthorProfileService::class.java),
+            proposals = context.getBean(ProposalService::class.java),
             updates = context.getBean(UpdateService::class.java),
             sound = context.getBean(NotificationSoundService::class.java),
+            dataDir = context.getBean(AppProperties::class.java).dataDir(),
         )
     }
 }

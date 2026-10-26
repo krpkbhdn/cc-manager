@@ -35,6 +35,7 @@ sealed interface RawDetails {
 }
 
 const val ADD_SERVER_KEY = "mcp:add"
+private const val LOAD_FAILURE_TITLE = "Could not read MCP servers"
 
 /**
  * MCP servers of one project (or of the user when [projectPath] is null). The list loads at once; the slow health check
@@ -87,12 +88,12 @@ class McpState(
         scope.launch {
             try {
                 val fresh = withContext(Dispatchers.IO) { service.servers(projectPath) }
-                if (seen == mutations.epoch) servers = fresh
+                if (seen == mutations.epoch) { servers = fresh; details.clear() }
                 loadFailure = null
             } catch (e: CancellationException) {
                 throw e
             } catch (e: RuntimeException) {
-                loadFailure = failureOf("Could not read MCP servers", e)
+                loadFailure = failureOf(LOAD_FAILURE_TITLE, e)
             } finally {
                 loading = false
                 loaded = true
@@ -187,8 +188,7 @@ class McpState(
     }
 
     fun add(name: String, json: String, target: ExtensionScope) {
-        mutations.run("Adding $name", ADD_SERVER_KEY, { service.add(name, json, target, projectPath); service.servers(projectPath) }) {
-            servers = it
+        mutations.runThenReload("Adding $name", ADD_SERVER_KEY, LOAD_FAILURE_TITLE, { service.add(name, json, target, projectPath) }, { service.servers(projectPath) }, { loadFailure = it }, { servers = it; details.clear() }) {
             adding = false
             selected = mcpKey(target, name)
             notify(NotificationKind.FINISHED, "Added $name", "Available to new sessions, ${target.label()} scope.")
@@ -200,8 +200,7 @@ class McpState(
         val target = entry.scope ?: return
         val message = "Removes ${entry.name} from ${target.cliValue()} scope. Running sessions keep it until they restart."
         confirm(ConfirmRequest("Remove ${entry.name}?", message, "Remove") {
-            mutations.run("Removing ${entry.name}", entry.key, { service.remove(entry.name, target, projectPath); service.servers(projectPath) }) {
-                servers = it
+            mutations.runThenReload("Removing ${entry.name}", entry.key, LOAD_FAILURE_TITLE, { service.remove(entry.name, target, projectPath) }, { service.servers(projectPath) }, { loadFailure = it }, { servers = it; details.clear() }) {
                 details.remove(entry.key)
                 if (selected == entry.key) selected = null
             }

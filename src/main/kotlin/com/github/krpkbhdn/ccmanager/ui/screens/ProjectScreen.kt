@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,6 +21,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
@@ -27,9 +29,15 @@ import com.github.krpkbhdn.ccmanager.claude.hook.ActivityEntry
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.project.Project
+import com.github.krpkbhdn.ccmanager.ui.components.AppButton
+import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant
 import com.github.krpkbhdn.ccmanager.ui.components.HorizontalRule
 import com.github.krpkbhdn.ccmanager.ui.components.IconButton
+import com.github.krpkbhdn.ccmanager.ui.components.MenuEntry
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
+import com.github.krpkbhdn.ccmanager.ui.run.RunControlActions
+import com.github.krpkbhdn.ccmanager.ui.run.RunTab
+import com.github.krpkbhdn.ccmanager.ui.run.RunTabActions
 import com.github.krpkbhdn.ccmanager.ui.shortcuts.AppShortcut
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.git.GitSystemActions
@@ -58,7 +66,10 @@ fun ProjectScreen(state: AppState, project: Project, modifier: Modifier = Modifi
         onDispose { unsubscribe?.run() }
     }
     val windowFocused = LocalWindowInfo.current.isWindowFocused
-    LaunchedEffect(windowFocused) { if (windowFocused) gitState?.refresh() }
+    LaunchedEffect(windowFocused) {
+        if (windowFocused) gitState?.refresh()
+    }
+    LaunchedEffect(project.id, windowFocused) { if (windowFocused) state.runs.track(project.id) }
     Column(modifier.fillMaxSize()) {
         ProjectHeader(
             project = project,
@@ -74,6 +85,15 @@ fun ProjectScreen(state: AppState, project: Project, modifier: Modifier = Modifi
                 onShowGit = { state.openGit(project.id) },
                 onShowChanges = { state.openGit(project.id, GitSubView.CHANGES) },
                 onOpenSettings = { state.openProjectSettings(project) },
+            ),
+            runEntries = state.runs.entriesOf(project.id),
+            runSelected = state.runs.selectedOf(project.id),
+            runActions = RunControlActions(
+                onSelect = { state.runs.select(project.id, it) },
+                onRun = state.runs::run,
+                onStop = state.runs::stop,
+                onAdd = { state.runs.openDialog(project.id) },
+                onEdit = { id -> state.runs.openDialog(project.id, state.runs.entriesOf(project.id).firstOrNull { it.id == id }?.configuration) },
             ),
         )
         Row(Modifier.fillMaxSize()) {
@@ -111,10 +131,12 @@ private fun ProjectMainArea(state: AppState, project: Project, view: ProjectView
             tabs = tabSpecs(state, view),
             selected = view.selected,
             onSelect = { state.select(project.id, it) },
-            onClose = { (it as? ProjectTab.Session)?.let { session -> state.sessions.requestClose(project.id, session.ccmSessionId) } },
+            onClose = { closeTab(state, project.id, it) },
             onNewSession = { state.sessions.launch(project.id, LaunchMode.NEW) },
+            shellMenu = shellMenu(state, project.id),
         ) {
-            ModelControl(state, project, (view.selected as? ProjectTab.Session)?.let { state.live.find(it.ccmSessionId) })
+            val shown = (view.selected as? ProjectTab.Session)?.ccmSessionId
+            ModelControl(state, project, shown?.let { state.live.find(it) })
             Spacer(Modifier.width(Spacing.sm))
             if (onSession) {
                 IconButton(Icons.Zap, state::toggleQuickBar, tooltip = "Quick actions", hint = AppShortcut.TOGGLE_QUICK_ACTIONS.hint(), active = state.settings.quickBarOpen)
@@ -132,6 +154,19 @@ private fun ProjectMainArea(state: AppState, project: Project, view: ProjectView
     }
 }
 
+private fun closeTab(state: AppState, projectId: Long, tab: ProjectTab) {
+    when (tab) {
+        is ProjectTab.Session -> state.sessions.requestClose(projectId, tab.ccmSessionId)
+        is ProjectTab.Shell -> state.shells.close(projectId, tab.terminalId)
+        else -> Unit
+    }
+}
+
+private fun shellMenu(state: AppState, projectId: Long): List<MenuEntry> =
+    state.shells.available.map { shell ->
+        MenuEntry(shell.name, Icons.SquareTerminal, hint = "Default".takeIf { shell == state.shells.default }) { state.shells.open(projectId, shell) }
+    }
+
 @Composable
 private fun MainContent(state: AppState, project: Project, view: ProjectView) {
     val tab = view.selected
@@ -139,9 +174,17 @@ private fun MainContent(state: AppState, project: Project, view: ProjectView) {
         SessionTab(state, tab.ccmSessionId)
         return
     }
+    if (tab is ProjectTab.Shell) {
+        TerminalPane(state, tab.terminalId)
+        return
+    }
     Crossfade(tab, animationSpec = Motion.base(), label = "projectTab") { shown ->
         when (shown) {
             ProjectTab.Git -> GitTabHost(state, project)
+            ProjectTab.Run -> RunTab(
+                state.runs.selectedOf(project.id), state.terminal,
+                RunTabActions(state.runs::run, state.runs::stop) { state.runs.openDialog(project.id) },
+            )
             else -> ActivityTabHost(state, view, project)
         }
     }
@@ -152,8 +195,10 @@ private fun tabSpecs(state: AppState, view: ProjectView): List<TabSpec> {
         val snapshot = state.live.find(id)
         TabSpec(ProjectTab.Session(id), snapshot?.let(::sessionTitle) ?: ENDED_SESSION_LABEL, snapshot?.status ?: AgentStatus.OFFLINE, null, closable = true)
     }
-    return sessions + listOf(
+    val shells = view.openShells.map { id -> TabSpec(ProjectTab.Shell(id), state.shells.labelOf(id), null, Icons.SquareTerminal, closable = true) }
+    return sessions + shells + listOf(
         TabSpec(ProjectTab.Git, "Git", null, Icons.Branch, closable = false),
+        TabSpec(ProjectTab.Run, "Run", null, Icons.Play, closable = false),
         TabSpec(ProjectTab.Activity, "Activity", null, Icons.Activity, closable = false),
     )
 }
@@ -163,13 +208,27 @@ private fun SessionTab(state: AppState, ccmSessionId: String) {
     Column(Modifier.fillMaxSize()) {
         state.sessions.sessionTeams[ccmSessionId]?.let { TeamRoleStrip(it, state.live.find(ccmSessionId).runningAgentTypes()) }
         QuickActionsBar(state.settings.quickBarOpen, enabled = state.live.find(ccmSessionId) != null, onSend = { state.sessions.send(ccmSessionId, it) })
-        Box(Modifier.fillMaxSize().background(colors.terminal).padding(start = TERMINAL_INSET, top = TERMINAL_INSET)) {
-            state.terminal.View(ccmSessionId, Modifier.fillMaxSize())
+        TerminalPane(state, ccmSessionId) {
+            if (state.proposals.hiddenCount(ccmSessionId) > 0) {
+                AppButton(
+                    "Claude is waiting - Answer", { state.proposals.reopen(ccmSessionId) },
+                    Modifier.align(Alignment.TopEnd).padding(end = Spacing.lg, top = Spacing.xs),
+                    variant = ButtonVariant.PRIMARY, icon = Icons.Message, compact = true,
+                )
+            }
         }
     }
 }
 
-private val TERMINAL_INSET = 10.dp
+@Composable
+private fun TerminalPane(state: AppState, terminalId: String, overlay: @Composable BoxScope.() -> Unit = {}) {
+    Box(Modifier.fillMaxSize().background(colors.terminal).padding(start = TERMINAL_INSET, top = TERMINAL_INSET)) {
+        state.terminal.View(terminalId, Modifier.fillMaxSize())
+        overlay()
+    }
+}
+
+internal val TERMINAL_INSET = 10.dp
 
 @Composable
 private fun GitTabHost(state: AppState, project: Project) {
@@ -177,8 +236,8 @@ private fun GitTabHost(state: AppState, project: Project) {
     val ideAvailable = state.ideAvailable
     val system = remember(project, ideAvailable) {
         GitSystemActions(
-            openFolder = { path -> state.openDirectory(project.path.resolve(path).parent ?: project.path) },
-            openInIde = { path -> state.openInIde(project.path.resolve(path)) },
+            openFolder = { path -> state.openDirectory(git.repo.resolve(path).parent ?: git.repo) },
+            openInIde = { path -> state.openInIde(git.repo.resolve(path)) },
             ideAvailable = ideAvailable,
         )
     }

@@ -27,7 +27,6 @@ import com.github.krpkbhdn.ccmanager.ui.components.StatusDot
 import com.github.krpkbhdn.ccmanager.ui.components.ThinScrollbar
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
-import com.github.krpkbhdn.ccmanager.ui.state.Route
 import com.github.krpkbhdn.ccmanager.ui.state.needingAttention
 import com.github.krpkbhdn.ccmanager.ui.state.overviewHeadline
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
@@ -64,8 +63,8 @@ fun OverviewScreen(state: AppState, modifier: Modifier = Modifier) {
                     project = project,
                     status = state.live.statusOf(project.id),
                     sessions = state.live.of(project.id),
-                    now = state.now,
-                    onOpen = { state.navigate(Route.Project(project.id)) },
+                    now = { state.now },
+                    actions = state.projectActions(project),
                     modifier = Modifier.animateItem(),
                 )
             }
@@ -84,9 +83,10 @@ private fun LazyGridScope.attentionCards(attention: List<SessionSnapshot>, state
         AttentionCard(
             projectName = state.projects.nameOf(session.projectId),
             session = session,
-            now = state.now,
-            onOpen = { state.openSession(session.ccmSessionId) },
+            now = { state.now },
+            onOpen = { state.answerProposals(session.ccmSessionId) },
             modifier = Modifier.animateItem(),
+            proposalHeadline = state.proposals.headlineOf(session.ccmSessionId),
         )
     }
 }
@@ -94,7 +94,8 @@ private fun LazyGridScope.attentionCards(attention: List<SessionSnapshot>, state
 @Composable
 private fun OverviewHero(state: AppState, attentionCount: Int) {
     val working = state.live.sessions.count { it.status == AgentStatus.WORKING }
-    val headline = overviewHeadline(attentionCount, working, state.live.sessions.size)
+    val answerable = state.live.sessions.count { state.proposals.of(it.ccmSessionId).isNotEmpty() }
+    val headline = overviewHeadline(attentionCount, working, state.live.sessions.size, answerable)
     val status = when {
         attentionCount > 0 -> AgentStatus.NEEDS_ACTION
         working > 0 -> AgentStatus.WORKING

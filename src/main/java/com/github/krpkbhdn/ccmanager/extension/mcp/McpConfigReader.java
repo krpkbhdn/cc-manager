@@ -32,6 +32,9 @@ class McpConfigReader {
     private static final String USER_CONFIG_FILE = ".claude.json";
     private static final String PROJECT_CONFIG_FILE = ".mcp.json";
     private static final String PROJECTS = "projects";
+    private static final String USER_SETTINGS_FILE = "settings.json";
+    private static final String SETTINGS_FILE = ".claude/settings.json";
+    private static final String SETTINGS_LOCAL_FILE = ".claude/settings.local.json";
 
     private final HostEnvironment host;
 
@@ -53,7 +56,9 @@ class McpConfigReader {
         if (projectDirectory != null) {
             var projectEntry = projectEntry(userConfig, projectDirectory);
             servers.addAll(servers(projectEntry, ExtensionScope.LOCAL, McpApproval.NOT_REQUIRED));
-            servers.addAll(servers(readFile(projectDirectory.resolve(PROJECT_CONFIG_FILE)), ExtensionScope.PROJECT, projectEntry));
+            var approvals = List.of(readApprovals(projectDirectory.resolve(SETTINGS_LOCAL_FILE)), readApprovals(projectDirectory.resolve(SETTINGS_FILE)), projectEntry,
+                    readApprovals(host.claudeConfigDirectory().resolve(USER_SETTINGS_FILE)));
+            servers.addAll(servers(readFile(projectDirectory.resolve(PROJECT_CONFIG_FILE)), ExtensionScope.PROJECT, approvals));
         }
         return List.copyOf(servers);
     }
@@ -76,7 +81,7 @@ class McpConfigReader {
         return servers(owner, scope, name -> approval);
     }
 
-    private static List<McpServerConfig> servers(JsonNode owner, ExtensionScope scope, JsonNode approvals) {
+    private static List<McpServerConfig> servers(JsonNode owner, ExtensionScope scope, List<JsonNode> approvals) {
         return servers(owner, scope, name -> approval(approvals, name));
     }
 
@@ -89,15 +94,29 @@ class McpConfigReader {
         }).toList();
     }
 
-    private static McpApproval approval(JsonNode projectEntry, String name) {
-        if (names(projectEntry.path("disabledMcpjsonServers")).contains(name)) {
+    /** @param sources approval holders, most specific first: local settings, shared settings, the ~/.claude.json project entry, user settings; disabled wins */
+    // shortcut: managed (enterprise) settings are not read (OS-specific paths), add them when users report it
+    private static McpApproval approval(List<JsonNode> sources, String name) {
+        if (sources.stream().anyMatch(source -> names(source.path("disabledMcpjsonServers")).contains(name))) {
             return McpApproval.DISABLED;
         }
-        return names(projectEntry.path("enabledMcpjsonServers")).contains(name) ? McpApproval.APPROVED : McpApproval.PENDING;
+        var enabled = sources.stream().anyMatch(source -> names(source.path("enabledMcpjsonServers")).contains(name));
+        var enableAll = sources.stream().map(source -> source.path("enableAllProjectMcpServers")).filter(JsonNode::isBoolean)
+                .findFirst().map(JsonNode::asBoolean).orElse(false);
+        return enabled || enableAll ? McpApproval.APPROVED : McpApproval.PENDING;
     }
 
     private static Set<String> names(JsonNode array) {
         return StreamSupport.stream(array.spliterator(), false).map(node -> node.asString("")).collect(Collectors.toSet());
+    }
+
+    /** Approval sources are optional hints: a broken settings file must not hide every server. */
+    private static JsonNode readApprovals(Path file) {
+        try {
+            return readFile(file);
+        } catch (RuntimeException e) {
+            return Json.parse("{}");
+        }
     }
 
     private static JsonNode readFile(Path file) {

@@ -27,8 +27,11 @@ public class SessionRegistry {
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
     private final SessionProperties properties;
 
-    public SessionRegistry(SessionProperties properties) {
+    private final TranscriptService transcripts;
+
+    public SessionRegistry(SessionProperties properties, TranscriptService transcripts) {
         this.properties = properties;
+        this.transcripts = transcripts;
     }
 
     /** Creates a live session in IDLE state and returns its ccm id. */
@@ -42,6 +45,11 @@ public class SessionRegistry {
     /** Process exited: the session leaves the registry. */
     public void markEnded(String ccmSessionId, int exitCode) {
         log.debug("Session {} ended with exit code {}", ccmSessionId, exitCode);
+        discard(ccmSessionId);
+    }
+
+    /** The user closed the session: it leaves at once so late hooks of the exiting process raise no status or notification. */
+    public void discard(String ccmSessionId) {
         if (states.remove(ccmSessionId) != null) {
             notifyListeners();
         }
@@ -55,7 +63,20 @@ public class SessionRegistry {
     /** Events of sessions this app did not register are ignored. */
     @EventListener
     public void on(HookEvent event) {
-        update(event.ccmSessionId(), state -> StatusReducer.reduce(state, event));
+        var topic = topicAfter(event);
+        update(event.ccmSessionId(), state -> {
+            var next = StatusReducer.reduce(state, event);
+            return topic.map(next::withTopic).orElse(next);
+        });
+    }
+
+    /** Claude writes the generated title to the transcript around prompts and turn ends; tool events never change it. */
+    private Optional<String> topicAfter(HookEvent event) {
+        var mayCarryTopic = switch (event.type()) {
+            case SESSION_START, USER_PROMPT_SUBMIT, STOP -> !event.fromSubagent() && states.containsKey(event.ccmSessionId());
+            default -> false;
+        };
+        return mayCarryTopic ? transcripts.title(event.text("transcript_path")) : Optional.empty();
     }
 
     public List<SessionSnapshot> sessions() {

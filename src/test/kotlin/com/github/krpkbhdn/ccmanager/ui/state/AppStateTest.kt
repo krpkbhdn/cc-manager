@@ -1,7 +1,11 @@
 package com.github.krpkbhdn.ccmanager.ui.state
 
+import com.github.krpkbhdn.ccmanager.ui.await
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.github.krpkbhdn.ccmanager.author.AuthorComponent
+import com.github.krpkbhdn.ccmanager.author.AuthorEntry
+import com.github.krpkbhdn.ccmanager.author.AuthorStatus
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
 import com.github.krpkbhdn.ccmanager.ui.PreviewWorld
 import java.util.concurrent.CopyOnWriteArrayList
@@ -13,9 +17,9 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito.`when`
 import org.mockito.Mockito.verify
 
-private const val WAIT_MILLIS = 5_000L
 private const val PROJECT_ID = 1L
 
 class AppStateTest {
@@ -72,9 +76,14 @@ class AppStateTest {
         assertThat(state.confirm!!.message).doesNotContain("terminated")
     }
 
-    private fun await(condition: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + WAIT_MILLIS
-        while (!condition() && System.currentTimeMillis() < deadline) Thread.sleep(20)
-        assertThat(condition()).describedAs("condition within ${WAIT_MILLIS}ms").isTrue()
+    @Test
+    fun `opening a project offers its author setup`() {
+        val projectSetup = AuthorEntry(AuthorComponent.PROJECT_SETUP, PROJECT_ID, "Project setup", "summary", 1, 0, AuthorStatus.NOT_INSTALLED)
+        `when`(backend.author.entries(PROJECT_ID)).thenReturn(listOf(projectSetup))
+
+        state.navigate(Route.Project(PROJECT_ID))
+
+        await { state.author.offer != null }
+        assertThat(state.author.offer!!.entries).containsExactly(projectSetup)
     }
 }

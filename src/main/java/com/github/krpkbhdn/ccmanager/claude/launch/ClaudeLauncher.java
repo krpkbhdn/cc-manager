@@ -1,15 +1,16 @@
 package com.github.krpkbhdn.ccmanager.claude.launch;
 
 import com.github.krpkbhdn.ccmanager.claude.hook.HookSettingsWriter;
+import com.github.krpkbhdn.ccmanager.claude.hook.SessionFiles;
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation;
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService;
+import com.github.krpkbhdn.ccmanager.claude.plugin.ClaudePluginWriter;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
 import com.github.krpkbhdn.ccmanager.project.Project;
 import com.github.krpkbhdn.ccmanager.project.ModelSelection;
 import com.github.krpkbhdn.ccmanager.project.ProjectService;
 import com.github.krpkbhdn.ccmanager.team.Team;
 import com.pty4j.PtyProcess;
-import com.pty4j.PtyProcessBuilder;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,40 +26,46 @@ import org.springframework.stereotype.Service;
 @Service
 public class ClaudeLauncher {
 
-    static final int INITIAL_COLUMNS = 120;
-    static final int INITIAL_ROWS = 32;
     private static final int SPAWN_FAILED_EXIT_CODE = -1;
     private static final Logger log = LoggerFactory.getLogger(ClaudeLauncher.class);
 
     private final ProjectService projects;
     private final ClaudeInstallationService installation;
     private final HookSettingsWriter hookSettings;
+    private final ClaudePluginWriter plugin;
     private final SessionRegistry sessions;
 
     public ClaudeLauncher(ProjectService projects, ClaudeInstallationService installation,
-            HookSettingsWriter hookSettings, SessionRegistry sessions) {
+            HookSettingsWriter hookSettings, ClaudePluginWriter plugin, SessionRegistry sessions) {
         this.projects = projects;
         this.installation = installation;
         this.hookSettings = hookSettings;
+        this.plugin = plugin;
         this.sessions = sessions;
     }
 
     /** @throws IllegalStateException with a user-readable message (Claude missing, project gone, spawn failed) */
     public LaunchedSession launch(long projectId, LaunchMode mode) {
         return start(projectId, ClaudeCommand.label(mode),
-                (settings, exe, selection) -> ClaudeCommand.launchArguments(exe, settings, mode, selection));
+                (files, exe, selection) -> ClaudeCommand.launchArguments(exe, files, plugin.directory(), mode, selection));
     }
 
     /** A lead session with the team's roles as subagents; the task is its first prompt. */
     public LaunchedSession launchTeam(long projectId, Team team, String task) {
         return start(projectId, "claude (" + team.name() + ")",
-                (settings, exe, selection) -> ClaudeCommand.teamArguments(exe, settings, team, task));
+                (files, exe, selection) -> ClaudeCommand.teamArguments(exe, files, plugin.directory(), team, task));
+    }
+
+    /** A session that finishes the author's setup; the prompt points at the staged profile. */
+    public LaunchedSession launchSetup(long projectId, String prompt, Path profileDirectory) {
+        return start(projectId, "claude (author setup)",
+                (files, exe, selection) -> ClaudeCommand.setupArguments(exe, files, plugin.directory(), prompt, profileDirectory));
     }
 
     /** claude attach ID for a background agent. */
     public LaunchedSession attach(long projectId, String backgroundSessionId) {
         return start(projectId, "attach " + backgroundSessionId,
-                (settings, exe, selection) -> ClaudeCommand.attachArguments(exe, settings, backgroundSessionId));
+                (files, exe, selection) -> ClaudeCommand.attachArguments(exe, files, backgroundSessionId));
     }
 
     private LaunchedSession start(long projectId, String label, CommandFactory commandFactory) {
@@ -67,9 +74,9 @@ public class ClaudeLauncher {
         Path executable = executable();
         String ccmSessionId = sessions.register(projectId);
         try {
-            Path settings = hookSettings.write(ccmSessionId);
-            List<String> command = commandFactory.build(settings, executable, project.modelSelection());
-            PtyProcess process = spawn(command, directory, ccmSessionId);
+            SessionFiles files = hookSettings.write(ccmSessionId);
+            List<String> command = commandFactory.build(files, executable, project.modelSelection());
+            PtyProcess process = PtySpawner.spawn(command, directory, ClaudeCommand.environment(System.getenv(), ccmSessionId));
             watchExit(ccmSessionId, process);
             return new LaunchedSession(ccmSessionId, projectId, label, process);
         } catch (IOException | RuntimeException e) {
@@ -95,27 +102,6 @@ public class ClaudeLauncher {
             throw new IllegalStateException(reason);
         }
         return current.executable();
-    }
-
-    private PtyProcess spawn(List<String> command, Path directory, String ccmSessionId) throws IOException {
-        return new PtyProcessBuilder(platformArguments(command))
-                .setDirectory(directory.toString())
-                .setUseWinConPty(true)
-                .setEnvironment(ClaudeCommand.environment(System.getenv(), ccmSessionId))
-                .setInitialColumns(INITIAL_COLUMNS)
-                .setInitialRows(INITIAL_ROWS)
-                .start();
-    }
-
-    private static String[] platformArguments(List<String> command) {
-        var windows = System.getProperty("os.name").startsWith("Windows");
-        if (!windows) {
-            return command.toArray(String[]::new);
-        }
-        WindowsArgument.requireSafeForBatchFile(command);
-        var quoted = command.stream().map(WindowsArgument::quote).toArray(String[]::new);
-        WindowsArgument.requireFitsCommandLine(quoted);
-        return quoted;
     }
 
     private void watchExit(String ccmSessionId, PtyProcess process) {
@@ -152,6 +138,6 @@ public class ClaudeLauncher {
 
     @FunctionalInterface
     private interface CommandFactory {
-        List<String> build(Path settings, Path executable, ModelSelection selection);
+        List<String> build(SessionFiles files, Path executable, ModelSelection selection);
     }
 }

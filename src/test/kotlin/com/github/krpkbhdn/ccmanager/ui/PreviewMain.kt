@@ -100,10 +100,21 @@ private suspend fun captureTour(capture: Capture, state: AppState, world: Previe
     state.openSession("s-needs")
     state.openSession("s-working")
     capture.take("2-project-terminal")
+    if (flags.many) {
+        (1..8).forEach { state.openSession("s-crowd-$it") }
+        capture.take("2b-many-tabs")
+    }
     state.select(1, ProjectTab.Git)
     capture.take("3-diff")
     state.select(1, ProjectTab.Activity)
     capture.take("4-activity")
+    state.select(1, ProjectTab.Run)
+    capture.take("4a-run-tab")
+    state.runs.select(1, 2)
+    capture.take("4b-run-exited")
+    state.runs.openDialog(1, state.runs.selectedOf(1)?.configuration)
+    capture.take("4c-run-dialog")
+    state.runs.closeDialog()
     state.notificationsOpen = true
     capture.take("5-notifications")
     state.notificationsOpen = false

@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -95,13 +96,21 @@ fun ModalHost(
 
 /** Header and [actions] stay visible; only [content] scrolls when the card is capped by the window height. */
 @Composable
-fun DialogBody(title: String, icon: ImageVector, tint: Color, actions: @Composable (() -> Unit)? = null, content: @Composable () -> Unit) {
+fun DialogBody(
+    title: String,
+    icon: ImageVector,
+    tint: Color,
+    actions: @Composable (() -> Unit)? = null,
+    headerTrailing: @Composable RowScope.() -> Unit = {},
+    content: @Composable () -> Unit,
+) {
     Column(Modifier.padding(Spacing.xl), verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.md), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(dialogIconBox).clip(RoundedCornerShape(Radius.md)).background(tint.copy(alpha = Alpha.SOFT)), contentAlignment = Alignment.Center) {
                 Glyph(icon, tint, size = IconSize.xlarge)
             }
             Label(title, style = Type.subtitle)
+            headerTrailing()
         }
         val scroll = rememberScrollState()
         // The scrollbar fills the box height, so it sits in a matchParentSize box that cannot stretch the card.

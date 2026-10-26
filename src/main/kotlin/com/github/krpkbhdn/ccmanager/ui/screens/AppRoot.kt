@@ -48,6 +48,7 @@ import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.palette.CommandPalette
 import com.github.krpkbhdn.ccmanager.ui.palette.paletteItems
 import com.github.krpkbhdn.ccmanager.ui.picker.FolderPickerDialog
+import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalDialogHost
 import com.github.krpkbhdn.ccmanager.ui.projectsettings.ProjectSettingsDialog
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.Route
@@ -55,8 +56,12 @@ import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.PluginCommandDialog
 import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.PluginsScreen
 import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.McpScreen
 import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillsScreen
+import com.github.krpkbhdn.ccmanager.ui.run.RunConfigurationDialog
 import com.github.krpkbhdn.ccmanager.ui.teams.RoleDialog
 import com.github.krpkbhdn.ccmanager.ui.teams.StartTaskDialog
+import com.github.krpkbhdn.ccmanager.ui.author.AuthorConfigurationDialog
+import com.github.krpkbhdn.ccmanager.ui.author.AuthorOfferDialog
+import com.github.krpkbhdn.ccmanager.ui.author.AuthorReportPanel
 import com.github.krpkbhdn.ccmanager.ui.teams.StartTaskActions
 import com.github.krpkbhdn.ccmanager.ui.teams.TeamsScreen
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
@@ -92,13 +97,18 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
         if (state.shortcutsOpen) ShortcutSheet { state.shortcutsOpen = false }
         (state.route as? Route.Project)?.let { state.gitOf(it.id) }?.let { GitDialogHost(it) }
         state.taskDialogProjectId?.let { id -> state.projects.all.firstOrNull { it.id == id } }?.let { StartTaskDialog(it, state.teams, startTaskActions(state, it)) }
+        state.runs.dialog?.let { RunConfigurationDialog(it, state.runs, state.dataDir) }
         state.teams.dialog?.let { open -> state.teams.find(open.teamId)?.let { RoleDialog(it, open, state.teams) } }
         state.projectSettings?.let { ProjectSettingsDialog(it, state::closeProjectSettings) }
         state.plugins.pending?.let { PluginCommandDialog(it, state.plugins.job == null, state.plugins::confirmPending, state.plugins::dismissPending) }
         state.agents.log?.let { SubagentLogHost(state.agents, { state.now }, it) }
+        state.author.offer?.let { AuthorOfferDialog(it, state.author) }
+        state.author.manage?.let { open -> AuthorConfigurationDialog(open, open.projectId?.let { state.projects.find(it)?.name }, state.author) }
+        state.author.report?.let { AuthorReportPanel(it, state.author::closeReport) }
+        ProposalDialogHost(state)
         state.confirm?.let { ConfirmDialog(it) { state.confirm = null } }
         state.projects.renaming?.let { RenameDialog(it, { name -> state.projects.rename(it.project, name) }, { state.projects.renaming = null }) }
-        if (state.projects.pickerOpen) FolderPickerDialog(initial = null, onDismiss = { state.projects.pickerOpen = false }, onPicked = state.projects::addAt)
+        if (state.projects.pickerOpen) FolderPickerDialog(initial = null, dataDir = state.dataDir, onDismiss = { state.projects.pickerOpen = false }, onPicked = state.projects::addAt)
         if (dropTarget.hovering) DropOverlay()
     }
 }

@@ -20,6 +20,7 @@ data class UiSettings(
     val agentsOpen: Boolean = true,
     val quickBarOpen: Boolean = true,
     val notificationSound: Boolean = true,
+    val lastShell: String? = null,
     val window: WindowBounds = WindowBounds(DEFAULT_WIDTH, DEFAULT_HEIGHT),
     val git: GitPrefs = GitPrefs(),
 ) {
@@ -34,6 +35,7 @@ private const val KEY_SIDEBAR = "sidebar.collapsed"
 private const val KEY_AGENTS = "agents.open"
 private const val KEY_QUICK_BAR = "quickbar.open"
 private const val KEY_NOTIFICATION_SOUND = "notification.sound"
+private const val KEY_LAST_SHELL = "shell.last"
 private const val KEY_WIDTH = "window.width"
 private const val KEY_HEIGHT = "window.height"
 private const val KEY_X = "window.x"
@@ -65,6 +67,7 @@ class UiSettingsStore(private val file: Path?) {
             setProperty(KEY_AGENTS, settings.agentsOpen.toString())
             setProperty(KEY_QUICK_BAR, settings.quickBarOpen.toString())
             setProperty(KEY_NOTIFICATION_SOUND, settings.notificationSound.toString())
+            settings.lastShell?.let { setProperty(KEY_LAST_SHELL, it) }
             setProperty(KEY_WIDTH, settings.window.width.toString())
             setProperty(KEY_HEIGHT, settings.window.height.toString())
             settings.window.x?.let { setProperty(KEY_X, it.toString()) }
@@ -90,6 +93,7 @@ class UiSettingsStore(private val file: Path?) {
             agentsOpen = props.flag(KEY_AGENTS, defaults.agentsOpen),
             quickBarOpen = props.flag(KEY_QUICK_BAR, defaults.quickBarOpen),
             notificationSound = props.flag(KEY_NOTIFICATION_SOUND, defaults.notificationSound),
+            lastShell = props.getProperty(KEY_LAST_SHELL),
             window = WindowBounds(
                 width = props.getProperty(KEY_WIDTH)?.toIntOrNull() ?: defaults.window.width,
                 height = props.getProperty(KEY_HEIGHT)?.toIntOrNull() ?: defaults.window.height,
@@ -114,9 +118,8 @@ class UiSettingsStore(private val file: Path?) {
     private fun Properties.flag(key: String, default: Boolean): Boolean = getProperty(key)?.toBooleanStrictOrNull() ?: default
 
     companion object {
-        private const val DIRECTORY = ".cc-manager"
         private const val FILE_NAME = "ui-settings.properties"
 
-        fun inUserHome(): UiSettingsStore = UiSettingsStore(Path.of(System.getProperty("user.home"), DIRECTORY, FILE_NAME))
+        fun inDataDir(dataDir: Path): UiSettingsStore = UiSettingsStore(dataDir.resolve(FILE_NAME))
     }
 }

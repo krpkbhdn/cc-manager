@@ -38,4 +38,15 @@ class CommitDraftTest {
         assertThat(draft.message.text).isEmpty()
         assertThat(draft.amend).isFalse()
     }
+
+    @Test
+    fun `a commit leaves amend mode even when the message was edited meanwhile`() {
+        draft.setAmend(true, "Last subject")
+        draft.message.setTextAndPlaceCursorAtEnd("edited")
+
+        draft.committed("Last subject")
+
+        assertThat(draft.message.text.toString()).isEqualTo("edited")
+        assertThat(draft.amend).isFalse()
+    }
 }

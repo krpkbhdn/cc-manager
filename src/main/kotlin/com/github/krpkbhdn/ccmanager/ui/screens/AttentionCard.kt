@@ -41,10 +41,10 @@ private const val ASK_LINES = 3
 
 /** Large actionable card for a session that waits for the user: what is asked and a jump to its terminal. */
 @Composable
-fun AttentionCard(projectName: String, session: SessionSnapshot, now: Instant, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+fun AttentionCard(projectName: String, session: SessionSnapshot, now: () -> Instant, onOpen: () -> Unit, modifier: Modifier = Modifier, proposalHeadline: String? = null) {
     val tint = colors.danger
     val shape = RoundedCornerShape(Radius.xl)
-    val waiting = session.lastEventAt?.let { "Waiting ${formatElapsed(Duration.between(it, now))}" }
+    val waiting = session.lastEventAt?.let { "Waiting ${formatElapsed(Duration.between(it, now()))}" }
     Pressable(
         onOpen,
         modifier.fillMaxWidth().shadow(14.dp, shape, ambientColor = tint.copy(alpha = Alpha.HALO), spotColor = tint.copy(alpha = Alpha.HALO))
@@ -66,10 +66,10 @@ fun AttentionCard(projectName: String, session: SessionSnapshot, now: Instant, o
                         Label(projectName, style = Type.heading)
                         Label(sessionTitle(session), color = colors.textSecondary, style = Type.body, tooltipWhenTruncated = true)
                     }
-                    Label(session.activity ?: "Waiting for your decision", color = colors.textPrimary, style = Type.subtitle, maxLines = ASK_LINES)
+                    Label(proposalHeadline ?: session.activity ?: "Waiting for your decision", color = colors.textPrimary, style = Type.subtitle, maxLines = ASK_LINES)
                     waiting?.let { Label(it, color = tint, style = Type.numeric) }
                 }
-                AppButton("Jump to terminal", onOpen, variant = ButtonVariant.PRIMARY, icon = Icons.Terminal)
+                if (proposalHeadline != null) AppButton("Answer", onOpen, variant = ButtonVariant.PRIMARY, icon = Icons.Message) else AppButton("Jump to terminal", onOpen, variant = ButtonVariant.PRIMARY, icon = Icons.Terminal)
             }
         }
     }

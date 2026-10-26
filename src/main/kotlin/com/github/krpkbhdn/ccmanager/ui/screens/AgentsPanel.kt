@@ -50,6 +50,7 @@ import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.state.backgroundTasksLabel
 import com.github.krpkbhdn.ccmanager.ui.state.formatElapsed
 import com.github.krpkbhdn.ccmanager.ui.state.permissionModeLabel
+import com.github.krpkbhdn.ccmanager.ui.state.sessionName
 import com.github.krpkbhdn.ccmanager.ui.state.sessionTitle
 import com.github.krpkbhdn.ccmanager.ui.theme.Alpha
 import com.github.krpkbhdn.ccmanager.ui.theme.Radius
@@ -135,9 +136,10 @@ private fun SessionCard(session: SessionSnapshot, team: Team?, selected: Boolean
         Column(Modifier.padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.xs + 2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 StatusDot(session.status, Modifier.padding(horizontal = Spacing.xs))
-                Label(sessionTitle(session), Modifier.weight(1f), style = Type.bodyMedium, tooltipWhenTruncated = true)
+                Label(sessionName(session), Modifier.weight(1f), style = Type.bodyMedium, tooltipWhenTruncated = true)
                 permissionModeLabel(session.permissionMode)?.let { Chip(it, modeTint(session.permissionMode)) }
             }
+            session.title?.let { Label(it, color = colors.textSecondary, style = Type.small, maxLines = 2) }
             MetaLine(session, now)
             session.activity?.let { Label(it, color = colors.textSecondary, style = Type.small, maxLines = 2) }
             session.error?.let { Label(it, color = colors.danger, style = Type.small, maxLines = 2) }

@@ -77,7 +77,7 @@ fun StashesView(git: GitState, now: () -> Instant, modifier: Modifier = Modifier
                 if (files.isEmpty()) {
                     EmptyState(Icons.Diff, "Select a stash", "Its files and diff show up here.")
                 } else {
-                    val shown = chosenFile ?: files.first().path
+                    val shown = chosenFile?.takeIf { p -> files.any { it.path == p } } ?: files.first().path
                     DiffFileList(files, shown) { chosenFile = it }
                     HorizontalRule()
                     GitDiffPane(files.firstOrNull { it.path == shown }, DiffContext.READ_ONLY, Modifier.weight(1f))

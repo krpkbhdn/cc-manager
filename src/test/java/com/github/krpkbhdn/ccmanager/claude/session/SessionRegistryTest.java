@@ -2,10 +2,14 @@ package com.github.krpkbhdn.ccmanager.claude.session;
 
 import static com.github.krpkbhdn.ccmanager.claude.HookEvents.of;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import com.github.krpkbhdn.ccmanager.claude.hook.HookEvent;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -16,7 +20,7 @@ class SessionRegistryTest {
     private static final int THREADS = 8;
     private static final int SESSIONS_PER_THREAD = 50;
 
-    private final SessionRegistry registry = new SessionRegistry(new SessionProperties(java.time.Duration.ofMinutes(10)));
+    private final SessionRegistry registry = new SessionRegistry(new SessionProperties(java.time.Duration.ofMinutes(10)), mock(TranscriptService.class));
 
     private HookEvent eventFor(String ccmId, String name, String json) {
         var template = of(name, json);
@@ -30,6 +34,17 @@ class SessionRegistryTest {
         assertThat(registry.find(id)).get().extracting(SessionSnapshot::status).isEqualTo(AgentStatus.IDLE);
 
         registry.markEnded(id, 0);
+
+        assertThat(registry.find(id)).isEmpty();
+        assertThat(registry.sessions()).isEmpty();
+    }
+
+    @Test
+    void discardedSessionIgnoresLateHooksAndNeverComesBack() {
+        var id = registry.register(1);
+        registry.discard(id);
+
+        registry.on(eventFor(id, "Stop", "{}"));
 
         assertThat(registry.find(id)).isEmpty();
         assertThat(registry.sessions()).isEmpty();
@@ -107,5 +122,55 @@ class SessionRegistryTest {
         assertThat(ids).hasSize(THREADS * SESSIONS_PER_THREAD).doesNotHaveDuplicates();
         List<SessionSnapshot> sessions = registry.sessions(1);
         assertThat(sessions).hasSize(ids.size()).allMatch(session -> session.status() == AgentStatus.WORKING);
+    }
+
+    private final TranscriptService transcripts = mock(TranscriptService.class);
+    private final SessionRegistry topicRegistry = new SessionRegistry(new SessionProperties(java.time.Duration.ofMinutes(10)), transcripts);
+
+    private SessionSnapshot afterEvent(String ccmId, String name, String json) {
+        topicRegistry.on(eventFor(ccmId, name, json));
+        return topicRegistry.find(ccmId).orElseThrow();
+    }
+
+    @Test
+    void stopAndPromptEventsStoreTheTranscriptTopicAsTitle() {
+        when(transcripts.title("/t.jsonl")).thenReturn(Optional.of("Fix login"));
+        var id = topicRegistry.register(1);
+
+        assertThat(afterEvent(id, "UserPromptSubmit", "{\"transcript_path\":\"/t.jsonl\"}").title()).isEqualTo("Fix login");
+
+        when(transcripts.title("/t.jsonl")).thenReturn(Optional.of("Fix login page"));
+        assertThat(afterEvent(id, "Stop", "{\"transcript_path\":\"/t.jsonl\"}").title()).isEqualTo("Fix login page");
+    }
+
+    @Test
+    void subagentAndToolEventsNeverReadTheTranscript() {
+        var id = topicRegistry.register(1);
+
+        afterEvent(id, "PreToolUse", "{\"tool_name\":\"Bash\",\"transcript_path\":\"/t.jsonl\"}");
+        afterEvent(id, "Stop", "{\"agent_id\":\"a1\",\"transcript_path\":\"/t.jsonl\"}");
+
+        verifyNoInteractions(transcripts);
+    }
+
+    @Test
+    void hookSessionTitleWinsOverTheTopic() {
+        when(transcripts.title("/t.jsonl")).thenReturn(Optional.of("Generated"));
+        var id = topicRegistry.register(1);
+
+        afterEvent(id, "UserPromptSubmit", "{\"session_title\":\"My name\",\"transcript_path\":\"/t.jsonl\"}");
+
+        assertThat(afterEvent(id, "Stop", "{\"transcript_path\":\"/t.jsonl\"}").title()).isEqualTo("My name");
+    }
+
+    @Test
+    void emptyTranscriptTitleKeepsThePreviousTopic() {
+        when(transcripts.title("/t.jsonl")).thenReturn(Optional.of("Fix login"));
+        var id = topicRegistry.register(1);
+        afterEvent(id, "UserPromptSubmit", "{\"transcript_path\":\"/t.jsonl\"}");
+
+        when(transcripts.title("/t.jsonl")).thenReturn(Optional.empty());
+
+        assertThat(afterEvent(id, "Stop", "{\"transcript_path\":\"/t.jsonl\"}").title()).isEqualTo("Fix login");
     }
 }

@@ -33,7 +33,7 @@ class HookEventStoreTest {
                 jdbc.sql(statement).update();
             }
         }
-        store = new HookEventStore(jdbc, JsonMapper.builder().build(), new HookProperties(RETENTION, 1024, MAX_TEXT));
+        store = new HookEventStore(jdbc, JsonMapper.builder().build(), new HookProperties(RETENTION, 1024, MAX_TEXT, java.time.Duration.ofSeconds(1)));
     }
 
     @Test

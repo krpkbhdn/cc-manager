@@ -2,6 +2,7 @@ package com.github.krpkbhdn.ccmanager.claude.launch;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.github.krpkbhdn.ccmanager.claude.hook.SessionFiles;
 import com.github.krpkbhdn.ccmanager.project.ModelSelection;
 import com.github.krpkbhdn.ccmanager.team.RoleDraft;
 import com.github.krpkbhdn.ccmanager.team.Team;
@@ -17,23 +18,49 @@ class ClaudeCommandTest {
 
     private static final Path EXE = Path.of("claude").toAbsolutePath();
     private static final Path SETTINGS = Path.of("s.json").toAbsolutePath();
+    private static final Path MCP = Path.of("m.json").toAbsolutePath();
+    private static final Path PLUGIN = Path.of("plugin").toAbsolutePath();
+    private static final SessionFiles FILES = new SessionFiles(SETTINGS, MCP);
+    private static final List<String> CLAUDE_MANAGER_FLAGS = List.of("--mcp-config", MCP.toString(), "--plugin-dir", PLUGIN.toString());
     private static final int WINDOWS_COMMAND_LINE_LIMIT = 32_767;
 
     @Test
-    void newSessionHasOnlySettings() {
-        assertThat(ClaudeCommand.launchArguments(EXE, SETTINGS, LaunchMode.NEW, ModelSelection.DEFAULT))
-                .containsExactly(EXE.toString(), "--settings", SETTINGS.toString());
+    void newSessionHasSettingsMcpConfigAndPlugin() {
+        assertThat(ClaudeCommand.launchArguments(EXE, FILES, PLUGIN, LaunchMode.NEW, ModelSelection.DEFAULT))
+                .containsExactly(EXE.toString(), "--settings", SETTINGS.toString(), "--mcp-config", MCP.toString(), "--plugin-dir", PLUGIN.toString());
     }
 
     @Test
     void continueAndResumeAddTheirFlag() {
-        assertThat(ClaudeCommand.launchArguments(EXE, SETTINGS, LaunchMode.CONTINUE, ModelSelection.DEFAULT)).endsWith("--continue");
-        assertThat(ClaudeCommand.launchArguments(EXE, SETTINGS, LaunchMode.RESUME_PICKER, ModelSelection.DEFAULT)).endsWith("--resume");
+        assertThat(ClaudeCommand.launchArguments(EXE, FILES, PLUGIN, LaunchMode.CONTINUE, ModelSelection.DEFAULT)).endsWith("--continue");
+        assertThat(ClaudeCommand.launchArguments(EXE, FILES, PLUGIN, LaunchMode.RESUME_PICKER, ModelSelection.DEFAULT)).endsWith("--resume");
+    }
+
+    @Test
+    void attachHasNeitherMcpConfigNorPluginBecauseItIsASubcommand() {
+        assertThat(ClaudeCommand.attachArguments(EXE, FILES, "ab12")).doesNotContain("--mcp-config", "--plugin-dir");
+    }
+
+    @Test
+    void teamLaunchGetsTheSameMcpConfigAndPlugin() {
+        var lead = new RoleDraft("boss", "d", "Lead it.", "opus", "high", null, true);
+
+        assertThat(ClaudeCommand.teamArguments(EXE, FILES, PLUGIN, new Team(1, "T", List.of(new TeamRole(1, lead, 0))), "t"))
+                .containsSequence(CLAUDE_MANAGER_FLAGS);
+    }
+
+    @Test
+    void setupLaunchAddsTheProfileDirectoryAndEndsWithThePromptAfterTheSeparator() {
+        var profile = Path.of("profile").toAbsolutePath();
+
+        assertThat(ClaudeCommand.setupArguments(EXE, FILES, PLUGIN, "Read it.", profile))
+                .containsSequence(CLAUDE_MANAGER_FLAGS)
+                .endsWith("--add-dir", profile.toString(), "--", "Read it.");
     }
 
     @Test
     void attachAppendsSubcommandAndId() {
-        assertThat(ClaudeCommand.attachArguments(EXE, SETTINGS, "ab12")).endsWith("attach", "ab12");
+        assertThat(ClaudeCommand.attachArguments(EXE, FILES, "ab12")).endsWith("attach", "ab12");
     }
 
     @Test
@@ -55,8 +82,8 @@ class ClaudeCommandTest {
 
     @Test
     void selectionFlagsComeBeforeTheModeFlagSoResumeKeepsItsOptionalValueFree() {
-        assertThat(ClaudeCommand.launchArguments(EXE, SETTINGS, LaunchMode.RESUME_PICKER, new ModelSelection("sonnet", "low")))
-                .containsExactly(EXE.toString(), "--settings", SETTINGS.toString(), "--model", "sonnet", "--effort", "low", "--resume");
+        assertThat(ClaudeCommand.launchArguments(EXE, FILES, PLUGIN, LaunchMode.RESUME_PICKER, new ModelSelection("sonnet", "low")))
+                .containsExactly(EXE.toString(), "--settings", SETTINGS.toString(), "--mcp-config", MCP.toString(), "--plugin-dir", PLUGIN.toString(), "--model", "sonnet", "--effort", "low", "--resume");
     }
 
     @Test
@@ -65,7 +92,7 @@ class ClaudeCommandTest {
         var tester = new RoleDraft("tester", "Checks.", "Test it.", "haiku", "low", null, false);
         var team = new Team(1, "T", List.of(new TeamRole(1, lead, 0), new TeamRole(2, tester, 1)));
 
-        var command = ClaudeCommand.teamArguments(EXE, SETTINGS, team, "-fix it");
+        var command = ClaudeCommand.teamArguments(EXE, FILES, PLUGIN, team, "-fix it");
 
         assertThat(command).containsSubsequence("--settings", SETTINGS.toString(), "--model", "opus", "--effort", "high", "--agents")
                 .contains(TeamAgentsJson.agents(team), TeamAgentsJson.leadAddendum(team))
@@ -82,7 +109,7 @@ class ClaudeCommandTest {
         TeamService.validate("Big", roles);
         var team = new Team(1, "Big", java.util.stream.IntStream.range(0, roles.size()).mapToObj(i -> new TeamRole(i, roles.get(i), i)).toList());
 
-        var commandLine = ClaudeCommand.teamArguments(EXE, SETTINGS, team, "task").stream().map(WindowsArgument::quote).collect(java.util.stream.Collectors.joining(" "));
+        var commandLine = ClaudeCommand.teamArguments(EXE, FILES, PLUGIN, team, "task").stream().map(WindowsArgument::quote).collect(java.util.stream.Collectors.joining(" "));
 
         assertThat(commandLine.length()).isLessThan(WINDOWS_COMMAND_LINE_LIMIT);
     }
@@ -95,7 +122,7 @@ class ClaudeCommandTest {
         }
         var team = new Team(1, "Big", java.util.stream.IntStream.range(0, roles.size()).mapToObj(i -> new TeamRole(i, roles.get(i), i)).toList());
 
-        var quoted = ClaudeCommand.teamArguments(EXE, SETTINGS, team, "t".repeat(6000)).stream().map(WindowsArgument::quote).toArray(String[]::new);
+        var quoted = ClaudeCommand.teamArguments(EXE, FILES, PLUGIN, team, "t".repeat(6000)).stream().map(WindowsArgument::quote).toArray(String[]::new);
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> WindowsArgument.requireFitsCommandLine(quoted))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("Shorten the task");

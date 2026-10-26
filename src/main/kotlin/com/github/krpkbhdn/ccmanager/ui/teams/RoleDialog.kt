@@ -50,6 +50,7 @@ fun RoleDialog(team: Team, dialog: RoleDialogState, teams: TeamsState) {
     var saveError by remember { mutableStateOf<String?>(null) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
+    LaunchedEffect(form.name.text.toString()) { saveError = null }
     val save = { if (form.error == null) teams.saveRole(dialog) { saveError = it } }
     val existing = dialog.index?.let { team.roles.getOrNull(it) }
     ModalHost(teams::requestCloseDialog, width = dialogWidth, takeFocus = false) {

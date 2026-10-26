@@ -20,13 +20,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.isSecondaryPressed
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import com.github.krpkbhdn.ccmanager.project.Project
+import com.github.krpkbhdn.ccmanager.ui.components.ContextMenuArea
 import com.github.krpkbhdn.ccmanager.ui.components.CountBadge
 import com.github.krpkbhdn.ccmanager.ui.components.IconButton
 import com.github.krpkbhdn.ccmanager.ui.components.Label
@@ -38,6 +36,9 @@ import com.github.krpkbhdn.ccmanager.ui.components.WithTooltip
 import com.github.krpkbhdn.ccmanager.ui.git.GitSummaryLine
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitSummary
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
+import com.github.krpkbhdn.ccmanager.ui.state.AppState
+import com.github.krpkbhdn.ccmanager.ui.state.RenameRequest
+import com.github.krpkbhdn.ccmanager.ui.state.Route
 import com.github.krpkbhdn.ccmanager.ui.state.mostUrgent
 import com.github.krpkbhdn.ccmanager.ui.state.pathTail
 import com.github.krpkbhdn.ccmanager.ui.theme.Motion
@@ -51,7 +52,34 @@ private val markerWidth = 3.dp
 private val markerHeight = 20.dp
 private val avatarSize = 30.dp
 
-class ProjectActions(val onOpen: () -> Unit, val onRename: () -> Unit, val onRemove: () -> Unit, val onOpenFolder: () -> Unit, val onSettings: () -> Unit)
+class ProjectActions(
+    val onOpen: () -> Unit,
+    val onStartTask: () -> Unit,
+    val onRename: () -> Unit,
+    val onRemove: () -> Unit,
+    val onOpenFolder: () -> Unit,
+    val onSettings: () -> Unit,
+    val onAuthorConfig: () -> Unit,
+)
+
+fun AppState.projectActions(project: Project) = ProjectActions(
+    onOpen = { navigate(Route.Project(project.id)) },
+    onStartTask = { taskDialogProjectId = project.id },
+    onRename = { projects.renaming = RenameRequest(project) },
+    onRemove = { projects.requestRemove(project) },
+    onOpenFolder = { openFolder(project) },
+    onSettings = { openProjectSettings(project) },
+    onAuthorConfig = { author.openManage(project.id) },
+)
+
+fun projectMenu(actions: ProjectActions): List<MenuEntry> = listOf(
+    MenuEntry("Start task with team", Icons.Users) { actions.onStartTask() },
+    MenuEntry("Open folder", Icons.FolderOpen) { actions.onOpenFolder() },
+    MenuEntry("Project settings", Icons.Settings) { actions.onSettings() },
+    MenuEntry("Author configuration", Icons.Sparkles) { actions.onAuthorConfig() },
+    MenuEntry("Rename", Icons.Edit) { actions.onRename() },
+    MenuEntry("Remove from manager", Icons.Trash, danger = true) { actions.onRemove() },
+)
 
 /** Sidebar entry of one project: avatar with status dot, name, live activity ticker and a context menu. */
 @Composable
@@ -67,31 +95,25 @@ fun ProjectRow(
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val marker by animateFloatAsState(if (selected) 1f else 0f, Motion.base(), label = "rowMarker")
-    Box(modifier.pointerInput(Unit) { openMenuOnSecondaryClick { menuOpen = true } }) {
-        WithTooltip(if (collapsed) project.name else null) {
-            Pressable(
-                actions.onOpen,
-                Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(Radius.md),
-                base = if (selected) colors.accentSoft else Color.Transparent,
-            ) { hovered ->
-                if (collapsed) CollapsedRow(project, status) else ExpandedRow(project, status, sessions, gitSummary, hovered, selected) { menuOpen = true }
+    ContextMenuArea({ projectMenu(actions) }, modifier) {
+        Box {
+            WithTooltip(if (collapsed) project.name else null) {
+                Pressable(
+                    actions.onOpen,
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(Radius.md),
+                    base = if (selected) colors.accentSoft else Color.Transparent,
+                ) { hovered ->
+                    if (collapsed) CollapsedRow(project, status) else ExpandedRow(project, status, sessions, gitSummary, hovered, selected) { menuOpen = true }
+                }
             }
-        }
-        Box(
-            Modifier.align(Alignment.CenterStart).width(markerWidth).height(markerHeight * marker)
-                .background(colors.accent, RoundedCornerShape(markerWidth)),
-        )
-        if (menuOpen) {
-            PopupMenu(
-                listOf(
-                    MenuEntry("Open folder", Icons.FolderOpen) { actions.onOpenFolder() },
-                    MenuEntry("Project settings", Icons.Settings) { actions.onSettings() },
-                    MenuEntry("Rename", Icons.Edit) { actions.onRename() },
-                    MenuEntry("Remove from manager", Icons.Trash, danger = true) { actions.onRemove() },
-                ),
-                onDismiss = { menuOpen = false },
+            Box(
+                Modifier.align(Alignment.CenterStart).width(markerWidth).height(markerHeight * marker)
+                    .background(colors.accent, RoundedCornerShape(markerWidth)),
             )
+            if (menuOpen) {
+                PopupMenu(projectMenu(actions), onDismiss = { menuOpen = false })
+            }
         }
     }
 }
@@ -126,15 +148,6 @@ private fun ExpandedRow(project: Project, status: AgentStatus, sessions: List<Se
             IconButton(Icons.More, onMenu, Modifier.size(24.dp), tooltip = "Project actions", size = 24.dp)
         } else if (sessions.isNotEmpty()) {
             CountBadge(sessions.size, tint = colors.status(status))
-        }
-    }
-}
-
-private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.openMenuOnSecondaryClick(open: () -> Unit) {
-    awaitPointerEventScope {
-        while (true) {
-            val event = awaitPointerEvent()
-            if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) open()
         }
     }
 }

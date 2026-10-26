@@ -16,7 +16,7 @@ final class SkillFrontmatter {
 
     /** @return the front matter fields, empty when the file has none */
     static Map<String, String> parse(String content) {
-        var lines = content.lines().toList();
+        var lines = (content.startsWith("\uFEFF") ? content.substring(1) : content).lines().toList();
         var fields = new HashMap<String, String>();
         if (lines.isEmpty() || !lines.getFirst().strip().equals(FENCE)) {
             return fields;

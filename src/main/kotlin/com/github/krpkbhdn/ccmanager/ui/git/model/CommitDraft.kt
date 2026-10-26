@@ -29,6 +29,14 @@ class CommitDraft {
 
     fun request(): CommitRequest = CommitRequest(message.text.toString().trim(), amend, signOff, skipHooks)
 
+    /** After a successful commit: a draft edited meanwhile keeps its text but must not amend again. */
+    fun committed(sent: String) {
+        if (message.text.toString() == sent) clear() else {
+            amend = false
+            memory = AmendMemory()
+        }
+    }
+
     fun clear() {
         message.clearText()
         amend = false

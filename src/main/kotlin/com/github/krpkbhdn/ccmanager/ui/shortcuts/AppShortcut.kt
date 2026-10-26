@@ -17,6 +17,7 @@ import java.awt.event.KeyEvent.VK_COMMA
 import java.awt.event.KeyEvent.VK_D
 import java.awt.event.KeyEvent.VK_ESCAPE
 import java.awt.event.KeyEvent.VK_F1
+import java.awt.event.KeyEvent.VK_F12
 import java.awt.event.KeyEvent.VK_G
 import java.awt.event.KeyEvent.VK_H
 import java.awt.event.KeyEvent.VK_J
@@ -27,6 +28,7 @@ import java.awt.event.KeyEvent.VK_N
 import java.awt.event.KeyEvent.VK_O
 import java.awt.event.KeyEvent.VK_P
 import java.awt.event.KeyEvent.VK_Q
+import java.awt.event.KeyEvent.VK_R
 import java.awt.event.KeyEvent.VK_S
 import java.awt.event.KeyEvent.VK_SLASH
 import java.awt.event.KeyEvent.VK_T
@@ -43,6 +45,7 @@ enum class AppShortcut(val label: String, private val windows: List<KeyChord>, p
     PALETTE("Command palette", listOf(ctrlShift(VK_P), ctrl(VK_K)), listOf(cmd(VK_K), cmdShift(VK_P))),
     ADD_PROJECT("Add project", listOf(ctrlShift(VK_O), ctrl(VK_N)), listOf(cmd(VK_O), cmd(VK_N))),
     NEW_SESSION("New Claude session", listOf(ctrlShift(VK_T)), listOf(cmd(VK_T))),
+    OPEN_TERMINAL("Open terminal", listOf(alt(VK_F12)), listOf(alt(VK_F12))),
     CLOSE_SESSION("Close session tab", listOf(ctrlShift(VK_W)), listOf(cmd(VK_W))),
     NEXT_TAB("Next tab", listOf(ctrl(VK_TAB)), listOf(ctrl(VK_TAB))),
     PREVIOUS_TAB("Previous tab", listOf(ctrlShift(VK_TAB)), listOf(ctrlShift(VK_TAB))),
@@ -65,6 +68,7 @@ enum class AppShortcut(val label: String, private val windows: List<KeyChord>, p
     GIT_COMMIT("Commit changes", listOf(ctrlShift(VK_K)), listOf(cmdShift(VK_K))),
     GIT_BRANCHES("Switch branch", listOf(ctrlShift(VK_H)), listOf(cmdShift(VK_H))),
     GIT_PUSH("Push", listOf(ctrlShift(VK_U)), listOf(cmdShift(VK_U))),
+    RUN("Run selected configuration", listOf(ctrlShift(VK_R)), listOf(cmdShift(VK_R))),
     ACTIVITY_TAB("Activity tab", listOf(ctrlShift(VK_A)), listOf(cmdShift(VK_A))),
     NOTIFICATIONS("Notifications", listOf(ctrlShift(VK_M)), listOf(cmdShift(VK_M))),
     USAGE("Show usage", listOf(ctrlShift(VK_Y)), listOf(cmdShift(VK_Y))),

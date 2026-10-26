@@ -1,7 +1,9 @@
 package com.github.krpkbhdn.ccmanager.git;
 
 import com.github.krpkbhdn.ccmanager.git.GitException.Kind;
+import com.github.krpkbhdn.ccmanager.workspace.CommandRunner;
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -11,6 +13,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -30,9 +33,18 @@ import org.springframework.stereotype.Component;
 public class GitRunner {
 
 
+    private static final Set<String> NETWORK = Set.of("fetch", "pull", "push", "ls-remote", "clone");
+    private static final Set<String> WRITES = Set.of("checkout", "switch", "restore", "reset", "merge", "rebase", "cherry-pick", "revert",
+            "stash", "commit", "add", "rm", "apply", "am", "clean", "pull");
     private static final ExecutorService PIPES = Executors.newVirtualThreadPerTaskExecutor();
     private static final List<String> BASE_COMMAND =
-            List.of("git", "-c", "core.quotepath=false", "-c", "color.ui=never", "-c", "core.fsmonitor=false");
+            List.of("git", "-c", "core.quotepath=false", "-c", "color.ui=never", "-c", "core.fsmonitor=false",
+                    "-c", "diff.noprefix=false", "-c", "diff.mnemonicPrefix=false", "-c", "log.showSignature=false",
+                    "-c", "diff.context=3");
+
+    /** Pins the a/ b/ prefixes the diff parser reads, over git 2.45+ diff.srcPrefix/dstPrefix. */
+    public static final String SRC_PREFIX = "--src-prefix=a/";
+    public static final String DST_PREFIX = "--dst-prefix=b/";
 
     private final GitProperties properties;
     private final Map<String, String> extraEnvironment;
@@ -67,17 +79,17 @@ public class GitRunner {
 
     /** stdout of a command that must succeed. @throws GitException otherwise */
     public String out(Path repo, String... args) {
-        return run(repo, properties.commandTimeout(), null, null, List.of(args)).stdout();
+        return run(repo, timeoutFor(List.of(args)), null, null, List.of(args)).stdout();
     }
 
     /** Like {@link #out} with {@code stdin} fed to git (patches, commit messages, path lists). */
     public String outWithInput(Path repo, byte[] stdin, String... args) {
-        return run(repo, properties.commandTimeout(), null, stdin, List.of(args)).stdout();
+        return run(repo, timeoutFor(List.of(args)), null, stdin, List.of(args)).stdout();
     }
 
     /** Result of a command whose non-zero exit is an answer, not an error (e.g. merge-base --is-ancestor). */
     public Result tryRun(Path repo, String... args) {
-        return execute(repo, properties.commandTimeout(), null, null, List.of(args));
+        return execute(repo, timeoutFor(List.of(args)), null, null, List.of(args));
     }
 
     /**
@@ -107,12 +119,15 @@ public class GitRunner {
         builder.environment().put("GIT_OPTIONAL_LOCKS", "0");
         builder.environment().put("LC_ALL", "C");
         builder.environment().put("GIT_EDITOR", "true");
-        builder.environment().putIfAbsent("GIT_SSH_COMMAND", "ssh -o BatchMode=yes");
         builder.environment().putAll(extraEnvironment);
+        if (mayForceBatchSsh(args, builder.environment()) && !hasConfiguredSsh(repo)) {
+            builder.environment().put("GIT_SSH_COMMAND", "ssh -o BatchMode=yes");
+        }
         try {
             var process = builder.start();
-            var stdout = async(() -> new String(readAll(process), StandardCharsets.UTF_8));
-            var stderr = async(() -> readLines(process, progress));
+            var stdout = new ByteArrayOutputStream();
+            var stderr = new StringBuffer();
+            var readers = CompletableFuture.allOf(CommandRunner.drain(process.getInputStream(), stdout), async(() -> readLines(process, progress, stderr)));
             var stdinWritten = async(() -> writeAndClose(process, stdin));
             if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
                 process.descendants().forEach(ProcessHandle::destroyForcibly);
@@ -120,13 +135,28 @@ public class GitRunner {
                 throw new GitException(Kind.TIMEOUT, "git " + GitFailure.subcommand(args) + " timed out", "");
             }
             stdinWritten.join();
-            return new Result(process.exitValue(), stdout.join(), stderr.join());
+            CommandRunner.awaitReaders(process, readers);
+            return new Result(process.exitValue(), stdout.toString(StandardCharsets.UTF_8), stderr.toString());
         } catch (IOException e) {
             throw new GitException(Kind.GIT_MISSING, "Git is not installed or not on PATH", String.valueOf(e.getMessage()));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new GitException(Kind.OTHER, "Interrupted", "");
         }
+    }
+
+    /** Writing commands get the long timeout: killing one mid-way leaves index.lock and a half-switched tree. */
+    Duration timeoutFor(List<String> args) {
+        return WRITES.contains(GitFailure.subcommand(args)) ? properties.syncTimeout() : properties.commandTimeout();
+    }
+
+    /** BatchMode only for network commands, and never over the user's own GIT_SSH or GIT_SSH_COMMAND. */
+    static boolean mayForceBatchSsh(List<String> args, Map<String, String> environment) {
+        return NETWORK.contains(GitFailure.subcommand(args)) && !environment.containsKey("GIT_SSH") && !environment.containsKey("GIT_SSH_COMMAND");
+    }
+
+    private boolean hasConfiguredSsh(Path repo) {
+        return execute(repo, properties.commandTimeout(), null, null, List.of("config", "--get", "core.sshCommand")).ok();
     }
 
     private static <T> CompletableFuture<T> async(Supplier<T> work) {
@@ -144,16 +174,7 @@ public class GitRunner {
         return null;
     }
 
-    private static byte[] readAll(Process process) {
-        try {
-            return process.getInputStream().readAllBytes();
-        } catch (IOException e) {
-            return new byte[0];
-        }
-    }
-
-    private static String readLines(Process process, Consumer<String> progress) {
-        var text = new StringBuilder();
+    private static Void readLines(Process process, Consumer<String> progress, StringBuffer text) {
         try (var reader = new BufferedReader(new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
             var line = new StringBuilder();
             int c;
@@ -167,9 +188,9 @@ public class GitRunner {
             }
             emit(line, progress);
         } catch (IOException e) {
-            return text.toString();
+            return null;
         }
-        return text.toString();
+        return null;
     }
 
     private static void emit(StringBuilder line, Consumer<String> progress) {

@@ -26,7 +26,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.abs
-import kotlin.math.roundToInt
 
 private const val WHEEL_LINES_PER_NOTCH = 3f
 private const val AUTOSCROLL_MILLIS = 50L
@@ -49,6 +48,19 @@ internal fun Modifier.terminalPointer(
     }
 }
 
+/** Turns fractional scroll deltas (touchpads) into whole lines, keeping the remainder for the next event. */
+internal class WheelLines {
+    private var pending = 0f
+
+    fun take(delta: Float): Int {
+        if (delta * pending < 0f) pending = 0f
+        pending += delta
+        val whole = pending.toInt()
+        pending -= whole
+        return whole
+    }
+}
+
 @OptIn(ExperimentalComposeUiApi::class)
 private class PointerGestures(
     private val session: TerminalSession,
@@ -58,6 +70,7 @@ private class PointerGestures(
     private val onContextMenu: (Offset) -> Unit,
 ) {
     private val clicks = ClickCounter()
+    private val wheelLines = WheelLines()
     private var selecting = false
     private var reportingDrag = false
     private var anchor = Cell(0, 0)
@@ -113,9 +126,10 @@ private class PointerGestures(
         val shift = event.keyboardModifiers.isShiftPressed
         if ((session.mouseReporting && !shift) || session.modes.alternateScreen) {
             val (column, row) = geometry.value.gridCellAt(point, session.columns, session.rows)
-            val code = if (delta > 0) MouseButtonCodes.SCROLLUP else MouseButtonCodes.SCROLLDOWN
-            val lines = abs(delta).roundToInt().coerceAtLeast(1)
-            return session.reportWheel(code, modifierFlags(event), lines, column, row)
+            val whole = wheelLines.take(delta)
+            if (whole == 0) return true
+            val code = if (whole > 0) MouseButtonCodes.SCROLLUP else MouseButtonCodes.SCROLLDOWN
+            return session.reportWheel(code, modifierFlags(event), abs(whole), column, row)
         }
         session.scrollBy(-delta * WHEEL_LINES_PER_NOTCH)
         return true

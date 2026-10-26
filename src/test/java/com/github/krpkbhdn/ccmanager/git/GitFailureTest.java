@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import com.github.krpkbhdn.ccmanager.git.GitException.Kind;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -108,6 +109,13 @@ class GitFailureTest {
         sandbox.write("a.txt", "dirty\n");
 
         assertThat(failureOf(sandbox, "checkout", "other").kind()).isEqualTo(Kind.DIRTY_TREE);
+    }
+
+    @Test
+    void subcommandSkipsTheValueOfEachDashC() {
+        assertThat(GitFailure.subcommand(List.of("-c", "core.editor=true", "rebase", "--continue"))).isEqualTo("rebase");
+        assertThat(GitFailure.subcommand(List.of("--literal-pathspecs", "status"))).isEqualTo("status");
+        assertThat(GitFailure.subcommand(List.of())).isEqualTo("command");
     }
 
     @Test

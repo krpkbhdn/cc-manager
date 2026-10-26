@@ -95,7 +95,7 @@ private fun BranchRow(git: GitState, branch: GitBranch, onPicked: () -> Unit) {
                 }
                 Badge(Icons.ArrowUp, branch.ahead(), colors.success)
                 Badge(Icons.ArrowDown, branch.behind(), colors.warning)
-                if (hovered) Box { IconButton(Icons.More, { menuOpen = true }, tooltip = "Branch actions", size = 24.dp); if (menuOpen) PopupMenu(branchMenu(git, branch), { menuOpen = false }, alignEnd = true) }
+                if (hovered || menuOpen) Box { IconButton(Icons.More, { menuOpen = true }, tooltip = "Branch actions", size = 24.dp); if (menuOpen) PopupMenu(branchMenu(git, branch), { menuOpen = false }, alignEnd = true) }
             }
         }
     }

@@ -100,6 +100,15 @@ class TerminalSessionTest {
     }
 
     @Test
+    fun onlyTheUsersEnterKeyCountsAsRecentEnter() {
+        session.send("\r")
+        settle(connector, session)
+        assertThat(session.enterWithin(60_000)).isFalse()
+        session.onKey(com.jediterm.core.input.KeyInputEvent(com.jediterm.core.input.KeyInputEvent.Type.PRESSED, java.awt.event.KeyEvent.VK_ENTER, '\r', 0))
+        assertThat(session.enterWithin(60_000)).isTrue()
+    }
+
+    @Test
     fun resizeReflowsTheBufferAndTellsTheProcess() {
         session.fit(100, 30)
         settle(connector, session)

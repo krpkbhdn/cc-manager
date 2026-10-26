@@ -4,10 +4,10 @@ import com.github.krpkbhdn.ccmanager.git.GitBranch
 import com.github.krpkbhdn.ccmanager.ui.components.MenuEntry
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitDialog
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitState
-import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
 import com.github.krpkbhdn.ccmanager.ui.git.model.checkout
 import com.github.krpkbhdn.ccmanager.ui.git.model.requestRebase
 import com.github.krpkbhdn.ccmanager.ui.git.model.setUpstream
+import com.github.krpkbhdn.ccmanager.ui.git.model.showInLog
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.state.ConfirmRequest
 import com.github.krpkbhdn.ccmanager.ui.git.model.deleteRemoteBranch
@@ -26,7 +26,7 @@ fun branchMenu(git: GitState, branch: GitBranch): List<MenuEntry> {
         if (local && sameNameRemote != null && branch.upstream() != sameNameRemote) {
             add(MenuEntry("Track $sameNameRemote", Icons.Link) { git.setUpstream(branch.name(), sameNameRemote) })
         }
-        add(MenuEntry("Show in log", Icons.Log, dividerAbove = true) { git.log.update { it.forBranch(branch.name()) }; git.show(GitSubView.LOG) })
+        add(MenuEntry("Show in log", Icons.Log, dividerAbove = true) { git.showInLog(branch.name()) })
         if (local && !here) add(MenuEntry("Delete...", Icons.Trash, danger = true, dividerAbove = true) { git.dialog = GitDialog.DeleteBranch(branch) })
         if (!local) add(MenuEntry("Delete remote branch...", Icons.Trash, danger = true, dividerAbove = true) { git.dialog = deleteRemoteDialog(git, branch) })
     }

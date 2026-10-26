@@ -98,6 +98,11 @@ public class SkillService {
         }
     }
 
+    /** Where a skill of this name lives in the scope, whether or not it exists yet. */
+    public Path skillDirectory(ExtensionScope scope, Path projectDirectory, String name) {
+        return skillsRoot(scope, projectDirectory).resolve(name);
+    }
+
     private Path skillsRoot(ExtensionScope scope, Path projectDirectory) {
         return switch (scope) {
             case USER -> host.claudeConfigDirectory().resolve(SKILLS_DIRECTORY);

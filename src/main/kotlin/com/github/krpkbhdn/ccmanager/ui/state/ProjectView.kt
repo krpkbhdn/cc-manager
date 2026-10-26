@@ -14,13 +14,16 @@ sealed interface Route {
 
 sealed interface ProjectTab {
     data class Session(val ccmSessionId: String) : ProjectTab
+    data class Shell(val terminalId: String) : ProjectTab
     data object Git : ProjectTab
+    data object Run : ProjectTab
     data object Activity : ProjectTab
 }
 
 /** Open terminal tabs and the selected tab of one project; every operation returns a new value. */
 data class ProjectView(
     val openSessions: List<String> = emptyList(),
+    val openShells: List<String> = emptyList(),
     val selected: ProjectTab = ProjectTab.Activity,
     val focusedSession: String? = null,
 ) {
@@ -30,13 +33,30 @@ data class ProjectView(
         focusedSession = ccmSessionId,
     )
 
+    fun openShell(terminalId: String): ProjectView = copy(
+        openShells = if (terminalId in openShells) openShells else openShells + terminalId,
+        selected = ProjectTab.Shell(terminalId),
+    )
+
     fun select(tab: ProjectTab): ProjectView = when (tab) {
         is ProjectTab.Session -> openSession(tab.ccmSessionId)
         else -> copy(selected = tab)
     }
 
-    /** Session tabs in strip order, then Git and Activity. */
-    fun tabs(): List<ProjectTab> = openSessions.map { ProjectTab.Session(it) } + ProjectTab.Git + ProjectTab.Activity
+    /** Session tabs in strip order, then shell tabs, Git, Run and Activity. */
+    fun tabs(): List<ProjectTab> =
+        openSessions.map { ProjectTab.Session(it) } + openShells.map { ProjectTab.Shell(it) } + ProjectTab.Git + ProjectTab.Run + ProjectTab.Activity
+
+    fun closeShell(terminalId: String): ProjectView {
+        if (terminalId !in openShells) return this
+        val remaining = openShells - terminalId
+        val next = if (selected == ProjectTab.Shell(terminalId)) {
+            remaining.lastOrNull()?.let { ProjectTab.Shell(it) } ?: openSessions.lastOrNull()?.let { ProjectTab.Session(it) } ?: ProjectTab.Activity
+        } else {
+            selected
+        }
+        return copy(openShells = remaining, selected = next)
+    }
 
     /** Selects the tab [step] places away, wrapping around the strip. */
     fun cycle(step: Int): ProjectView {

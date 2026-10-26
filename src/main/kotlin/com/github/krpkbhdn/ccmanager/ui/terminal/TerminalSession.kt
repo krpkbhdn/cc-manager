@@ -19,7 +19,7 @@ import com.jediterm.terminal.emulator.mouse.MouseEventProcessingSettings
 import com.jediterm.terminal.emulator.mouse.MouseMode
 import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
-import java.awt.datatransfer.StringSelection
+import com.github.krpkbhdn.ccmanager.ui.components.copyToClipboard
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -28,6 +28,8 @@ private const val INITIAL_ROWS = 32
 internal const val DEFAULT_CELL_DP = 8
 private const val MIN_CELL_DP = 6
 private const val MAX_CELL_DP = 20
+private const val ENTER_BYTE: Byte = 0x0D
+private const val NANOS_PER_MILLI = 1_000_000L
 
 private fun Color.toJediColor() = com.jediterm.core.Color(toArgb() and 0xFFFFFF)
 
@@ -111,19 +113,26 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
 
     fun send(text: String) = emulator.write(text.toByteArray(Charsets.UTF_8))
 
+    @Volatile
+    private var lastEnterNanos = 0L
+
+    /** True when the user pressed Enter less than [windowMillis] ago: the turn it starts is not WORKING yet and Ctrl+C would abort it. */
+    fun enterWithin(windowMillis: Long): Boolean =
+        lastEnterNanos != 0L && System.nanoTime() - lastEnterNanos < windowMillis * NANOS_PER_MILLI
+
     /** Handles a key event; returns true when it was consumed here. */
     fun onKey(event: KeyInputEvent): Boolean {
         if (event.type == KeyInputEvent.Type.TYPED && suppressTyped && event.modifiersEx != 0) return true
-        val command = commandFor(event)
-        if (command != null) {
+        val command = commandFor(event, selection != null)
+        if (command != null && perform(command)) {
             suppressTyped = true
-            perform(command)
             return true
         }
         if (event.type == KeyInputEvent.Type.PRESSED) suppressTyped = false
         val bytes = typedPair(event) ?: optionLetterBytes(event)?.also { suppressTyped = true } ?: keyBytes(event, emulator.terminal) ?: return false
         selection = null
         scrollToBottom()
+        if (bytes.size == 1 && bytes[0] == ENTER_BYTE) lastEnterNanos = System.nanoTime()
         emulator.write(bytes)
         return true
     }
@@ -141,11 +150,15 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
         return String(charArrayOf(high, char)).toByteArray(Charsets.UTF_8)
     }
 
-    private fun perform(command: TerminalCommand) = when (command) {
-        is TerminalCommand.Zoom -> zoomBy(command.steps)
-        TerminalCommand.ResetZoom -> cellDp = DEFAULT_CELL_DP
-        TerminalCommand.Copy -> copySelection()
-        TerminalCommand.Paste -> paste()
+    /** False when the key should still reach the process: Ctrl+V with no text on the clipboard is an app's image paste. */
+    private fun perform(command: TerminalCommand): Boolean {
+        when (command) {
+            is TerminalCommand.Zoom -> zoomBy(command.steps)
+            TerminalCommand.ResetZoom -> cellDp = DEFAULT_CELL_DP
+            TerminalCommand.Copy -> copySelection()
+            TerminalCommand.Paste -> return paste()
+        }
+        return true
     }
 
     fun zoomBy(steps: Int) {
@@ -154,15 +167,18 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
 
     fun copySelection() {
         val text = selection?.textIn(buffer)?.takeIf { it.isNotEmpty() } ?: return
-        Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null)
+        copyToClipboard(text)
+        selection = null
     }
 
-    fun paste() {
+    /** Pastes the clipboard text; false when it holds none. */
+    fun paste(): Boolean {
         val clipboard = Toolkit.getDefaultToolkit().systemClipboard
         val text = runCatching { clipboard.getData(DataFlavor.stringFlavor) as? String }.getOrNull().orEmpty()
-        if (text.isEmpty()) return
+        if (text.isEmpty()) return false
         scrollToBottom()
         emulator.write(pasteBytes(text, modes.bracketedPaste))
+        return true
     }
 
     fun selectAll() {

@@ -30,6 +30,7 @@ sealed interface SkillText {
 class SkillHost(val openFolder: (Path) -> Unit, val openIde: (Path) -> Unit, val ideAvailable: () -> Boolean)
 
 const val NEW_SKILL_KEY = "skill:new"
+private const val LOAD_FAILURE_TITLE = "Could not read skills"
 
 /** Skills of one project (or of the user when [projectPath] is null); files are read and written one operation at a time. */
 class SkillsState(
@@ -75,7 +76,7 @@ class SkillsState(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: RuntimeException) {
-                loadFailure = failureOf("Could not read skills", e)
+                loadFailure = failureOf(LOAD_FAILURE_TITLE, e)
             } finally {
                 loading = false
                 loaded = true
@@ -98,8 +99,7 @@ class SkillsState(
     }
 
     fun create(target: ExtensionScope, name: String, description: String) {
-        mutations.run("Creating $name", NEW_SKILL_KEY, { service.create(target, projectPath, name, description) to service.list(projectPath) }) { (created, all) ->
-            skills = all
+        mutations.runThenReload("Creating $name", NEW_SKILL_KEY, LOAD_FAILURE_TITLE, { service.create(target, projectPath, name, description) }, { service.list(projectPath) }, { loadFailure = it }, { skills = it }) { created ->
             creating = false
             selected = created.file.toString()
             notify(NotificationKind.FINISHED, "Created $name", "Edit its SKILL.md to tell Claude what it does.")
@@ -109,8 +109,7 @@ class SkillsState(
     fun requestDelete(entry: SkillEntry) {
         val name = entry.skill.name
         confirm(ConfirmRequest("Delete $name?", "Deletes the whole folder of the skill, including any files next to its SKILL.md. This cannot be undone.", "Delete") {
-            mutations.run("Deleting $name", entry.key, { service.delete(entry.skill); service.list(projectPath) }) {
-                skills = it
+            mutations.runThenReload("Deleting $name", entry.key, LOAD_FAILURE_TITLE, { service.delete(entry.skill) }, { service.list(projectPath) }, { loadFailure = it }, { skills = it }) {
                 texts.remove(entry.key)
                 if (selected == entry.key) selected = null
             }

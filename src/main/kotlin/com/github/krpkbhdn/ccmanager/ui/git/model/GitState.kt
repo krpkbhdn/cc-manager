@@ -14,6 +14,7 @@ import java.nio.file.Path
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -24,6 +25,17 @@ private const val GIT_BUSY = "Git is busy"
 /** Wraps anything that is not already a [GitException] so the UI has one failure type to show. */
 internal fun asGitException(e: RuntimeException): GitException =
     e as? GitException ?: GitException(GitException.Kind.OTHER, e.message ?: UNEXPECTED_ERROR, "")
+
+/** Runs a blocking git [block] off the UI thread; a failure goes to [onError] and the result is null. */
+internal suspend fun <T> gitCall(onError: (GitException) -> Unit, block: () -> T): T? =
+    try {
+        withContext(Dispatchers.IO) { block() }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: RuntimeException) {
+        onError(asGitException(e))
+        null
+    }
 
 /** What [GitState] needs from the app around it: remembered preferences and a way to tell the user things. */
 class GitHost(
@@ -44,11 +56,16 @@ data class ChangeRef(val path: String, val staged: Boolean)
  */
 class GitState(
     val projectId: Long,
-    val repo: Path,
+    private val folder: Path,
     internal val git: GitBackend,
     internal val scope: CoroutineScope,
     internal val host: GitHost,
 ) {
+    /** The repository top level, re-read on every reload: git reports paths relative to it, whatever subfolder the project is. */
+    @Volatile
+    var repo: Path = folder
+        private set
+
     var status by mutableStateOf<GitStatus?>(null)
         private set
     var branches by mutableStateOf<List<GitBranch>>(emptyList())
@@ -75,7 +92,7 @@ class GitState(
         private set
 
     val draft = CommitDraft()
-    val log = LogModel(repo, git, scope) { fail("Could not read history", it) }
+    val log = LogModel({ repo }, git, scope) { fail("Could not read history", it) }
 
     val view: GitSubView get() = host.prefs().viewOf(projectId)
     val pullMode: GitMisc.PullMode get() = host.prefs().pullMode
@@ -105,29 +122,32 @@ class GitState(
 
     fun refresh() = refresher.request()
 
+    /** The toolbar Refresh: also re-reads tags, remotes and stashes, which a terminal can change without the watcher noticing. */
+    fun refreshAll() {
+        refresh()
+        scope.launch { loadAuxiliary() }
+    }
+
+    /** Stops the reload loop once the project is gone. */
+    fun close() = refresher.close()
+
     /** Subscribes to repository changes until the returned handle runs; a missing watcher only costs live updates. */
     fun attach(): Runnable {
-        val unsubscribe = try {
-            git.watcher.subscribe(repo) { refresh() }
-        } catch (e: RuntimeException) {
-            Runnable { }
+        val subscription = scope.async(Dispatchers.IO) {
+            try {
+                git.watcher.subscribe(folder) { refresh() }
+            } catch (e: RuntimeException) {
+                Runnable { }
+            }
         }
         refresh()
-        return unsubscribe
+        return Runnable { scope.launch(Dispatchers.IO) { subscription.await().run() } }
     }
 
     /** Diff of one file for the pane; failures show as a toast and yield null. */
     suspend fun diffOf(ref: ChangeRef) = guarded("Could not read the diff") { git.status.diff(repo, ref.path, ref.staged) }
 
-    suspend fun <T> guarded(label: String, call: GitBackend.() -> T): T? =
-        try {
-            withContext(Dispatchers.IO) { git.call() }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: RuntimeException) {
-            fail(label, asGitException(e))
-            null
-        }
+    suspend fun <T> guarded(label: String, call: GitBackend.() -> T): T? = gitCall({ fail(label, it) }) { git.call() }
 
     /** Runs one mutation at a time; progress lines flow into [job], then state reloads. [handle] may take over a failure. */
     internal fun <T> act(
@@ -154,15 +174,10 @@ class GitState(
     private class Success<T>(val value: T)
 
     private suspend fun <T> attempt(label: String, handle: (GitException) -> Boolean, again: () -> Unit, call: GitBackend.((String) -> Unit) -> T): Success<T>? =
-        try {
-            val thisJob = jobCount
-            Success(withContext(Dispatchers.IO) { git.call { line -> scope.launch { if (thisJob == jobCount) job = job?.copy(progress = line) } } })
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: RuntimeException) {
-            val failure = asGitException(e)
-            if (!handle(failure)) fail(label, failure, again)
-            null
+        jobCount.let { thisJob ->
+            gitCall({ failure -> if (!handle(failure)) fail(label, failure, again) }) {
+                Success(git.call { line -> scope.launch { if (thisJob == jobCount) job = job?.copy(progress = line) } })
+            }
         }
 
     internal fun fail(label: String, e: GitException, again: (() -> Unit)? = null) {
@@ -179,16 +194,19 @@ class GitState(
     private suspend fun reload() {
         loading = true
         try {
-            val loaded = withContext(Dispatchers.IO) {
+            val loaded = gitCall(::failLoad) {
+                repo = git.status.topLevel(folder)
                 val current = git.status.status(repo)
                 current to if (current.repository()) git.branches.branches(repo) else emptyList()
             }
-            applyLoaded(loaded.first, loaded.second)
-            loadError = null
+            if (loaded != null) {
+                applyLoaded(loaded.first, loaded.second)
+                loadError = null
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: RuntimeException) {
-            loadError = errorPlan(asGitException(e), LOAD_FAILED)
+            failLoad(asGitException(e))
         } finally {
             loading = false
         }
@@ -209,18 +227,16 @@ class GitState(
 
     private suspend fun loadAuxiliary() {
         if (status?.repository() != true) return
-        try {
-            val aux = withContext(Dispatchers.IO) {
-                Auxiliary(git.status.remotes(repo), git.status.identity(repo), git.stashes.list(repo), git.history.tags(repo))
-            }
-            remotes = aux.remotes
-            identity = aux.identity
-            stashes = aux.stashes
-            tags = aux.tags
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: RuntimeException) {
-            loadError = errorPlan(asGitException(e), LOAD_FAILED)
-        }
+        val aux = gitCall(::failLoad) {
+            Auxiliary(git.status.remotes(repo), git.status.identity(repo), git.stashes.list(repo), git.history.tags(repo))
+        } ?: return
+        remotes = aux.remotes
+        identity = aux.identity
+        stashes = aux.stashes
+        tags = aux.tags
+    }
+
+    private fun failLoad(e: GitException) {
+        loadError = errorPlan(e, LOAD_FAILED)
     }
 }

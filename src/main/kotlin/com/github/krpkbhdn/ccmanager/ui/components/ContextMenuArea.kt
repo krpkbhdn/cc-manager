@@ -10,22 +10,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
 
-/** Opens [entries] as a menu below [content] on a right click; [entries] is read when the menu opens. */
+/** Opens [entries] as a menu at the cursor on a right click inside [content]; [entries] is read when the menu opens. */
 @Composable
 fun ContextMenuArea(entries: () -> List<MenuEntry>, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    var open by remember { mutableStateOf(false) }
+    var openAt by remember { mutableStateOf<IntOffset?>(null) }
     Box(
         modifier.pointerInput(Unit) {
             awaitPointerEventScope {
                 while (true) {
                     val event = awaitPointerEvent()
-                    if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) open = true
+                    if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+                        val position = event.changes.first().position
+                        openAt = IntOffset(position.x.toInt(), position.y.toInt())
+                    }
                 }
             }
         },
     ) {
         content()
-        if (open) PopupMenu(entries(), onDismiss = { open = false })
+        openAt?.let { PopupMenu(entries(), onDismiss = { openAt = null }, at = it) }
     }
 }

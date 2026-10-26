@@ -31,7 +31,7 @@ class ProjectViewTest {
     fun `cycling walks sessions then diff and activity and wraps`() {
         val view = ProjectView().openSession("a").openSession("b")
 
-        assertThat(view.tabs()).containsExactly(ProjectTab.Session("a"), ProjectTab.Session("b"), ProjectTab.Git, ProjectTab.Activity)
+        assertThat(view.tabs()).containsExactly(ProjectTab.Session("a"), ProjectTab.Session("b"), ProjectTab.Git, ProjectTab.Run, ProjectTab.Activity)
         assertThat(view.cycle(1).selected).isEqualTo(ProjectTab.Git)
         assertThat(view.cycle(-1).selected).isEqualTo(ProjectTab.Session("a"))
         assertThat(view.select(ProjectTab.Activity).cycle(1).selected).isEqualTo(ProjectTab.Session("a"))
@@ -58,6 +58,22 @@ class ProjectViewTest {
         val view = ProjectView().openSession("a").openSession("b").closeSession("a")
 
         assertThat(view.selected).isEqualTo(ProjectTab.Session("b"))
+    }
+
+    @Test
+    fun `shell tabs sit between sessions and git and close to their neighbour`() {
+        val view = ProjectView().openSession("a").openShell("s1").openShell("s2")
+
+        assertThat(view.tabs()).containsExactly(ProjectTab.Session("a"), ProjectTab.Shell("s1"), ProjectTab.Shell("s2"), ProjectTab.Git, ProjectTab.Run, ProjectTab.Activity)
+        assertThat(view.closeShell("s2").selected).isEqualTo(ProjectTab.Shell("s1"))
+        assertThat(view.closeShell("s2").closeShell("s1").selected).isEqualTo(ProjectTab.Session("a"))
+    }
+
+    @Test
+    fun `further tabs of the same shell are numbered`() {
+        assertThat(uniqueLabel("Git Bash", emptyList())).isEqualTo("Git Bash")
+        assertThat(uniqueLabel("Git Bash", listOf("Git Bash"))).isEqualTo("Git Bash 2")
+        assertThat(uniqueLabel("Git Bash", listOf("Git Bash", "Git Bash 2"))).isEqualTo("Git Bash 3")
     }
 
     @Test
