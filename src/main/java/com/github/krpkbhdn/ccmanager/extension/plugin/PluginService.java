@@ -3,6 +3,7 @@ package com.github.krpkbhdn.ccmanager.extension.plugin;
 import com.github.krpkbhdn.ccmanager.extension.ClaudeCli;
 import com.github.krpkbhdn.ccmanager.extension.ExtensionProperties;
 import com.github.krpkbhdn.ccmanager.extension.ExtensionScope;
+import com.github.krpkbhdn.ccmanager.workspace.CommandRunner;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -14,6 +15,9 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class PluginService {
+
+    private static final String JSON_FLAG = "--json";
+    private static final String UNKNOWN_JSON_OPTION = "unknown option '--json'";
 
     private final ClaudeCli cli;
     private final ExtensionProperties properties;
@@ -78,7 +82,7 @@ public class PluginService {
             String action, String pluginId, ExtensionScope scope, Path projectDirectory, List<String> extra) {
         var arguments = scoped(action, pluginId, scope);
         arguments.addAll(extra);
-        var result = cli.execute(scope.workingDirectory(projectDirectory), properties.networkTimeout(), arguments);
+        var result = executeWithJsonFallback(scope.workingDirectory(projectDirectory), arguments);
         var parsed = PluginParser.installResult(result.exitCode(), result.stdout(), result.stderr());
         if (!parsed.installed() && !parsed.needsConfirmation()) {
             throw ClaudeCli.failure(arguments, result);
@@ -115,7 +119,21 @@ public class PluginService {
     }
 
     private void run(List<String> arguments, ExtensionScope scope, Path projectDirectory) {
-        cli.executeChecked(scope.workingDirectory(projectDirectory), properties.networkTimeout(), arguments);
+        var result = executeWithJsonFallback(scope.workingDirectory(projectDirectory), arguments);
+        if (!result.succeeded()) {
+            throw ClaudeCli.failure(arguments, result);
+        }
+    }
+
+    /** Older claude versions reject --json on mutating plugin commands; the command is then repeated once without it. */
+    private CommandRunner.Result executeWithJsonFallback(Path directory, List<String> arguments) {
+        var result = cli.execute(directory, properties.networkTimeout(), arguments);
+        if (result.succeeded() || !result.stderr().contains(UNKNOWN_JSON_OPTION)) {
+            return result;
+        }
+        var withoutJson = new ArrayList<>(arguments);
+        withoutJson.remove(JSON_FLAG);
+        return cli.execute(directory, properties.networkTimeout(), withoutJson);
     }
 
     private static List<String> scoped(String action, String pluginId, ExtensionScope scope) {
