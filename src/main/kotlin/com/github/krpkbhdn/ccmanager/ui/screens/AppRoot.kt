@@ -103,6 +103,7 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
         (state.route as? Route.Project)?.let { state.gitOf(it.id) }?.let { GitDialogHost(it) }
         state.taskDialogProjectId?.let { id -> state.projects.all.firstOrNull { it.id == id } }?.let { StartTaskDialog(it, state.teams, startTaskTemplates(state, it), startTaskActions(state, it)) }
         state.quickStartProjectId?.let { id -> state.projects.all.firstOrNull { it.id == id } }?.let { QuickStartPicker(state, it) }
+        state.queuePickTarget?.let { (id, sessionId) -> state.projects.all.firstOrNull { it.id == id }?.let { QueuePicker(state, it, sessionId) } }
         state.prompts.dialog?.let { PromptDialog(it, state.prompts, state.projects.all, state.teams.teams) }
         state.runs.dialog?.let { RunConfigurationDialog(it, state.runs, state.dataDir) }
         state.teams.dialog?.let { open -> state.teams.find(open.teamId)?.let { RoleDialog(it, open, state.teams) } }
@@ -204,6 +205,10 @@ private fun startTaskTemplates(state: AppState, project: Project) = TaskTemplate
 @Composable
 private fun QuickStartPicker(state: AppState, project: Project) =
     TemplatePickerDialog(state.prompts.forProject(project.id), project.id, state.teams.teams, { state.startTaskFromTemplate(project, it) }, { state.quickStartProjectId = null })
+
+@Composable
+private fun QueuePicker(state: AppState, project: Project, ccmSessionId: String) =
+    TemplatePickerDialog(state.prompts.forProject(project.id), project.id, state.teams.teams, { state.queueFromTemplate(project, ccmSessionId, it) }, { state.queuePickTarget = null })
 
 private fun startTaskActions(state: AppState, project: Project) = StartTaskActions(
     onStart = { team, task, makeDefault -> state.startTask(project, team, task, makeDefault) },

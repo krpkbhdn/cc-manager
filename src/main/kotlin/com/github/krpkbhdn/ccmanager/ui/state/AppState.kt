@@ -90,6 +90,8 @@ class AppState(
     var taskDialogProjectId by mutableStateOf<Long?>(null)
     var taskDialogTemplateId by mutableStateOf<Long?>(null)
     var quickStartProjectId by mutableStateOf<Long?>(null)
+    /** Project and live session whose queue receives the card chosen in the picker. */
+    var queuePickTarget by mutableStateOf<Pair<Long, String>?>(null)
     var projectSettings by mutableStateOf<ProjectSettingsState?>(null)
         private set
 
@@ -365,6 +367,11 @@ class AppState(
     fun branchOf(projectId: Long): String? = gitOf(projectId)?.status?.branch?.takeIf { it.isNotBlank() }
 
     fun placeholderValuesOf(project: Project) = PlaceholderValues(project.name, branchOf(project.id), null)
+
+    fun queueFromTemplate(project: Project, ccmSessionId: String, template: PromptTemplate) {
+        queuePickTarget = null
+        queue.add(ccmSessionId, PlaceholderSubstitution.apply(template.text, placeholderValuesOf(project)))
+    }
 
     /** Starts [template] at once in [project], led by its default team or else the project's default team. */
     fun startTaskFromTemplate(project: Project, template: PromptTemplate) {

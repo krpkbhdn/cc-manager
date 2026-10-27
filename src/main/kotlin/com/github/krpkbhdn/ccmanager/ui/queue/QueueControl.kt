@@ -9,16 +9,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.project.Project
-import com.github.krpkbhdn.ccmanager.prompt.PlaceholderSubstitution
-import com.github.krpkbhdn.ccmanager.prompt.PromptTemplate
 import com.github.krpkbhdn.ccmanager.ui.components.AnchoredPopup
 import com.github.krpkbhdn.ccmanager.ui.components.AppButton
 import com.github.krpkbhdn.ccmanager.ui.components.AppTextArea
@@ -26,8 +20,6 @@ import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant
 import com.github.krpkbhdn.ccmanager.ui.components.CountDot
 import com.github.krpkbhdn.ccmanager.ui.components.IconButton
 import com.github.krpkbhdn.ccmanager.ui.components.Label
-import com.github.krpkbhdn.ccmanager.ui.components.MenuEntry
-import com.github.krpkbhdn.ccmanager.ui.components.PopupMenu
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
@@ -76,21 +68,12 @@ private fun QueuePanel(state: AppState, project: Project, ccmSessionId: String) 
             AppTextArea(draft, Modifier.fillMaxWidth(), placeholder = "Prompt to send next", onSubmit = add)
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 AppButton("Add", add, variant = ButtonVariant.PRIMARY, icon = Icons.Plus, compact = true, enabled = draft.text.isNotBlank())
-                TemplateMenu(state.prompts.forProject(project.id)) { template ->
-                    queue.add(ccmSessionId, PlaceholderSubstitution.apply(template.text, state.placeholderValuesOf(project)))
-                }
+                AppButton(
+                    "From library", { queue.panelSessionId = null; state.queuePickTarget = project.id to ccmSessionId },
+                    icon = Icons.Message, compact = true, tooltip = "Queue a saved prompt from the library",
+                )
             }
             Label(QUEUE_NOTE, color = colors.textTertiary, style = Type.caption, maxLines = 3)
         }
-    }
-}
-
-@Composable
-private fun TemplateMenu(templates: List<PromptTemplate>, onSelect: (PromptTemplate) -> Unit) {
-    if (templates.isEmpty()) return
-    var open by remember { mutableStateOf(false) }
-    Box {
-        AppButton("From library", { open = !open }, icon = Icons.Message, compact = true, tooltip = "Queue a saved prompt from the library")
-        if (open) PopupMenu(templates.map { template -> MenuEntry(template.name) { onSelect(template) } }, { open = false })
     }
 }
