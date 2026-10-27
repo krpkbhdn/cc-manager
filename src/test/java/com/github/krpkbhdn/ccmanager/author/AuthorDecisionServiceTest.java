@@ -27,9 +27,21 @@ class AuthorDecisionServiceTest {
     }
 
     @Test
-    void migrationMarksTheSeededDevTeamAsInstalled() {
-        assertThat(service.find(AuthorComponent.TEAMS, 0))
-                .contains(new AuthorDecision(AuthorComponent.TEAMS, 0, AuthorChoice.INSTALLED, 1));
+    void migrationDropsTheDecisionSeededForTheDevTeam() {
+        assertThat(service.find(AuthorComponent.TEAMS, 0)).isEmpty();
+    }
+
+    @Test
+    void migrationKeepsATeamsDecisionOfALaterVersion() {
+        var dataSource = new DriverManagerDataSource("jdbc:sqlite:" + temp.resolve("upgrade.db"));
+        Flyway.configure().dataSource(dataSource).target("6").load().migrate();
+        var upgrade = JdbcClient.create(dataSource);
+        upgrade.sql("UPDATE author_decision SET version = 2 WHERE component = 'TEAMS'").update();
+
+        Flyway.configure().dataSource(dataSource).load().migrate();
+
+        assertThat(new AuthorDecisionService(upgrade).find(AuthorComponent.TEAMS, 0))
+                .contains(new AuthorDecision(AuthorComponent.TEAMS, 0, AuthorChoice.INSTALLED, 2));
     }
 
     @Test

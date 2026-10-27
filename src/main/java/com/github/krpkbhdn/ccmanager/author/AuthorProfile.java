@@ -2,6 +2,7 @@ package com.github.krpkbhdn.ccmanager.author;
 
 import java.io.InputStream;
 import java.util.List;
+import java.util.Map;
 import tools.jackson.databind.json.JsonMapper;
 
 /** The bundled manifest of the author's setup, read from {@code author-profile/profile.json}. */
@@ -28,6 +29,21 @@ public record AuthorProfile(List<String> files, String commonPrompt, ScopeSetup 
             case PROJECT_SETUP -> projectSetup.version();
             case TEAMS -> teams.version();
         };
+    }
+
+    /** Notes of the versions after {@code installedVersion} up to the bundled one, oldest first. */
+    public List<String> changesSince(AuthorComponent component, int installedVersion) {
+        var bundled = version(component);
+        var changes = switch (component) {
+            case USER_SETUP -> userSetup.changes();
+            case PROJECT_SETUP -> projectSetup.changes();
+            case TEAMS -> teams.changes();
+        };
+        return changes.entrySet().stream()
+                .filter(note -> note.getKey() > installedVersion && note.getKey() <= bundled)
+                .sorted(Map.Entry.comparingByKey())
+                .flatMap(note -> note.getValue().stream())
+                .toList();
     }
 
     public String title(AuthorComponent component) {

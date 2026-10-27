@@ -4,11 +4,14 @@ import com.github.krpkbhdn.ccmanager.author.install.ExtensionInstaller;
 import com.github.krpkbhdn.ccmanager.author.install.InstallOutcome;
 import com.github.krpkbhdn.ccmanager.author.install.TeamsInstaller;
 import com.github.krpkbhdn.ccmanager.extension.ExtensionScope;
+import com.github.krpkbhdn.ccmanager.team.Team;
+import com.github.krpkbhdn.ccmanager.team.TeamService;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 /** The author's bundled setup as the UI sees it: what is offered, installing the chosen parts, remembering declines. */
@@ -21,14 +24,16 @@ public class AuthorProfileService {
     private final AuthorDecisionService decisions;
     private final ExtensionInstaller extensions;
     private final TeamsInstaller teams;
+    private final TeamService teamService;
     private final AuthorSessionPrompt prompt;
 
     public AuthorProfileService(AuthorProfileLoader loader, AuthorDecisionService decisions, ExtensionInstaller extensions,
-            TeamsInstaller teams, AuthorSessionPrompt prompt) {
+            TeamsInstaller teams, TeamService teamService, AuthorSessionPrompt prompt) {
         this.loader = loader;
         this.decisions = decisions;
         this.extensions = extensions;
         this.teams = teams;
+        this.teamService = teamService;
         this.prompt = prompt;
     }
 
@@ -47,12 +52,12 @@ public class AuthorProfileService {
      * Blocking. Teams without failures are recorded as installed at once; the user and project setup are recorded only by
      * {@link #markInstalled} once the Claude session that finishes them started.
      *
-     * @param projectPath the project Claude works in; needed for the user and project setup
-     * @throws IllegalArgumentException when a Claude-finished component is chosen without a project path
+     * @param projectPath the project Claude works in; without one the Claude-finished components stay in
+     *                    {@code awaitingSession} with no handoff, to be prepared later by {@link #handoff}
      */
     public AuthorInstallReport install(List<AuthorEntry> chosen, Path projectPath) {
-        if (projectPath == null && chosen.stream().anyMatch(entry -> entry.component() != AuthorComponent.TEAMS)) {
-            throw new IllegalArgumentException("The user and project setup need a project for Claude to work in");
+        if (projectPath == null && chosen.stream().anyMatch(entry -> entry.component() == AuthorComponent.PROJECT_SETUP)) {
+            throw new IllegalArgumentException("The project setup needs a project path");
         }
         var outcomes = new ArrayList<ComponentOutcome>();
         var succeeded = new ArrayList<AuthorEntry>();
@@ -64,12 +69,21 @@ public class AuthorProfileService {
             }
         }
         var awaiting = succeeded.stream().filter(entry -> entry.component() != AuthorComponent.TEAMS).toList();
-        var claudeComponents = EnumSet.noneOf(AuthorComponent.class);
-        awaiting.forEach(entry -> claudeComponents.add(entry.component()));
-        var handoff = claudeComponents.isEmpty() ? Optional.<SessionHandoff>empty()
-                : Optional.of(prompt.prepare(claudeComponents, projectPath, outcomes));
+        var handoff = awaiting.isEmpty() || projectPath == null ? Optional.<SessionHandoff>empty()
+                : Optional.of(handoff(awaiting, projectPath, outcomes));
         succeeded.stream().filter(entry -> entry.component() == AuthorComponent.TEAMS).forEach(this::markInstalled);
         return new AuthorInstallReport(outcomes, handoff, awaiting);
+    }
+
+    /** Prepares the session that finishes the report's {@code awaitingSession} entries in the project. */
+    public SessionHandoff handoff(AuthorInstallReport report, Path projectPath) {
+        return handoff(report.awaitingSession(), projectPath, report.components());
+    }
+
+    private SessionHandoff handoff(List<AuthorEntry> awaiting, Path projectPath, List<ComponentOutcome> outcomes) {
+        var claudeComponents = EnumSet.noneOf(AuthorComponent.class);
+        awaiting.forEach(entry -> claudeComponents.add(entry.component()));
+        return prompt.prepare(claudeComponents, projectPath, outcomes);
     }
 
     /** Records the entries as installed; called once the session that finishes them started. */
@@ -90,7 +104,7 @@ public class AuthorProfileService {
         return switch (entry.component()) {
             case USER_SETUP -> extensions.install(profile.userSetup().extensions(), ExtensionScope.USER, null);
             case PROJECT_SETUP -> extensions.install(profile.projectSetup().extensions(), ExtensionScope.PROJECT, projectPath);
-            case TEAMS -> teams.install(entry.status() == AuthorStatus.UPDATE_AVAILABLE);
+            case TEAMS -> teams.install();
         };
     }
 
@@ -99,7 +113,14 @@ public class AuthorProfileService {
         var decision = decisions.find(component, projectId);
         var bundled = profile.version(component);
         var installed = decision.filter(found -> found.choice() == AuthorChoice.INSTALLED).map(AuthorDecision::version).orElse(0);
-        return new AuthorEntry(component, projectId, profile.title(component), profile.summary(component), bundled, installed,
-                AuthorStatus.of(decision, bundled));
+        var status = AuthorStatus.of(decision, bundled);
+        var changes = status == AuthorStatus.UPDATE_AVAILABLE ? profile.changesSince(component, installed) : List.<String>of();
+        return new AuthorEntry(component, projectId, profile.title(component), profile.summary(component), bundled, installed, status, changes,
+                component == AuthorComponent.TEAMS && replacesExistingTeam());
+    }
+
+    private boolean replacesExistingTeam() {
+        var existing = teamService.list().stream().map(Team::name).collect(Collectors.toSet());
+        return loader.teamTemplates().stream().anyMatch(template -> existing.contains(template.name()));
     }
 }

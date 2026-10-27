@@ -47,6 +47,21 @@ class AuthorProfileTest {
     }
 
     @Test
+    void changesSinceListsNotesAfterTheInstalledVersionUpToTheBundledOneInOrder() {
+        var profile = parse("""
+                {"files": [], "commonPrompt": "a",
+                 "userSetup": {"version": 2, "title": "User", "summary": "u", "prompt": "a"},
+                 "projectSetup": {"version": 3, "title": "Project", "summary": "p", "prompt": "a"},
+                 "teams": {"version": 3, "title": "Teams", "summary": "t", "changes": {"3": ["c"], "2": ["b1", "b2"], "4": ["future"]}}}
+                """);
+
+        assertThat(profile.changesSince(AuthorComponent.USER_SETUP, 0)).isEmpty();
+        assertThat(profile.changesSince(AuthorComponent.TEAMS, 1)).containsExactly("b1", "b2", "c");
+        assertThat(profile.changesSince(AuthorComponent.TEAMS, 2)).containsExactly("c");
+        assertThat(profile.changesSince(AuthorComponent.TEAMS, 3)).isEmpty();
+    }
+
+    @Test
     void rejectsTextThatIsNotJson() {
         assertThatThrownBy(() -> parse("nope")).isInstanceOf(IllegalArgumentException.class);
     }

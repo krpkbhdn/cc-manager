@@ -30,7 +30,7 @@ fun AuthorConfigurationDialog(manage: AuthorManage, projectName: String?, state:
     }
 }
 
-private fun footer(project: String?) = if (project == null) "Add a project first, Claude finishes the setup there." else "Claude finishes the setup in $project."
+private fun footer(project: String?) = if (project == null) "User setup and teams install now, Claude finishes the rest in your first project." else "Claude finishes the setup in $project."
 
 @Composable
 private fun Section(title: String, entries: List<AuthorEntry>, state: AuthorProfileState) {
@@ -49,6 +49,7 @@ private fun EntryRow(entry: AuthorEntry, state: AuthorProfileState) {
                 Chip(statusLabel(entry.status()), statusTint(entry.status()))
             }
             Label(entry.summary(), color = colors.textSecondary, style = Type.small, maxLines = 2)
+            ChangeList(entry)
             ReplaceWarning(entry)
         }
         AppButton(

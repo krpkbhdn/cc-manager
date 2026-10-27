@@ -58,8 +58,8 @@ class AuthorProfileStateTest {
         assertThat(errors).isEmpty()
     }
 
-    private fun entry(component: AuthorComponent, status: AuthorStatus = AuthorStatus.NOT_INSTALLED, projectId: Long = 0) =
-        AuthorEntry(component, projectId, component.name, "summary", 1, 0, status)
+    private fun entry(component: AuthorComponent, status: AuthorStatus = AuthorStatus.NOT_INSTALLED, projectId: Long = 0, replaces: Boolean = false) =
+        AuthorEntry(component, projectId, component.name, "summary", 1, 0, status, emptyList(), replaces)
 
     private fun report(withHandoff: Boolean, awaiting: List<AuthorEntry> = emptyList()) =
         AuthorInstallReport(emptyList(), if (withHandoff) Optional.of(SessionHandoff("go", Path.of("profile"))) else Optional.empty(), awaiting)
@@ -147,8 +147,8 @@ class AuthorProfileStateTest {
     }
 
     @Test
-    fun teamUpdateStartsUncheckedWhileNewComponentsStartChecked() {
-        val update = entry(AuthorComponent.TEAMS, AuthorStatus.UPDATE_AVAILABLE)
+    fun teamsThatReplaceAnExistingTeamStartUncheckedWhileNewComponentsStartChecked() {
+        val update = entry(AuthorComponent.TEAMS, AuthorStatus.NOT_INSTALLED, replaces = true)
         `when`(service.entries(null)).thenReturn(listOf(user, update))
 
         state.offerAtStart()
@@ -217,15 +217,113 @@ class AuthorProfileStateTest {
     }
 
     @Test
-    fun withoutAProjectNothingIsRecorded() {
+    fun withoutAProjectTheInstallRunsAndTheSessionStartsWithTheFirstProject() {
         sessionProject = null
+        val awaiting = report(false, listOf(user))
+        `when`(service.install(listOf(user), null)).thenReturn(awaiting)
+        `when`(service.handoff(awaiting, project.path)).thenReturn(SessionHandoff("go", Path.of("profile")))
 
-        state.install(listOf(user), listOf(teams))
+        state.install(listOf(user))
+        await { toasts.isNotEmpty() }
+        assertThat(toasts.single()).isEqualTo("Author configuration installed")
+        assertThat(launched).isEmpty()
+        state.offerForProject(PROJECT_ID)
+        await { launched.isNotEmpty() }
+        state.offerForProject(PROJECT_ID)
+        Thread.sleep(SETTLE_MILLIS)
+
+        assertThat(launched).hasSize(1)
+        assertThat(launched.single().first).isEqualTo(PROJECT_ID)
+        verify(service, timeout(WAIT_MILLIS)).markInstalled(listOf(user))
+    }
+
+    @Test
+    fun thePendingSessionStartsEvenWhileTheStartOfferIsPending() {
+        sessionProject = null
+        val awaiting = report(false, listOf(user))
+        `when`(service.install(listOf(user), null)).thenReturn(awaiting)
+        `when`(service.handoff(awaiting, project.path)).thenReturn(SessionHandoff("go", Path.of("profile")))
+        `when`(service.entries(null)).thenAnswer { Thread.sleep(SETTLE_MILLIS); listOf(user) }
+        state.install(listOf(user))
+        await { toasts.isNotEmpty() }
+        state.offerAtStart()
+
+        state.offerForProject(PROJECT_ID)
+        await { launched.isNotEmpty() }
+    }
+
+    @Test
+    fun thePendingSessionStartsEvenWhileAnAuthorOfferDialogIsOpen() {
+        sessionProject = null
+        val awaiting = report(false, listOf(user))
+        `when`(service.install(listOf(user), null)).thenReturn(awaiting)
+        `when`(service.handoff(awaiting, project.path)).thenReturn(SessionHandoff("go", Path.of("profile")))
+        `when`(service.entries(null)).thenReturn(listOf(user))
+        state.install(listOf(user))
+        await { toasts.isNotEmpty() }
+        state.offerAtStart()
+        await { state.offer != null }
+
+        state.offerForProject(PROJECT_ID)
+        await { launched.isNotEmpty() }
+    }
+
+    @Test
+    fun aSecondInstallWithoutAProjectMergesItsAwaitingComponentsIntoThePendingReport() {
+        sessionProject = null
+        val first = report(false, listOf(user))
+        val second = report(false, listOf(projectSetup))
+        `when`(service.install(listOf(user), null)).thenReturn(first)
+        `when`(service.install(listOf(teams), null)).thenReturn(second)
+        `when`(service.handoff(any(), any())).thenReturn(SessionHandoff("go", Path.of("profile")))
+        state.install(listOf(user))
+        await { toasts.size == 1 }
+        state.install(listOf(teams))
+        await { toasts.size == 2 }
+
+        state.offerForProject(PROJECT_ID)
+        await { launched.isNotEmpty() }
+
+        val merged = org.mockito.ArgumentCaptor.forClass(AuthorInstallReport::class.java)
+        verify(service).handoff(merged.capture(), any())
+        assertThat(merged.value.awaitingSession()).containsExactlyInAnyOrder(user, projectSetup)
+    }
+
+    @Test
+    fun aFailedHandoffKeepsThePendingSessionArmedForTheNextVisit() {
+        sessionProject = null
+        val awaiting = report(false, listOf(user))
+        `when`(service.install(listOf(user), null)).thenReturn(awaiting)
+        `when`(service.handoff(awaiting, project.path)).thenThrow(IllegalStateException("disk")).thenReturn(SessionHandoff("go", Path.of("profile")))
+        state.install(listOf(user))
         await { toasts.isNotEmpty() }
 
-        assertThat(toasts.single()).isEqualTo("Add a project first")
-        verify(service, never()).decline(anyList())
-        verify(service, never()).install(anyList(), any())
+        state.offerForProject(PROJECT_ID)
+        await { errors.isNotEmpty() }
+        errors.clear()
+        state.offerForProject(PROJECT_ID)
+
+        await { launched.isNotEmpty() }
+    }
+
+    @Test
+    fun anInstallWithAProjectAfterAPendingOneDoesNotLaunchASecondSession() {
+        sessionProject = null
+        val pending = report(false, listOf(user))
+        `when`(service.install(listOf(user), null)).thenReturn(pending)
+        state.install(listOf(user))
+        await { toasts.isNotEmpty() }
+        sessionProject = project
+        `when`(service.install(listOf(user), project.path)).thenReturn(report(true, listOf(user)))
+        state.install(listOf(user))
+        await { launched.isNotEmpty() }
+        Thread.sleep(SETTLE_MILLIS)
+
+        state.offerForProject(PROJECT_ID)
+        Thread.sleep(SETTLE_MILLIS)
+
+        assertThat(launched).hasSize(1)
+        verify(service, never()).handoff(any(), any())
     }
 
     @Test

@@ -26,5 +26,6 @@
     "prompt": "project/session-prompt.md",
     "extensions": {"marketplaces": [], "plugins": [], "skills": [], "mcpServers": []}
   },
-  "teams": {"version": 2, "title": "Agent teams", "summary": "The author's agent teams.", "templates": ["teams/dev-team.json"]}
+  "teams": {"version": 3, "title": "Agent teams", "summary": "The author's agent teams.", "templates": ["teams/dev-team.json"],
+            "changes": {"2": ["Added researcher and debater roles"], "3": ["Teams snapshot from the author's current setup"]}}
 }

@@ -87,7 +87,7 @@ class TeamsStateTest {
         val team = state.selected!!
 
         state.moveRole(team, team.roles[2], -1)
-        await { roleNames() == listOf("architect", "tester", "developer") }
+        await { roleNames() == listOf("architect", "tester", "developer") && state.selected!!.roles.map { it.name() } == roleNames() }
         state.duplicateRole(state.selected!!, state.selected!!.roles[1])
         await { roleNames().size == 4 }
 
