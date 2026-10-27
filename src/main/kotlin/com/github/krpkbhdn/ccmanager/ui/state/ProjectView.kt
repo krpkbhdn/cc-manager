@@ -9,6 +9,7 @@ sealed interface Route {
     data object Plugins : Route
     data object Mcp : Route
     data object Skills : Route
+    data object Sessions : Route
     data class Project(val id: Long) : Route
 }
 

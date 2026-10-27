@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.ui.components.CountBadge
 import com.github.krpkbhdn.ccmanager.ui.components.Glyph
 import com.github.krpkbhdn.ccmanager.ui.components.IconButton
@@ -55,6 +56,7 @@ fun Sidebar(state: AppState, modifier: Modifier = Modifier, forceCollapsed: Bool
         Column(Modifier.width(width).fillMaxHeight().background(colors.sidebar).padding(horizontal = if (collapsed) Spacing.sm else Spacing.md)) {
             SidebarHeader(collapsed, forceCollapsed, state)
             NavItem(Icons.Grid, "Overview", state.route == Route.Overview, collapsed, state.live.sessions.size) { state.navigate(Route.Overview) }
+            NavItem(Icons.Layers, "All sessions", state.route == Route.Sessions, collapsed, state.live.sessions.count { it.status == AgentStatus.NEEDS_ACTION }) { state.navigate(Route.Sessions) }
             NavItem(Icons.Users, "Teams", state.route == Route.Teams, collapsed, 0) { state.navigate(Route.Teams) }
             ExtensionsGroup(state, collapsed)
             ProjectsSection(state, collapsed, Modifier.weight(1f))

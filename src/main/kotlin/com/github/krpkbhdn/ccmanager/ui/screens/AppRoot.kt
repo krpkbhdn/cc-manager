@@ -51,6 +51,7 @@ import com.github.krpkbhdn.ccmanager.ui.picker.FolderPickerDialog
 import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalDialogHost
 import com.github.krpkbhdn.ccmanager.ui.projectsettings.ProjectSettingsDialog
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
+import com.github.krpkbhdn.ccmanager.ui.sessions.SessionsScreen
 import com.github.krpkbhdn.ccmanager.ui.state.Route
 import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.PluginCommandDialog
 import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.PluginsScreen
@@ -164,6 +165,7 @@ private fun RouteContent(state: AppState) {
     if (route == Route.Plugins) return PluginsScreen(state.plugins)
     if (route == Route.Mcp) return McpScreen(state.mcp)
     if (route == Route.Skills) return SkillsScreen(state.skills)
+    if (route == Route.Sessions) return SessionsScreen(state)
     val project = (route as? Route.Project)?.let { target -> state.projects.all.firstOrNull { it.id == target.id } }
     Crossfade(project?.id, label = "route") { shown ->
         val current = state.projects.all.firstOrNull { it.id == shown }

@@ -45,6 +45,8 @@ enum class AppShortcut(val label: String, private val windows: List<KeyChord>, p
     PALETTE("Command palette", listOf(ctrlShift(VK_P), ctrl(VK_K)), listOf(cmd(VK_K), cmdShift(VK_P))),
     ADD_PROJECT("Add project", listOf(ctrlShift(VK_O), ctrl(VK_N)), listOf(cmd(VK_O), cmd(VK_N))),
     NEW_SESSION("New Claude session", listOf(ctrlShift(VK_T)), listOf(cmd(VK_T))),
+    ALL_SESSIONS("All sessions", listOf(ctrlShift(VK_S)), listOf(cmdShift(VK_S))),
+    NEXT_WAITING("Answer next waiting session", listOf(ctrlShift(VK_N)), listOf(cmdShift(VK_N))),
     OPEN_TERMINAL("Open terminal", listOf(alt(VK_F12)), listOf(alt(VK_F12))),
     CLOSE_SESSION("Close session tab", listOf(ctrlShift(VK_W)), listOf(cmd(VK_W))),
     NEXT_TAB("Next tab", listOf(ctrl(VK_TAB)), listOf(ctrl(VK_TAB))),

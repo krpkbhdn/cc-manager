@@ -23,6 +23,7 @@ import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillHost
 import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillsState
 import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalState
 import com.github.krpkbhdn.ccmanager.ui.run.RunState
+import com.github.krpkbhdn.ccmanager.ui.sessions.nextWaiting
 import com.github.krpkbhdn.ccmanager.ui.teams.TeamsState
 import com.github.krpkbhdn.ccmanager.usage.RateLimitSnapshot
 import com.github.krpkbhdn.ccmanager.usage.SessionUsage
@@ -157,6 +158,14 @@ class AppState(
         }
 
     /** Opens the session and shows its proposals again, also those the user hid before. */
+    /** Answers the next session waiting for the user after the focused one; false when none waits. */
+    fun answerNextWaiting(): Boolean {
+        val focused = (route as? Route.Project)?.let { viewOf(it.id).focusedSession }
+        val next = nextWaiting(live.sessions, focused) ?: return false
+        answerProposals(next.ccmSessionId)
+        return true
+    }
+
     fun answerProposals(ccmSessionId: String) {
         proposals.reopen(ccmSessionId)
         openSession(ccmSessionId)

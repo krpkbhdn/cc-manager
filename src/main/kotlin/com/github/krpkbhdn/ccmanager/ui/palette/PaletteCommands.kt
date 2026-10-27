@@ -59,6 +59,8 @@ private fun projectItems(state: AppState): List<PaletteItem> =
 private fun globalActions(state: AppState, systemDark: Boolean): List<PaletteItem> = listOf(
     PaletteItem("add-project", "Add project", PaletteGroup.ACTIONS, "Pick a folder to manage", Icons.FolderPlus, shortcut = AppShortcut.ADD_PROJECT, run = state::requestAddProject),
     PaletteItem("overview", "Go to overview", PaletteGroup.ACTIONS, icon = Icons.Grid, shortcut = AppShortcut.OVERVIEW) { state.navigate(Route.Overview) },
+    PaletteItem("sessions", "All sessions", PaletteGroup.ACTIONS, "Every session of every project", Icons.Layers, shortcut = AppShortcut.ALL_SESSIONS) { state.navigate(Route.Sessions) },
+    PaletteItem("next-waiting", "Answer next waiting session", PaletteGroup.ACTIONS, "Jump to the session that needs you", Icons.Message, shortcut = AppShortcut.NEXT_WAITING) { state.answerNextWaiting() },
     PaletteItem("teams", "Manage teams", PaletteGroup.ACTIONS, "Roles and models of your agent teams", Icons.Users) { state.navigate(Route.Teams) },
     PaletteItem("author-config", "Author configuration", PaletteGroup.ACTIONS, "Install or update the author's Claude setup", Icons.Sparkles) { state.author.openManage((state.route as? Route.Project)?.id) },
     PaletteItem("plugins", "Open plugins", PaletteGroup.ACTIONS, "Install and manage Claude plugins", Icons.Plug) { state.navigate(Route.Plugins) },
