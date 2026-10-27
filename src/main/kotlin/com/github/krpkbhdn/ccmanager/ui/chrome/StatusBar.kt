@@ -54,6 +54,7 @@ private fun Breadcrumb(state: AppState, modifier: Modifier) {
     val parts = when (val route = state.route) {
         Route.Overview -> listOf("Overview")
         Route.Teams -> listOf("Teams")
+        Route.Prompts -> listOf("Templates")
         Route.Plugins -> listOf("Plugins")
         Route.Mcp -> listOf("MCP servers")
         Route.Skills -> listOf("Skills")

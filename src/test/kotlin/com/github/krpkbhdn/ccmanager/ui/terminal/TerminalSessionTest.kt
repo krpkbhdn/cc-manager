@@ -109,6 +109,24 @@ class TerminalSessionTest {
     }
 
     @Test
+    fun aDraftMayExistFromUserInputUntilEnterCtrlCOrEscNotProgrammaticSends() {
+        val typed = com.jediterm.core.input.KeyInputEvent.Type.TYPED
+        val pressed = com.jediterm.core.input.KeyInputEvent.Type.PRESSED
+        session.send("draft")
+        assertThat(session.draftMayExist).isFalse()
+        session.onKey(com.jediterm.core.input.KeyInputEvent(typed, 0, 'a', 0))
+        assertThat(session.draftMayExist).isTrue()
+        session.onKey(com.jediterm.core.input.KeyInputEvent(pressed, java.awt.event.KeyEvent.VK_ENTER, '\r', 0))
+        assertThat(session.draftMayExist).isFalse()
+        session.onKey(com.jediterm.core.input.KeyInputEvent(typed, 0, 'a', 0))
+        session.onKey(com.jediterm.core.input.KeyInputEvent(pressed, java.awt.event.KeyEvent.VK_ESCAPE, '\u001b', 0))
+        assertThat(session.draftMayExist).isFalse()
+        session.onKey(com.jediterm.core.input.KeyInputEvent(typed, 0, 'a', 0))
+        session.onKey(com.jediterm.core.input.KeyInputEvent(pressed, java.awt.event.KeyEvent.VK_C, '\u0003', java.awt.event.InputEvent.CTRL_DOWN_MASK))
+        assertThat(session.draftMayExist).isFalse()
+    }
+
+    @Test
     fun resizeReflowsTheBufferAndTellsTheProcess() {
         session.fit(100, 30)
         settle(connector, session)

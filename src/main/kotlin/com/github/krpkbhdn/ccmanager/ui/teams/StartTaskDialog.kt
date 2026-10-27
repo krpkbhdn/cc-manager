@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -18,6 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.project.Project
+import com.github.krpkbhdn.ccmanager.prompt.PlaceholderSubstitution
+import com.github.krpkbhdn.ccmanager.prompt.PlaceholderValues
+import com.github.krpkbhdn.ccmanager.prompt.PromptTemplate
 import com.github.krpkbhdn.ccmanager.team.Team
 import com.github.krpkbhdn.ccmanager.ui.components.AppButton
 import com.github.krpkbhdn.ccmanager.ui.components.AppCheckbox
@@ -40,16 +44,26 @@ private const val NO_TEAM_NOTE = "The task runs in a plain Claude session withou
 private const val NO_TEAM_TASK_HINT = "Claude starts one session in the project with this text as its first message."
 private const val TASK_HINT = "Claude starts one lead session in the project with this text as its first message. The lead delegates to the roles below."
 
+/** Templates offered in the dialog, the one to apply at once, and the values their placeholders get. */
+class TaskTemplates(val available: List<PromptTemplate>, val initialId: Long?, val values: PlaceholderValues)
+
 class StartTaskActions(val onStart: (team: Team?, task: String, makeDefault: Boolean) -> Unit, val onDismiss: () -> Unit)
 
 /** Pick a team (or none), describe the task, and see which roles the lead will have; Ctrl+Enter starts it. */
 @Composable
-fun StartTaskDialog(project: Project, teams: TeamsState, actions: StartTaskActions) {
+fun StartTaskDialog(project: Project, teams: TeamsState, templates: TaskTemplates, actions: StartTaskActions) {
     var selected by remember { mutableStateOf(teams.defaultTeamOf(project.id)?.id) }
     var makeDefault by remember { mutableStateOf(false) }
     val task = rememberTextFieldState()
     val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focus.requestFocus() }
+    val apply: (PromptTemplate) -> Unit = { template ->
+        task.setTextAndPlaceCursorAtEnd(PlaceholderSubstitution.apply(template.text, templates.values))
+        template.defaultTeamId?.takeIf { teams.find(it) != null }?.let { selected = it }
+    }
+    LaunchedEffect(Unit) {
+        focus.requestFocus()
+        templates.available.firstOrNull { it.id == templates.initialId }?.let(apply)
+    }
     val team = selected?.let(teams::find)
     val start = { if (task.text.isNotBlank()) actions.onStart(team, task.text.toString().trim(), team != null && makeDefault) }
     ModalHost(actions.onDismiss, width = dialogWidth, takeFocus = false, hasInput = { task.text.isNotEmpty() }) {
@@ -57,7 +71,10 @@ fun StartTaskDialog(project: Project, teams: TeamsState, actions: StartTaskActio
             Label("Team", color = colors.textSecondary, style = Type.smallMedium)
             TeamSelect(team, teams.teams) { selected = it?.id }
             if (team != null) RolesPreview(team) else Label(NO_TEAM_NOTE, color = colors.textTertiary, style = Type.caption, maxLines = 2)
-            Label("Task", color = colors.textSecondary, style = Type.smallMedium)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                Label("Task", Modifier.weight(1f), color = colors.textSecondary, style = Type.smallMedium)
+                if (templates.available.isNotEmpty()) TemplateSelect(templates.available, apply)
+            }
             AppTextArea(task, Modifier.fillMaxWidth(), placeholder = "Describe what to do", focusRequester = focus, onSubmit = start)
             Label(if (team != null) TASK_HINT else NO_TEAM_TASK_HINT, color = colors.textTertiary, style = Type.caption, maxLines = 2)
             if (team != null) DefaultTeamToggle(makeDefault) { makeDefault = it }
@@ -75,6 +92,15 @@ private fun TeamSelect(selected: Team?, teams: List<Team>, onSelect: (Team?) -> 
             val entries = teams.map { MenuEntry(it.name, hint = "${it.roles.size} roles") { onSelect(it) } } + MenuEntry(NO_TEAM, dividerAbove = teams.isNotEmpty()) { onSelect(null) }
             PopupMenu(entries, { open = false })
         }
+    }
+}
+
+@Composable
+private fun TemplateSelect(templates: List<PromptTemplate>, onSelect: (PromptTemplate) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        AppButton("From template", { open = !open }, icon = Icons.Message, compact = true, tooltip = "Fill the task from a saved template")
+        if (open) PopupMenu(templates.map { template -> MenuEntry(template.name) { onSelect(template) } }, { open = false }, alignEnd = true)
     }
 }
 

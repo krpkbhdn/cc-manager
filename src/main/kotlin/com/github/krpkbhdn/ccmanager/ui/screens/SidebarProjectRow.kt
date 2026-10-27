@@ -64,7 +64,7 @@ class ProjectActions(
 
 fun AppState.projectActions(project: Project) = ProjectActions(
     onOpen = { navigate(Route.Project(project.id)) },
-    onStartTask = { taskDialogProjectId = project.id },
+    onStartTask = { openTaskDialog(project.id) },
     onRename = { projects.renaming = RenameRequest(project) },
     onRemove = { projects.requestRemove(project) },
     onOpenFolder = { openFolder(project) },

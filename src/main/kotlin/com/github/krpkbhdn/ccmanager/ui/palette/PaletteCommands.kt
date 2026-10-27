@@ -62,6 +62,7 @@ private fun globalActions(state: AppState, systemDark: Boolean): List<PaletteIte
     PaletteItem("sessions", "All sessions", PaletteGroup.ACTIONS, "Every session of every project", Icons.Layers, shortcut = AppShortcut.ALL_SESSIONS) { state.navigate(Route.Sessions) },
     PaletteItem("next-waiting", "Answer next waiting session", PaletteGroup.ACTIONS, "Jump to the session that needs you", Icons.Message, shortcut = AppShortcut.NEXT_WAITING) { state.answerNextWaiting() },
     PaletteItem("teams", "Manage teams", PaletteGroup.ACTIONS, "Roles and models of your agent teams", Icons.Users) { state.navigate(Route.Teams) },
+    PaletteItem("prompts", "Templates", PaletteGroup.ACTIONS, "Reusable task texts", Icons.Message) { state.navigate(Route.Prompts) },
     PaletteItem("author-config", "Author configuration", PaletteGroup.ACTIONS, "Install or update the author's Claude setup", Icons.Sparkles) { state.author.openManage((state.route as? Route.Project)?.id) },
     PaletteItem("plugins", "Open plugins", PaletteGroup.ACTIONS, "Install and manage Claude plugins", Icons.Plug) { state.navigate(Route.Plugins) },
     PaletteItem("mcp", "Open MCP servers", PaletteGroup.ACTIONS, "Servers that give Claude extra tools", Icons.Server) { state.navigate(Route.Mcp) },
@@ -90,7 +91,7 @@ private fun projectActions(state: AppState): List<PaletteItem> {
     val here = "in ${project.name}"
     return shellActions(state, project.id, here) + listOfNotNull(
         PaletteItem("launch", "Launch Claude", PaletteGroup.ACTIONS, here, Icons.Play, shortcut = AppShortcut.NEW_SESSION) { state.sessions.launch(project.id, LaunchMode.NEW) },
-        PaletteItem("start-task", "Start task with team", PaletteGroup.ACTIONS, here, Icons.Users) { state.taskDialogProjectId = project.id },
+        PaletteItem("start-task", "Start task with team", PaletteGroup.ACTIONS, here, Icons.Users) { state.openTaskDialog(project.id) },
         PaletteItem("continue", "Continue last session", PaletteGroup.ACTIONS, here, Icons.ArrowRight) { state.sessions.launch(project.id, LaunchMode.CONTINUE) },
         PaletteItem("resume", "Resume a session", PaletteGroup.ACTIONS, here, Icons.Rewind) { state.sessions.launch(project.id, LaunchMode.RESUME_PICKER) },
         PaletteItem("open-folder", "Open folder", PaletteGroup.ACTIONS, here, Icons.FolderOpen) { state.openFolder(project) },

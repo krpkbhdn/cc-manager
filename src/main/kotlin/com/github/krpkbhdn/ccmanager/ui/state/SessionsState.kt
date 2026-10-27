@@ -157,5 +157,9 @@ class SessionsState(
         }
     }
 
+    /** Types a queued prompt without clearing the draft, unless a draft exists by the time it would be typed. */
+    suspend fun sendQueued(ccmSessionId: String, text: String): Boolean =
+        commandWriter.run(ccmSessionId, text, clearDraft = false) { backend.terminal.draftMayExist(ccmSessionId) }
+
     private suspend fun guarded(block: suspend () -> Unit) = runGuarded(reportError, block)
 }

@@ -16,6 +16,7 @@ import com.github.krpkbhdn.ccmanager.claude.session.TranscriptService
 import com.github.krpkbhdn.ccmanager.notification.NotificationService
 import com.github.krpkbhdn.ccmanager.notification.NotificationSoundService
 import com.github.krpkbhdn.ccmanager.project.ProjectService
+import com.github.krpkbhdn.ccmanager.prompt.PromptTemplateService
 import com.github.krpkbhdn.ccmanager.run.RunConfigurationService
 import com.github.krpkbhdn.ccmanager.run.RunService
 import com.github.krpkbhdn.ccmanager.extension.mcp.McpService
@@ -53,6 +54,9 @@ interface TerminalPort {
     /** True when the user pressed Enter less than [windowMillis] ago, before the hook marks the session WORKING. */
     fun enterWithin(ccmSessionId: String, windowMillis: Long): Boolean = false
 
+    /** True while the user may have an unsent draft: typed or pasted since the last Enter, Ctrl+C or Esc. */
+    fun draftMayExist(ccmSessionId: String): Boolean = false
+
     @Composable
     fun View(ccmSessionId: String, modifier: Modifier)
 }
@@ -65,6 +69,7 @@ object HostTerminalPort : TerminalPort {
     override fun focus(ccmSessionId: String) = TerminalHost.focus(ccmSessionId)
     override fun ctrlCWithin(ccmSessionId: String, windowMillis: Long) = TerminalHost.ctrlCWithin(ccmSessionId, windowMillis)
     override fun enterWithin(ccmSessionId: String, windowMillis: Long) = TerminalHost.enterWithin(ccmSessionId, windowMillis)
+    override fun draftMayExist(ccmSessionId: String) = TerminalHost.draftMayExist(ccmSessionId)
 
     @Composable
     override fun View(ccmSessionId: String, modifier: Modifier) = TerminalView(ccmSessionId, modifier, dark = colors.dark, background = colors.terminal)
@@ -95,6 +100,7 @@ class Backend(
     val shellLauncher: ShellLauncher,
     val author: AuthorProfileService,
     val proposals: ProposalService,
+    val promptTemplates: PromptTemplateService,
     val terminal: TerminalPort = HostTerminalPort,
     val updates: UpdateService? = null,
     val sound: NotificationSoundService? = null,
@@ -126,6 +132,7 @@ class Backend(
             shellLauncher = context.getBean(ShellLauncher::class.java),
             author = context.getBean(AuthorProfileService::class.java),
             proposals = context.getBean(ProposalService::class.java),
+            promptTemplates = context.getBean(PromptTemplateService::class.java),
             updates = context.getBean(UpdateService::class.java),
             sound = context.getBean(NotificationSoundService::class.java),
             dataDir = context.getBean(AppProperties::class.java).dataDir(),

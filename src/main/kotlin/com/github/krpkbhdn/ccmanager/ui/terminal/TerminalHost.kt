@@ -47,6 +47,9 @@ object TerminalHost {
     fun enterWithin(ccmSessionId: String, windowMillis: Long): Boolean =
         terminals[ccmSessionId]?.session?.enterWithin(windowMillis) == true
 
+    fun draftMayExist(ccmSessionId: String): Boolean =
+        terminals[ccmSessionId]?.session?.draftMayExist == true
+
     /** Moves the keyboard focus into the terminal when it is on screen. */
     fun focus(ccmSessionId: String) {
         terminals[ccmSessionId]?.let { runCatching { it.session.focusRequester.requestFocus() } }

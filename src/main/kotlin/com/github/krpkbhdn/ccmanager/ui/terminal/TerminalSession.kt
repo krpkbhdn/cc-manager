@@ -29,6 +29,7 @@ internal const val DEFAULT_CELL_DP = 8
 private const val MIN_CELL_DP = 6
 private const val MAX_CELL_DP = 20
 private const val ENTER_BYTE: Byte = 0x0D
+private const val CTRL_C_BYTE: Byte = 0x03
 private const val NANOS_PER_MILLI = 1_000_000L
 
 private fun Color.toJediColor() = com.jediterm.core.Color(toArgb() and 0xFFFFFF)
@@ -120,6 +121,15 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
     fun enterWithin(windowMillis: Long): Boolean =
         lastEnterNanos != 0L && System.nanoTime() - lastEnterNanos < windowMillis * NANOS_PER_MILLI
 
+    /** True after user input that can leave an unsent draft, until the user presses Enter, Ctrl+C or a lone Esc (programmatic sends never set it). */
+    @Volatile
+    var draftMayExist = false
+        private set
+
+    private fun trackDraft(bytes: ByteArray) {
+        draftMayExist = !(bytes.size == 1 && (bytes[0] == ENTER_BYTE || bytes[0] == CTRL_C_BYTE)) && !isLoneEscape(bytes)
+    }
+
     /** Handles a key event; returns true when it was consumed here. */
     fun onKey(event: KeyInputEvent): Boolean {
         if (event.type == KeyInputEvent.Type.TYPED && suppressTyped && event.modifiersEx != 0) return true
@@ -132,7 +142,9 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
         val bytes = typedPair(event) ?: optionLetterBytes(event)?.also { suppressTyped = true } ?: keyBytes(event, emulator.terminal) ?: return false
         selection = null
         scrollToBottom()
-        if (bytes.size == 1 && bytes[0] == ENTER_BYTE) lastEnterNanos = System.nanoTime()
+        val now = System.nanoTime()
+        if (bytes.size == 1 && bytes[0] == ENTER_BYTE) lastEnterNanos = now
+        trackDraft(bytes)
         emulator.write(bytes)
         return true
     }
@@ -177,6 +189,7 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
         val text = runCatching { clipboard.getData(DataFlavor.stringFlavor) as? String }.getOrNull().orEmpty()
         if (text.isEmpty()) return false
         scrollToBottom()
+        draftMayExist = true
         emulator.write(pasteBytes(text, modes.bracketedPaste))
         return true
     }

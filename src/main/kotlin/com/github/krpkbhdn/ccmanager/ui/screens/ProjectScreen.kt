@@ -39,6 +39,7 @@ import com.github.krpkbhdn.ccmanager.ui.run.RunControlActions
 import com.github.krpkbhdn.ccmanager.ui.run.RunTab
 import com.github.krpkbhdn.ccmanager.ui.run.RunTabActions
 import com.github.krpkbhdn.ccmanager.ui.shortcuts.AppShortcut
+import com.github.krpkbhdn.ccmanager.ui.queue.QueueControl
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.git.GitSystemActions
 import com.github.krpkbhdn.ccmanager.ui.git.GitTab
@@ -79,7 +80,7 @@ fun ProjectScreen(state: AppState, project: Project, modifier: Modifier = Modifi
             gitSummary = gitState?.summary,
             actions = ProjectHeaderActions(
                 onLaunch = { state.sessions.launch(project.id, it) },
-                onStartTask = { state.taskDialogProjectId = project.id },
+                onStartTask = { state.openTaskDialog(project.id) },
                 onOpenFolder = { state.openFolder(project) },
                 onOpenIde = { state.openIde(project) },
                 onShowGit = { state.openGit(project.id) },
@@ -136,6 +137,10 @@ private fun ProjectMainArea(state: AppState, project: Project, view: ProjectView
             shellMenu = shellMenu(state, project.id),
         ) {
             val shown = (view.selected as? ProjectTab.Session)?.ccmSessionId
+            if (shown != null) {
+                QueueControl(state, project, shown)
+                Spacer(Modifier.width(Spacing.sm))
+            }
             ModelControl(state, project, shown?.let { state.live.find(it) })
             Spacer(Modifier.width(Spacing.sm))
             if (onSession) {

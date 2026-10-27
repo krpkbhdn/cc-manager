@@ -24,14 +24,18 @@ class SessionCommandWriter(private val terminal: TerminalPort, private val pause
     /**
      * Clears the whole typed draft (Ctrl+C: Ctrl+U only clears one wrapped row), its own write, so the command is not glued onto it.
      * Only for an idle session, Ctrl+C interrupts a turn. Returns false without typing when the session is still being sent to
-     * or the user pressed Ctrl+C a moment ago (a second one would exit claude).
+     * or the user pressed Ctrl+C a moment ago (a second one would exit claude). With [clearDraft] false nothing is cleared, for
+     * callers that already know the user is not typing; they pass [draftExists] to be checked again right before the text is typed.
      */
-    suspend fun run(ccmSessionId: String, command: String): Boolean {
+    suspend fun run(ccmSessionId: String, command: String, clearDraft: Boolean = true, draftExists: () -> Boolean = { false }): Boolean {
         if (!sending.add(ccmSessionId)) return false
         try {
             if (terminal.ctrlCWithin(ccmSessionId, EXIT_HINT_MILLIS) || terminal.enterWithin(ccmSessionId, SUBMITTED_TURN_MILLIS)) return false
-            terminal.send(ccmSessionId, CLEAR_INPUT)
-            pause(SUBMIT_DELAY_MILLIS)
+            if (clearDraft) {
+                terminal.send(ccmSessionId, CLEAR_INPUT)
+                pause(SUBMIT_DELAY_MILLIS)
+            }
+            if (draftExists()) return false
             terminal.send(ccmSessionId, command)
             pause(SUBMIT_DELAY_MILLIS)
             terminal.send(ccmSessionId, ENTER)

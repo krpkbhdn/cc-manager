@@ -22,6 +22,8 @@ import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.McpState
 import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillHost
 import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillsState
 import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalState
+import com.github.krpkbhdn.ccmanager.ui.prompts.PromptsState
+import com.github.krpkbhdn.ccmanager.ui.queue.QueueState
 import com.github.krpkbhdn.ccmanager.ui.run.RunState
 import com.github.krpkbhdn.ccmanager.ui.sessions.nextWaiting
 import com.github.krpkbhdn.ccmanager.ui.teams.TeamsState
@@ -82,6 +84,8 @@ class AppState(
     var modelPickerOpen by mutableStateOf(false)
     var loginBannerDismissed by mutableStateOf(false)
     var taskDialogProjectId by mutableStateOf<Long?>(null)
+    var taskDialogTemplateId by mutableStateOf<Long?>(null)
+        private set
     var projectSettings by mutableStateOf<ProjectSettingsState?>(null)
         private set
 
@@ -109,6 +113,7 @@ class AppState(
         requestConfirm = { confirm = it },
         reportError = notifications::reportError,
     )
+    val queue = QueueState(backend.sessions, backend.terminal, scope, sessions::isAttached, sessions::sendQueued)
     val runs = RunState(
         backend.runConfigurations, backend.runs, backend.terminal, scope,
         projectPath = { projects.find(it)?.path },
@@ -127,6 +132,7 @@ class AppState(
     )
     val proposals = ProposalState(backend.proposals, scope, notifications::reportError) { terminal.focus(it) }
     val teams = TeamsState(backend.teams, scope, { confirm = it }, notifications::reportError)
+    val prompts = PromptsState(backend.promptTemplates, scope, { confirm = it }, notifications::reportError, listOf(backend.projects::subscribe, backend.teams::subscribe))
     val plugins = PluginsState(backend.plugins, scope, { confirm = it }, notifications::toast)
     val mcp = McpState(backend.mcp, null, scope, { confirm = it }, notifications::toast)
     private val skillHost = SkillHost(::openDirectory, ::openInIde) { ideAvailable }
@@ -185,6 +191,8 @@ class AppState(
         unsubscribers += backend.notifications.subscribe { notification -> scope.launch { notifications.receive(notification) } }
         backend.sound?.setEnabled(settings.notificationSound)
         teams.start()
+        prompts.start()
+        queue.start()
         author.offerAtStart()
         runs.start()
         shells.detect()
@@ -210,6 +218,8 @@ class AppState(
     fun dispose() {
         cancelProjectSettings()
         teams.dispose()
+        prompts.dispose()
+        queue.dispose()
         runs.dispose()
         proposals.dispose()
         unsubscribers.forEach { it.run() }
@@ -337,10 +347,23 @@ class AppState(
 
     fun openInIde(target: Path) = scope.launch { guarded { io { backend.ide.open(target) } } }
 
+    fun openTaskDialog(projectId: Long, templateId: Long? = null) {
+        taskDialogTemplateId = templateId
+        taskDialogProjectId = projectId
+    }
+
+    fun closeTaskDialog() {
+        taskDialogProjectId = null
+        taskDialogTemplateId = null
+    }
+
+    /** Branch of the project's repository when its git state is already loaded. */
+    fun branchOf(projectId: Long): String? = gitOf(projectId)?.status?.branch?.takeIf { it.isNotBlank() }
+
     /** Starts a session with [task] as its first prompt, led by [team] or without a team, and opens its terminal. */
     fun startTask(project: Project, team: Team?, task: String, makeDefault: Boolean) {
         sessions.launchTask(project.id, team, task) {
-            taskDialogProjectId = null
+            closeTaskDialog()
             if (makeDefault && team != null) teams.setProjectDefault(project.id, team.id)
         }
     }
