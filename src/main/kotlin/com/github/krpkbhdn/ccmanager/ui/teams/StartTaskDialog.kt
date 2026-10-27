@@ -76,7 +76,7 @@ fun StartTaskDialog(project: Project, teams: TeamsState, templates: TaskTemplate
             if (team != null) RolesPreview(team) else Label(NO_TEAM_NOTE, color = colors.textTertiary, style = Type.caption, maxLines = 2)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Label("Task", Modifier.weight(1f), color = colors.textSecondary, style = Type.smallMedium)
-                AppButton("From template", { picking = true }, icon = Icons.Message, compact = true, tooltip = "Fill the task from a saved template")
+                AppButton("From library", { picking = true }, icon = Icons.Message, compact = true, tooltip = "Fill the task from a saved prompt in the library")
             }
             AppTextArea(task, Modifier.fillMaxWidth(), placeholder = "Describe what to do", focusRequester = focus, onSubmit = start)
             Label(if (team != null) TASK_HINT else NO_TEAM_TASK_HINT, color = colors.textTertiary, style = Type.caption, maxLines = 2)

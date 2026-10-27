@@ -167,7 +167,7 @@ private fun MainLayout(state: AppState, installation: ClaudeInstallation) = BoxW
 @Composable
 private fun RouteContent(state: AppState) {
     val route = state.route
-    if (route == Route.Prompts) return PromptsScreen(state.prompts, state.projects.all, state.teams.teams, { template, project -> state.openTaskDialog(project.id, template.id) })
+    if (route == Route.Prompts) return PromptsScreen(state.prompts, state.projects.all, state.teams.teams, { state.teams.defaultTeamOf(it.id) }, { template, project -> state.openTaskDialog(project.id, template.id) })
     if (route == Route.Teams) return TeamsScreen(state.teams, state.projects.all)
     if (route == Route.Plugins) return PluginsScreen(state.plugins)
     if (route == Route.Mcp) return McpScreen(state.mcp)

@@ -23,7 +23,7 @@ import com.github.krpkbhdn.ccmanager.ui.components.AnchoredPopup
 import com.github.krpkbhdn.ccmanager.ui.components.AppButton
 import com.github.krpkbhdn.ccmanager.ui.components.AppTextArea
 import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant
-import com.github.krpkbhdn.ccmanager.ui.components.CountBadge
+import com.github.krpkbhdn.ccmanager.ui.components.CountDot
 import com.github.krpkbhdn.ccmanager.ui.components.IconButton
 import com.github.krpkbhdn.ccmanager.ui.components.Label
 import com.github.krpkbhdn.ccmanager.ui.components.MenuEntry
@@ -35,7 +35,7 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
 private val panelWidth = 400.dp
-private const val QUEUE_NOTE = "One prompt is typed each time Claude finishes a turn. Nothing is sent after an Esc interrupt, while you are typing, or while Claude waits for you."
+private const val QUEUE_NOTE = "A prompt is typed as soon as Claude is free, then one more after each finished turn. Nothing is sent while you are typing, while Claude waits for you, or right after an Esc interrupt."
 
 /** Tab strip button of a live session: opens the panel with its queued prompts. */
 @Composable
@@ -46,8 +46,8 @@ internal fun QueueControl(state: AppState, project: Project, ccmSessionId: Strin
         AppButton(
             "Queue", { queue.panelSessionId = if (queue.panelSessionId == ccmSessionId) null else ccmSessionId },
             variant = ButtonVariant.SECONDARY, icon = Icons.List, compact = true, tooltip = "Prompts to send when Claude is free",
+            trailing = if (count > 0) ({ CountDot(count) }) else null,
         )
-        if (count > 0) CountBadge(count, Modifier.align(Alignment.TopEnd))
         if (queue.panelSessionId == ccmSessionId) QueuePanel(state, project, ccmSessionId)
     }
 }
@@ -90,7 +90,7 @@ private fun TemplateMenu(templates: List<PromptTemplate>, onSelect: (PromptTempl
     if (templates.isEmpty()) return
     var open by remember { mutableStateOf(false) }
     Box {
-        AppButton("From template", { open = !open }, icon = Icons.Message, compact = true, tooltip = "Queue a saved template")
+        AppButton("From library", { open = !open }, icon = Icons.Message, compact = true, tooltip = "Queue a saved prompt from the library")
         if (open) PopupMenu(templates.map { template -> MenuEntry(template.name) { onSelect(template) } }, { open = false })
     }
 }

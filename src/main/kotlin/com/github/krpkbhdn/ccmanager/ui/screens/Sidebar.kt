@@ -57,7 +57,7 @@ fun Sidebar(state: AppState, modifier: Modifier = Modifier, forceCollapsed: Bool
             SidebarHeader(collapsed, forceCollapsed, state)
             NavItem(Icons.Grid, "Overview", state.route == Route.Overview, collapsed, state.live.sessions.size) { state.navigate(Route.Overview) }
             NavItem(Icons.Layers, "All sessions", state.route == Route.Sessions, collapsed, state.live.sessions.count { it.status == AgentStatus.NEEDS_ACTION }) { state.navigate(Route.Sessions) }
-            NavItem(Icons.Message, "Templates", state.route == Route.Prompts, collapsed, 0) { state.navigate(Route.Prompts) }
+            NavItem(Icons.Message, "Prompt Library", state.route == Route.Prompts, collapsed, 0) { state.navigate(Route.Prompts) }
             NavItem(Icons.Users, "Teams", state.route == Route.Teams, collapsed, 0) { state.navigate(Route.Teams) }
             ExtensionsGroup(state, collapsed)
             ProjectsSection(state, collapsed, Modifier.weight(1f))

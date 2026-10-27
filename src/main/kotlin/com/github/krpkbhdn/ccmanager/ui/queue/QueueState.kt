@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 
 private const val RETRY_MILLIS = 1_000L
 
-/** Prompts waiting for the live sessions to finish their turn; sends one per turn end through [sendPrompt]. Runs on the UI scope only. */
+/** Prompts waiting for the live sessions to be free; sends one at once to an idle session, then one per turn end, through [sendPrompt]. Runs on the UI scope only. */
 class QueueState(
     private val registry: SessionRegistry,
     private val terminal: TerminalPort,
@@ -36,7 +36,10 @@ class QueueState(
     fun of(ccmSessionId: String): List<QueuedPrompt> = queues.of(ccmSessionId)
 
     fun add(ccmSessionId: String, text: String) {
-        if (text.isNotBlank()) queues.add(ccmSessionId, text.trim())
+        if (text.isBlank()) return
+        queues.add(ccmSessionId, text.trim())
+        dispatcher.promptAdded(ccmSessionId)
+        evaluate()
     }
 
     fun remove(ccmSessionId: String, promptId: Long) = queues.remove(ccmSessionId, promptId)

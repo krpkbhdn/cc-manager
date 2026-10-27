@@ -23,7 +23,7 @@ class PromptDialogState(val existing: PromptTemplate?) {
     val hasInput: Boolean get() = name.text.isNotEmpty() || description.text.isNotEmpty() || text.text.isNotEmpty()
 }
 
-/** Prompt templates of the Templates screen; every backend change callback reloads the list, writes run off the UI thread. */
+/** Prompt templates of the Prompt Library screen; every backend change callback reloads the list, writes run off the UI thread. */
 class PromptsState(
     private val service: PromptTemplateService,
     private val scope: CoroutineScope,
@@ -76,7 +76,7 @@ class PromptsState(
     }
 
     fun requestDelete(template: PromptTemplate) {
-        requestConfirm(ConfirmRequest("Delete template", "Delete the template \"${template.name}\"?", "Delete") {
+        requestConfirm(ConfirmRequest("Delete prompt", "Delete the prompt \"${template.name}\"?", "Delete") {
             scope.launch { runGuarded(reportError) { io { service.delete(template.id) } } }
         })
     }
