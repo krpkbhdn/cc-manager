@@ -43,14 +43,26 @@ class ProjectsState(
     /** Adds the chosen directory of the folder picker (opened by setting [pickerOpen]). */
     fun addAt(directory: Path) {
         pickerOpen = false
+        register(directory, showProject)
+    }
+
+    /** Adds [directory] as a project and reports its id to [onAdded] once the list is reloaded. */
+    fun register(directory: Path, onAdded: (projectId: Long) -> Unit) {
         scope.launch {
             runGuarded({ reportError(ADD_FAILED_TITLE, it) }) {
                 val added = io { backend.projects.add(directory) }
                 load()
-                showProject(added.id)
+                onAdded(added.id)
             }
         }
     }
+
+    fun projectAt(directory: Path): Project? {
+        val target = realPathOf(directory)
+        return all.firstOrNull { realPathOf(it.path) == target }
+    }
+
+    private fun realPathOf(path: Path): Path = runCatching { path.toRealPath() }.getOrDefault(path.toAbsolutePath().normalize())
 
     fun rename(project: Project, name: String) {
         renaming = null
@@ -72,9 +84,11 @@ class ProjectsState(
         )
     }
 
-    private fun remove(project: Project) = scope.launch {
+    fun closeSessions(project: Project) = sessionIdsOf(project.id).forEach { closeSession(project.id, it) }
+
+    fun remove(project: Project) = scope.launch {
         guarded {
-            sessionIdsOf(project.id).forEach { closeSession(project.id, it) }
+            closeSessions(project)
             io { backend.projects.remove(project.id) }
             onRemoved(project.id)
             load()

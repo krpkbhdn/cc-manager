@@ -16,6 +16,8 @@ import com.github.krpkbhdn.ccmanager.git.GitStatus
 import com.github.krpkbhdn.ccmanager.git.GitStatusService
 import com.github.krpkbhdn.ccmanager.git.GitSyncService
 import com.github.krpkbhdn.ccmanager.git.GitWatcher
+import com.github.krpkbhdn.ccmanager.git.GitWorktreeService
+import com.github.krpkbhdn.ccmanager.git.Worktree
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitBackend
 import com.github.krpkbhdn.ccmanager.workspace.GitDiff
 import java.nio.file.Path
@@ -71,7 +73,11 @@ class FakeRepoData(
 
 /** A complete fake [GitBackend] over [data]; every service reads and mutates the same in-memory repository. */
 class FakeGit(val data: FakeRepoData) {
-    val backend = GitBackend(status(), index(), branches(), sync(), log(), stashes(), history(), conflicts(), watcher())
+    val backend = GitBackend(status(), index(), branches(), sync(), log(), stashes(), history(), conflicts(), worktrees(), watcher())
+
+    private fun worktrees() = object : GitWorktreeService(GitRunner()) {
+        override fun list(repo: Path) = emptyList<Worktree>()
+    }
 
     private fun status() = object : GitStatusService(GitRunner()) {
         override fun topLevel(folder: Path): Path {

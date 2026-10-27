@@ -74,6 +74,7 @@ private fun Sections(git: GitState, system: GitSystemActions, now: () -> Instant
             GitSubView.BRANCHES -> BranchesView(git)
             GitSubView.STASHES -> StashesView(git, now)
             GitSubView.TAGS -> TagsView(git)
+            GitSubView.WORKTREES -> WorktreesView(git)
         }
     }
 }
@@ -86,6 +87,7 @@ private fun segments(git: GitState): List<Segment<GitSubView>> {
         Segment(GitSubView.BRANCHES, GitSubView.BRANCHES.label, Icons.Branch, git.branches.count { !it.remote() }),
         Segment(GitSubView.STASHES, GitSubView.STASHES.label, Icons.Archive, git.stashes.size),
         Segment(GitSubView.TAGS, GitSubView.TAGS.label, Icons.Tag, git.tags.size),
+        Segment(GitSubView.WORKTREES, GitSubView.WORKTREES.label, Icons.FolderTree, git.worktrees.size),
     )
 }
 

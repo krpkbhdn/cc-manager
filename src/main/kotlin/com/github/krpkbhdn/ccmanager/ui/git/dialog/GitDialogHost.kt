@@ -19,6 +19,8 @@ fun GitDialogHost(git: GitState) {
         is GitDialog.NewTag -> NewTagDialog(git, dialog, close)
         is GitDialog.Reset -> ResetDialog(git, dialog, close)
         is GitDialog.DirtyCheckout -> DirtyCheckoutDialog(git, dialog, close)
+        is GitDialog.CreateWorktree -> CreateWorktreeDialog(git, close)
+        is GitDialog.RemoveWorktree -> RemoveWorktreeDialog(git, dialog, close)
         is GitDialog.Confirm -> ConfirmDialog(dialog.request, close)
         is GitDialog.Output -> OutputDialog(dialog, close)
     }
