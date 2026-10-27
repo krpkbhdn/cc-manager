@@ -30,7 +30,7 @@ class ProposalServiceTest {
     private static final int WAIT_SECONDS = 2;
     private static final Duration SHORT_HOLD = Duration.ofMillis(100);
 
-    private final SessionRegistry registry = new SessionRegistry(new SessionProperties(Duration.ofMinutes(10)), mock(TranscriptService.class));
+    private final SessionRegistry registry = new SessionRegistry(new SessionProperties(Duration.ofMinutes(10), Duration.ofMinutes(10)), mock(TranscriptService.class));
     private final ProposalService service = serviceHolding(Duration.ofSeconds(30));
     private final String session = registry.register(1L);
 

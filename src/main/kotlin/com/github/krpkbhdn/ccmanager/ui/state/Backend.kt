@@ -9,6 +9,7 @@ import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgentService
 import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
 import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalService
+import com.github.krpkbhdn.ccmanager.claude.session.SessionProperties
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry
 import com.github.krpkbhdn.ccmanager.config.AppProperties
 import com.github.krpkbhdn.ccmanager.claude.session.TranscriptService
@@ -98,6 +99,7 @@ class Backend(
     val updates: UpdateService? = null,
     val sound: NotificationSoundService? = null,
     val dataDir: Path = Path.of(System.getProperty("user.home"), ".cc-manager"),
+    val sessionProperties: SessionProperties,
 ) {
     companion object {
         fun from(context: ConfigurableApplicationContext) = Backend(
@@ -127,6 +129,7 @@ class Backend(
             updates = context.getBean(UpdateService::class.java),
             sound = context.getBean(NotificationSoundService::class.java),
             dataDir = context.getBean(AppProperties::class.java).dataDir(),
+            sessionProperties = context.getBean(SessionProperties::class.java),
         )
     }
 }

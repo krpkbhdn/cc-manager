@@ -2,6 +2,7 @@ package com.github.krpkbhdn.ccmanager.ui.sessions
 
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
+import java.time.Duration
 import java.time.Instant
 
 /** What the all-sessions screen shows; a null field means no restriction. */
@@ -10,17 +11,14 @@ data class SessionFilter(val status: AgentStatus? = null, val projectId: Long? =
         (status == null || session.status == status) && (projectId == null || session.projectId == projectId)
 }
 
-private val urgencyOrder = listOf(AgentStatus.NEEDS_ACTION, AgentStatus.WORKING, AgentStatus.IDLE, AgentStatus.OFFLINE)
+/** One project's sessions in the grouped view, with what its header flags. */
+data class ProjectGroup(val projectId: Long, val name: String, val sessions: List<SessionSnapshot>, val waiting: Int, val stale: Int)
 
-private val longestWaitFirst = compareBy<SessionSnapshot> { it.lastEventAt ?: Instant.MAX }
-private val mostRecentFirst = compareByDescending<SessionSnapshot> { it.lastEventAt ?: Instant.MIN }
+private val startOrder = compareBy<SessionSnapshot>({ it.startedAt }, { it.ccmSessionId })
 
-/** Sessions needing the user first (longest wait first), then working, idle and offline, newest event first. */
+/** Filtered sessions in a fixed order, oldest start first, so cards never jump when a status changes. */
 fun board(sessions: List<SessionSnapshot>, filter: SessionFilter = SessionFilter()): List<SessionSnapshot> =
-    sessions.filter(filter::matches)
-        .sortedWith(compareBy<SessionSnapshot> { urgencyOrder.indexOf(it.status) }.thenComparing { a, b ->
-            if (a.status == AgentStatus.NEEDS_ACTION) longestWaitFirst.compare(a, b) else mostRecentFirst.compare(a, b)
-        })
+    sessions.filter(filter::matches).sortedWith(startOrder)
 
 /** The waiting session after [currentId] in board order, wrapping around; the first one when [currentId] is not waiting. */
 fun nextWaiting(sessions: List<SessionSnapshot>, currentId: String?): SessionSnapshot? {
@@ -35,3 +33,15 @@ fun projectChoices(sessions: List<SessionSnapshot>, filter: SessionFilter, proje
     val withSessions = sessions.map { it.projectId }.toSet()
     return projectOrder.filter { it in withSessions || it == filter.projectId }
 }
+
+/** A working session without any event for longer than [threshold]; sessions without a known last event are never stale. */
+fun isStale(session: SessionSnapshot, now: Instant, threshold: Duration): Boolean =
+    session.status == AgentStatus.WORKING && session.lastEventAt?.let { Duration.between(it, now) > threshold } == true
+
+/** Filtered sessions grouped by project, projects alphabetical, only those that still have sessions. */
+fun groupByProject(sessions: List<SessionSnapshot>, filter: SessionFilter, projectName: (Long) -> String, now: Instant, staleAfter: Duration): List<ProjectGroup> =
+    board(sessions, filter).groupBy { it.projectId }
+        .map { (projectId, members) ->
+            ProjectGroup(projectId, projectName(projectId), members, members.count { it.status == AgentStatus.NEEDS_ACTION }, members.count { isStale(it, now, staleAfter) })
+        }
+        .sortedWith(compareBy<ProjectGroup, String>(String.CASE_INSENSITIVE_ORDER) { it.name }.thenBy { it.projectId })

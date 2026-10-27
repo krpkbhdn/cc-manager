@@ -33,7 +33,7 @@ class NotificationSoundServiceTest {
 
     private final List<NotificationSound> played = new ArrayList<>();
     private final MutableClock clock = new MutableClock();
-    private final NotificationService notifications = new NotificationService(new SessionRegistry(new SessionProperties(Duration.ofMinutes(10)), mock(TranscriptService.class)));
+    private final NotificationService notifications = new NotificationService(new SessionRegistry(new SessionProperties(Duration.ofMinutes(10), Duration.ofMinutes(10)), mock(TranscriptService.class)));
     private NotificationSoundService service = create(played::add);
 
     private NotificationSoundService create(java.util.function.Consumer<NotificationSound> sink) {

@@ -17,7 +17,7 @@ class NotificationServiceTest {
 
     private static final long PROJECT_ID = 9;
 
-    private final SessionRegistry registry = new SessionRegistry(new com.github.krpkbhdn.ccmanager.claude.session.SessionProperties(java.time.Duration.ofMinutes(10)), mock(TranscriptService.class));
+    private final SessionRegistry registry = new SessionRegistry(new com.github.krpkbhdn.ccmanager.claude.session.SessionProperties(java.time.Duration.ofMinutes(10), java.time.Duration.ofMinutes(10)), mock(TranscriptService.class));
     private final NotificationService service = new NotificationService(registry);
     private final List<AppNotification> received = new ArrayList<>();
     private String id;
@@ -54,7 +54,7 @@ class NotificationServiceTest {
 
     @Test
     void goingIdleOnlyBecauseABackgroundAgentWentStaleIsNotFinished() throws Exception {
-        var shortLived = new SessionRegistry(new SessionProperties(java.time.Duration.ofMillis(200)), mock(TranscriptService.class));
+        var shortLived = new SessionRegistry(new SessionProperties(java.time.Duration.ofMillis(200), java.time.Duration.ofMinutes(10)), mock(TranscriptService.class));
         var stale = new NotificationService(shortLived);
         var seen = new ArrayList<AppNotification>();
         stale.subscribe(seen::add);

@@ -27,6 +27,7 @@ import com.github.krpkbhdn.ccmanager.usage.RateLimitSnapshot
 import com.github.krpkbhdn.ccmanager.usage.RateLimitWindow
 import com.github.krpkbhdn.ccmanager.usage.SessionUsage
 import com.github.krpkbhdn.ccmanager.usage.SessionUsageService
+import com.github.krpkbhdn.ccmanager.claude.session.SessionProperties
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import com.github.krpkbhdn.ccmanager.claude.session.SubagentSnapshot
 import com.github.krpkbhdn.ccmanager.claude.session.SubagentState
@@ -54,6 +55,7 @@ import com.github.krpkbhdn.ccmanager.shell.ShellProfile
 import com.github.krpkbhdn.ccmanager.workspace.DirectoryOpener
 import com.github.krpkbhdn.ccmanager.workspace.IdeLauncher
 import java.nio.file.Path
+import java.time.Duration
 import java.time.Instant
 import java.util.Optional
 import java.util.OptionalInt
@@ -180,6 +182,10 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
             "s-infra", 4, "c4", AgentStatus.NEEDS_ACTION, "Plan approval: migrate state backend to S3", "plan", "claude-opus-4-7",
             null, ago(800), ago(20), emptyList(), 0, null,
         ),
+        SessionSnapshot(
+            "s-silent", 2, "c6", AgentStatus.WORKING, "Running Bash: npm run docs:build", "default", "claude-opus-4-7",
+            "Rebuild the docs site", ago(2400), ago(1500), emptyList(), 0, null,
+        ),
     )
 
     val notifications = listOf(
@@ -290,7 +296,7 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         val shellLauncher = mock(ShellLauncher::class.java)
         `when`(shellLauncher.launch(anyLong(), any())).thenThrow(IllegalStateException("Preview mode: shells cannot be started here."))
 
-        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), TranscriptService(JsonMapper.builder().build(), previewTranscriptDir), runConfigurationService(), runService(), shellDetector, shellLauncher, mock(AuthorProfileService::class.java), proposals.service(), terminal = terminal)
+        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), TranscriptService(JsonMapper.builder().build(), previewTranscriptDir), runConfigurationService(), runService(), shellDetector, shellLauncher, mock(AuthorProfileService::class.java), proposals.service(), terminal = terminal, sessionProperties = SessionProperties(Duration.ofMinutes(10), Duration.ofMinutes(10)))
     }
 
     private fun installationNow() = if (claudeInstalled) {

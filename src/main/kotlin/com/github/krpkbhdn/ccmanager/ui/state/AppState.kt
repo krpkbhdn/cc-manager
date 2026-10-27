@@ -32,6 +32,7 @@ import com.github.krpkbhdn.ccmanager.ui.git.model.GitState
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitSummary
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
 import java.nio.file.Path
+import java.time.Duration
 import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -67,6 +68,7 @@ class AppState(
         private set
     var live by mutableStateOf(LiveSessions())
         private set
+    val workingStaleAfter: Duration = backend.sessionProperties.workingStaleAfter()
     var now by mutableStateOf(Instant.now())
         private set
     var route by mutableStateOf<Route>(Route.Overview)
@@ -307,6 +309,7 @@ class AppState(
     }
 
     fun toggleSidebar() = updateSettings { it.copy(sidebarCollapsed = !it.sidebarCollapsed) }
+    fun setGroupSessionsByProject(group: Boolean) = updateSettings { it.copy(groupSessionsByProject = group) }
 
     fun toggleNotificationSound() = updateSettings { it.copy(notificationSound = !it.notificationSound) }
 

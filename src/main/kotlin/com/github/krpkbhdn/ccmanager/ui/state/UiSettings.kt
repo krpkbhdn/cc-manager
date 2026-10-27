@@ -21,6 +21,7 @@ data class UiSettings(
     val quickBarOpen: Boolean = true,
     val notificationSound: Boolean = true,
     val lastShell: String? = null,
+    val groupSessionsByProject: Boolean = false,
     val window: WindowBounds = WindowBounds(DEFAULT_WIDTH, DEFAULT_HEIGHT),
     val git: GitPrefs = GitPrefs(),
 ) {
@@ -36,6 +37,7 @@ private const val KEY_AGENTS = "agents.open"
 private const val KEY_QUICK_BAR = "quickbar.open"
 private const val KEY_NOTIFICATION_SOUND = "notification.sound"
 private const val KEY_LAST_SHELL = "shell.last"
+private const val KEY_GROUP_SESSIONS = "sessions.group"
 private const val KEY_WIDTH = "window.width"
 private const val KEY_HEIGHT = "window.height"
 private const val KEY_X = "window.x"
@@ -68,6 +70,7 @@ class UiSettingsStore(private val file: Path?) {
             setProperty(KEY_QUICK_BAR, settings.quickBarOpen.toString())
             setProperty(KEY_NOTIFICATION_SOUND, settings.notificationSound.toString())
             settings.lastShell?.let { setProperty(KEY_LAST_SHELL, it) }
+            setProperty(KEY_GROUP_SESSIONS, settings.groupSessionsByProject.toString())
             setProperty(KEY_WIDTH, settings.window.width.toString())
             setProperty(KEY_HEIGHT, settings.window.height.toString())
             settings.window.x?.let { setProperty(KEY_X, it.toString()) }
@@ -94,6 +97,7 @@ class UiSettingsStore(private val file: Path?) {
             quickBarOpen = props.flag(KEY_QUICK_BAR, defaults.quickBarOpen),
             notificationSound = props.flag(KEY_NOTIFICATION_SOUND, defaults.notificationSound),
             lastShell = props.getProperty(KEY_LAST_SHELL),
+            groupSessionsByProject = props.flag(KEY_GROUP_SESSIONS, defaults.groupSessionsByProject),
             window = WindowBounds(
                 width = props.getProperty(KEY_WIDTH)?.toIntOrNull() ?: defaults.window.width,
                 height = props.getProperty(KEY_HEIGHT)?.toIntOrNull() ?: defaults.window.height,
