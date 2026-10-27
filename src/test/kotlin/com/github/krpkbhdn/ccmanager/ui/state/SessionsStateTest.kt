@@ -62,6 +62,22 @@ class SessionsStateTest {
     }
 
     @Test
+    fun `continue reuses the team the project last started with instead of the default`() {
+        val chosen = Team(8, "Chosen", emptyList())
+        doReturn(session("ccm-first")).`when`(backend.launcher).launchTeam(1, chosen, "task")
+        doReturn(session("ccm-second")).`when`(backend.launcher).launch(1, LaunchMode.CONTINUE, chosen)
+        val state = sessionsState(team)
+
+        state.launchTeam(1, chosen, "task") {}
+        await { "ccm-first" in opened }
+        await { !state.launching }
+        state.launch(1, LaunchMode.CONTINUE)
+        await { "ccm-second" in opened }
+
+        assertThat(state.sessionTeams["ccm-second"]).isSameAs(chosen)
+    }
+
+    @Test
     fun `launch without any team uses the plain launch and records no team`() {
         doReturn(session("ccm-plain")).`when`(backend.launcher).launch(1, LaunchMode.CONTINUE)
         val state = sessionsState(null)

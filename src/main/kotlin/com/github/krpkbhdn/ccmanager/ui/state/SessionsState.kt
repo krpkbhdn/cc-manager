@@ -39,6 +39,8 @@ class SessionsState(
         private set
 
     val sessionTeams = mutableStateMapOf<String, Team>()
+    /** The team each project's latest session started with: claude does not persist --agents, so Continue/Resume must pass it again. */
+    private val lastTeams = mutableMapOf<Long, Team>()
     private val attachedSessions = mutableStateSetOf<String>()
     private val commandWriter = SessionCommandWriter(backend.terminal)
 
@@ -48,7 +50,7 @@ class SessionsState(
     private val unconfirmed = mutableSetOf<String>()
 
     fun launch(projectId: Long, mode: LaunchMode) {
-        val team = defaultTeam(projectId)
+        val team = (if (mode == LaunchMode.NEW) null else lastTeams[projectId]) ?: defaultTeam(projectId)
         launchSession(projectId, team) {
             if (team == null) backend.launcher.launch(projectId, mode) else backend.launcher.launch(projectId, mode, team)
         }
@@ -69,7 +71,10 @@ class SessionsState(
             guarded {
                 val session = io(start)
                 onStarted()
-                team?.let { sessionTeams[session.ccmSessionId()] = it }
+                team?.let {
+                    sessionTeams[session.ccmSessionId()] = it
+                    lastTeams[projectId] = it
+                }
                 backend.terminal.open(session)
                 onOpened(projectId, session.ccmSessionId())
                 showProject(projectId)
