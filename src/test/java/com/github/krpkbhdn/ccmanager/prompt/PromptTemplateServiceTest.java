@@ -35,7 +35,7 @@ class PromptTemplateServiceTest {
 
     @Test
     void createStoresTheTemplateWithTrimmedName() {
-        var created = service.create(" Review ", "Review {branch}", projectId, teamId);
+        var created = service.create(" Review ", "", "Review {branch}", projectId, teamId);
 
         assertThat(created.name()).isEqualTo("Review");
         assertThat(created.projectId()).isEqualTo(projectId);
@@ -47,9 +47,9 @@ class PromptTemplateServiceTest {
     void listForReturnsGlobalAndOwnTemplatesOnly() {
         jdbc.sql("INSERT INTO project (name, path, created_at) VALUES ('other', ?, 'now')").param(temp.resolve("other").toString()).update();
         var otherId = jdbc.sql("SELECT id FROM project WHERE name = 'other'").query(Long.class).single();
-        service.create("b global", "t", null, null);
-        service.create("a own", "t", projectId, null);
-        service.create("c foreign", "t", otherId, null);
+        service.create("b global", "", "t", null, null);
+        service.create("a own", "", "t", projectId, null);
+        service.create("c foreign", "", "t", otherId, null);
 
         assertThat(service.listFor(projectId)).extracting(PromptTemplate::name).containsExactly("a own", "b global");
         assertThat(service.list()).hasSize(3);
@@ -57,28 +57,42 @@ class PromptTemplateServiceTest {
 
     @Test
     void updateReplacesFieldsAndRejectsUnknownId() {
-        var created = service.create("a", "t", null, null);
+        var created = service.create("a", "", "t", null, null);
 
-        var updated = service.update(created.id(), "b", "new", projectId, null);
+        var updated = service.update(created.id(), "b", "", "new", projectId, null);
 
         assertThat(updated.name()).isEqualTo("b");
         assertThat(updated.projectId()).isEqualTo(projectId);
-        assertThatThrownBy(() -> service.update(999, "x", "t", null, null)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.update(999, "x", "", "t", null, null)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void descriptionIsTrimmedStoredAndUpdated() {
+        var created = service.create("a", "  Short blurb ", "t", null, null);
+        assertThat(created.description()).isEqualTo("Short blurb");
+
+        assertThat(service.update(created.id(), "a", "Other", "t", null, null).description()).isEqualTo("Other");
+    }
+
+    @Test
+    void descriptionLongerThanTheLimitIsRejected() {
+        assertThatThrownBy(() -> service.create("a", "x".repeat(PromptTemplateService.MAX_DESCRIPTION + 1), "t", null, null)).hasMessageContaining("description");
+        assertThatThrownBy(() -> service.update(service.create("a", "", "t", null, null).id(), "a", "x".repeat(PromptTemplateService.MAX_DESCRIPTION + 1), "t", null, null)).hasMessageContaining("description");
     }
 
     @Test
     void invalidInputIsRejectedWithAMessage() {
-        assertThatThrownBy(() -> service.create(" ", "t", null, null)).hasMessageContaining("name");
-        assertThatThrownBy(() -> service.create("a", " ", null, null)).hasMessageContaining("text");
-        assertThatThrownBy(() -> service.create("a", "t", 999L, null)).hasMessageContaining("project");
-        assertThatThrownBy(() -> service.create("a", "t", null, 999L)).hasMessageContaining("team");
-        assertThatThrownBy(() -> service.create("x".repeat(PromptTemplateService.MAX_NAME + 1), "t", null, null)).hasMessageContaining("name");
+        assertThatThrownBy(() -> service.create(" ", "", "t", null, null)).hasMessageContaining("name");
+        assertThatThrownBy(() -> service.create("a", "", " ", null, null)).hasMessageContaining("text");
+        assertThatThrownBy(() -> service.create("a", "", "t", 999L, null)).hasMessageContaining("project");
+        assertThatThrownBy(() -> service.create("a", "", "t", null, 999L)).hasMessageContaining("team");
+        assertThatThrownBy(() -> service.create("x".repeat(PromptTemplateService.MAX_NAME + 1), "", "t", null, null)).hasMessageContaining("name");
     }
 
     @Test
     void deletingTheProjectRemovesItsTemplatesAndDeletingTheTeamClearsTheDefault() {
-        service.create("own", "t", projectId, null);
-        var global = service.create("global", "t", null, teamId);
+        service.create("own", "", "t", projectId, null);
+        var global = service.create("global", "", "t", null, teamId);
 
         jdbc.sql("DELETE FROM team WHERE id = ?").param(teamId).update();
         jdbc.sql("DELETE FROM project WHERE id = ?").param(projectId).update();
@@ -92,13 +106,13 @@ class PromptTemplateServiceTest {
         var calls = new AtomicInteger();
         var unsubscribe = service.subscribe(calls::incrementAndGet);
 
-        var created = service.create("a", "t", null, null);
+        var created = service.create("a", "", "t", null, null);
         service.delete(created.id());
         service.delete(created.id());
         assertThat(calls).hasValue(2);
 
         unsubscribe.run();
-        service.create("b", "t", null, null);
+        service.create("b", "", "t", null, null);
         assertThat(calls).hasValue(2);
     }
 }

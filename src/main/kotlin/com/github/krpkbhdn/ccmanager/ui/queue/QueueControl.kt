@@ -18,7 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.prompt.PlaceholderSubstitution
-import com.github.krpkbhdn.ccmanager.prompt.PlaceholderValues
 import com.github.krpkbhdn.ccmanager.prompt.PromptTemplate
 import com.github.krpkbhdn.ccmanager.ui.components.AnchoredPopup
 import com.github.krpkbhdn.ccmanager.ui.components.AppButton
@@ -78,7 +77,7 @@ private fun QueuePanel(state: AppState, project: Project, ccmSessionId: String) 
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 AppButton("Add", add, variant = ButtonVariant.PRIMARY, icon = Icons.Plus, compact = true, enabled = draft.text.isNotBlank())
                 TemplateMenu(state.prompts.forProject(project.id)) { template ->
-                    queue.add(ccmSessionId, PlaceholderSubstitution.apply(template.text, PlaceholderValues(project.name, state.branchOf(project.id), null)))
+                    queue.add(ccmSessionId, PlaceholderSubstitution.apply(template.text, state.placeholderValuesOf(project)))
                 }
             }
             Label(QUEUE_NOTE, color = colors.textTertiary, style = Type.caption, maxLines = 3)

@@ -46,6 +46,7 @@ fun PromptDialog(form: PromptDialogState, prompts: PromptsState, projects: List<
     ModalHost(prompts::closeDialog, width = dialogWidth, takeFocus = false, hasInput = { form.hasInput }) {
         DialogBody(if (form.existing == null) "New template" else "Edit template", Icons.Message, colors.accent) {
             Field("Name") { AppTextField(form.name, Modifier.fillMaxWidth(), placeholder = "Review the branch", focusRequester = focus, onSubmit = save) }
+            Field("Description (optional)") { AppTextField(form.description, Modifier.fillMaxWidth(), placeholder = "What this template is for") }
             Field("Text") {
                 AppTextArea(form.text, Modifier.fillMaxWidth(), placeholder = "Review {project} on {branch} and list the risks", onSubmit = save)
                 Label(PLACEHOLDER_HINT, color = colors.textTertiary, style = Type.caption, maxLines = 2)

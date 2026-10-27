@@ -11,6 +11,9 @@ import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgent
 import com.github.krpkbhdn.ccmanager.notification.AppNotification
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.project.Project
+import com.github.krpkbhdn.ccmanager.prompt.PlaceholderSubstitution
+import com.github.krpkbhdn.ccmanager.prompt.PlaceholderValues
+import com.github.krpkbhdn.ccmanager.prompt.PromptTemplate
 import com.github.krpkbhdn.ccmanager.team.Team
 import com.github.krpkbhdn.ccmanager.ui.author.AuthorProfileState
 import com.github.krpkbhdn.ccmanager.ui.extensions.ExtensionContext
@@ -23,6 +26,7 @@ import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillHost
 import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillsState
 import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalState
 import com.github.krpkbhdn.ccmanager.ui.prompts.PromptsState
+import com.github.krpkbhdn.ccmanager.ui.prompts.teamForTemplate
 import com.github.krpkbhdn.ccmanager.ui.queue.QueueState
 import com.github.krpkbhdn.ccmanager.ui.run.RunState
 import com.github.krpkbhdn.ccmanager.ui.sessions.nextWaiting
@@ -85,7 +89,7 @@ class AppState(
     var loginBannerDismissed by mutableStateOf(false)
     var taskDialogProjectId by mutableStateOf<Long?>(null)
     var taskDialogTemplateId by mutableStateOf<Long?>(null)
-        private set
+    var quickStartProjectId by mutableStateOf<Long?>(null)
     var projectSettings by mutableStateOf<ProjectSettingsState?>(null)
         private set
 
@@ -359,6 +363,15 @@ class AppState(
 
     /** Branch of the project's repository when its git state is already loaded. */
     fun branchOf(projectId: Long): String? = gitOf(projectId)?.status?.branch?.takeIf { it.isNotBlank() }
+
+    fun placeholderValuesOf(project: Project) = PlaceholderValues(project.name, branchOf(project.id), null)
+
+    /** Starts [template] at once in [project], led by its default team or else the project's default team. */
+    fun startTaskFromTemplate(project: Project, template: PromptTemplate) {
+        quickStartProjectId = null
+        val team = teamForTemplate(template, teams.teams, teams.defaultTeamOf(project.id))
+        startTask(project, team, PlaceholderSubstitution.apply(template.text, placeholderValuesOf(project)).trim(), false)
+    }
 
     /** Starts a session with [task] as its first prompt, led by [team] or without a team, and opens its terminal. */
     fun startTask(project: Project, team: Team?, task: String, makeDefault: Boolean) {

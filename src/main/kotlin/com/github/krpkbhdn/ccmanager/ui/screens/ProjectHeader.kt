@@ -22,6 +22,7 @@ import com.github.krpkbhdn.ccmanager.ui.git.model.GitSummary
 import com.github.krpkbhdn.ccmanager.ui.components.MenuEntry
 import com.github.krpkbhdn.ccmanager.ui.components.ProjectAvatar
 import com.github.krpkbhdn.ccmanager.ui.components.SplitButton
+import com.github.krpkbhdn.ccmanager.ui.components.SplitActionButton
 import com.github.krpkbhdn.ccmanager.ui.components.StatusChip
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.run.RunControl
@@ -38,6 +39,7 @@ private const val IDE_HINT = "Open in IntelliJ IDEA"
 class ProjectHeaderActions(
     val onLaunch: (LaunchMode) -> Unit,
     val onStartTask: () -> Unit,
+    val onStartTaskFromTemplate: () -> Unit,
     val onOpenFolder: () -> Unit,
     val onOpenIde: () -> Unit,
     val onShowGit: () -> Unit,
@@ -70,7 +72,7 @@ fun ProjectHeader(project: Project, status: AgentStatus, ideAvailable: Boolean, 
                 IconButton(Icons.Diff, actions.onShowChanges, tooltip = "Review changes", hint = AppShortcut.GIT_CHANGES.hint())
             }
             RunControl(runEntries, runSelected, runActions)
-            AppButton("Start task", actions.onStartTask, icon = Icons.Users, tooltip = "Run a lead session with one of your agent teams")
+            SplitActionButton("Start task", Icons.Users, actions.onStartTask, tooltip = "Run a lead session with one of your agent teams", onChevron = actions.onStartTaskFromTemplate)
             SplitButton(
                 text = "Launch Claude",
                 icon = Icons.Play,

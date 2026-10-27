@@ -34,6 +34,8 @@ import com.github.krpkbhdn.ccmanager.ui.components.MenuEntry
 import com.github.krpkbhdn.ccmanager.ui.components.ModalHost
 import com.github.krpkbhdn.ccmanager.ui.components.PopupMenu
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
+import com.github.krpkbhdn.ccmanager.ui.prompts.TemplatePickerDialog
+import com.github.krpkbhdn.ccmanager.ui.prompts.teamForTemplate
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
@@ -56,9 +58,10 @@ fun StartTaskDialog(project: Project, teams: TeamsState, templates: TaskTemplate
     var makeDefault by remember { mutableStateOf(false) }
     val task = rememberTextFieldState()
     val focus = remember { FocusRequester() }
+    var picking by remember { mutableStateOf(false) }
     val apply: (PromptTemplate) -> Unit = { template ->
         task.setTextAndPlaceCursorAtEnd(PlaceholderSubstitution.apply(template.text, templates.values))
-        template.defaultTeamId?.takeIf { teams.find(it) != null }?.let { selected = it }
+        selected = teamForTemplate(template, teams.teams, selected?.let(teams::find))?.id
     }
     LaunchedEffect(Unit) {
         focus.requestFocus()
@@ -73,7 +76,7 @@ fun StartTaskDialog(project: Project, teams: TeamsState, templates: TaskTemplate
             if (team != null) RolesPreview(team) else Label(NO_TEAM_NOTE, color = colors.textTertiary, style = Type.caption, maxLines = 2)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Label("Task", Modifier.weight(1f), color = colors.textSecondary, style = Type.smallMedium)
-                if (templates.available.isNotEmpty()) TemplateSelect(templates.available, apply)
+                AppButton("From template", { picking = true }, icon = Icons.Message, compact = true, tooltip = "Fill the task from a saved template")
             }
             AppTextArea(task, Modifier.fillMaxWidth(), placeholder = "Describe what to do", focusRequester = focus, onSubmit = start)
             Label(if (team != null) TASK_HINT else NO_TEAM_TASK_HINT, color = colors.textTertiary, style = Type.caption, maxLines = 2)
@@ -81,6 +84,7 @@ fun StartTaskDialog(project: Project, teams: TeamsState, templates: TaskTemplate
             DialogActions("Start task", task.text.isNotBlank(), false, start, actions.onDismiss)
         }
     }
+    if (picking) TemplatePickerDialog(templates.available, project.id, teams.teams, { picking = false; apply(it); focus.requestFocus() }, { picking = false; focus.requestFocus() })
 }
 
 @Composable
@@ -92,15 +96,6 @@ private fun TeamSelect(selected: Team?, teams: List<Team>, onSelect: (Team?) -> 
             val entries = teams.map { MenuEntry(it.name, hint = "${it.roles.size} roles") { onSelect(it) } } + MenuEntry(NO_TEAM, dividerAbove = teams.isNotEmpty()) { onSelect(null) }
             PopupMenu(entries, { open = false })
         }
-    }
-}
-
-@Composable
-private fun TemplateSelect(templates: List<PromptTemplate>, onSelect: (PromptTemplate) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        AppButton("From template", { open = !open }, icon = Icons.Message, compact = true, tooltip = "Fill the task from a saved template")
-        if (open) PopupMenu(templates.map { template -> MenuEntry(template.name) { onSelect(template) } }, { open = false }, alignEnd = true)
     }
 }
 

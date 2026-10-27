@@ -82,6 +82,7 @@ private fun TemplateRow(template: PromptTemplate, prompts: PromptsState, project
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             Label(template.name, style = Type.bodyMedium, tooltipWhenTruncated = true)
+            if (template.description.isNotBlank()) Label(template.description, style = Type.small, tooltipWhenTruncated = true)
             Label(template.text.replace('\n', ' '), color = colors.textSecondary, style = Type.small, tooltipWhenTruncated = true)
             Label(details, color = colors.textTertiary, style = Type.caption)
         }

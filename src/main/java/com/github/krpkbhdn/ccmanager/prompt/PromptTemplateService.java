@@ -15,9 +15,10 @@ import org.springframework.stereotype.Service;
 public class PromptTemplateService {
 
     public static final int MAX_NAME = 60;
+    public static final int MAX_DESCRIPTION = 200;
     public static final int MAX_TEXT = 20_000;
     private static final Logger log = LoggerFactory.getLogger(PromptTemplateService.class);
-    private static final String SELECT = "SELECT id, name, text, project_id, default_team_id FROM prompt_template";
+    private static final String SELECT = "SELECT id, name, description, text, project_id, default_team_id FROM prompt_template";
     private static final String ORDER = " ORDER BY name COLLATE NOCASE, id";
 
     private final JdbcClient jdbc;
@@ -42,20 +43,20 @@ public class PromptTemplateService {
     }
 
     /** @throws IllegalArgumentException with a user-readable message for invalid input */
-    public PromptTemplate create(String name, String text, Long projectId, Long defaultTeamId) {
-        var cleanName = validate(name, text, projectId, defaultTeamId);
-        var id = jdbc.sql("INSERT INTO prompt_template (name, text, project_id, default_team_id) VALUES (?, ?, ?, ?) RETURNING id")
-                .param(cleanName).param(text).param(projectId).param(defaultTeamId).query(Long.class).single();
+    public PromptTemplate create(String name, String description, String text, Long projectId, Long defaultTeamId) {
+        var cleanName = validate(name, description, text, projectId, defaultTeamId);
+        var id = jdbc.sql("INSERT INTO prompt_template (name, description, text, project_id, default_team_id) VALUES (?, ?, ?, ?, ?) RETURNING id")
+                .param(cleanName).param(description.strip()).param(text).param(projectId).param(defaultTeamId).query(Long.class).single();
         fireChanged();
         return find(id).orElseThrow();
     }
 
     /** @throws IllegalArgumentException with a user-readable message for invalid input */
-    public PromptTemplate update(long id, String name, String text, Long projectId, Long defaultTeamId) {
+    public PromptTemplate update(long id, String name, String description, String text, Long projectId, Long defaultTeamId) {
         find(id).orElseThrow(() -> new IllegalArgumentException("Template not found: " + id));
-        var cleanName = validate(name, text, projectId, defaultTeamId);
-        jdbc.sql("UPDATE prompt_template SET name = ?, text = ?, project_id = ?, default_team_id = ? WHERE id = ?")
-                .param(cleanName).param(text).param(projectId).param(defaultTeamId).param(id).update();
+        var cleanName = validate(name, description, text, projectId, defaultTeamId);
+        jdbc.sql("UPDATE prompt_template SET name = ?, description = ?, text = ?, project_id = ?, default_team_id = ? WHERE id = ?")
+                .param(cleanName).param(description.strip()).param(text).param(projectId).param(defaultTeamId).param(id).update();
         fireChanged();
         return find(id).orElseThrow();
     }
@@ -72,13 +73,16 @@ public class PromptTemplateService {
         return () -> listeners.remove(onChange);
     }
 
-    private String validate(String name, String text, Long projectId, Long defaultTeamId) {
+    private String validate(String name, String description, String text, Long projectId, Long defaultTeamId) {
         var cleanName = name == null ? "" : name.strip();
         if (cleanName.isEmpty()) {
             throw new IllegalArgumentException("The name must not be empty.");
         }
         if (cleanName.length() > MAX_NAME) {
             throw new IllegalArgumentException("The name is longer than " + MAX_NAME + " characters.");
+        }
+        if (description.strip().length() > MAX_DESCRIPTION) {
+            throw new IllegalArgumentException("The description is longer than " + MAX_DESCRIPTION + " characters.");
         }
         if (text == null || text.isBlank()) {
             throw new IllegalArgumentException("The text must not be empty.");
@@ -100,7 +104,7 @@ public class PromptTemplateService {
     }
 
     private static PromptTemplate mapRow(ResultSet rs, int row) throws SQLException {
-        return new PromptTemplate(rs.getLong("id"), rs.getString("name"), rs.getString("text"),
+        return new PromptTemplate(rs.getLong("id"), rs.getString("name"), rs.getString("description"), rs.getString("text"),
                 nullableLong(rs, "project_id"), nullableLong(rs, "default_team_id"));
     }
 

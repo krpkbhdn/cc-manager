@@ -81,6 +81,7 @@ fun ProjectScreen(state: AppState, project: Project, modifier: Modifier = Modifi
             actions = ProjectHeaderActions(
                 onLaunch = { state.sessions.launch(project.id, it) },
                 onStartTask = { state.openTaskDialog(project.id) },
+                onStartTaskFromTemplate = { state.quickStartProjectId = project.id },
                 onOpenFolder = { state.openFolder(project) },
                 onOpenIde = { state.openIde(project) },
                 onShowGit = { state.openGit(project.id) },

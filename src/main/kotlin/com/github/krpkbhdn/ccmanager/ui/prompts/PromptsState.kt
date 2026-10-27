@@ -16,10 +16,11 @@ import kotlinx.coroutines.launch
 /** Input of the create/edit dialog; [existing] is null for a new template. */
 class PromptDialogState(val existing: PromptTemplate?) {
     val name = TextFieldState(existing?.name().orEmpty())
+    val description = TextFieldState(existing?.description().orEmpty())
     val text = TextFieldState(existing?.text().orEmpty())
     var projectId by mutableStateOf(existing?.projectId())
     var teamId by mutableStateOf(existing?.defaultTeamId())
-    val hasInput: Boolean get() = name.text.isNotEmpty() || text.text.isNotEmpty()
+    val hasInput: Boolean get() = name.text.isNotEmpty() || description.text.isNotEmpty() || text.text.isNotEmpty()
 }
 
 /** Prompt templates of the Templates screen; every backend change callback reloads the list, writes run off the UI thread. */
@@ -66,8 +67,9 @@ class PromptsState(
         scope.launch {
             runGuarded(onError) {
                 val name = form.name.text.toString()
+                val description = form.description.text.toString()
                 val text = form.text.text.toString()
-                io { form.existing?.let { service.update(it.id, name, text, form.projectId, form.teamId) } ?: service.create(name, text, form.projectId, form.teamId) }
+                io { form.existing?.let { service.update(it.id, name, description, text, form.projectId, form.teamId) } ?: service.create(name, description, text, form.projectId, form.teamId) }
                 dialog = null
             }
         }

@@ -33,7 +33,6 @@ import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation
 import com.github.krpkbhdn.ccmanager.claude.install.LoginState
 import com.github.krpkbhdn.ccmanager.project.Project
-import com.github.krpkbhdn.ccmanager.prompt.PlaceholderValues
 import com.github.krpkbhdn.ccmanager.ui.chrome.StatusBar
 import com.github.krpkbhdn.ccmanager.ui.chrome.UpdateBanner
 import com.github.krpkbhdn.ccmanager.ui.components.Banner
@@ -52,6 +51,7 @@ import com.github.krpkbhdn.ccmanager.ui.picker.FolderPickerDialog
 import com.github.krpkbhdn.ccmanager.ui.projectsettings.ProjectSettingsDialog
 import com.github.krpkbhdn.ccmanager.ui.prompts.PromptDialog
 import com.github.krpkbhdn.ccmanager.ui.prompts.PromptsScreen
+import com.github.krpkbhdn.ccmanager.ui.prompts.TemplatePickerDialog
 import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalDialogHost
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.sessions.SessionsScreen
@@ -102,6 +102,7 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
         if (state.shortcutsOpen) ShortcutSheet { state.shortcutsOpen = false }
         (state.route as? Route.Project)?.let { state.gitOf(it.id) }?.let { GitDialogHost(it) }
         state.taskDialogProjectId?.let { id -> state.projects.all.firstOrNull { it.id == id } }?.let { StartTaskDialog(it, state.teams, startTaskTemplates(state, it), startTaskActions(state, it)) }
+        state.quickStartProjectId?.let { id -> state.projects.all.firstOrNull { it.id == id } }?.let { QuickStartPicker(state, it) }
         state.prompts.dialog?.let { PromptDialog(it, state.prompts, state.projects.all, state.teams.teams) }
         state.runs.dialog?.let { RunConfigurationDialog(it, state.runs, state.dataDir) }
         state.teams.dialog?.let { open -> state.teams.find(open.teamId)?.let { RoleDialog(it, open, state.teams) } }
@@ -197,8 +198,12 @@ private const val SKELETON_CARDS = 6
 private fun startTaskTemplates(state: AppState, project: Project) = TaskTemplates(
     available = state.prompts.forProject(project.id),
     initialId = state.taskDialogTemplateId,
-    values = PlaceholderValues(project.name, state.branchOf(project.id), null),
+    values = state.placeholderValuesOf(project),
 )
+
+@Composable
+private fun QuickStartPicker(state: AppState, project: Project) =
+    TemplatePickerDialog(state.prompts.forProject(project.id), project.id, state.teams.teams, { state.startTaskFromTemplate(project, it) }, { state.quickStartProjectId = null })
 
 private fun startTaskActions(state: AppState, project: Project) = StartTaskActions(
     onStart = { team, task, makeDefault -> state.startTask(project, team, task, makeDefault) },
