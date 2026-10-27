@@ -7,4 +7,5 @@ enum class GitSubView(val label: String) {
     BRANCHES("Branches"),
     STASHES("Stashes"),
     TAGS("Tags"),
+    WORKTREES("Worktrees"),
 }

@@ -4,6 +4,8 @@ import com.github.krpkbhdn.ccmanager.ui.git.model.GitDialog
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitState
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
 import com.github.krpkbhdn.ccmanager.ui.git.model.fetch
+import com.github.krpkbhdn.ccmanager.ui.git.model.openWorktree
+import com.github.krpkbhdn.ccmanager.ui.git.model.worktreeTitle
 import com.github.krpkbhdn.ccmanager.ui.git.model.pull
 import com.github.krpkbhdn.ccmanager.ui.git.model.push
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
@@ -29,5 +31,8 @@ fun gitActions(state: AppState): List<PaletteItem> {
         item("push", "Push", Icons.Push, AppShortcut.GIT_PUSH) { it.push() },
         item("commit", "Commit...", Icons.Check, AppShortcut.GIT_COMMIT) { it.requestCommitFocus() },
         item("stash", "Stash changes...", Icons.Archive) { it.dialog = GitDialog.SaveStash() },
-    )
+        item("create-worktree", "Create worktree...", Icons.FolderTree) { it.show(GitSubView.WORKTREES); it.dialog = GitDialog.CreateWorktree },
+    ) + git.worktrees.map { worktree ->
+        item("worktree-${worktree.path()}", "Switch worktree: ${worktreeTitle(worktree)}", Icons.FolderTree) { it.openWorktree(worktree, false) }
+    }
 }

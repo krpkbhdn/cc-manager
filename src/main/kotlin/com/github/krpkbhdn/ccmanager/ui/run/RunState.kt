@@ -83,6 +83,8 @@ class RunState(
         }
     }
 
+    fun stopRunning(projectId: Long) = entriesOf(projectId).filter { it.running }.forEach { stop(it.id) }
+
     fun stop(configurationId: Long) {
         scope.launch { runGuarded(reportError) { io { runs.stop(configurationId) } } }
     }

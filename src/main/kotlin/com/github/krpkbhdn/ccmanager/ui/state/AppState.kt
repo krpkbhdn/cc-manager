@@ -8,6 +8,7 @@ import com.github.krpkbhdn.ccmanager.claude.hook.ActivityEntry
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation
 import com.github.krpkbhdn.ccmanager.claude.proposal.Proposal
 import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgent
+import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
 import com.github.krpkbhdn.ccmanager.notification.AppNotification
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.project.Project
@@ -157,7 +158,7 @@ class AppState(
     val agents = AgentsState(backend.transcripts, scope, { live }, ::showSessionTerminal)
     private val unsubscribers = mutableListOf<Runnable>()
     private val gitStates = mutableMapOf<Long, GitState>()
-    private val gitHost = GitHost({ settings.git }, { change -> updateSettings { it.copy(git = change(it.git)) } }, notifications::toast)
+    private val gitHost = GitHost({ settings.git }, { change -> updateSettings { it.copy(git = change(it.git)) } }, notifications::toast, ::openWorktree, ::forgetWorktree, ::registerWorktree, ::stopWorktreeWork, ::hasRunningWork, ::openDirectory)
     private val projectReload = Refresher(scope) { guarded { projects.load() } }
     private val sessionReload = Refresher(scope) { guarded { loadSessions() } }
 
@@ -346,6 +347,33 @@ class AppState(
     }
 
     fun openFolder(project: Project) = openDirectory(project.path)
+
+    /** Opens the project registered for a worktree folder, registering it first when needed, and optionally starts a session there. */
+    fun openWorktree(directory: Path, launchSession: Boolean) {
+        val open = { id: Long ->
+            navigate(Route.Project(id))
+            if (launchSession) sessions.launch(id, LaunchMode.NEW)
+        }
+        projects.projectAt(directory)?.let { return open(it.id) }
+        projects.register(directory, open)
+    }
+
+    /** The worktree becomes its own project, without navigating or starting a session. */
+    fun registerWorktree(directory: Path) {
+        if (projects.projectAt(directory) == null) projects.register(directory) {}
+    }
+
+    fun hasRunningWork(directory: Path): Boolean = projects.projectAt(directory)?.let { live.of(it.id).isNotEmpty() } == true
+
+    /** Closes the sessions, shells and runs of the project at [directory] so nothing holds the folder while git removes it. */
+    fun stopWorktreeWork(directory: Path) {
+        projects.projectAt(directory)?.let { projects.closeSessions(it); runs.stopRunning(it.id) }
+    }
+
+    /** A removed worktree is no longer a place to work, so its project goes too; files and branches are not touched. */
+    fun forgetWorktree(directory: Path) {
+        projects.projectAt(directory)?.let(projects::remove)
+    }
 
     fun openDirectory(directory: Path) = scope.launch { guarded { io { backend.directories.open(directory) } } }
 
