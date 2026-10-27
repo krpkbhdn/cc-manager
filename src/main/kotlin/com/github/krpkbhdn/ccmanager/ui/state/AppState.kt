@@ -157,15 +157,19 @@ class AppState(
             return proposals.dialogFor(session.ccmSessionId)
         }
 
-    /** Opens the session and shows its proposals again, also those the user hid before. */
     /** Answers the next session waiting for the user after the focused one; false when none waits. */
     fun answerNextWaiting(): Boolean {
         val focused = (route as? Route.Project)?.let { viewOf(it.id).focusedSession }
-        val next = nextWaiting(live.sessions, focused) ?: return false
+        val next = nextWaiting(live.sessions, focused)
+        if (next == null) {
+            notifications.toast(NotificationKind.INFO, "No session is waiting", "Nothing needs your answer right now.")
+            return false
+        }
         answerProposals(next.ccmSessionId)
         return true
     }
 
+    /** Opens the session and shows its proposals again, also those the user hid before. */
     fun answerProposals(ccmSessionId: String) {
         proposals.reopen(ccmSessionId)
         openSession(ccmSessionId)

@@ -40,7 +40,7 @@ fun SessionCard(
     session: SessionSnapshot,
     projectName: String,
     usage: SessionUsage?,
-    now: () -> Instant,
+    now: Instant,
     proposalHeadline: String?,
     onOpen: () -> Unit,
     onAnswer: () -> Unit,
@@ -60,7 +60,7 @@ fun SessionCard(
             (proposalHeadline ?: session.activity)?.let { Label(it, color = colors.textSecondary, style = Type.body, maxLines = ACTIVITY_LINES) }
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md), verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                    figures(session, usage, now()).forEach { Label(it, color = colors.textTertiary, style = Type.numeric) }
+                    figures(session, usage, now).forEach { Label(it, color = colors.textTertiary, style = Type.numeric) }
                 }
                 if (session.status == AgentStatus.NEEDS_ACTION) AppButton("Answer", onAnswer, variant = ButtonVariant.PRIMARY, icon = Icons.Message, compact = true)
             }

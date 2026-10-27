@@ -66,7 +66,7 @@ fun SessionsScreen(state: AppState, modifier: Modifier = Modifier) {
                     session = session,
                     projectName = state.projects.nameOf(session.projectId),
                     usage = state.sessionUsage[session.ccmSessionId],
-                    now = { state.now },
+                    now = state.now,
                     proposalHeadline = state.proposals.headlineOf(session.ccmSessionId),
                     onOpen = { state.openSession(session.ccmSessionId) },
                     onAnswer = { state.answerProposals(session.ccmSessionId) },
@@ -82,7 +82,7 @@ fun SessionsScreen(state: AppState, modifier: Modifier = Modifier) {
 private fun FilterBar(state: AppState, filter: SessionFilter, onChange: (SessionFilter) -> Unit) {
     val sessions = state.live.sessions
     val statuses = listOf<AgentStatus?>(null) + AgentStatus.entries.reversed()
-    val projectIds = listOf<Long?>(null) + sessions.map { it.projectId }.distinct()
+    val projectIds = listOf<Long?>(null) + projectChoices(sessions, filter, state.projects.all.map { it.id })
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.lg), verticalAlignment = Alignment.CenterVertically) {
         SegmentedControl(
             segments = statuses.map { status -> Segment(status, status?.let(::statusLabel) ?: "All", count = sessions.count { status == null || it.status == status }) },
