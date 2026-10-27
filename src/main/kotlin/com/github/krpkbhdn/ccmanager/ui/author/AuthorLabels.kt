@@ -11,10 +11,12 @@ fun statusLabel(status: AuthorStatus): String = when (status) {
     AuthorStatus.DECLINED -> "Declined"
 }
 
+const val UPDATE_HINT = "An update applies all changes since the installed version at once: accept or decline it as a whole."
+
 const val TEAM_REPLACE_WARNING = "Replaces the roles of your team with the author's version: edits you made to it are lost."
 
-/** Updating the teams overwrites the roles, so it is never done by accident. */
-fun replacesEdits(entry: AuthorEntry): Boolean = entry.component() == AuthorComponent.TEAMS && entry.status() == AuthorStatus.UPDATE_AVAILABLE
+/** Installing the teams overwrites the roles of a team that already exists, so it is never done by accident. */
+fun replacesEdits(entry: AuthorEntry): Boolean = entry.component() == AuthorComponent.TEAMS && entry.replacesExisting()
 
 fun buttonLabel(status: AuthorStatus): String = when (status) {
     AuthorStatus.NOT_INSTALLED, AuthorStatus.DECLINED -> "Install"

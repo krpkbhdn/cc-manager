@@ -3,6 +3,7 @@ package com.github.krpkbhdn.ccmanager.ui.author
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.author.AuthorEntry
+import com.github.krpkbhdn.ccmanager.author.AuthorStatus
 import com.github.krpkbhdn.ccmanager.ui.components.DialogBody
 import com.github.krpkbhdn.ccmanager.ui.components.Label
 import com.github.krpkbhdn.ccmanager.ui.components.ModalHost
@@ -24,4 +25,11 @@ fun AuthorDialog(title: String, onClose: () -> Unit, content: @Composable () -> 
 @Composable
 fun ReplaceWarning(entry: AuthorEntry) {
     if (replacesEdits(entry)) Label(TEAM_REPLACE_WARNING, color = colors.warning, style = Type.caption, maxLines = 3)
+}
+
+/** What an update brings: the all-at-once hint and the changes, one line each. */
+@Composable
+fun ChangeList(entry: AuthorEntry) {
+    if (entry.status() == AuthorStatus.UPDATE_AVAILABLE) Label(UPDATE_HINT, color = colors.textTertiary, style = Type.caption, maxLines = 2)
+    entry.changes().forEach { Label("- $it", color = colors.textSecondary, style = Type.caption, maxLines = 2) }
 }

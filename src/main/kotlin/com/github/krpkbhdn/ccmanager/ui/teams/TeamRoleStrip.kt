@@ -26,17 +26,17 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
-/** Session header: the team a lead session was started with and its roles; a role with a running subagent shows a spinner. */
+/** Session header: the team of the session (or the one a new launch would use) and its roles; a role with a running subagent shows a spinner, no team shows a muted note. */
 @Composable
-fun TeamRoleStrip(team: Team, runningAgentTypes: Set<String>, modifier: Modifier = Modifier) {
+fun TeamRoleStrip(team: Team?, runningAgentTypes: Set<String>, modifier: Modifier = Modifier) {
     Row(
         modifier.fillMaxWidth().background(colors.surface).horizontalScroll(rememberScrollState()).padding(horizontal = Spacing.lg, vertical = Spacing.xs + 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         Glyph(Icons.Users, colors.textTertiary)
-        Label(team.name, color = colors.textSecondary, style = Type.smallMedium)
-        team.roles.forEachIndexed { slot, role -> RolePill(role, slot, role.name() in runningAgentTypes) }
+        Label(team?.name ?: "No team", color = if (team == null) colors.textTertiary else colors.textSecondary, style = Type.smallMedium)
+        team?.roles?.forEachIndexed { slot, role -> RolePill(role, slot, role.name() in runningAgentTypes) }
     }
     HorizontalRule()
 }

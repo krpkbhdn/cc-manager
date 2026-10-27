@@ -27,30 +27,21 @@ class TeamsInstallerTest {
     void createsAMissingTeam() {
         when(teams.list()).thenReturn(List.of());
 
-        var outcome = installer.install(false);
+        var outcome = installer.install();
 
         assertThat(outcome.installed()).containsExactly("team " + name);
         verify(teams).create(any(), anyList());
     }
 
     @Test
-    void leavesAnExistingTeamAloneOnAFreshInstall() {
+    void replacesTheRolesOfAnExistingTeamWithTheSameName() {
         when(teams.list()).thenReturn(List.of(new Team(7, name, List.of())));
 
-        var outcome = installer.install(false);
-
-        assertThat(outcome.alreadyPresent()).containsExactly("team " + name);
-        verify(teams, never()).update(anyLong(), anyString(), anyList());
-    }
-
-    @Test
-    void updatesAnExistingTeamWhenAskedTo() {
-        when(teams.list()).thenReturn(List.of(new Team(7, name, List.of())));
-
-        var outcome = installer.install(true);
+        var outcome = installer.install();
 
         assertThat(outcome.installed()).containsExactly("team " + name);
         verify(teams).update(anyLong(), anyString(), anyList());
+        verify(teams, never()).create(any(), anyList());
     }
 
     @Test
@@ -58,6 +49,6 @@ class TeamsInstallerTest {
         when(teams.list()).thenReturn(List.of());
         when(teams.create(any(), anyList())).thenThrow(new IllegalArgumentException("nope"));
 
-        assertThat(installer.install(false).failed()).containsExactly("team " + name + ": nope");
+        assertThat(installer.install().failed()).containsExactly("team " + name + ": nope");
     }
 }

@@ -99,7 +99,7 @@ class AppState(
     )
     val notifications: NotificationsState = NotificationsState({ projects.nameOf(it) }) { windowActive }
     val sessions = SessionsState(
-        backend, scope, { live }, { sessionUsage[it] },
+        backend, scope, { live }, { sessionUsage[it] }, { teams.defaultTeamOf(it) },
         onOpened = { projectId, id -> views[projectId] = viewOf(projectId).openSession(id) },
         onClosed = { projectId, id -> views[projectId] = viewOf(projectId).closeSession(id) },
         showProject = { navigate(Route.Project(it)) },
@@ -321,11 +321,11 @@ class AppState(
 
     fun openInIde(target: Path) = scope.launch { guarded { io { backend.ide.open(target) } } }
 
-    /** Starts a lead session for [team] with [task] as its first prompt and opens its terminal. */
-    fun startTask(project: Project, team: Team, task: String, makeDefault: Boolean) {
-        sessions.launchTeam(project.id, team, task) {
+    /** Starts a session with [task] as its first prompt, led by [team] or without a team, and opens its terminal. */
+    fun startTask(project: Project, team: Team?, task: String, makeDefault: Boolean) {
+        sessions.launchTask(project.id, team, task) {
             taskDialogProjectId = null
-            if (makeDefault) teams.setProjectDefault(project.id, team.id)
+            if (makeDefault && team != null) teams.setProjectDefault(project.id, team.id)
         }
     }
 

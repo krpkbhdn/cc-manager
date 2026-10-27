@@ -7,7 +7,10 @@ import com.github.krpkbhdn.ccmanager.extension.ExtensionException;
 import com.github.krpkbhdn.ccmanager.extension.ExtensionProperties;
 import com.github.krpkbhdn.ccmanager.extension.ExtensionScope;
 import com.github.krpkbhdn.ccmanager.extension.RecordingCli;
+import com.github.krpkbhdn.ccmanager.workspace.CommandRunner;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class PluginServiceTest {
@@ -93,9 +96,60 @@ class PluginServiceTest {
     }
 
     @Test
+    void installRepeatsWithoutJsonWhenTheCliDoesNotKnowTheOption() {
+        var old = new JsonRejectingCli("error: unknown option '--json'");
+        var oldService = new PluginService(old, new ExtensionProperties(30, 180, 90, 300));
+
+        var result = oldService.install("a@m", ExtensionScope.USER, null);
+
+        assertThat(result.installed()).isTrue();
+        assertThat(old.calls).hasSize(2);
+        assertThat(old.lastCall()).containsExactly("plugin", "install", "a@m", "--scope", "user");
+    }
+
+    @Test
+    void addMarketplaceRepeatsWithoutJsonWhenTheCliDoesNotKnowTheOption() {
+        var old = new JsonRejectingCli("error: unknown option '--json'");
+        var oldService = new PluginService(old, new ExtensionProperties(30, 180, 90, 300));
+
+        oldService.addMarketplace("org/repo", ExtensionScope.USER, null);
+
+        assertThat(old.calls).hasSize(2);
+        assertThat(old.lastCall()).containsExactly("plugin", "marketplace", "add", "org/repo", "--scope", "user");
+    }
+
+    @Test
+    void otherFailuresAreNotRepeated() {
+        var failing = new JsonRejectingCli("Plugin \"zzz\" not found");
+        var failingService = new PluginService(failing, new ExtensionProperties(30, 180, 90, 300));
+
+        assertThatThrownBy(() -> failingService.install("zzz", ExtensionScope.USER, null))
+                .isInstanceOf(ExtensionException.class)
+                .hasMessageContaining("not found");
+        assertThat(failing.calls).hasSize(1);
+    }
+
+    @Test
     void updatingAllMarketplacesPassesNoName() {
         service.updateMarketplace(null);
 
         assertThat(cli.lastCall()).containsExactly("plugin", "marketplace", "update");
+    }
+
+    /** Fails with the given stderr while --json is among the arguments, succeeds otherwise. */
+    private static final class JsonRejectingCli extends RecordingCli {
+
+        private final String stderr;
+
+        JsonRejectingCli(String stderr) {
+            this.stderr = stderr;
+        }
+
+        @Override
+        public CommandRunner.Result execute(Path directory, Duration timeout, List<String> arguments) {
+            super.execute(directory, timeout, arguments);
+            return arguments.contains("--json") ? new CommandRunner.Result(1, "", stderr, false)
+                    : new CommandRunner.Result(0, "installed", "", false);
+        }
     }
 }

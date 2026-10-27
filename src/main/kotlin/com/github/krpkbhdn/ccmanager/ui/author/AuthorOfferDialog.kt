@@ -32,6 +32,7 @@ fun AuthorOfferDialog(offer: AuthorOffer, state: AuthorProfileState) {
                             Chip(versionTag(entry), colors.accent)
                         }
                         Label(entry.summary(), color = colors.textSecondary, style = Type.small, maxLines = 3)
+                        ChangeList(entry)
                         ReplaceWarning(entry)
                     }
                 }

@@ -30,4 +30,14 @@ class ModelSelectionTest {
         assertThatThrownBy(() -> new ModelSelection("opus 4", null)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new ModelSelection(null, "ultra")).hasMessageContaining("ultra");
     }
+
+    @Test
+    void orElseTakesEachUnsetPartFromTheFallback() {
+        var fallback = new ModelSelection("opus", "high");
+
+        assertThat(new ModelSelection("sonnet", null).orElse(fallback)).isEqualTo(new ModelSelection("sonnet", "high"));
+        assertThat(new ModelSelection(null, "low").orElse(fallback)).isEqualTo(new ModelSelection("opus", "low"));
+        assertThat(ModelSelection.DEFAULT.orElse(fallback)).isEqualTo(fallback);
+        assertThat(new ModelSelection("a", "max").orElse(fallback)).isEqualTo(new ModelSelection("a", "max"));
+    }
 }

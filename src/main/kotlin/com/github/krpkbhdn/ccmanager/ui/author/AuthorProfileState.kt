@@ -15,11 +15,11 @@ import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.McpState
 import com.github.krpkbhdn.ccmanager.ui.state.io
 import com.github.krpkbhdn.ccmanager.ui.state.runGuarded
 import java.nio.file.Path
+import java.util.Optional
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-private const val NO_PROJECT_TITLE = "Add a project first"
-private const val NO_PROJECT_BODY = "Claude finishes the setup there"
+private const val PENDING_SETUP_BODY = "Claude finishes the setup when you open a project"
 private const val PROJECT_GONE_TITLE = "Project not found"
 private const val PROJECT_GONE_BODY = "The project was removed, nothing was installed"
 
@@ -65,6 +65,7 @@ class AuthorProfileState(
 
     private val askedProjects = mutableSetOf<Long>()
     private var startOfferPending = false
+    private var pendingSession: AuthorInstallReport? = null
 
     private val dialogOpen get() = offer != null || manage != null || report != null
 
@@ -83,6 +84,7 @@ class AuthorProfileState(
 
     /** Skipped, and not remembered, while another dialog or the start offer is in the way: the project is offered on its next visit. */
     fun offerForProject(projectId: Long) {
+        launchPendingSession(projectId)
         if (dialogOpen || startOfferPending || projectId in askedProjects) return
         launchGuarded { showOffer(projectId) }
     }
@@ -134,15 +136,39 @@ class AuthorProfileState(
         if (projectEntry != null && project == null) {
             return toast(NotificationKind.ERROR, PROJECT_GONE_TITLE, PROJECT_GONE_BODY)
         }
-        if (project == null && chosen.any { it.component() != AuthorComponent.TEAMS }) {
-            return toast(NotificationKind.INFO, NO_PROJECT_TITLE, NO_PROJECT_BODY)
-        }
         if (declined.isNotEmpty()) io { service.decline(declined) }
         val result = io { service.install(chosen, project?.path) }
         offer = null
-        result.handoff().ifPresent { launchSetup(requireNotNull(project).id, it) { markInstalled(result.awaitingSession()) } }
+        result.handoff().ifPresent { startSetupSession(requireNotNull(project).id, it, result) }
+        if (project == null && result.awaitingSession().isNotEmpty()) pendingSession = merge(pendingSession, result)
         showResult(result, project)
         refreshManage()
+    }
+
+    private fun merge(pending: AuthorInstallReport?, result: AuthorInstallReport): AuthorInstallReport {
+        if (pending == null) return result
+        val awaiting = (pending.awaitingSession() + result.awaitingSession()).distinctBy { it.component() }
+        return AuthorInstallReport(pending.components() + result.components(), Optional.empty(), awaiting)
+    }
+
+    /** The components leave the pending report only once their session started, so a failed launch is retried on the next visit. */
+    private fun startSetupSession(projectId: Long, handoff: SessionHandoff, result: AuthorInstallReport) =
+        launchSetup(projectId, handoff) {
+            dropFromPending(result.awaitingSession())
+            markInstalled(result.awaitingSession())
+        }
+
+    private fun dropFromPending(started: List<AuthorEntry>) {
+        val pending = pendingSession ?: return
+        val startedComponents = started.map { it.component() }.toSet()
+        val rest = pending.awaitingSession().filterNot { it.component() in startedComponents }
+        pendingSession = if (rest.isEmpty()) null else AuthorInstallReport(pending.components(), Optional.empty(), rest)
+    }
+
+    private fun launchPendingSession(projectId: Long) {
+        val pending = pendingSession ?: return
+        val project = projectOf(projectId) ?: return
+        launchGuarded { startSetupSession(project.id, io { service.handoff(pending, project.path) }, pending) }
     }
 
     private fun markInstalled(entries: List<AuthorEntry>) {
@@ -168,8 +194,14 @@ class AuthorProfileState(
         if (result.components().any { it.failed() } || signIns.isNotEmpty()) {
             report = AuthorReport(lines, signIns)
         } else {
-            toast(NotificationKind.INFO, "Author configuration installed", project?.let { "Claude finishes the setup in ${it.name}" } ?: "Agent teams are ready")
+            toast(NotificationKind.INFO, "Author configuration installed", setupNote(result, project))
         }
+    }
+
+    private fun setupNote(result: AuthorInstallReport, project: Project?) = when {
+        project != null -> "Claude finishes the setup in ${project.name}"
+        result.awaitingSession().isNotEmpty() -> PENDING_SETUP_BODY
+        else -> "Agent teams are ready"
     }
 
     private fun launchGuarded(block: suspend () -> Unit) {

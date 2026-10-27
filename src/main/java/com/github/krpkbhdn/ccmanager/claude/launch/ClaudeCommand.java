@@ -31,11 +31,17 @@ public final class ClaudeCommand {
         List<String> command = base(executable, files);
         addClaudeManager(command, files, pluginDir);
         command.addAll(selection.arguments());
-        switch (mode) {
-            case NEW -> { }
-            case CONTINUE -> command.add("--continue");
-            case RESUME_PICKER -> command.add("--resume");
-        }
+        addModeFlag(command, mode);
+        return command;
+    }
+
+    /** Claude does not persist --agents and the system prompt addendum in the transcript, so a continued or resumed conversation gets them again; the project's model and effort win over the lead's. */
+    static List<String> launchArguments(Path executable, SessionFiles files, Path pluginDir, LaunchMode mode, ModelSelection selection, Team team) {
+        List<String> command = base(executable, files);
+        addClaudeManager(command, files, pluginDir);
+        command.addAll(selection.orElse(leadSelection(team)).arguments());
+        addTeam(command, team);
+        addModeFlag(command, mode);
         return command;
     }
 
@@ -43,8 +49,18 @@ public final class ClaudeCommand {
     static List<String> teamArguments(Path executable, SessionFiles files, Path pluginDir, Team team, String task) {
         List<String> command = base(executable, files);
         addClaudeManager(command, files, pluginDir);
-        team.lead().map(TeamRole::selection).ifPresent(selection -> command.addAll(selection.arguments()));
-        command.addAll(List.of("--agents", TeamAgentsJson.agents(team), "--append-system-prompt", TeamAgentsJson.leadAddendum(team), "--", task));
+        command.addAll(leadSelection(team).arguments());
+        addTeam(command, team);
+        command.addAll(List.of("--", task));
+        return command;
+    }
+
+    /** A plain session with the project's model and effort and the task as the first prompt. */
+    static List<String> taskArguments(Path executable, SessionFiles files, Path pluginDir, ModelSelection selection, String task) {
+        List<String> command = base(executable, files);
+        addClaudeManager(command, files, pluginDir);
+        command.addAll(selection.arguments());
+        command.addAll(List.of("--", task));
         return command;
     }
 
@@ -84,6 +100,30 @@ public final class ClaudeCommand {
             case CONTINUE -> "claude (continue)";
             case RESUME_PICKER -> "claude (resume)";
         };
+    }
+
+    static String label(LaunchMode mode, Team team) {
+        return switch (mode) {
+            case NEW -> "claude (" + team.name() + ")";
+            case CONTINUE -> "claude (continue, " + team.name() + ")";
+            case RESUME_PICKER -> "claude (resume, " + team.name() + ")";
+        };
+    }
+
+    private static ModelSelection leadSelection(Team team) {
+        return team.lead().map(TeamRole::selection).orElse(ModelSelection.DEFAULT);
+    }
+
+    private static void addTeam(List<String> command, Team team) {
+        command.addAll(List.of("--agents", TeamAgentsJson.agents(team), "--append-system-prompt", TeamAgentsJson.leadAddendum(team)));
+    }
+
+    private static void addModeFlag(List<String> command, LaunchMode mode) {
+        switch (mode) {
+            case NEW -> { }
+            case CONTINUE -> command.add("--continue");
+            case RESUME_PICKER -> command.add("--resume");
+        }
     }
 
     /** --mcp-config is variadic, so a flag follows it. Not for attach, which is a subcommand. */

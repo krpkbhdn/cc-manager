@@ -50,10 +50,22 @@ public class ClaudeLauncher {
                 (files, exe, selection) -> ClaudeCommand.launchArguments(exe, files, plugin.directory(), mode, selection));
     }
 
+    /** Like {@link #launch(long, LaunchMode)} but with [team] as agents, so the team also applies to a new, continued or resumed conversation. */
+    public LaunchedSession launch(long projectId, LaunchMode mode, Team team) {
+        return start(projectId, ClaudeCommand.label(mode, team),
+                (files, exe, selection) -> ClaudeCommand.launchArguments(exe, files, plugin.directory(), mode, selection, team));
+    }
+
     /** A lead session with the team's roles as subagents; the task is its first prompt. */
     public LaunchedSession launchTeam(long projectId, Team team, String task) {
         return start(projectId, "claude (" + team.name() + ")",
                 (files, exe, selection) -> ClaudeCommand.teamArguments(exe, files, plugin.directory(), team, task));
+    }
+
+    /** A plain session without an agent team; the task is its first prompt. */
+    public LaunchedSession launchTask(long projectId, String task) {
+        return start(projectId, ClaudeCommand.label(LaunchMode.NEW),
+                (files, exe, selection) -> ClaudeCommand.taskArguments(exe, files, plugin.directory(), selection, task));
     }
 
     /** A session that finishes the author's setup; the prompt points at the staged profile. */

@@ -78,7 +78,7 @@ class AppStateTest {
 
     @Test
     fun `opening a project offers its author setup`() {
-        val projectSetup = AuthorEntry(AuthorComponent.PROJECT_SETUP, PROJECT_ID, "Project setup", "summary", 1, 0, AuthorStatus.NOT_INSTALLED)
+        val projectSetup = AuthorEntry(AuthorComponent.PROJECT_SETUP, PROJECT_ID, "Project setup", "summary", 1, 0, AuthorStatus.NOT_INSTALLED, emptyList(), false)
         `when`(backend.author.entries(PROJECT_ID)).thenReturn(listOf(projectSetup))
 
         state.navigate(Route.Project(PROJECT_ID))

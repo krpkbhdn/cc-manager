@@ -50,6 +50,22 @@ class ClaudeCommandTest {
     }
 
     @Test
+    void taskWithoutTeamHasNoAgentsOrSystemPromptAndEndsWithTheTaskAfterDoubleDash() {
+        var command = ClaudeCommand.taskArguments(EXE, FILES, PLUGIN, new ModelSelection("sonnet", "low"), "-fix it");
+
+        assertThat(command).containsSequence(CLAUDE_MANAGER_FLAGS)
+                .containsSubsequence("--model", "sonnet", "--effort", "low")
+                .doesNotContain("--agents", "--append-system-prompt")
+                .endsWith("--", "-fix it");
+    }
+
+    @Test
+    void taskWithoutTeamAndDefaultSelectionHasOnlyTheTask() {
+        assertThat(ClaudeCommand.taskArguments(EXE, FILES, PLUGIN, ModelSelection.DEFAULT, "t"))
+                .doesNotContain("--model", "--effort", "--agents").endsWith("--", "t");
+    }
+
+    @Test
     void setupLaunchAddsTheProfileDirectoryAndEndsWithThePromptAfterTheSeparator() {
         var profile = Path.of("profile").toAbsolutePath();
 
@@ -99,6 +115,41 @@ class ClaudeCommandTest {
                 .endsWith("--append-system-prompt", TeamAgentsJson.leadAddendum(team), "--", "-fix it");
     }
 
+    @Test
+    void teamLaunchWithModeCarriesTeamFlagsAndModeFlagButNoTask() {
+        var lead = new RoleDraft("boss", "d", "Lead it.", "opus", "high", null, true);
+        var team = new Team(1, "T", List.of(new TeamRole(1, lead, 0)));
+
+        for (var mode : LaunchMode.values()) {
+            var command = ClaudeCommand.launchArguments(EXE, FILES, PLUGIN, mode, ModelSelection.DEFAULT, team);
+
+            assertThat(command).containsSequence(CLAUDE_MANAGER_FLAGS)
+                    .containsSubsequence("--model", "opus", "--effort", "high", "--agents", TeamAgentsJson.agents(team), "--append-system-prompt", TeamAgentsJson.leadAddendum(team))
+                    .doesNotContain("--");
+        }
+        assertThat(ClaudeCommand.launchArguments(EXE, FILES, PLUGIN, LaunchMode.NEW, ModelSelection.DEFAULT, team)).endsWith(TeamAgentsJson.leadAddendum(team));
+        assertThat(ClaudeCommand.launchArguments(EXE, FILES, PLUGIN, LaunchMode.CONTINUE, ModelSelection.DEFAULT, team)).endsWith("--continue");
+        assertThat(ClaudeCommand.launchArguments(EXE, FILES, PLUGIN, LaunchMode.RESUME_PICKER, ModelSelection.DEFAULT, team)).endsWith("--resume");
+    }
+
+    @Test
+    void projectSelectionWinsPerFieldOverTheLeadInATeamLaunch() {
+        var lead = new RoleDraft("boss", "d", "Lead it.", "opus", "high", null, true);
+        var team = new Team(1, "T", List.of(new TeamRole(1, lead, 0)));
+
+        assertThat(ClaudeCommand.launchArguments(EXE, FILES, PLUGIN, LaunchMode.NEW, new ModelSelection("sonnet", null), team))
+                .containsSubsequence("--model", "sonnet", "--effort", "high", "--agents")
+                .doesNotContain("opus");
+    }
+
+    @Test
+    void labelNamesTheTeamAndTheMode() {
+        var team = new Team(1, "Dev", List.of());
+
+        assertThat(ClaudeCommand.label(LaunchMode.NEW, team)).isEqualTo("claude (Dev)");
+        assertThat(ClaudeCommand.label(LaunchMode.CONTINUE, team)).isEqualTo("claude (continue, Dev)");
+        assertThat(ClaudeCommand.label(LaunchMode.RESUME_PICKER, team)).isEqualTo("claude (resume, Dev)");
+    }
     @Test
     void largestValidTeamFitsTheWindowsCommandLine() {
         var roles = new java.util.ArrayList<RoleDraft>();
