@@ -68,7 +68,7 @@ class SessionsStateTest {
         doReturn(session("ccm-second")).`when`(backend.launcher).launch(1, LaunchMode.CONTINUE, chosen)
         val state = sessionsState(team)
 
-        state.launchTeam(1, chosen, "task") {}
+        state.launchTask(1, chosen, "task") {}
         await { "ccm-first" in opened }
         await { !state.launching }
         state.launch(1, LaunchMode.CONTINUE)
@@ -84,6 +84,34 @@ class SessionsStateTest {
 
         state.launch(1, LaunchMode.CONTINUE)
         await { "ccm-plain" in opened }
+
+        assertThat(state.sessionTeams).isEmpty()
+        verify(backend.launcher).launch(1, LaunchMode.CONTINUE)
+    }
+
+    @Test
+    fun `task without a team starts a plain session with no team recorded`() {
+        doReturn(session("ccm-task")).`when`(backend.launcher).launchTask(1, "task")
+        val state = sessionsState(team)
+
+        state.launchTask(1, null, "task") {}
+        await { "ccm-task" in opened }
+
+        assertThat(state.sessionTeams).isEmpty()
+        verify(backend.launcher).launchTask(1, "task")
+    }
+
+    @Test
+    fun `continue after a task without a team stays team-less instead of using the default`() {
+        doReturn(session("ccm-task")).`when`(backend.launcher).launchTask(1, "task")
+        doReturn(session("ccm-continue")).`when`(backend.launcher).launch(1, LaunchMode.CONTINUE)
+        val state = sessionsState(team)
+
+        state.launchTask(1, null, "task") {}
+        await { "ccm-task" in opened }
+        await { !state.launching }
+        state.launch(1, LaunchMode.CONTINUE)
+        await { "ccm-continue" in opened }
 
         assertThat(state.sessionTeams).isEmpty()
         verify(backend.launcher).launch(1, LaunchMode.CONTINUE)

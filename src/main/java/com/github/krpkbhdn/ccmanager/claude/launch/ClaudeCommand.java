@@ -55,6 +55,15 @@ public final class ClaudeCommand {
         return command;
     }
 
+    /** A plain session with the project's model and effort and the task as the first prompt. */
+    static List<String> taskArguments(Path executable, SessionFiles files, Path pluginDir, ModelSelection selection, String task) {
+        List<String> command = base(executable, files);
+        addClaudeManager(command, files, pluginDir);
+        command.addAll(selection.arguments());
+        command.addAll(List.of("--", task));
+        return command;
+    }
+
     /** The author setup session: the staged profile is readable through --add-dir and the first prompt only points at it. */
     static List<String> setupArguments(Path executable, SessionFiles files, Path pluginDir, String prompt, Path profileDirectory) {
         List<String> command = base(executable, files);

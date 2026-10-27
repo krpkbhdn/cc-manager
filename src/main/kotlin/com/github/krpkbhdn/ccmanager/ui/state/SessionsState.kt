@@ -40,7 +40,7 @@ class SessionsState(
 
     val sessionTeams = mutableStateMapOf<String, Team>()
     /** The team each project's latest session started with: claude does not persist --agents, so Continue/Resume must pass it again. */
-    private val lastTeams = mutableMapOf<Long, Team>()
+    private val lastTeams = mutableMapOf<Long, Team?>()
     private val attachedSessions = mutableStateSetOf<String>()
     private val commandWriter = SessionCommandWriter(backend.terminal)
 
@@ -50,31 +50,32 @@ class SessionsState(
     private val unconfirmed = mutableSetOf<String>()
 
     fun launch(projectId: Long, mode: LaunchMode) {
-        val team = (if (mode == LaunchMode.NEW) null else lastTeams[projectId]) ?: defaultTeam(projectId)
+        val remembered = mode != LaunchMode.NEW && lastTeams.containsKey(projectId)
+        val team = if (remembered) lastTeams[projectId] else defaultTeam(projectId)
         launchSession(projectId, team) {
             if (team == null) backend.launcher.launch(projectId, mode) else backend.launcher.launch(projectId, mode, team)
         }
     }
 
-    /** Starts a lead session for [team] with [task] as its first prompt; [onStarted] runs only when the session really started. */
-    fun launchTeam(projectId: Long, team: Team, task: String, onStarted: () -> Unit) =
-        launchSession(projectId, team, onStarted) { backend.launcher.launchTeam(projectId, team, task) }
+    /** Starts a session with [task] as its first prompt, as a lead of [team] or, for null, without a team; [onStarted] runs only when the session really started. */
+    fun launchTask(projectId: Long, team: Team?, task: String, onStarted: () -> Unit) =
+        launchSession(projectId, team, onStarted, rememberTeam = true) {
+            if (team == null) backend.launcher.launchTask(projectId, task) else backend.launcher.launchTeam(projectId, team, task)
+        }
 
     /** Starts the session that finishes the author's setup in [projectId]; [onStarted] runs only when the session really started. */
     fun launchSetup(projectId: Long, handoff: SessionHandoff, onStarted: () -> Unit) =
         launchSession(projectId, onStarted = onStarted) { backend.launcher.launchSetup(projectId, handoff.firstMessage(), handoff.profileDirectory()) }
 
-    private fun launchSession(projectId: Long, team: Team? = null, onStarted: () -> Unit = {}, start: () -> LaunchedSession) {
+    private fun launchSession(projectId: Long, team: Team? = null, onStarted: () -> Unit = {}, rememberTeam: Boolean = team != null, start: () -> LaunchedSession) {
         if (launching) return
         launching = true
         scope.launch {
             guarded {
                 val session = io(start)
                 onStarted()
-                team?.let {
-                    sessionTeams[session.ccmSessionId()] = it
-                    lastTeams[projectId] = it
-                }
+                team?.let { sessionTeams[session.ccmSessionId()] = it }
+                if (rememberTeam) lastTeams[projectId] = team
                 backend.terminal.open(session)
                 onOpened(projectId, session.ccmSessionId())
                 showProject(projectId)

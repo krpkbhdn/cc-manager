@@ -188,6 +188,5 @@ private const val SKELETON_CARDS = 6
 
 private fun startTaskActions(state: AppState, project: Project) = StartTaskActions(
     onStart = { team, task, makeDefault -> state.startTask(project, team, task, makeDefault) },
-    onManageTeams = { state.navigate(Route.Teams) },
     onDismiss = { state.taskDialogProjectId = null },
 )

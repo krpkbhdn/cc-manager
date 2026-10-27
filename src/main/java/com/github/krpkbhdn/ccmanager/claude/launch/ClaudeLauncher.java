@@ -62,6 +62,12 @@ public class ClaudeLauncher {
                 (files, exe, selection) -> ClaudeCommand.teamArguments(exe, files, plugin.directory(), team, task));
     }
 
+    /** A plain session without an agent team; the task is its first prompt. */
+    public LaunchedSession launchTask(long projectId, String task) {
+        return start(projectId, ClaudeCommand.label(LaunchMode.NEW),
+                (files, exe, selection) -> ClaudeCommand.taskArguments(exe, files, plugin.directory(), selection, task));
+    }
+
     /** A session that finishes the author's setup; the prompt points at the staged profile. */
     public LaunchedSession launchSetup(long projectId, String prompt, Path profileDirectory) {
         return start(projectId, "claude (author setup)",

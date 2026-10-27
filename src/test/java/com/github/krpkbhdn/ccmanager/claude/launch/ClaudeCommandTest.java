@@ -50,6 +50,22 @@ class ClaudeCommandTest {
     }
 
     @Test
+    void taskWithoutTeamHasNoAgentsOrSystemPromptAndEndsWithTheTaskAfterDoubleDash() {
+        var command = ClaudeCommand.taskArguments(EXE, FILES, PLUGIN, new ModelSelection("sonnet", "low"), "-fix it");
+
+        assertThat(command).containsSequence(CLAUDE_MANAGER_FLAGS)
+                .containsSubsequence("--model", "sonnet", "--effort", "low")
+                .doesNotContain("--agents", "--append-system-prompt")
+                .endsWith("--", "-fix it");
+    }
+
+    @Test
+    void taskWithoutTeamAndDefaultSelectionHasOnlyTheTask() {
+        assertThat(ClaudeCommand.taskArguments(EXE, FILES, PLUGIN, ModelSelection.DEFAULT, "t"))
+                .doesNotContain("--model", "--effort", "--agents").endsWith("--", "t");
+    }
+
+    @Test
     void setupLaunchAddsTheProfileDirectoryAndEndsWithThePromptAfterTheSeparator() {
         var profile = Path.of("profile").toAbsolutePath();
 

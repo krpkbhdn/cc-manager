@@ -171,7 +171,7 @@ private fun shellMenu(state: AppState, projectId: Long): List<MenuEntry> =
 private fun MainContent(state: AppState, project: Project, view: ProjectView) {
     val tab = view.selected
     if (tab is ProjectTab.Session) {
-        SessionTab(state, tab.ccmSessionId)
+        SessionTab(state, project.id, tab.ccmSessionId)
         return
     }
     if (tab is ProjectTab.Shell) {
@@ -204,9 +204,11 @@ private fun tabSpecs(state: AppState, view: ProjectView): List<TabSpec> {
 }
 
 @Composable
-private fun SessionTab(state: AppState, ccmSessionId: String) {
+private fun SessionTab(state: AppState, projectId: Long, ccmSessionId: String) {
     Column(Modifier.fillMaxSize()) {
-        state.sessions.sessionTeams[ccmSessionId]?.let { TeamRoleStrip(it, state.live.find(ccmSessionId).runningAgentTypes()) }
+        val live = state.live.find(ccmSessionId)
+        val team = if (live != null) state.sessions.sessionTeams[ccmSessionId] else state.teams.defaultTeamOf(projectId)
+        TeamRoleStrip(team, if (live != null) live.runningAgentTypes() else emptySet())
         QuickActionsBar(state.settings.quickBarOpen, enabled = state.live.find(ccmSessionId) != null, onSend = { state.sessions.send(ccmSessionId, it) })
         TerminalPane(state, ccmSessionId) {
             if (state.proposals.hiddenCount(ccmSessionId) > 0) {
