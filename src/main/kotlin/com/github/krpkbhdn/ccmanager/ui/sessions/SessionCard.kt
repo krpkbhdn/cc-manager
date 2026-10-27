@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -32,9 +33,10 @@ import java.time.Duration
 import java.time.Instant
 import kotlin.math.roundToInt
 
-private const val ACTIVITY_LINES = 2
+private const val ACTIVITY_LINES = 3
+private val footerHeight = 28.dp
 
-/** One session at a glance: project, title, status, last action, time since the last event, context and cost. */
+/** One session at a glance: project, title, status, last action, time since the last event, context and cost. Every card has the same height. */
 @Composable
 fun SessionCard(
     session: SessionSnapshot,
@@ -57,8 +59,8 @@ fun SessionCard(
                 }
                 StatusChip(session.status)
             }
-            (proposalHeadline ?: session.activity)?.let { Label(it, color = colors.textSecondary, style = Type.body, maxLines = ACTIVITY_LINES) }
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md), verticalAlignment = Alignment.CenterVertically) {
+            Label(proposalHeadline ?: session.activity.orEmpty(), color = colors.textSecondary, style = Type.body, maxLines = ACTIVITY_LINES, minLines = ACTIVITY_LINES)
+            Row(Modifier.height(footerHeight), horizontalArrangement = Arrangement.spacedBy(Spacing.md), verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                     figures(session, usage, now).forEach { Label(it, color = colors.textTertiary, style = Type.numeric) }
                 }

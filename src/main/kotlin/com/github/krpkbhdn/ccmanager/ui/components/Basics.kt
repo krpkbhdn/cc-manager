@@ -64,6 +64,7 @@ fun Label(
     color: Color = colors.textPrimary,
     style: TextStyle = Type.body,
     maxLines: Int = 1,
+    minLines: Int = 1,
     align: TextAlign = TextAlign.Unspecified,
     tooltipWhenTruncated: Boolean = false,
 ) {
@@ -74,6 +75,7 @@ fun Label(
             modifier = textModifier,
             style = style.copy(color = color, textAlign = align),
             maxLines = maxLines,
+            minLines = minLines,
             overflow = TextOverflow.Ellipsis,
             onTextLayout = { truncated = it.hasVisualOverflow },
         )
