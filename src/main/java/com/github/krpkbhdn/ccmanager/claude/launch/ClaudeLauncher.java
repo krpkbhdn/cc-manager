@@ -6,6 +6,7 @@ import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation;
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService;
 import com.github.krpkbhdn.ccmanager.claude.plugin.ClaudePluginWriter;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
+import com.github.krpkbhdn.ccmanager.config.AppProperties;
 import com.github.krpkbhdn.ccmanager.project.Project;
 import com.github.krpkbhdn.ccmanager.project.ModelSelection;
 import com.github.krpkbhdn.ccmanager.project.ProjectService;
@@ -26,6 +27,9 @@ import org.springframework.stereotype.Service;
 @Service
 public class ClaudeLauncher {
 
+    /** Project id of sessions that belong to no project; SQLite ids start at 1. */
+    public static final long ASSISTANT_PROJECT_ID = 0L;
+    private static final String ASSISTANT_DIRECTORY = "assistant";
     private static final int SPAWN_FAILED_EXIT_CODE = -1;
     private static final Logger log = LoggerFactory.getLogger(ClaudeLauncher.class);
 
@@ -34,9 +38,11 @@ public class ClaudeLauncher {
     private final HookSettingsWriter hookSettings;
     private final ClaudePluginWriter plugin;
     private final SessionRegistry sessions;
+    private final Path dataDir;
 
     public ClaudeLauncher(ProjectService projects, ClaudeInstallationService installation,
-            HookSettingsWriter hookSettings, ClaudePluginWriter plugin, SessionRegistry sessions) {
+            HookSettingsWriter hookSettings, ClaudePluginWriter plugin, SessionRegistry sessions, AppProperties properties) {
+        this.dataDir = properties.dataDir();
         this.projects = projects;
         this.installation = installation;
         this.hookSettings = hookSettings;
@@ -80,14 +86,30 @@ public class ClaudeLauncher {
                 (files, exe, selection) -> ClaudeCommand.attachArguments(exe, files, backgroundSessionId));
     }
 
+    /** A general session outside any project, started in the assistant directory under {@link #ASSISTANT_PROJECT_ID}. */
+    public LaunchedSession launchAssistant() {
+        Path directory = dataDir.resolve(ASSISTANT_DIRECTORY);
+        try {
+            Files.createDirectories(directory);
+        } catch (IOException e) {
+            throw new IllegalStateException("Could not create the assistant folder: " + e.getMessage(), e);
+        }
+        return start(ASSISTANT_PROJECT_ID, directory, ModelSelection.DEFAULT, ClaudeCommand.label(LaunchMode.NEW),
+                (files, exe, selection) -> ClaudeCommand.assistantArguments(exe, files, selection));
+    }
+
     private LaunchedSession start(long projectId, String label, CommandFactory commandFactory) {
         Project project = project(projectId);
-        Path directory = project.path();
+        return start(projectId, project.path(), project.modelSelection(), label, commandFactory);
+    }
+
+    private LaunchedSession start(long projectId, Path directory, ModelSelection modelSelection, String label,
+            CommandFactory commandFactory) {
         Path executable = executable();
         String ccmSessionId = sessions.register(projectId);
         try {
             SessionFiles files = hookSettings.write(ccmSessionId);
-            List<String> command = commandFactory.build(files, executable, project.modelSelection());
+            List<String> command = commandFactory.build(files, executable, modelSelection);
             PtyProcess process = PtySpawner.spawn(command, directory, ClaudeCommand.environment(System.getenv(), ccmSessionId));
             watchExit(ccmSessionId, process);
             return new LaunchedSession(ccmSessionId, projectId, label, process);

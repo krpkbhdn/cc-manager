@@ -57,6 +57,9 @@ interface TerminalPort {
     /** True while the user may have an unsent draft: typed or pasted since the last Enter, Ctrl+C or Esc. */
     fun draftMayExist(ccmSessionId: String): Boolean = false
 
+    /** The text currently on the session's terminal screen; empty without a terminal. */
+    fun screenText(ccmSessionId: String): String = ""
+
     @Composable
     fun View(ccmSessionId: String, modifier: Modifier)
 }
@@ -70,6 +73,7 @@ object HostTerminalPort : TerminalPort {
     override fun ctrlCWithin(ccmSessionId: String, windowMillis: Long) = TerminalHost.ctrlCWithin(ccmSessionId, windowMillis)
     override fun enterWithin(ccmSessionId: String, windowMillis: Long) = TerminalHost.enterWithin(ccmSessionId, windowMillis)
     override fun draftMayExist(ccmSessionId: String) = TerminalHost.draftMayExist(ccmSessionId)
+    override fun screenText(ccmSessionId: String) = TerminalHost.sessionOf(ccmSessionId)?.screenText().orEmpty()
 
     @Composable
     override fun View(ccmSessionId: String, modifier: Modifier) = TerminalView(ccmSessionId, modifier, dark = colors.dark, background = colors.terminal)

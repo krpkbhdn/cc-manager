@@ -6,7 +6,11 @@ import androidx.compose.ui.Modifier
 import com.github.krpkbhdn.ccmanager.author.AuthorComponent
 import com.github.krpkbhdn.ccmanager.author.AuthorEntry
 import com.github.krpkbhdn.ccmanager.author.AuthorStatus
+import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
+import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
+import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
+import java.time.Instant
 import com.github.krpkbhdn.ccmanager.ui.PreviewWorld
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CoroutineScope
@@ -85,5 +89,22 @@ class AppStateTest {
 
         await { state.author.offer != null }
         assertThat(state.author.offer!!.entries).containsExactly(projectSetup)
+    }
+
+    @Test
+    fun `opening the assistant session routes to the assistant screen and the assistant is named`() {
+        val assistant = SessionSnapshot(
+            "ccm-assistant", ClaudeLauncher.ASSISTANT_PROJECT_ID, "c0", AgentStatus.IDLE, null, null, null, null,
+            Instant.now(), Instant.now(), emptyList(), 0, null,
+        )
+        `when`(backend.sessions.sessions()).thenReturn(world.sessions + assistant)
+        world.fire()
+        await { state.live.find("ccm-assistant") != null }
+
+        state.openSession("ccm-assistant")
+
+        assertThat(state.route).isEqualTo(Route.Assistant)
+        assertThat(state.assistant.liveSessionId).isEqualTo("ccm-assistant")
+        assertThat(state.projects.nameOf(ClaudeLauncher.ASSISTANT_PROJECT_ID)).isEqualTo("Assistant")
     }
 }

@@ -37,6 +37,12 @@ class ClaudeCommandTest {
     }
 
     @Test
+    void assistantHasSystemPromptButNoPluginOrMcpConfig() {
+        assertThat(ClaudeCommand.assistantArguments(EXE, FILES, ModelSelection.DEFAULT))
+                .containsExactly(EXE.toString(), "--settings", SETTINGS.toString(), "--append-system-prompt", ClaudeCommand.ASSISTANT_SYSTEM_PROMPT);
+    }
+
+    @Test
     void attachHasNeitherMcpConfigNorPluginBecauseItIsASubcommand() {
         assertThat(ClaudeCommand.attachArguments(EXE, FILES, "ab12")).doesNotContain("--mcp-config", "--plugin-dir");
     }

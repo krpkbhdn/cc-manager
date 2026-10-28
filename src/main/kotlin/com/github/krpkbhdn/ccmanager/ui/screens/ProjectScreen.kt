@@ -229,7 +229,7 @@ private fun SessionTab(state: AppState, projectId: Long, ccmSessionId: String) {
 }
 
 @Composable
-private fun TerminalPane(state: AppState, terminalId: String, overlay: @Composable BoxScope.() -> Unit = {}) {
+internal fun TerminalPane(state: AppState, terminalId: String, overlay: @Composable BoxScope.() -> Unit = {}) {
     Box(Modifier.fillMaxSize().background(colors.terminal).padding(start = TERMINAL_INSET, top = TERMINAL_INSET)) {
         state.terminal.View(terminalId, Modifier.fillMaxSize())
         overlay()

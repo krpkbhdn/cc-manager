@@ -19,6 +19,8 @@ public final class ClaudeCommand {
     static final String ENV_SESSION = "CCM_SESSION";
     static final String TERM_VALUE = "xterm-256color";
     static final String COLORTERM_VALUE = "truecolor";
+    static final String ASSISTANT_SYSTEM_PROMPT = "You are a general-purpose assistant running outside any project. "
+            + "There is no repository to edit; answer questions and use the available tools.";
     /** Would turn off Claude colors or make it think it runs inside another agent (which also switches off transcripts, so no --resume) or terminal host. */
     private static final List<String> INHERITED_ENV_TO_DROP = List.of(
             "NO_COLOR", "FORCE_COLOR", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_CHILD_SESSION",
@@ -69,6 +71,14 @@ public final class ClaudeCommand {
         List<String> command = base(executable, files);
         addClaudeManager(command, files, pluginDir);
         command.addAll(List.of("--add-dir", profileDirectory.toAbsolutePath().toString(), "--", prompt));
+        return command;
+    }
+
+    /** The assistant session: no project, so no plugin or MCP config, only a system prompt saying so. */
+    static List<String> assistantArguments(Path executable, SessionFiles files, ModelSelection selection) {
+        List<String> command = base(executable, files);
+        command.addAll(selection.arguments());
+        command.addAll(List.of("--append-system-prompt", ASSISTANT_SYSTEM_PROMPT));
         return command;
     }
 

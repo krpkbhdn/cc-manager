@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateSetOf
 import androidx.compose.runtime.setValue
 import com.github.krpkbhdn.ccmanager.author.SessionHandoff
+import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
@@ -56,6 +57,9 @@ class SessionsState(
             if (team == null) backend.launcher.launch(projectId, mode) else backend.launcher.launch(projectId, mode, team)
         }
     }
+
+    /** Starts the general session outside any project. */
+    fun launchAssistant() = launchSession(ClaudeLauncher.ASSISTANT_PROJECT_ID) { backend.launcher.launchAssistant() }
 
     /** Starts a session with [task] as its first prompt, as a lead of [team] or, for null, without a team; [onStarted] runs only when the session really started. */
     fun launchTask(projectId: Long, team: Team?, task: String, onStarted: () -> Unit) =

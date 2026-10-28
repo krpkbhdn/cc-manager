@@ -22,6 +22,7 @@ import java.awt.event.KeyEvent.VK_G
 import java.awt.event.KeyEvent.VK_H
 import java.awt.event.KeyEvent.VK_J
 import java.awt.event.KeyEvent.VK_K
+import java.awt.event.KeyEvent.VK_I
 import java.awt.event.KeyEvent.VK_L
 import java.awt.event.KeyEvent.VK_M
 import java.awt.event.KeyEvent.VK_N
@@ -46,6 +47,7 @@ enum class AppShortcut(val label: String, private val windows: List<KeyChord>, p
     ADD_PROJECT("Add project", listOf(ctrlShift(VK_O), ctrl(VK_N)), listOf(cmd(VK_O), cmd(VK_N))),
     NEW_SESSION("New Claude session", listOf(ctrlShift(VK_T)), listOf(cmd(VK_T))),
     ALL_SESSIONS("All sessions", listOf(ctrlShift(VK_S)), listOf(cmdShift(VK_S))),
+    ASSISTANT("Assistant", listOf(ctrlShift(VK_I)), listOf(cmdShift(VK_I))),
     NEXT_WAITING("Answer next waiting session", listOf(ctrlShift(VK_N)), listOf(cmdShift(VK_N))),
     OPEN_TERMINAL("Open terminal", listOf(alt(VK_F12)), listOf(alt(VK_F12))),
     CLOSE_SESSION("Close session tab", listOf(ctrlShift(VK_W)), listOf(cmd(VK_W))),
