@@ -29,6 +29,7 @@ import java.awt.event.KeyEvent.VK_M
 import java.awt.event.KeyEvent.VK_N
 import java.awt.event.KeyEvent.VK_O
 import java.awt.event.KeyEvent.VK_P
+import java.awt.event.KeyEvent.VK_PERIOD
 import java.awt.event.KeyEvent.VK_Q
 import java.awt.event.KeyEvent.VK_R
 import java.awt.event.KeyEvent.VK_S
@@ -79,6 +80,7 @@ enum class AppShortcut(val label: String, private val windows: List<KeyChord>, p
     NOTIFICATIONS("Notifications", listOf(ctrlShift(VK_M)), listOf(cmdShift(VK_M))),
     USAGE("Show usage", listOf(ctrlShift(VK_Y)), listOf(cmdShift(VK_Y))),
     PROJECT_SETTINGS("Project settings", listOf(ctrlShift(VK_COMMA)), listOf(cmd(VK_COMMA))),
+    APP_SETTINGS("Settings", listOf(ctrlShift(VK_PERIOD)), listOf(cmdShift(VK_PERIOD))),
     FOCUS_TERMINAL("Focus terminal", listOf(ctrlShift(VK_BACK_QUOTE)), listOf(ctrl(VK_BACK_QUOTE))),
     SHORTCUT_SHEET("Keyboard shortcuts", listOf(ctrlShift(VK_SLASH), plain(VK_F1)), listOf(cmdShift(VK_SLASH), plain(VK_F1))),
     CLOSE_OVERLAY("Close overlay", listOf(plain(VK_ESCAPE)), listOf(plain(VK_ESCAPE)));

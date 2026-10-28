@@ -28,6 +28,7 @@ import com.github.krpkbhdn.ccmanager.ui.extensions.ExtensionContext
 import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.PluginsState
 import com.github.krpkbhdn.ccmanager.ui.projectsettings.ProjectSettingsSection
 import com.github.krpkbhdn.ccmanager.ui.projectsettings.ProjectSettingsState
+import com.github.krpkbhdn.ccmanager.ui.settings.SettingsState
 import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.HealthCheck
 import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.McpState
 import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillHost
@@ -173,6 +174,7 @@ class AppState(
         reportError = notifications::reportError,
         toast = notifications::toast,
     )
+    val settingsDialog = SettingsState()
     val update = UpdateState(backend.updates, scope, notifications::reportError, ::requestQuit) { exitApp() }
     var exitApp: () -> Unit = {}
     val agents = AgentsState(backend.transcripts, scope, { live }, ::showSessionTerminal)
@@ -360,6 +362,8 @@ class AppState(
     fun setGroupSessionsByProject(group: Boolean) = updateSettings { it.copy(groupSessionsByProject = group) }
 
     fun toggleNotificationSound() = updateSettings { it.copy(notificationSound = !it.notificationSound) }
+
+    fun setAssistantStartup(mode: AssistantStartup) = updateSettings { it.copy(assistantStartup = mode) }
 
     fun cycleAssistantStartup() = updateSettings { it.copy(assistantStartup = it.assistantStartup.next()) }
 

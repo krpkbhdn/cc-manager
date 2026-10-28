@@ -79,6 +79,7 @@ private fun globalActions(state: AppState, systemDark: Boolean): List<PaletteIte
     PaletteItem("toggle-sound", "Toggle notification sound", PaletteGroup.ACTIONS, if (state.settings.notificationSound) "Currently on" else "Currently off", Icons.Bell) { state.toggleNotificationSound() },
     PaletteItem("toggle-theme", "Toggle light and dark theme", PaletteGroup.ACTIONS, icon = Icons.Sun, shortcut = AppShortcut.TOGGLE_THEME) { state.toggleTheme(systemDark) },
     PaletteItem("system-theme", "Use the system theme", PaletteGroup.ACTIONS, icon = Icons.Monitor) { state.setThemeMode(ThemeMode.SYSTEM) },
+    PaletteItem("settings", "Settings", PaletteGroup.ACTIONS, "Theme, notifications, Assistant, updates and more", Icons.Settings, shortcut = AppShortcut.APP_SETTINGS) { state.settingsDialog.show() },
     PaletteItem("shortcuts", "Keyboard shortcuts", PaletteGroup.ACTIONS, icon = Icons.Command, shortcut = AppShortcut.SHORTCUT_SHEET) { state.shortcutsOpen = true },
     PaletteItem("toggle-sidebar", "Toggle sidebar", PaletteGroup.ACTIONS, icon = Icons.PanelLeftClose, shortcut = AppShortcut.TOGGLE_SIDEBAR, run = state::toggleSidebar),
 )

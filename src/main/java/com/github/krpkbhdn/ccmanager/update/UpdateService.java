@@ -53,6 +53,14 @@ public class UpdateService {
         return properties.enabled() && ReleaseVersion.parse(properties.version()).isPresent();
     }
 
+    public String currentVersion() {
+        return properties.version();
+    }
+
+    public URI releasesUri() {
+        return URI.create("https://github.com/" + properties.repository() + "/releases");
+    }
+
     public Duration checkInterval() {
         return Duration.ofHours(properties.checkIntervalHours());
     }
@@ -64,6 +72,16 @@ public class UpdateService {
 
     /** Empty when up to date, offline, or the latest release has no installable asset; failures are logged, not thrown. */
     public Optional<AvailableUpdate> findUpdate() {
+        try {
+            return checkForUpdate();
+        } catch (IllegalStateException e) {
+            log.warn("Update check failed: {}", e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /** Like [findUpdate] but a failed request (offline, HTTP error, unreadable answer) is thrown as [IllegalStateException]. */
+    public Optional<AvailableUpdate> checkForUpdate() {
         if (!enabled()) {
             return Optional.empty();
         }
@@ -75,8 +93,7 @@ public class UpdateService {
                 return ReleaseParser.newerThan(mapper.readTree(body), current);
             }
         } catch (IOException | RuntimeException e) {
-            log.warn("Update check failed: {}", e.toString());
-            return Optional.empty();
+            throw new IllegalStateException(e.toString(), e);
         }
     }
 

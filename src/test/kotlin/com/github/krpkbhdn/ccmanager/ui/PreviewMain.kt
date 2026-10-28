@@ -99,6 +99,9 @@ private suspend fun captureTour(capture: Capture, state: AppState, world: Previe
         return
     }
     capture.take("1-overview")
+    state.settingsDialog.show()
+    capture.take("1a-settings")
+    state.settingsDialog.close()
     state.navigate(Route.Sessions)
     capture.take("1b-all-sessions")
     state.setGroupSessionsByProject(true)

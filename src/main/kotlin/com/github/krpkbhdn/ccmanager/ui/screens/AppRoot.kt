@@ -77,6 +77,7 @@ import com.github.krpkbhdn.ccmanager.ui.teams.TeamsScreen
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import java.net.URI
+import com.github.krpkbhdn.ccmanager.ui.settings.SettingsDialog
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -113,6 +114,7 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
         state.runs.dialog?.let { RunConfigurationDialog(it, state.runs, state.dataDir) }
         state.teams.dialog?.let { open -> state.teams.find(open.teamId)?.let { RoleDialog(it, open, state.teams) } }
         state.projectSettings?.let { ProjectSettingsDialog(it, state::closeProjectSettings) }
+        if (state.settingsDialog.open) SettingsDialog(state)
         state.plugins.pending?.let { PluginCommandDialog(it, state.plugins.job == null, state.plugins::confirmPending, state.plugins::dismissPending) }
         state.agents.log?.let { SubagentLogHost(state.agents, { state.now }, it) }
         state.author.offer?.let { AuthorOfferDialog(it, state.author) }

@@ -26,6 +26,7 @@ data class KeyChord(val keyCode: Int, val ctrl: Boolean = false, val shift: Bool
             KeyEvent.VK_BACK_QUOTE -> "`"
             KeyEvent.VK_SLASH -> "/"
             KeyEvent.VK_COMMA -> ","
+            KeyEvent.VK_PERIOD -> "."
             else -> KeyEvent.getKeyText(keyCode)
         }
     }
