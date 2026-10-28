@@ -2,6 +2,9 @@ package com.github.krpkbhdn.ccmanager.ui.sessions
 
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
+import com.github.krpkbhdn.ccmanager.project.ModelSelection
+import com.github.krpkbhdn.ccmanager.project.Project
+import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
 import org.assertj.core.api.Assertions.assertThat
@@ -22,6 +25,9 @@ class SessionBoardTest {
         session("wait-late", AgentStatus.NEEDS_ACTION, 70, projectId = 2),
         session("wait-early", AgentStatus.NEEDS_ACTION, 20),
     )
+
+    private fun project(id: Long, name: String, group: Boolean = false, groupId: Long? = null) =
+        Project(id, name, Path.of(name), now, ModelSelection.DEFAULT, group, groupId)
 
     private fun ids(sessions: List<SessionSnapshot>) = sessions.map { it.ccmSessionId }
 
@@ -72,8 +78,18 @@ class SessionBoardTest {
     fun `project choices follow project order and keep the selected project without sessions`() {
         val live = listOf(session("a", AgentStatus.IDLE, 1, projectId = 3), session("b", AgentStatus.IDLE, 2, projectId = 1))
 
-        assertThat(projectChoices(live, SessionFilter(), listOf(1, 2, 3))).containsExactly(1, 3)
-        assertThat(projectChoices(live, SessionFilter(projectId = 2), listOf(1, 2, 3))).containsExactly(1, 2, 3)
+        val projects = listOf(project(1, "a"), project(2, "b"), project(3, "c"))
+
+        assertThat(projectChoices(live, SessionFilter(), projects)).containsExactly(1, 3)
+        assertThat(projectChoices(live, SessionFilter(projectId = 2), projects)).containsExactly(1, 2, 3)
+    }
+
+    @Test
+    fun `a group is a project choice when only its members have sessions`() {
+        val projects = listOf(project(1, "grp", group = true), project(2, "m", groupId = 1), project(3, "other", group = true))
+        val live = listOf(session("a", AgentStatus.IDLE, 1, projectId = 2))
+
+        assertThat(projectChoices(live, SessionFilter(), projects)).containsExactly(1, 2)
     }
 
     @Test
@@ -99,9 +115,9 @@ class SessionBoardTest {
             session("z2", AgentStatus.WORKING, 1, projectId = 1, lastEvent = silent),
             session("a1", AgentStatus.IDLE, 3, projectId = 2),
         )
-        val names = mapOf(1L to "zeta", 2L to "Alpha")
+        val projects = listOf(project(1, "zeta"), project(2, "Alpha"))
 
-        val groups = groupByProject(sessions, SessionFilter(), { names.getValue(it) }, now, staleAfter)
+        val groups = groupByProject(sessions, SessionFilter(), projects, now, staleAfter)
 
         assertThat(groups.map { it.name }).containsExactly("Alpha", "zeta")
         assertThat(ids(groups[1].sessions)).containsExactly("z2", "z1")
@@ -114,8 +130,52 @@ class SessionBoardTest {
     fun `groups keep only projects that have sessions after filtering`() {
         val sessions = listOf(session("a", AgentStatus.IDLE, 1, projectId = 1), session("b", AgentStatus.NEEDS_ACTION, 2, projectId = 2))
 
-        val groups = groupByProject(sessions, SessionFilter(status = AgentStatus.NEEDS_ACTION), { "p$it" }, now, staleAfter)
+        val groups = groupByProject(sessions, SessionFilter(status = AgentStatus.NEEDS_ACTION), listOf(project(1, "p1"), project(2, "p2")), now, staleAfter)
 
         assertThat(groups.map { it.projectId }).containsExactly(2L)
+    }
+
+    @Test
+    fun `a group lists its own sessions then its members and keeps ungrouped projects in alphabetical order`() {
+        val projects = listOf(
+            project(1, "zeta"), project(100, "suite", group = true), project(3, "web", groupId = 100),
+            project(2, "api", groupId = 100), project(4, "beta"), project(5, "idle-member", groupId = 100),
+        )
+        val sessions = listOf(
+            session("m-web", AgentStatus.IDLE, 1, projectId = 3), session("g", AgentStatus.WORKING, 2, projectId = 100),
+            session("m-api", AgentStatus.NEEDS_ACTION, 3, projectId = 2), session("z", AgentStatus.IDLE, 4, projectId = 1),
+            session("b", AgentStatus.IDLE, 5, projectId = 4),
+        )
+
+        val groups = groupByProject(sessions, SessionFilter(), projects, now, staleAfter)
+
+        assertThat(groups.map { it.name }).containsExactly("beta", "suite", "suite / api", "suite / web", "zeta")
+        assertThat(groups[2].waiting).isEqualTo(1)
+    }
+
+    @Test
+    fun `filtering by a group also shows its members and no other project`() {
+        val projects = listOf(project(100, "suite", group = true), project(2, "api", groupId = 100), project(3, "other"))
+        val sessions = listOf(session("g", AgentStatus.IDLE, 1, projectId = 100), session("m", AgentStatus.IDLE, 2, projectId = 2), session("o", AgentStatus.IDLE, 3, projectId = 3))
+
+        assertThat(ids(board(sessions, SessionFilter(projectId = 100).withMembersFrom(projects)))).containsExactly("g", "m")
+        assertThat(ids(board(sessions, SessionFilter(projectId = 2).withMembersFrom(projects)))).containsExactly("m")
+    }
+
+    @Test
+    fun `sessions of an unregistered project stay visible under Unknown project`() {
+        val sessions = listOf(session("a", AgentStatus.IDLE, 1, projectId = 1), session("x", AgentStatus.IDLE, 2, projectId = 99))
+
+        val groups = groupByProject(sessions, SessionFilter(), listOf(project(1, "p1")), now, staleAfter)
+
+        assertThat(groups.map { it.name }).containsExactly("p1", "Unknown project")
+        assertThat(ids(groups[1].sessions)).containsExactly("x")
+    }
+
+    @Test
+    fun `project order puts members right after their group`() {
+        val projects = listOf(project(2, "b-member", groupId = 100), project(100, "grp", group = true), project(1, "a"), project(3, "a-member", groupId = 100))
+
+        assertThat(projectOrder(projects).map { it.id }).containsExactly(1L, 100L, 3L, 2L)
     }
 }

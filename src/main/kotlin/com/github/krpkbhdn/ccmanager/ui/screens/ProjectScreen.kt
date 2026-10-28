@@ -130,12 +130,12 @@ private fun ProjectMainArea(state: AppState, project: Project, view: ProjectView
     val onSession = view.selected is ProjectTab.Session
     Column(modifier.fillMaxSize()) {
         ProjectTabStrip(
-            tabs = tabSpecs(state, view),
+            tabs = tabSpecs(state, view, project),
             selected = view.selected,
             onSelect = { state.select(project.id, it) },
             onClose = { closeTab(state, project.id, it) },
             onNewSession = { state.sessions.launch(project.id, LaunchMode.NEW) },
-            shellMenu = shellMenu(state, project.id),
+            shellMenu = if (project.group) emptyList() else shellMenu(state, project.id),
         ) {
             val shown = (view.selected as? ProjectTab.Session)?.ccmSessionId
             if (shown != null) {
@@ -186,7 +186,7 @@ private fun MainContent(state: AppState, project: Project, view: ProjectView) {
     }
     Crossfade(tab, animationSpec = Motion.base(), label = "projectTab") { shown ->
         when (shown) {
-            ProjectTab.Git -> GitTabHost(state, project)
+            ProjectTab.Git -> if (project.group) GroupMembersTab(state, project) else GitTabHost(state, project)
             ProjectTab.Run -> RunTab(
                 state.runs.selectedOf(project.id), state.terminal,
                 RunTabActions(state.runs::run, state.runs::stop) { state.runs.openDialog(project.id) },
@@ -196,17 +196,17 @@ private fun MainContent(state: AppState, project: Project, view: ProjectView) {
     }
 }
 
-private fun tabSpecs(state: AppState, view: ProjectView): List<TabSpec> {
+/** A group has no repository, so its Git tab slot (ProjectTab.Git) shows the members instead. */
+private fun tabSpecs(state: AppState, view: ProjectView, project: Project): List<TabSpec> {
     val sessions = view.openSessions.map { id ->
         val snapshot = state.live.find(id)
         TabSpec(ProjectTab.Session(id), snapshot?.let(::sessionTitle) ?: ENDED_SESSION_LABEL, snapshot?.status ?: AgentStatus.OFFLINE, null, closable = true)
     }
     val shells = view.openShells.map { id -> TabSpec(ProjectTab.Shell(id), state.shells.labelOf(id), null, Icons.SquareTerminal, closable = true) }
-    return sessions + shells + listOf(
-        TabSpec(ProjectTab.Git, "Git", null, Icons.Branch, closable = false),
-        TabSpec(ProjectTab.Run, "Run", null, Icons.Play, closable = false),
-        TabSpec(ProjectTab.Activity, "Activity", null, Icons.Activity, closable = false),
-    )
+    val git = if (project.group) TabSpec(ProjectTab.Git, "Members", null, Icons.FolderTree, closable = false)
+    else TabSpec(ProjectTab.Git, "Git", null, Icons.Branch, closable = false)
+    val run = TabSpec(ProjectTab.Run, "Run", null, Icons.Play, closable = false).takeIf { !project.group }
+    return sessions + shells + listOfNotNull(git, run, TabSpec(ProjectTab.Activity, "Activity", null, Icons.Activity, closable = false))
 }
 
 @Composable

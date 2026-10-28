@@ -18,6 +18,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import com.github.krpkbhdn.ccmanager.project.Project
+import com.github.krpkbhdn.ccmanager.ui.state.GroupDialogRequest
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -123,27 +125,34 @@ private fun ProjectsSection(state: AppState, collapsed: Boolean, modifier: Modif
         if (!collapsed) {
             Row(Modifier.fillMaxWidth().padding(start = Spacing.sm, top = Spacing.lg, bottom = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
                 Label("Projects", Modifier.weight(1f), color = colors.textTertiary, style = Type.overline)
-                CountBadge(state.projects.all.size)
+                CountBadge(state.projects.topLevelCount)
             }
         } else {
             HorizontalRule(Modifier.padding(vertical = Spacing.sm, horizontal = Spacing.sm))
         }
         Box(Modifier.weight(1f)) {
             LazyColumn(Modifier.animateContentSize(), list, verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
-                items(state.projects.all, key = { it.id }) { project ->
-                    val sessions = state.live.of(project.id)
-                    ProjectRow(
-                        project = project,
-                        status = state.live.statusOf(project.id),
-                        sessions = sessions,
-                        selected = state.route == Route.Project(project.id),
-                        collapsed = collapsed,
-                        gitSummary = state.gitSummaryOf(project.id),
-                        actions = state.projectActions(project),
-                        modifier = Modifier.animateItem(),
-                    )
+                state.projects.groups.forEach { group ->
+                    val members = state.projects.membersOf(group.id)
+                    val open = collapsed || group.id !in state.projects.foldedGroups
+                    item(key = group.id) {
+                        GroupRow(
+                            group = group,
+                            status = state.live.statusOf(group.id),
+                            memberCount = members.size,
+                            expanded = open,
+                            selected = state.route == Route.Project(group.id),
+                            collapsed = collapsed,
+                            actions = state.groupActions(group),
+                            onToggle = { state.projects.toggleFolded(group.id) },
+                            modifier = Modifier.animateItem(),
+                        )
+                    }
+                    if (open) items(members, key = { it.id }) { SidebarProject(state, it, collapsed, Modifier.animateItem().padding(start = if (collapsed) 0.dp else Spacing.lg)) }
                 }
+                items(state.projects.ungrouped, key = { it.id }) { SidebarProject(state, it, collapsed, Modifier.animateItem()) }
                 item(key = "add") { AddProjectRow(collapsed, state::requestAddProject, Modifier.animateItem()) }
+                item(key = "add-group") { AddGroupRow(collapsed, { state.projects.groupDialog = GroupDialogRequest(null) }, Modifier.animateItem()) }
             }
             ThinScrollbar(list)
         }
@@ -151,17 +160,40 @@ private fun ProjectsSection(state: AppState, collapsed: Boolean, modifier: Modif
 }
 
 @Composable
-private fun AddProjectRow(collapsed: Boolean, onClick: () -> Unit, modifier: Modifier) {
+private fun SidebarProject(state: AppState, project: Project, collapsed: Boolean, modifier: Modifier) {
+    ProjectRow(
+        project = project,
+        status = state.live.statusOf(project.id),
+        sessions = state.live.of(project.id),
+        selected = state.route == Route.Project(project.id),
+        collapsed = collapsed,
+        gitSummary = state.gitSummaryOf(project.id),
+        actions = state.projectActions(project),
+        modifier = modifier,
+        groupName = project.groupId?.let(state.projects::nameOf),
+    )
+}
+
+@Composable
+private fun AddProjectRow(collapsed: Boolean, onClick: () -> Unit, modifier: Modifier) =
+    AddRow(Icons.Plus, "Add project", collapsed, onClick, modifier) { Shortcut(AppShortcut.ADD_PROJECT) }
+
+@Composable
+private fun AddGroupRow(collapsed: Boolean, onClick: () -> Unit, modifier: Modifier) =
+    AddRow(Icons.FolderPlus, "New group", collapsed, onClick, modifier)
+
+@Composable
+private fun AddRow(icon: ImageVector, label: String, collapsed: Boolean, onClick: () -> Unit, modifier: Modifier, trailing: @Composable () -> Unit = {}) {
     Pressable(onClick, modifier.fillMaxWidth().padding(top = Spacing.xs), shape = RoundedCornerShape(Radius.md)) {
         Row(
             Modifier.padding(horizontal = Spacing.md - 2.dp, vertical = Spacing.sm).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = if (collapsed) Arrangement.Center else Arrangement.spacedBy(Spacing.md - 2.dp),
         ) {
-            Glyph(Icons.Plus, colors.textSecondary, size = IconSize.large)
+            Glyph(icon, colors.textSecondary, size = IconSize.large)
             if (!collapsed) {
-                Label("Add project", Modifier.weight(1f), color = colors.textSecondary, style = Type.bodyMedium)
-                Shortcut(AppShortcut.ADD_PROJECT)
+                Label(label, Modifier.weight(1f), color = colors.textSecondary, style = Type.bodyMedium)
+                trailing()
             }
         }
     }

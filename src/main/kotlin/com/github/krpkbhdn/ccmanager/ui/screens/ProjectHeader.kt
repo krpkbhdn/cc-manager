@@ -63,15 +63,17 @@ fun ProjectHeader(project: Project, status: AgentStatus, ideAvailable: Boolean, 
                     StatusChip(status)
                     gitSummary?.let { GitSummaryChip(it, actions.onShowGit) }
                 }
-                CopyChip(project.path.toString(), label = "Copy path")
+                if (!project.group) CopyChip(project.path.toString(), label = "Copy path")
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(Icons.FolderOpen, actions.onOpenFolder, tooltip = "Open folder")
-                IconButton(Icons.Code, actions.onOpenIde, tooltip = if (ideAvailable) IDE_HINT else IDE_UNAVAILABLE_HINT, enabled = ideAvailable)
-                IconButton(Icons.Settings, actions.onOpenSettings, tooltip = "Project settings", hint = AppShortcut.PROJECT_SETTINGS.hint())
-                IconButton(Icons.Diff, actions.onShowChanges, tooltip = "Review changes", hint = AppShortcut.GIT_CHANGES.hint())
+            if (!project.group) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(Icons.FolderOpen, actions.onOpenFolder, tooltip = "Open folder")
+                    IconButton(Icons.Code, actions.onOpenIde, tooltip = if (ideAvailable) IDE_HINT else IDE_UNAVAILABLE_HINT, enabled = ideAvailable)
+                    IconButton(Icons.Settings, actions.onOpenSettings, tooltip = "Project settings", hint = AppShortcut.PROJECT_SETTINGS.hint())
+                    IconButton(Icons.Diff, actions.onShowChanges, tooltip = "Review changes", hint = AppShortcut.GIT_CHANGES.hint())
+                }
+                RunControl(runEntries, runSelected, runActions)
             }
-            RunControl(runEntries, runSelected, runActions)
             SplitActionButton("Start task", Icons.Users, actions.onStartTask, tooltip = "Run a lead session with one of your agent teams", onChevron = actions.onStartTaskFromTemplate)
             SplitButton(
                 text = "Launch Claude",

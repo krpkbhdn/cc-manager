@@ -13,7 +13,11 @@ import com.github.krpkbhdn.ccmanager.claude.plugin.ClaudePluginWriter;
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation;
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
+import com.github.krpkbhdn.ccmanager.extension.mcp.ProjectMcpServers;
+import com.github.krpkbhdn.ccmanager.project.GroupWorkspace;
 import com.github.krpkbhdn.ccmanager.project.ModelSelection;
+import com.github.krpkbhdn.ccmanager.project.ProjectGroupService;
+import java.util.List;
 import com.github.krpkbhdn.ccmanager.project.Project;
 import com.github.krpkbhdn.ccmanager.project.ProjectService;
 import java.nio.file.Files;
@@ -30,7 +34,9 @@ class ClaudeLauncherTest {
     private final ClaudeInstallationService installation = mock(ClaudeInstallationService.class);
     private final HookSettingsWriter hooks = mock(HookSettingsWriter.class);
     private final SessionRegistry sessions = mock(SessionRegistry.class);
-    private final ClaudeLauncher launcher = new ClaudeLauncher(projects, installation, hooks, mock(ClaudePluginWriter.class), sessions);
+    private final ProjectGroupService groups = mock(ProjectGroupService.class);
+    private final ClaudeLauncher launcher = new ClaudeLauncher(projects, installation, hooks, mock(ClaudePluginWriter.class), sessions,
+            groups, mock(GroupWorkspace.class), mock(ProjectMcpServers.class));
 
     @TempDir
     Path directory;
@@ -46,6 +52,38 @@ class ClaudeLauncherTest {
 
         assertThatThrownBy(() -> launcher.launch(1, LaunchMode.NEW))
                 .isInstanceOf(IllegalStateException.class).hasMessage("Claude is missing");
+        verify(sessions, never()).register(anyLong());
+    }
+
+    private Project group() {
+        return new Project(2, "g", directory, Instant.now(), ModelSelection.DEFAULT, true, null);
+    }
+
+    @Test
+    void groupWithoutMembersIsRefused() {
+        when(projects.find(2)).thenReturn(Optional.of(group()));
+        when(groups.members(2)).thenReturn(List.of());
+        when(installation.current()).thenReturn(new ClaudeInstallation(true, directory, "1", null, null));
+
+        assertThatThrownBy(() -> launcher.launch(2, LaunchMode.NEW)).hasMessageContaining("no projects");
+        verify(sessions, never()).register(anyLong());
+    }
+
+    @Test
+    void groupWithMissingMemberFolderNamesIt() {
+        var gone = new Project(3, "gone", directory.resolve("nope"), Instant.now());
+        when(projects.find(2)).thenReturn(Optional.of(group()));
+        when(groups.members(2)).thenReturn(List.of(gone));
+
+        assertThatThrownBy(() -> launcher.launch(2, LaunchMode.NEW)).hasMessageContaining("folder is missing").hasMessageContaining("gone");
+        verify(sessions, never()).register(anyLong());
+    }
+
+    @Test
+    void attachIsRefusedForAGroup() {
+        when(projects.find(2)).thenReturn(Optional.of(group()));
+
+        assertThatThrownBy(() -> launcher.attach(2, "ab12")).hasMessageContaining("group");
         verify(sessions, never()).register(anyLong());
     }
 

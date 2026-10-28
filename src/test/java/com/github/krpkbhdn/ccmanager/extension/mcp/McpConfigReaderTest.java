@@ -3,6 +3,7 @@ package com.github.krpkbhdn.ccmanager.extension.mcp;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.krpkbhdn.ccmanager.extension.ExtensionScope;
+import com.github.krpkbhdn.ccmanager.git.GitRunner;
 import com.github.krpkbhdn.ccmanager.workspace.FakeHostEnvironment;
 import com.github.krpkbhdn.ccmanager.workspace.HostEnvironment;
 import java.io.IOException;
@@ -20,7 +21,7 @@ class McpConfigReaderTest {
     Path project;
 
     private McpConfigReader reader(HostEnvironment.OperatingSystem os) {
-        return new McpConfigReader(new FakeHostEnvironment(os, home));
+        return new McpConfigReader(new FakeHostEnvironment(os, home), new GitRunner());
     }
 
     @Test
@@ -95,7 +96,7 @@ class McpConfigReaderTest {
         Files.writeString(project.resolve(".claude.json"), "{\"mcpServers\":{\"custom\":{\"command\":\"x\"}}}");
         var host = new FakeHostEnvironment(HostEnvironment.OperatingSystem.LINUX, home).withEnv("CLAUDE_CONFIG_DIR", project.toString());
 
-        assertThat(new McpConfigReader(host).read(null)).extracting(McpServerConfig::name).containsExactly("custom");
+        assertThat(new McpConfigReader(host, new GitRunner()).read(null)).extracting(McpServerConfig::name).containsExactly("custom");
     }
 
     @Test

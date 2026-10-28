@@ -15,6 +15,7 @@ import com.github.krpkbhdn.ccmanager.config.AppProperties
 import com.github.krpkbhdn.ccmanager.claude.session.TranscriptService
 import com.github.krpkbhdn.ccmanager.notification.NotificationService
 import com.github.krpkbhdn.ccmanager.notification.NotificationSoundService
+import com.github.krpkbhdn.ccmanager.project.ProjectGroupService
 import com.github.krpkbhdn.ccmanager.project.ProjectService
 import com.github.krpkbhdn.ccmanager.prompt.PromptTemplateService
 import com.github.krpkbhdn.ccmanager.run.RunConfigurationService
@@ -78,6 +79,7 @@ object HostTerminalPort : TerminalPort {
 /** Every backend collaborator the UI talks to. */
 class Backend(
     val projects: ProjectService,
+    val groups: ProjectGroupService,
     val installation: ClaudeInstallationService,
     val sessions: SessionRegistry,
     val notifications: NotificationService,
@@ -110,6 +112,7 @@ class Backend(
     companion object {
         fun from(context: ConfigurableApplicationContext) = Backend(
             projects = context.getBean(ProjectService::class.java),
+            groups = context.getBean(ProjectGroupService::class.java),
             installation = context.getBean(ClaudeInstallationService::class.java),
             sessions = context.getBean(SessionRegistry::class.java),
             notifications = context.getBean(NotificationService::class.java),

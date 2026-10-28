@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -115,6 +116,7 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
         state.author.report?.let { AuthorReportPanel(it, state.author::closeReport) }
         ProposalDialogHost(state)
         state.confirm?.let { ConfirmDialog(it) { state.confirm = null } }
+        state.projects.groupDialog?.let { key(it) { GroupDialog(it, state.projects) } }
         state.projects.renaming?.let { RenameDialog(it, { name -> state.projects.rename(it.project, name) }, { state.projects.renaming = null }) }
         if (state.projects.pickerOpen) FolderPickerDialog(initial = null, dataDir = state.dataDir, onDismiss = { state.projects.pickerOpen = false }, onPicked = state.projects::addAt)
         if (dropTarget.hovering) DropOverlay()

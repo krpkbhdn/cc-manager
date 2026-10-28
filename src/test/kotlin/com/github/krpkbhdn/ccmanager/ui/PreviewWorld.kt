@@ -40,6 +40,7 @@ import com.github.krpkbhdn.ccmanager.notification.NotificationService
 import com.github.krpkbhdn.ccmanager.prompt.PromptTemplateService
 import com.github.krpkbhdn.ccmanager.project.ModelSelection
 import com.github.krpkbhdn.ccmanager.project.Project
+import com.github.krpkbhdn.ccmanager.project.ProjectGroupService
 import com.github.krpkbhdn.ccmanager.project.ProjectService
 import com.github.krpkbhdn.ccmanager.run.ActiveRun
 import com.github.krpkbhdn.ccmanager.run.RunConfiguration
@@ -97,6 +98,7 @@ private fun previewAgent(
     calls: Int = 0, message: String = "", background: Boolean = false, stale: Boolean = false,
 ) = SubagentSnapshot(id, type, activity, state, background, calls, state == SubagentState.FAILED, message, previewTranscript, ago(startedAgo), ago(ended ?: if (stale) STALE_SECONDS else 4), ended?.let { ago(it) }, stale)
 
+internal const val PREVIEW_GROUP_ID = 100L
 private const val STALE_SECONDS = 1_320L
 
 private const val FIVE_HOUR_RESET_SECONDS = 8_040L
@@ -128,12 +130,42 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         "data-warehouse", "auth-service", "marketing-site", "design-system",
     )
 
-    val projects: List<Project> = if (empty) emptyList() else listOf(
+    @Volatile var projects: List<Project> = if (empty) emptyList() else listOf(
         Project(1, "cc-manager", previewProjectDir, ago(9000), selection),
         Project(2, "billing-api", Path.of("C:/Users/dev/Work/billing-api"), ago(8000)),
         Project(3, "docs-site", Path.of("C:/Users/dev/Work/docs-site"), ago(7000)),
         Project(4, "infra-terraform", Path.of("C:/Users/dev/Work/infra-terraform"), ago(6000)),
     ) + if (many) extraNames.mapIndexed { index, name -> Project(5L + index, name, Path.of("C:/Users/dev/Work/clients/$name"), ago(5000L - index)) } else emptyList()
+    private val projectListeners = mutableListOf<Runnable>()
+
+    init {
+        if (projects.isNotEmpty()) projects = projects.map { if (it.id in 2L..3L) projectRow(it, groupId = PREVIEW_GROUP_ID) else it } + projectRow(Project(PREVIEW_GROUP_ID, "billing-suite", previewProjectDir, ago(4000)), group = true)
+    }
+
+    private fun projectRow(p: Project, group: Boolean = p.group, groupId: Long? = p.groupId) = Project(p.id, p.name, p.path, p.createdAt, p.modelSelection, group, groupId)
+
+    private fun changeProjects(change: (List<Project>) -> List<Project>) {
+        projects = change(projects)
+        projectListeners.toList().forEach { it.run() }
+    }
+
+    private fun fakeGroupService(): ProjectGroupService {
+        val service = mock(ProjectGroupService::class.java)
+        fun assign(groupId: Long, memberIds: List<Long>) {
+            require(memberIds.isNotEmpty()) { "A group needs at least one project" }
+            changeProjects { all -> all.map { if (it.id in memberIds) projectRow(it, groupId = groupId) else if (it.groupId == groupId) projectRow(it, groupId = null) else it } }
+        }
+        `when`(service.create(anyString(), any())).thenAnswer {
+            val id = projects.maxOf { p -> p.id } + 1
+            require(it.getArgument<String>(0).isNotBlank()) { "Group name must not be empty" }
+            changeProjects { all -> all + Project(id, it.getArgument<String>(0).trim(), previewProjectDir, Instant.now(), ModelSelection.DEFAULT, true, null) }
+            assign(id, it.getArgument<List<Long>>(1))
+            projects.first { p -> p.id == id }
+        }
+        `when`(service.setMembers(anyLong(), any())).thenAnswer { assign(it.getArgument(0), it.getArgument(1)); projects.first { p -> p.id == it.getArgument<Long>(0) } }
+        `when`(service.members(anyLong())).thenAnswer { projects.filter { p -> p.groupId == it.getArgument<Long>(0) } }
+        return service
+    }
 
     private val extraSessions = if (!many || empty) emptyList() else extraNames.indices.filter { it % 2 == 0 }.map { index ->
         val status = listOf(AgentStatus.WORKING, AgentStatus.IDLE, AgentStatus.NEEDS_ACTION, AgentStatus.IDLE)[index / 2 % 4]
@@ -250,9 +282,13 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
 
     fun backend(terminal: TerminalPort): Backend {
         val projectService = mock(ProjectService::class.java)
-        `when`(projectService.list()).thenReturn(projects)
         `when`(projectService.find(anyLong())).thenAnswer { Optional.ofNullable(projects.firstOrNull { p -> p.id == it.getArgument<Long>(0) }) }
-        `when`(projectService.subscribe(any())).thenAnswer { Runnable { } }
+        `when`(projectService.subscribe(any())).thenAnswer { projectListeners += it.getArgument<Runnable>(0); Runnable { } }
+        `when`(projectService.list()).thenAnswer { projects }
+        `when`(projectService.rename(anyLong(), anyString())).thenAnswer { id ->
+            changeProjects { all -> all.map { if (it.id == id.getArgument<Long>(0)) Project(it.id, id.getArgument(1), it.path, it.createdAt, it.modelSelection, it.group, it.groupId) else it } }
+            projects.first { it.id == id.getArgument<Long>(0) }
+        }
         `when`(projectService.selectModel(anyLong(), any())).thenAnswer { projects.first { p -> p.id == it.getArgument<Long>(0) } }
 
         val registry = mock(SessionRegistry::class.java)
@@ -298,7 +334,7 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         val shellLauncher = mock(ShellLauncher::class.java)
         `when`(shellLauncher.launch(anyLong(), any())).thenThrow(IllegalStateException("Preview mode: shells cannot be started here."))
 
-        return Backend(projectService, installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), TranscriptService(JsonMapper.builder().build(), previewTranscriptDir), runConfigurationService(), runService(), shellDetector, shellLauncher, mock(AuthorProfileService::class.java), proposals.service(), mock(PromptTemplateService::class.java), terminal = terminal, sessionProperties = SessionProperties(Duration.ofMinutes(10), Duration.ofMinutes(10)))
+        return Backend(projectService, fakeGroupService(), installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), TranscriptService(JsonMapper.builder().build(), previewTranscriptDir), runConfigurationService(), runService(), shellDetector, shellLauncher, mock(AuthorProfileService::class.java), proposals.service(), mock(PromptTemplateService::class.java), terminal = terminal, sessionProperties = SessionProperties(Duration.ofMinutes(10), Duration.ofMinutes(10)))
     }
 
     private fun installationNow() = if (claudeInstalled) {

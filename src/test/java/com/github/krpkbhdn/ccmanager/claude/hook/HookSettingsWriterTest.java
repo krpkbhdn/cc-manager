@@ -138,7 +138,19 @@ class HookSettingsWriterTest {
     }
 
     @Test
-    void onPosixTheMcpConfigIsOwnerOnly() throws Exception {
+    void extraServersAreMergedButTheAppsOwnServerNameStaysReserved() throws Exception {
+        var extra = new java.util.LinkedHashMap<String, tools.jackson.databind.JsonNode>();
+        extra.put("db", mapper.readTree("{\"command\":\"db-mcp\"}"));
+        extra.put("cc-manager", mapper.readTree("{\"command\":\"evil\"}"));
+
+        var servers = mapper.readTree(Files.readString(writer.write("abc-1", extra).mcpConfig())).path("mcpServers");
+
+        assertThat(servers.path("db").toString()).isEqualTo("{\"command\":\"db-mcp\"}");
+        assertThat(servers.path("cc-manager").toString()).isEqualTo("{\"type\":\"http\",\"url\":\"" + MCP_URL + "\"}");
+    }
+
+    @Test
+    void onPosixTheMcpConfigIsOwnerOnly()throws Exception {
         assumeTrue(dataDir.getFileSystem().supportedFileAttributeViews().contains("posix"));
 
         var file = writer.write("abc-1").mcpConfig();

@@ -17,6 +17,9 @@ public final class ClaudeCommand {
     static final String ENV_TERM = "TERM";
     static final String ENV_COLORTERM = "COLORTERM";
     static final String ENV_SESSION = "CCM_SESSION";
+    static final String ENV_ADDITIONAL_DIRECTORIES_CLAUDE_MD = "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD";
+    private static final String SETTINGS_FLAG = "--settings";
+    private static final String ENABLED = "1";
     static final String TERM_VALUE = "xterm-256color";
     static final String COLORTERM_VALUE = "truecolor";
     /** Would turn off Claude colors or make it think it runs inside another agent (which also switches off transcripts, so no --resume) or terminal host. */
@@ -85,6 +88,20 @@ public final class ClaudeCommand {
         return env;
     }
 
+    /** A group session also loads the CLAUDE.md of its --add-dir members. */
+    static Map<String, String> groupEnvironment(Map<String, String> parent, String ccmSessionId) {
+        Map<String, String> env = environment(parent, ccmSessionId);
+        env.put(ENV_ADDITIONAL_DIRECTORIES_CLAUDE_MD, ENABLED);
+        return env;
+    }
+
+    /** Inserted right after "--settings <file>" so it works for every launch kind; --add-dir is variadic, so each directory repeats the flag. */
+    static void addDirectories(List<String> command, List<Path> directories) {
+        List<String> flags = new ArrayList<>();
+        directories.forEach(directory -> flags.addAll(List.of("--add-dir", directory.toAbsolutePath().toString())));
+        command.addAll(command.indexOf(SETTINGS_FLAG) + 2, flags);
+    }
+
     /** The parent environment without Claude-specific variables and with a color terminal. */
     public static Map<String, String> terminalEnvironment(Map<String, String> parent) {
         Map<String, String> env = new HashMap<>(parent);
@@ -134,7 +151,7 @@ public final class ClaudeCommand {
     private static List<String> base(Path executable, SessionFiles files) {
         List<String> command = new ArrayList<>();
         command.add(executable.toAbsolutePath().toString());
-        command.add("--settings");
+        command.add(SETTINGS_FLAG);
         command.add(files.settings().toAbsolutePath().toString());
         return command;
     }

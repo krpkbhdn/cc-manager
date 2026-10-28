@@ -41,7 +41,8 @@ private val gridPadding = 28.dp
 /** Every session of every project as a card in start order, flat or grouped by project, filtered by status and project. */
 @Composable
 fun SessionsScreen(state: AppState, modifier: Modifier = Modifier) {
-    var filter by remember { mutableStateOf(SessionFilter()) }
+    var selected by remember { mutableStateOf(SessionFilter()) }
+    val filter = selected.withMembersFrom(state.projects.all)
     var collapsed by remember { mutableStateOf(emptySet<Long>()) }
     val grouped = state.settings.groupSessionsByProject
     val sessions = state.live.sessions
@@ -75,13 +76,13 @@ fun SessionsScreen(state: AppState, modifier: Modifier = Modifier) {
                         Box(Modifier.weight(1f)) { SectionTitle("All sessions", sessions.size) }
                         GroupToggle(grouped, state::setGroupSessionsByProject)
                     }
-                    FilterBar(state, filter) { filter = it }
+                    FilterBar(state, filter) { selected = it }
                 }
             }
             if (shown.isEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) { NoSessions(sessions.isEmpty()) }
             } else if (grouped) {
-                groups(groupByProject(sessions, filter, state.projects::nameOf, state.now, state.workingStaleAfter), collapsed, { id -> collapsed = if (id in collapsed) collapsed - id else collapsed + id }, card)
+                groups(groupByProject(sessions, filter, state.projects.all, state.now, state.workingStaleAfter), collapsed, { id -> collapsed = if (id in collapsed) collapsed - id else collapsed + id }, card)
             } else {
                 items(shown, key = { it.ccmSessionId }) { card(it, Modifier.animateItem()) }
             }
@@ -90,7 +91,7 @@ fun SessionsScreen(state: AppState, modifier: Modifier = Modifier) {
     }
 }
 
-private fun LazyGridScope.groups(groups: List<ProjectGroup>, collapsed: Set<Long>, onToggle: (Long) -> Unit, card: @Composable (SessionSnapshot, Modifier) -> Unit) {
+private fun LazyGridScope.groups(groups: List<ProjectSessions>, collapsed: Set<Long>, onToggle: (Long) -> Unit, card: @Composable (SessionSnapshot, Modifier) -> Unit) {
     groups.forEach { group ->
         val expanded = group.projectId !in collapsed
         item(key = "group-${group.projectId}", span = { GridItemSpan(maxLineSpan) }) { GroupHeader(group, expanded, { onToggle(group.projectId) }) }
@@ -107,7 +108,7 @@ private fun GroupToggle(grouped: Boolean, onChange: (Boolean) -> Unit) {
 private fun FilterBar(state: AppState, filter: SessionFilter, onChange: (SessionFilter) -> Unit) {
     val sessions = state.live.sessions
     val statuses = listOf<AgentStatus?>(null) + AgentStatus.entries.reversed()
-    val projectIds = listOf<Long?>(null) + projectChoices(sessions, filter, state.projects.all.map { it.id })
+    val projectIds = listOf<Long?>(null) + projectChoices(sessions, filter, state.projects.all)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.lg), verticalAlignment = Alignment.CenterVertically) {
         SegmentedControl(
             segments = statuses.map { status -> Segment(status, status?.let(::statusLabel) ?: "All", count = sessions.count { status == null || it.status == status }) },

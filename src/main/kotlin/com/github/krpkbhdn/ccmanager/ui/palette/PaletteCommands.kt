@@ -3,10 +3,12 @@ package com.github.krpkbhdn.ccmanager.ui.palette
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
+import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.run.RunEntry
 import com.github.krpkbhdn.ccmanager.ui.shortcuts.AppShortcut
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
+import com.github.krpkbhdn.ccmanager.ui.state.GroupDialogRequest
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
 import com.github.krpkbhdn.ccmanager.ui.state.Route
 import com.github.krpkbhdn.ccmanager.ui.state.ThemeMode
@@ -45,10 +47,10 @@ private fun sessionItems(state: AppState): List<PaletteItem> =
     }
 
 private fun projectItems(state: AppState): List<PaletteItem> =
-    state.projects.all.map { project ->
+    (state.projects.projects.map { it to "project" } + state.projects.groups.map { it to "group" }).map { (project, kind) ->
         PaletteItem(
-            id = "project-${project.id}",
-            title = project.name,
+            id = "$kind-${project.id}",
+            title = if (project.group) "Open group ${project.name}" else project.name,
             group = PaletteGroup.PROJECTS,
             subtitle = project.path.toString(),
             avatarOf = project.name,
@@ -58,6 +60,7 @@ private fun projectItems(state: AppState): List<PaletteItem> =
 
 private fun globalActions(state: AppState, systemDark: Boolean): List<PaletteItem> = listOf(
     PaletteItem("add-project", "Add project", PaletteGroup.ACTIONS, "Pick a folder to manage", Icons.FolderPlus, shortcut = AppShortcut.ADD_PROJECT, run = state::requestAddProject),
+    PaletteItem("new-group", "New group", PaletteGroup.ACTIONS, "Bundle projects into one workspace", Icons.FolderPlus) { state.projects.groupDialog = GroupDialogRequest(null) },
     PaletteItem("overview", "Go to overview", PaletteGroup.ACTIONS, icon = Icons.Grid, shortcut = AppShortcut.OVERVIEW) { state.navigate(Route.Overview) },
     PaletteItem("sessions", "All sessions", PaletteGroup.ACTIONS, "Every session of every project", Icons.Layers, shortcut = AppShortcut.ALL_SESSIONS) { state.navigate(Route.Sessions) },
     PaletteItem("next-waiting", "Answer next waiting session", PaletteGroup.ACTIONS, "Jump to the session that needs you", Icons.Message, shortcut = AppShortcut.NEXT_WAITING) { state.answerNextWaiting() },
@@ -89,11 +92,18 @@ private fun projectActions(state: AppState): List<PaletteItem> {
     val route = state.route as? Route.Project ?: return emptyList()
     val project = state.projects.all.firstOrNull { it.id == route.id } ?: return emptyList()
     val here = "in ${project.name}"
+    return launchActions(state, project, here) + if (project.group) groupActions(state, project, here) else projectOnlyActions(state, project, here)
+}
+
+private fun launchActions(state: AppState, project: Project, here: String) = listOf(
+    PaletteItem("launch", "Launch Claude", PaletteGroup.ACTIONS, here, Icons.Play, shortcut = AppShortcut.NEW_SESSION) { state.sessions.launch(project.id, LaunchMode.NEW) },
+    PaletteItem("start-task", if (project.group) "Start task on group" else "Start task with team", PaletteGroup.ACTIONS, here, Icons.Users) { state.openTaskDialog(project.id) },
+    PaletteItem("continue", "Continue last session", PaletteGroup.ACTIONS, here, Icons.ArrowRight) { state.sessions.launch(project.id, LaunchMode.CONTINUE) },
+    PaletteItem("resume", "Resume a session", PaletteGroup.ACTIONS, here, Icons.Rewind) { state.sessions.launch(project.id, LaunchMode.RESUME_PICKER) },
+)
+
+private fun projectOnlyActions(state: AppState, project: Project, here: String): List<PaletteItem> {
     return shellActions(state, project.id, here) + listOfNotNull(
-        PaletteItem("launch", "Launch Claude", PaletteGroup.ACTIONS, here, Icons.Play, shortcut = AppShortcut.NEW_SESSION) { state.sessions.launch(project.id, LaunchMode.NEW) },
-        PaletteItem("start-task", "Start task with team", PaletteGroup.ACTIONS, here, Icons.Users) { state.openTaskDialog(project.id) },
-        PaletteItem("continue", "Continue last session", PaletteGroup.ACTIONS, here, Icons.ArrowRight) { state.sessions.launch(project.id, LaunchMode.CONTINUE) },
-        PaletteItem("resume", "Resume a session", PaletteGroup.ACTIONS, here, Icons.Rewind) { state.sessions.launch(project.id, LaunchMode.RESUME_PICKER) },
         PaletteItem("open-folder", "Open folder", PaletteGroup.ACTIONS, here, Icons.FolderOpen) { state.openFolder(project) },
         PaletteItem("open-ide", "Open in IntelliJ IDEA", PaletteGroup.ACTIONS, here, Icons.Code) { state.openIde(project) },
         PaletteItem("project-settings", "Project settings", PaletteGroup.ACTIONS, "$here: plugins, MCP servers, skills", Icons.Settings, shortcut = AppShortcut.PROJECT_SETTINGS) { state.openProjectSettings(project) },
@@ -107,6 +117,10 @@ private fun projectActions(state: AppState): List<PaletteItem> {
         },
     )
 }
+
+private fun groupActions(state: AppState, group: Project, here: String) = listOf(
+    PaletteItem("edit-group", "Edit group", PaletteGroup.ACTIONS, here, Icons.Settings) { state.projects.groupDialog = GroupDialogRequest(group) },
+)
 
 private fun runItem(state: AppState, entry: RunEntry, here: String) =
     PaletteItem("run", (if (entry.running) "Restart " else "Run ") + entry.name, PaletteGroup.ACTIONS, here, Icons.Play, shortcut = AppShortcut.RUN) { state.runs.run(entry.id) }

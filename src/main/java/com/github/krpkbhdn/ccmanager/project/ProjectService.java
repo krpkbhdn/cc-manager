@@ -22,14 +22,16 @@ import org.springframework.stereotype.Service;
 public class ProjectService {
 
     private static final Logger log = LoggerFactory.getLogger(ProjectService.class);
-    private static final String SELECT = "SELECT id, name, path, created_at, model, effort FROM project";
+    private static final String SELECT = "SELECT id, name, path, created_at, model, effort, is_group, group_id FROM project";
 
     private final JdbcClient jdbc;
+    private final GroupWorkspace groupWorkspace;
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
 
     @Autowired
-    public ProjectService(JdbcClient jdbc) {
+    public ProjectService(JdbcClient jdbc, GroupWorkspace groupWorkspace) {
         this.jdbc = jdbc;
+        this.groupWorkspace = groupWorkspace;
     }
 
     public List<Project> list() {
@@ -80,9 +82,20 @@ public class ProjectService {
         return find(id).orElseThrow();
     }
 
+    /** A group's service directory goes with it; its members stay registered. */
     public void remove(long id) {
+        var groupPath = jdbc.sql("SELECT path FROM project WHERE id = ? AND is_group = 1").param(id).query(String.class).optional();
         if (jdbc.sql("DELETE FROM project WHERE id = ?").param(id).update() > 0) {
+            groupPath.ifPresent(path -> deleteGroupDirectory(Path.of(path)));
             fireChanged();
+        }
+    }
+
+    private void deleteGroupDirectory(Path directory) {
+        try {
+            groupWorkspace.delete(directory);
+        } catch (RuntimeException e) {
+            log.warn("Could not delete the group folder {}", directory, e);
         }
     }
 
@@ -118,7 +131,7 @@ public class ProjectService {
         return fileName == null ? path.toString() : fileName.toString();
     }
 
-    private void fireChanged() {
+    void fireChanged() {
         for (var listener : listeners) {
             try {
                 listener.run();
@@ -130,6 +143,12 @@ public class ProjectService {
 
     private static Project mapRow(ResultSet rs, int rowNum) throws SQLException {
         return new Project(rs.getLong("id"), rs.getString("name"), Path.of(rs.getString("path")),
-                Instant.parse(rs.getString("created_at")), ModelSelection.stored(rs.getString("model"), rs.getString("effort")));
+                Instant.parse(rs.getString("created_at")), ModelSelection.stored(rs.getString("model"), rs.getString("effort")),
+                rs.getInt("is_group") != 0, groupId(rs));
+    }
+
+    private static Long groupId(ResultSet rs) throws SQLException {
+        var id = rs.getLong("group_id");
+        return rs.wasNull() ? null : id;
     }
 }

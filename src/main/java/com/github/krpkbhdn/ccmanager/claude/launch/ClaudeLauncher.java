@@ -6,15 +6,20 @@ import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation;
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService;
 import com.github.krpkbhdn.ccmanager.claude.plugin.ClaudePluginWriter;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
+import com.github.krpkbhdn.ccmanager.extension.mcp.ProjectMcpServers;
+import com.github.krpkbhdn.ccmanager.project.GroupWorkspace;
 import com.github.krpkbhdn.ccmanager.project.Project;
 import com.github.krpkbhdn.ccmanager.project.ModelSelection;
+import com.github.krpkbhdn.ccmanager.project.ProjectGroupService;
 import com.github.krpkbhdn.ccmanager.project.ProjectService;
 import com.github.krpkbhdn.ccmanager.team.Team;
 import com.pty4j.PtyProcess;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -34,9 +39,16 @@ public class ClaudeLauncher {
     private final HookSettingsWriter hookSettings;
     private final ClaudePluginWriter plugin;
     private final SessionRegistry sessions;
+    private final ProjectGroupService groups;
+    private final GroupWorkspace groupWorkspace;
+    private final ProjectMcpServers projectMcpServers;
 
     public ClaudeLauncher(ProjectService projects, ClaudeInstallationService installation,
-            HookSettingsWriter hookSettings, ClaudePluginWriter plugin, SessionRegistry sessions) {
+            HookSettingsWriter hookSettings, ClaudePluginWriter plugin, SessionRegistry sessions,
+            ProjectGroupService groups, GroupWorkspace groupWorkspace, ProjectMcpServers projectMcpServers) {
+        this.groups = groups;
+        this.groupWorkspace = groupWorkspace;
+        this.projectMcpServers = projectMcpServers;
         this.projects = projects;
         this.installation = installation;
         this.hookSettings = hookSettings;
@@ -74,8 +86,11 @@ public class ClaudeLauncher {
                 (files, exe, selection) -> ClaudeCommand.setupArguments(exe, files, plugin.directory(), prompt, profileDirectory));
     }
 
-    /** claude attach ID for a background agent. */
+    /** claude attach ID for a background agent; not for a group, whose variadic --add-dir would swallow the subcommand. */
     public LaunchedSession attach(long projectId, String backgroundSessionId) {
+        if (project(projectId).group()) {
+            throw new IllegalStateException("Background agents cannot be attached to a project group.");
+        }
         return start(projectId, "attach " + backgroundSessionId,
                 (files, exe, selection) -> ClaudeCommand.attachArguments(exe, files, backgroundSessionId));
     }
@@ -83,12 +98,25 @@ public class ClaudeLauncher {
     private LaunchedSession start(long projectId, String label, CommandFactory commandFactory) {
         Project project = project(projectId);
         Path directory = project.path();
+        List<Project> members = project.group() ? members(project) : List.of();
         Path executable = executable();
         String ccmSessionId = sessions.register(projectId);
         try {
-            SessionFiles files = hookSettings.write(ccmSessionId);
-            List<String> command = commandFactory.build(files, executable, project.modelSelection());
-            PtyProcess process = PtySpawner.spawn(command, directory, ClaudeCommand.environment(System.getenv(), ccmSessionId));
+            List<Path> memberPaths = members.stream().map(Project::path).toList();
+            if (project.group()) {
+                groupWorkspace.prepare(directory, members);
+            }
+            SessionFiles files = project.group()
+                    ? hookSettings.write(ccmSessionId, projectMcpServers.approved(memberPaths))
+                    : hookSettings.write(ccmSessionId);
+            List<String> command = new ArrayList<>(commandFactory.build(files, executable, project.modelSelection()));
+            if (project.group()) {
+                ClaudeCommand.addDirectories(command, memberPaths);
+            }
+            Map<String, String> environment = project.group()
+                    ? ClaudeCommand.groupEnvironment(System.getenv(), ccmSessionId)
+                    : ClaudeCommand.environment(System.getenv(), ccmSessionId);
+            PtyProcess process = PtySpawner.spawn(command, directory, environment);
             watchExit(ccmSessionId, process);
             return new LaunchedSession(ccmSessionId, projectId, label, process);
         } catch (IOException | RuntimeException e) {
@@ -101,10 +129,21 @@ public class ClaudeLauncher {
     private Project project(long projectId) {
         Project project = projects.find(projectId)
                 .orElseThrow(() -> new IllegalStateException("The project no longer exists."));
-        if (!Files.isDirectory(project.path())) {
+        if (!project.group() && !Files.isDirectory(project.path())) {
             throw new IllegalStateException("The project folder is missing: " + project.path());
         }
         return project;
+    }
+
+    private List<Project> members(Project group) {
+        List<Project> members = groups.members(group.id());
+        if (members.isEmpty()) {
+            throw new IllegalStateException("The group has no projects: " + group.name());
+        }
+        members.stream().filter(member -> !Files.isDirectory(member.path())).findFirst().ifPresent(member -> {
+            throw new IllegalStateException("The project folder is missing: " + member.path() + " (" + member.name() + ")");
+        });
+        return members;
     }
 
     private Path executable() {

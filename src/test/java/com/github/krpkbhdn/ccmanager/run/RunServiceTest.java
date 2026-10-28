@@ -1,5 +1,7 @@
 package com.github.krpkbhdn.ccmanager.run;
 
+import com.github.krpkbhdn.ccmanager.config.AppProperties;
+import com.github.krpkbhdn.ccmanager.project.GroupWorkspace;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -40,7 +42,7 @@ class RunServiceTest {
         jdbc.sql("INSERT INTO project (name, path, created_at) VALUES ('app', ?, 'now')").param(temp.toString()).update();
         projectId = jdbc.sql("SELECT id FROM project").query(Long.class).single();
         configurations = new RunConfigurationService(jdbc);
-        projects = new ProjectService(jdbc);
+        projects = new ProjectService(jdbc, new GroupWorkspace(new AppProperties(temp)));
         var host = new SystemHostEnvironment();
         runs = new RunService(configurations, projects, new RunShell(host), host);
     }

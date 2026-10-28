@@ -13,6 +13,7 @@ import com.github.krpkbhdn.ccmanager.notification.AppNotification
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.ui.chrome.MainWindow
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
+import com.github.krpkbhdn.ccmanager.ui.state.GroupDialogRequest
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
 import com.github.krpkbhdn.ccmanager.ui.state.Route
 import com.github.krpkbhdn.ccmanager.ui.state.ThemeMode
@@ -130,6 +131,19 @@ private suspend fun captureTour(capture: Capture, state: AppState, world: Previe
     state.navigate(Route.Project(2))
     world.emit(AppNotification(99, Instant.now(), NotificationKind.NEEDS_ACTION, 1, "s-needs", "Needs your action", "Permission needed: Edit NotificationServiceTest.java"))
     capture.take("7-toast-other-project")
+    state.navigate(Route.Project(PREVIEW_GROUP_ID))
+    state.select(PREVIEW_GROUP_ID, ProjectTab.Git)
+    capture.take("7b-group-members")
+    state.projects.groupDialog = GroupDialogRequest(state.projects.find(PREVIEW_GROUP_ID))
+    capture.take("7c-group-dialog-edit")
+    state.projects.groupDialog = null
+    delay(SETTLE_MILLIS)
+    state.projects.groupDialog = GroupDialogRequest(null)
+    capture.take("7d-group-dialog-new")
+    state.projects.groupDialog = null
+    state.projects.toggleFolded(PREVIEW_GROUP_ID)
+    capture.take("7e-sidebar-group-folded")
+    state.projects.toggleFolded(PREVIEW_GROUP_ID)
     state.toggleSidebar()
     state.toggleAgents()
     capture.take("8-collapsed")

@@ -29,7 +29,7 @@ private val groupCardWidth = 320.dp
 
 /** Collapsible project header of the grouped view: avatar, name, session count, and flags for waiting and silent sessions. */
 @Composable
-fun GroupHeader(group: ProjectGroup, expanded: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+fun GroupHeader(group: ProjectSessions, expanded: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
     Pressable(onToggle, modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.md)) {
         Row(
             Modifier.padding(vertical = Spacing.xs, horizontal = Spacing.sm),

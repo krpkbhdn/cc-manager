@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.ui.shortcuts
 
+import com.github.krpkbhdn.ccmanager.ui.state.GroupDialogRequest
 import com.github.krpkbhdn.ccmanager.ui.PreviewTerminal
 import com.github.krpkbhdn.ccmanager.ui.PreviewWorld
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
@@ -69,9 +70,32 @@ class ShortcutActionsTest {
         assertThat(state.paletteOpen).isFalse()
     }
 
+    @Test
+    fun `project slots follow the sidebar order of group, its members, then ungrouped`() {
+        runBlocking { state.projects.load() }
+        val projects = state.projects
+        val expected = projects.groups.flatMap { listOf(it) + projects.membersOf(it.id) } + projects.ungrouped
+
+        assertThat(projects.groups).isNotEmpty()
+        assertThat(actions.sidebarOrder().map { it.id }).containsExactlyElementsOf(expected.map { it.id })
+        assertThat(actions.sidebarOrder().first().group).isTrue()
+    }
+
+    @Test
+    fun `project slots skip members of a folded group`() {
+        runBlocking { state.projects.load() }
+        val group = state.projects.groups.first()
+        val hidden = state.projects.membersOf(group.id)
+        state.projects.toggleFolded(group.id)
+
+        assertThat(hidden).isNotEmpty()
+        assertThat(actions.sidebarOrder().map { it.id }).doesNotContainAnyElementsOf(hidden.map { it.id }).contains(group.id)
+    }
+
     enum class Modal(val open: ShortcutActionsTest.() -> Unit) {
         CONFIRMATION({ state.confirm = confirmation() }),
         FOLDER_PICKER({ state.projects.pickerOpen = true }),
+        GROUP_DIALOG({ state.projects.groupDialog = GroupDialogRequest(null) }),
         TASK_DIALOG({ state.taskDialogProjectId = 1L }),
         RUN_CONFIGURATION({
             runBlocking { state.projects.load() }

@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.project;
 
+import com.github.krpkbhdn.ccmanager.config.AppProperties;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -27,7 +28,7 @@ class ProjectServiceTest {
         var dataSource = new DriverManagerDataSource("jdbc:sqlite:" + temp.resolve("test.db"));
         Flyway.configure().dataSource(dataSource).load().migrate();
         jdbc = JdbcClient.create(dataSource);
-        service = new ProjectService(jdbc);
+        service = new ProjectService(jdbc, new GroupWorkspace(new AppProperties(temp)));
     }
 
     private Path directory(String name) throws IOException {

@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
+import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.ui.components.AppButton
 import com.github.krpkbhdn.ccmanager.ui.components.CountBadge
 import com.github.krpkbhdn.ccmanager.ui.components.Label
@@ -27,8 +28,10 @@ import com.github.krpkbhdn.ccmanager.ui.components.StatusDot
 import com.github.krpkbhdn.ccmanager.ui.components.ThinScrollbar
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
+import com.github.krpkbhdn.ccmanager.ui.state.mostUrgent
 import com.github.krpkbhdn.ccmanager.ui.state.needingAttention
 import com.github.krpkbhdn.ccmanager.ui.state.overviewHeadline
+import com.github.krpkbhdn.ccmanager.ui.state.sessionTitle
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
@@ -57,8 +60,17 @@ fun OverviewScreen(state: AppState, modifier: Modifier = Modifier) {
         ) {
             fullWidth { OverviewHero(state, attention.size) }
             if (attention.isNotEmpty()) attentionCards(attention, state)
-            fullWidth { SectionTitle("Projects", state.projects.all.size) }
-            items(state.projects.all, key = { it.id }) { project ->
+            fullWidth { SectionTitle("Projects", state.projects.topLevelCount) }
+            items(state.projects.groups, key = { "group-${it.id}" }) { group ->
+                GroupCard(
+                    name = group.name,
+                    status = state.live.statusOf(group.id),
+                    members = state.projects.membersOf(group.id).map { state.memberSummary(it) },
+                    onOpen = state.projectActions(group).onOpen,
+                    modifier = Modifier.animateItem(),
+                )
+            }
+            items(state.projects.ungrouped, key = { it.id }) { project ->
                 ProjectCard(
                     project = project,
                     status = state.live.statusOf(project.id),
@@ -73,6 +85,11 @@ fun OverviewScreen(state: AppState, modifier: Modifier = Modifier) {
         }
         ThinScrollbar(grid)
     }
+}
+
+private fun AppState.memberSummary(member: Project): GroupMemberSummary {
+    val urgent = mostUrgent(live.of(member.id))
+    return GroupMemberSummary(member.name, live.statusOf(member.id), urgent?.let { it.activity ?: sessionTitle(it) }, projectActions(member).onOpen)
 }
 
 private fun LazyGridScope.fullWidth(content: @Composable () -> Unit) {

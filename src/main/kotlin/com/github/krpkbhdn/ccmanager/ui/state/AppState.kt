@@ -11,6 +11,7 @@ import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgent
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
 import com.github.krpkbhdn.ccmanager.notification.AppNotification
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
+import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.prompt.PlaceholderSubstitution
 import com.github.krpkbhdn.ccmanager.prompt.PlaceholderValues
@@ -147,7 +148,7 @@ class AppState(
     val skills = SkillsState(backend.skills, null, scope, { confirm = it }, notifications::toast, skillHost)
     val author = AuthorProfileState(
         backend.author, scope,
-        sessionProject = { (route as? Route.Project)?.let { projects.find(it.id) } ?: projects.all.firstOrNull() },
+        sessionProject = { (route as? Route.Project)?.let { projects.find(it.id) }?.takeIf { !it.group } ?: projects.projects.firstOrNull() },
         projectOf = projects::find,
         launchSetup = sessions::launchSetup,
         mcpOf = { path -> if (path == null) mcp else McpState(backend.mcp, path, scope, { confirm = it }, notifications::toast) },
@@ -279,7 +280,7 @@ class AppState(
 
     fun navigate(target: Route) {
         route = target
-        (target as? Route.Project)?.let { author.offerForProject(it.id) }
+        (target as? Route.Project)?.takeIf { projects.find(it.id)?.group != true }?.let { author.offerForProject(it.id) }
         notificationsOpen = false
         usageOpen = false
         modelPickerOpen = false
@@ -423,10 +424,10 @@ class AppState(
         backend.terminal.focus(ccmSessionId)
     }
 
-    /** Git state of a project, created on first use; null for an unknown project. */
+    /** Git state of a project, created on first use; null for an unknown project or a group (its directory is no repository). */
     fun gitOf(projectId: Long): GitState? {
         gitStates[projectId]?.let { return it }
-        val project = projects.find(projectId) ?: return null
+        val project = projects.find(projectId)?.takeIf { !it.group } ?: return null
         return GitState(projectId, project.path, backend.git, scope, gitHost).also { gitStates[projectId] = it }
     }
 
@@ -482,9 +483,13 @@ class AppState(
         sessionReload.request()
     }
 
+    /** A group shows the worst status over its own sessions and those of its member projects. */
+    private fun statusOf(project: Project): AgentStatus =
+        (listOf(project.id) + projects.membersOf(project.id).map { it.id }).maxOf { backend.sessions.projectStatus(it) }
+
     private suspend fun loadSessions() {
         val (sessions, statuses) = io {
-            backend.sessions.sessions() to projects.all.associate { it.id to backend.sessions.projectStatus(it.id) }
+            backend.sessions.sessions() to projects.all.associate { it.id to statusOf(it) }
         }
         val previous = live.sessions.associate { it.ccmSessionId to it.status }
         live = LiveSessions(sessions, statuses)
