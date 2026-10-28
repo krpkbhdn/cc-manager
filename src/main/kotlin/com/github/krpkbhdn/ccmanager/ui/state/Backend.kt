@@ -1,5 +1,8 @@
 package com.github.krpkbhdn.ccmanager.ui.state
 
+import java.time.Duration
+import com.github.krpkbhdn.ccmanager.app.AppControlProperties
+import com.github.krpkbhdn.ccmanager.app.AppControlRegistry
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.github.krpkbhdn.ccmanager.author.AuthorProfileService
@@ -8,6 +11,7 @@ import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService
 import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgentService
 import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
+import com.github.krpkbhdn.ccmanager.app.mcp.AssistantMcpTool
 import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalService
 import com.github.krpkbhdn.ccmanager.claude.session.SessionProperties
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry
@@ -110,6 +114,9 @@ class Backend(
     val sound: NotificationSoundService? = null,
     val dataDir: Path = Path.of(System.getProperty("user.home"), ".cc-manager"),
     val sessionProperties: SessionProperties,
+    val appControl: AppControlRegistry? = null,
+    val appControlProperties: AppControlProperties = AppControlProperties(Duration.ofSeconds(10)),
+    val assistantTools: List<AssistantMcpTool> = emptyList(),
 ) {
     companion object {
         fun from(context: ConfigurableApplicationContext) = Backend(
@@ -141,6 +148,9 @@ class Backend(
             sound = context.getBean(NotificationSoundService::class.java),
             dataDir = context.getBean(AppProperties::class.java).dataDir(),
             sessionProperties = context.getBean(SessionProperties::class.java),
+            appControl = context.getBean(AppControlRegistry::class.java),
+            appControlProperties = context.getBean(AppControlProperties::class.java),
+            assistantTools = context.getBeansOfType(AssistantMcpTool::class.java).values.toList(),
         )
     }
 }

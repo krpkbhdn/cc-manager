@@ -17,7 +17,11 @@ import com.github.krpkbhdn.ccmanager.prompt.PlaceholderSubstitution
 import com.github.krpkbhdn.ccmanager.prompt.PlaceholderValues
 import com.github.krpkbhdn.ccmanager.prompt.PromptTemplate
 import com.github.krpkbhdn.ccmanager.team.Team
+import com.github.krpkbhdn.ccmanager.claude.install.LoginState
+import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartup
+import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartupState
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantState
+import com.github.krpkbhdn.ccmanager.ui.assistant.ToolSummary
 import com.github.krpkbhdn.ccmanager.ui.author.AuthorProfileState
 import com.github.krpkbhdn.ccmanager.ui.extensions.ExtensionContext
 import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.PluginsState
@@ -90,6 +94,9 @@ class AppState(
     var notificationsOpen by mutableStateOf(false)
     var usageOpen by mutableStateOf(false)
     var modelPickerOpen by mutableStateOf(false)
+    var quickRequestOpen by mutableStateOf(false)
+    var assistantHelpOpen by mutableStateOf(false)
+    val assistantTools: List<ToolSummary> = backend.assistantTools.map { ToolSummary(it.name(), it.description()) }
     var loginBannerDismissed by mutableStateOf(false)
     var taskDialogProjectId by mutableStateOf<Long?>(null)
     var taskDialogTemplateId by mutableStateOf<Long?>(null)
@@ -125,7 +132,12 @@ class AppState(
     )
     val assistant = AssistantState(
         scope, backend.terminal, { live }, backend.dataDir.resolve("assistant"),
-        launch = sessions::launchAssistant, show = { navigate(Route.Assistant) }, requestConfirm = { confirm = it },
+        launch = { sessions.launchAssistant(it) }, show = { navigate(Route.Assistant) }, enqueue = { id, text -> queue.add(id, text) }, requestConfirm = { confirm = it },
+    )
+    val assistantStartup = AssistantStartupState(
+        scope, { settings.assistantStartup }, { mode -> updateSettings { it.copy(assistantStartup = mode) } },
+        blocked = { author.dialogOpen || author.startOfferPending || confirm != null },
+        startInBackground = assistant::startInBackground, start = assistant::start,
     )
     val queue = QueueState(backend.sessions, backend.terminal, scope, sessions::isAttached, sessions::sendQueued)
     val runs = RunState(
@@ -205,6 +217,7 @@ class AppState(
         unsubscribers += backend.sessionUsage.subscribe { scope.launch { sessionUsage = backend.sessionUsage.all() } }
         unsubscribers += backend.notifications.subscribe { notification -> scope.launch { notifications.receive(notification) } }
         backend.sound?.setEnabled(settings.notificationSound)
+        backend.appControl?.let { unsubscribers += it.connect(AppControlAdapter(this, scope, backend.appControlProperties.uiTimeout())) }
         teams.start()
         prompts.start()
         queue.start()
@@ -218,7 +231,12 @@ class AppState(
         scope.launch { rateLimits = backend.rateLimits.current().orElse(null) }
         scope.launch { sessionUsage = backend.sessionUsage.all() }
         scope.launch { guarded { notifications.restore(io { backend.notifications.history() }) } }
-        scope.launch { guarded { installation = io { backend.installation.current() } } }
+        scope.launch {
+            guarded {
+                installation = io { backend.installation.current() }
+                assistantStartup.atStart(installation?.let { it.installed && it.login != LoginState.LOGGED_OUT } == true)
+            }
+        }
         scope.launch { guarded { ideAvailable = io { backend.ide.available() } } }
         scope.launch {
             var ticks = 0
@@ -341,6 +359,8 @@ class AppState(
     fun setGroupSessionsByProject(group: Boolean) = updateSettings { it.copy(groupSessionsByProject = group) }
 
     fun toggleNotificationSound() = updateSettings { it.copy(notificationSound = !it.notificationSound) }
+
+    fun cycleAssistantStartup() = updateSettings { it.copy(assistantStartup = it.assistantStartup.next()) }
 
     fun toggleAgents() = updateSettings { it.copy(agentsOpen = !it.agentsOpen) }
 

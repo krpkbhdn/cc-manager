@@ -108,7 +108,7 @@ public class ClaudeLauncher {
         Path executable = executable();
         String ccmSessionId = sessions.register(projectId);
         try {
-            SessionFiles files = hookSettings.write(ccmSessionId);
+            SessionFiles files = projectId == ASSISTANT_PROJECT_ID ? hookSettings.writeAssistant(ccmSessionId) : hookSettings.write(ccmSessionId);
             List<String> command = commandFactory.build(files, executable, modelSelection);
             PtyProcess process = PtySpawner.spawn(command, directory, ClaudeCommand.environment(System.getenv(), ccmSessionId));
             watchExit(ccmSessionId, process);

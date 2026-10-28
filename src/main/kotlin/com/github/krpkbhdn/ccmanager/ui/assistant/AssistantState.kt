@@ -22,12 +22,15 @@ class AssistantState(
     private val terminal: TerminalPort,
     private val live: () -> LiveSessions,
     private val folder: Path,
-    private val launch: () -> Unit,
+    private val launch: (show: Boolean) -> Unit,
     private val show: () -> Unit,
+    private val enqueue: (ccmSessionId: String, text: String) -> Unit,
     private val requestConfirm: (ConfirmRequest) -> Unit,
     private val pollMillis: Long = POLL_MILLIS,
     private val watchMillis: Long = WATCH_MILLIS,
 ) {
+    private val pending = mutableListOf<String>()
+
     val liveSessionId: String?
         get() = live().of(ClaudeLauncher.ASSISTANT_PROJECT_ID).firstOrNull()?.ccmSessionId
 
@@ -38,8 +41,45 @@ class AssistantState(
             terminal.focus(running)
             return
         }
-        launch()
+        begin(show = true)
+    }
+
+    /** Starts the assistant without leaving the current page; nothing happens when it already runs. */
+    fun startInBackground() {
+        if (liveSessionId == null) begin(show = false)
+    }
+
+    private fun begin(show: Boolean) {
+        launch(show)
         scope.launch { watchTrustDialog() }
+    }
+
+    /** Queues [text] for the assistant; without a live one it is started and the text waits until its session appears. */
+    fun request(text: String) {
+        if (text.isBlank()) return
+        val running = liveSessionId
+        if (running != null) return enqueue(running, text)
+        val first = pending.isEmpty()
+        pending += text
+        if (first) {
+            start()
+            scope.launch { deliverPending() }
+        }
+    }
+
+    private suspend fun deliverPending() {
+        var waited = 0L
+        while (waited <= watchMillis) {
+            val id = liveSessionId
+            if (id != null) {
+                pending.forEach { enqueue(id, it) }
+                pending.clear()
+                return
+            }
+            delay(pollMillis)
+            waited += pollMillis
+        }
+        pending.clear()
     }
 
     /** Claude shows the dialog before SessionStart, so it ends once the session reports its claude id. */

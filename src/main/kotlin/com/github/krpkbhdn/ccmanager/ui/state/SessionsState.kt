@@ -59,7 +59,7 @@ class SessionsState(
     }
 
     /** Starts the general session outside any project. */
-    fun launchAssistant() = launchSession(ClaudeLauncher.ASSISTANT_PROJECT_ID) { backend.launcher.launchAssistant() }
+    fun launchAssistant(show: Boolean = true) = launchSession(ClaudeLauncher.ASSISTANT_PROJECT_ID, show = show) { backend.launcher.launchAssistant() }
 
     /** Starts a session with [task] as its first prompt, as a lead of [team] or, for null, without a team; [onStarted] runs only when the session really started. */
     fun launchTask(projectId: Long, team: Team?, task: String, onStarted: () -> Unit) =
@@ -71,7 +71,7 @@ class SessionsState(
     fun launchSetup(projectId: Long, handoff: SessionHandoff, onStarted: () -> Unit) =
         launchSession(projectId, onStarted = onStarted) { backend.launcher.launchSetup(projectId, handoff.firstMessage(), handoff.profileDirectory()) }
 
-    private fun launchSession(projectId: Long, team: Team? = null, onStarted: () -> Unit = {}, rememberTeam: Boolean = team != null, start: () -> LaunchedSession) {
+    private fun launchSession(projectId: Long, team: Team? = null, onStarted: () -> Unit = {}, rememberTeam: Boolean = team != null, show: Boolean = true, start: () -> LaunchedSession) {
         if (launching) return
         launching = true
         scope.launch {
@@ -82,7 +82,7 @@ class SessionsState(
                 if (rememberTeam) lastTeams[projectId] = team
                 backend.terminal.open(session)
                 onOpened(projectId, session.ccmSessionId())
-                showProject(projectId)
+                if (show) showProject(projectId)
             }
             launching = false
         }

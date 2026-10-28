@@ -24,10 +24,12 @@ fun AssistantScreen(state: AppState, modifier: Modifier = Modifier) {
             modifier = modifier,
         ) {
             AppButton("Start", state.assistant::start, variant = ButtonVariant.PRIMARY, icon = Icons.Sparkles)
+            AppButton("Help", { state.assistantHelpOpen = true }, icon = Icons.Book)
         }
         return
     }
     TerminalPane(state, sessionId) {
+        AppButton("Help", { state.assistantHelpOpen = true }, Modifier.align(Alignment.TopStart).padding(start = Spacing.lg, top = Spacing.xs), icon = Icons.Book, compact = true)
         if (state.proposals.hiddenCount(sessionId) > 0) {
             AppButton(
                 "Claude is waiting - Answer", { state.proposals.reopen(sessionId) },

@@ -52,6 +52,9 @@ import com.github.krpkbhdn.ccmanager.ui.projectsettings.ProjectSettingsDialog
 import com.github.krpkbhdn.ccmanager.ui.prompts.PromptDialog
 import com.github.krpkbhdn.ccmanager.ui.prompts.PromptsScreen
 import com.github.krpkbhdn.ccmanager.ui.prompts.TemplatePickerDialog
+import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantHelpDialog
+import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartupDialog
+import com.github.krpkbhdn.ccmanager.ui.assistant.QuickRequestDialog
 import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalDialogHost
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantScreen
@@ -115,6 +118,9 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
         state.author.manage?.let { open -> AuthorConfigurationDialog(open, open.projectId?.let { state.projects.find(it)?.name }, state.author) }
         state.author.report?.let { AuthorReportPanel(it, state.author::closeReport) }
         ProposalDialogHost(state)
+        if (state.quickRequestOpen) QuickRequestDialog({ state.assistant.request(it); state.quickRequestOpen = false }, { state.quickRequestOpen = false })
+        if (state.assistantStartup.asking) AssistantStartupDialog(state.assistantStartup)
+        if (state.assistantHelpOpen) AssistantHelpDialog(state.assistantTools) { state.assistantHelpOpen = false }
         state.confirm?.let { ConfirmDialog(it) { state.confirm = null } }
         state.projects.renaming?.let { RenameDialog(it, { name -> state.projects.rename(it.project, name) }, { state.projects.renaming = null }) }
         if (state.projects.pickerOpen) FolderPickerDialog(initial = null, dataDir = state.dataDir, onDismiss = { state.projects.pickerOpen = false }, onPicked = state.projects::addAt)

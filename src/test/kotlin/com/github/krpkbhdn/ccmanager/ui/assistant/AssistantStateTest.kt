@@ -29,6 +29,7 @@ class AssistantStateTest {
     private val sent = CopyOnWriteArrayList<String>()
     private val launches = AtomicInteger()
     private val shown = AtomicInteger()
+    private val queued = CopyOnWriteArrayList<Pair<String, String>>()
     private val confirms = CopyOnWriteArrayList<ConfirmRequest>()
     @Volatile private var screen = ""
     @Volatile private var live = LiveSessions()
@@ -42,7 +43,7 @@ class AssistantStateTest {
         override fun View(ccmSessionId: String, modifier: Modifier) = Unit
     }
     private val state = AssistantState(
-        scope, terminal, { live }, Path.of("assistant"), { launches.incrementAndGet() }, { shown.incrementAndGet() }, { confirms += it },
+        scope, terminal, { live }, Path.of("assistant"), { launches.incrementAndGet() }, { shown.incrementAndGet() }, { id, text -> queued += id to text }, { confirms += it },
         pollMillis = 10, watchMillis = 400,
     )
 
@@ -100,5 +101,34 @@ class AssistantStateTest {
 
         assertThat(launches.get()).isEqualTo(1)
         assertThat(state.liveSessionId).isNull()
+    }
+
+    @Test
+    fun `request queues the text for the live assistant`() {
+        live = LiveSessions(listOf(session("claude-1")))
+
+        state.request("do it")
+
+        assertThat(queued).containsExactly("ccm-a" to "do it")
+        assertThat(launches.get()).isZero()
+    }
+
+    @Test
+    fun `request launches once and queues when the session appears`() {
+        state.request("first")
+        state.request("second")
+        live = LiveSessions(listOf(session(null)))
+        await { queued.size == 2 }
+
+        assertThat(launches.get()).isEqualTo(1)
+        assertThat(queued).containsExactly("ccm-a" to "first", "ccm-a" to "second")
+    }
+
+    @Test
+    fun `blank request is ignored`() {
+        state.request("  ")
+
+        assertThat(launches.get()).isZero()
+        assertThat(queued).isEmpty()
     }
 }

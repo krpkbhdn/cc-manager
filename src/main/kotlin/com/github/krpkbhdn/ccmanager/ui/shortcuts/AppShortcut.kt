@@ -15,6 +15,7 @@ import java.awt.event.KeyEvent.VK_B
 import java.awt.event.KeyEvent.VK_BACK_QUOTE
 import java.awt.event.KeyEvent.VK_COMMA
 import java.awt.event.KeyEvent.VK_D
+import java.awt.event.KeyEvent.VK_E
 import java.awt.event.KeyEvent.VK_ESCAPE
 import java.awt.event.KeyEvent.VK_F1
 import java.awt.event.KeyEvent.VK_F12
@@ -48,6 +49,7 @@ enum class AppShortcut(val label: String, private val windows: List<KeyChord>, p
     NEW_SESSION("New Claude session", listOf(ctrlShift(VK_T)), listOf(cmd(VK_T))),
     ALL_SESSIONS("All sessions", listOf(ctrlShift(VK_S)), listOf(cmdShift(VK_S))),
     ASSISTANT("Assistant", listOf(ctrlShift(VK_I)), listOf(cmdShift(VK_I))),
+    QUICK_REQUEST("Ask assistant", listOf(ctrlShift(VK_E)), listOf(cmdShift(VK_E))),
     NEXT_WAITING("Answer next waiting session", listOf(ctrlShift(VK_N)), listOf(cmdShift(VK_N))),
     OPEN_TERMINAL("Open terminal", listOf(alt(VK_F12)), listOf(alt(VK_F12))),
     CLOSE_SESSION("Close session tab", listOf(ctrlShift(VK_W)), listOf(cmd(VK_W))),

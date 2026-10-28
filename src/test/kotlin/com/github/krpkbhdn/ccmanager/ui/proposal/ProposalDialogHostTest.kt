@@ -11,6 +11,7 @@ import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
 import com.github.krpkbhdn.ccmanager.claude.proposal.PermissionProposal
 import com.github.krpkbhdn.ccmanager.ui.PreviewTerminal
 import com.github.krpkbhdn.ccmanager.ui.PreviewWorld
+import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartup
 import com.github.krpkbhdn.ccmanager.ui.shortcuts.AppShortcut
 import com.github.krpkbhdn.ccmanager.ui.shortcuts.ShortcutActions
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
@@ -53,7 +54,7 @@ class ProposalDialogHostTest {
 
     @BeforeEach
     fun open() {
-        state = AppState(world.backend(terminal), scope, UiSettingsStore(null)).also { it.start() }
+        state = AppState(world.backend(terminal), scope, UiSettingsStore(null)).also { it.updateSettings { s -> s.copy(assistantStartup = AssistantStartup.NEVER) }; it.start() }
         until { state.live.find(SESSION) != null }
         state.openSession(SESSION)
         scene = ImageComposeScene(1000, 800, Density(1f)) { host { ProposalDialogHost(state) } }

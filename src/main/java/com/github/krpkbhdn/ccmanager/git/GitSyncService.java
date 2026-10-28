@@ -31,6 +31,21 @@ public class GitSyncService {
         network(repo, progress, "fetch", "--all", "--prune", "--tags", "--progress");
     }
 
+    /** git fetch of one remote (all when {@code remote} is null or blank), optionally pruning. */
+    public void fetch(Path repo, String remote, boolean prune, Consumer<String> progress) {
+        var args = new ArrayList<>(List.of("fetch", "--progress"));
+        if (prune) {
+            args.add("--prune");
+        }
+        if (remote == null || remote.isBlank()) {
+            args.add("--all");
+        } else {
+            GitRevisions.requireNotOption(remote);
+            args.add(remote);
+        }
+        network(repo, progress, args.toArray(String[]::new));
+    }
+
     public void pull(Path repo, PullMode mode, Consumer<String> progress) {
         var args = new ArrayList<>(List.of("pull", "--progress"));
         args.addAll(switch (mode) {

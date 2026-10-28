@@ -1,5 +1,8 @@
 package com.github.krpkbhdn.ccmanager.ui.terminal
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry
 import com.github.krpkbhdn.ccmanager.shell.LaunchedShell
@@ -18,6 +21,8 @@ object TerminalHost {
     private val terminals = ConcurrentHashMap<String, OpenTerminal>()
     private val pendingClose = CopyOnWriteArrayList<Thread>()
 
+    private var openedCount by mutableStateOf(0)
+
     @Volatile
     private var registry: SessionRegistry? = null
 
@@ -33,6 +38,7 @@ object TerminalHost {
 
     private fun open(id: String, label: String, process: PtyProcess, isClaude: Boolean) {
         terminals.computeIfAbsent(id) { createTerminal(id, label, process, isClaude) }
+        openedCount++
     }
 
     /** Types text into the session console exactly as if the user typed it (CR = Enter, ESC = Esc). */
@@ -75,7 +81,11 @@ object TerminalHost {
 
     private fun detach(ccmSessionId: String): OpenTerminal? = terminals.remove(ccmSessionId)?.also { registry?.discard(ccmSessionId) }
 
-    internal fun sessionOf(ccmSessionId: String): TerminalSession? = terminals[ccmSessionId]?.session
+    /** Reads [openedCount], so a composition that asked too early is redone once the terminal is opened. */
+    internal fun sessionOf(ccmSessionId: String): TerminalSession? {
+        openedCount
+        return terminals[ccmSessionId]?.session
+    }
 
     internal fun anyFocused(): Boolean = terminals.values.any { it.session.focused }
 

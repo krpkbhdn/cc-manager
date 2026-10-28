@@ -25,6 +25,7 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
             AppShortcut.OVERVIEW -> handled { state.navigate(Route.Overview) }
             AppShortcut.ALL_SESSIONS -> handled { state.navigate(Route.Sessions) }
             AppShortcut.ASSISTANT -> handled { state.navigate(Route.Assistant) }
+            AppShortcut.QUICK_REQUEST -> handled { state.quickRequestOpen = true }
             AppShortcut.NEXT_WAITING -> state.answerNextWaiting()
             AppShortcut.NOTIFICATIONS -> handled { state.notificationsOpen = !state.notificationsOpen }
             AppShortcut.USAGE -> handled { state.usageOpen = !state.usageOpen }
@@ -76,7 +77,7 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
 
     private fun currentProject(): Project? = (state.route as? Route.Project)?.let { route -> state.projects.all.firstOrNull { it.id == route.id } }
 
-    private fun modalOpen() = state.proposalDialog != null || state.confirm != null || state.projects.renaming != null || state.projects.pickerOpen || state.projectSettings != null ||
+    private fun modalOpen() = state.proposalDialog != null || state.quickRequestOpen || state.assistantHelpOpen || state.assistantStartup.asking || state.confirm != null || state.projects.renaming != null || state.projects.pickerOpen || state.projectSettings != null ||
         state.taskDialogProjectId != null || state.quickStartProjectId != null || state.queuePickTarget != null ||state.runs.dialog != null || state.teams.dialog != null || state.agents.log != null || state.plugins.pending != null || state.mcp.adding || state.skills.creating || state.author.offer != null || state.author.manage != null || state.author.report != null ||
         currentProject()?.let { state.gitOf(it.id)?.dialog } != null
 
