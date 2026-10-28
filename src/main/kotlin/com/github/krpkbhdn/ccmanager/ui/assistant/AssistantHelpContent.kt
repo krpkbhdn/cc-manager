@@ -14,7 +14,13 @@ private val groupRules: List<Pair<String, (String) -> Boolean>> = listOf(
     "Runs" to { it.endsWith("_run") || it.endsWith("_runs") },
     "Sessions" to { it.endsWith("_session") || it.endsWith("_sessions") || it == "queue_prompt" },
     "Projects" to { it.endsWith("_project") || it.endsWith("_projects") },
+    "Groups" to { it.endsWith("_group") },
+    "Teams" to { it.endsWith("_team") || it.endsWith("_teams") },
+    "Prompts" to { it.endsWith("_prompt") || it.endsWith("_prompts") },
+    "Skills & plugins" to { "skill" in it || "plugin" in it || it.endsWith("_marketplace") },
+    "MCP servers" to { "mcp_server" in it },
     "UI" to { it == "navigate" },
+    "Help" to { it == "get_help" },
 )
 private const val OTHER_GROUP = "Other"
 
@@ -24,7 +30,8 @@ private val helpShortcuts = listOf(
     AppShortcut.NOTIFICATIONS, AppShortcut.SHORTCUT_SHEET,
 )
 
-val assistantExamples = listOf("add project C:\\x and open it", "queue 'run tests' to project X", "what is running right now?")
+val assistantExamples = listOf("add project C:\\x and open it", "queue 'run tests' to project X", "what is running right now?",
+    "group projects A and B into a group", "install the plugin foo@bar")
 
 /** Groups tools by name in the rule order, tools sorted by name inside a group, empty groups dropped. */
 fun groupTools(tools: List<ToolSummary>): List<ToolGroup> {

@@ -20,6 +20,11 @@ class AddProjectTool extends AssistantTool {
     }
 
     @Override
+    public boolean autoApproved() {
+        return true;
+    }
+
+    @Override
     public String name() {
         return "add_project";
     }

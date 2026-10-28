@@ -15,6 +15,11 @@ class ListSessionsTool implements AssistantMcpTool {
     }
 
     @Override
+    public boolean autoApproved() {
+        return true;
+    }
+
+    @Override
     public String name() {
         return "list_sessions";
     }

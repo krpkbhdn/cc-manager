@@ -9,9 +9,9 @@ class AssistantHelpContentTest {
 
     @Test
     fun groupsToolsByNameInRuleOrder() {
-        val groups = groupTools(listOf("navigate", "stop_run", "git_status", "add_project", "queue_prompt", "list_runs", "mystery").map(::tool))
+        val groups = groupTools(listOf("navigate", "stop_run", "git_status", "add_project", "queue_prompt", "list_runs", "mystery", "set_group", "list_teams", "get_prompt", "install_plugin", "add_mcp_server", "get_help").map(::tool))
 
-        assertThat(groups.map { it.title }).containsExactly("Git", "Runs", "Sessions", "Projects", "UI", "Other")
+        assertThat(groups.map { it.title }).containsExactly("Git", "Runs", "Sessions", "Projects", "Groups", "Teams", "Prompts", "Skills & plugins", "MCP servers", "UI", "Help", "Other")
         assertThat(groups.first { it.title == "Runs" }.tools.map { it.name }).containsExactly("list_runs", "stop_run")
     }
 

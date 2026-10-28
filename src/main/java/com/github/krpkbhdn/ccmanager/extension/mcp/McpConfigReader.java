@@ -123,7 +123,7 @@ class McpConfigReader {
             var command = text(entry.getValue(), "command");
             var type = text(entry.getValue(), "type");
             return new McpServerConfig(entry.getKey(), scope, type.isEmpty() ? STDIO : type,
-                    McpTarget.masked(command.isEmpty() ? text(entry.getValue(), "url") : command), approval.apply(entry.getKey()));
+                    McpTargetRedaction.redact(command.isEmpty() ? text(entry.getValue(), "url") : command), approval.apply(entry.getKey()));
         }).toList();
     }
 

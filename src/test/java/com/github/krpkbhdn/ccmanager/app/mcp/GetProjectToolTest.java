@@ -12,6 +12,8 @@ import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot;
 import com.github.krpkbhdn.ccmanager.git.GitStatus;
 import com.github.krpkbhdn.ccmanager.git.GitStatusService;
 import com.github.krpkbhdn.ccmanager.project.Project;
+import com.github.krpkbhdn.ccmanager.project.ModelSelection;
+import com.github.krpkbhdn.ccmanager.project.ProjectGroupService;
 import com.github.krpkbhdn.ccmanager.project.ProjectService;
 import com.github.krpkbhdn.ccmanager.run.RunConfiguration;
 import com.github.krpkbhdn.ccmanager.run.RunConfigurationService;
@@ -25,10 +27,11 @@ import tools.jackson.databind.json.JsonMapper;
 class GetProjectToolTest {
 
     private final ProjectService projects = mock(ProjectService.class);
+    private final ProjectGroupService groups = mock(ProjectGroupService.class);
     private final GitStatusService git = mock(GitStatusService.class);
     private final SessionRegistry sessions = mock(SessionRegistry.class);
     private final RunConfigurationService runs = mock(RunConfigurationService.class);
-    private final GetProjectTool tool = new GetProjectTool(projects, git, sessions, runs);
+    private final GetProjectTool tool = new GetProjectTool(projects, groups, git, sessions, runs);
 
     @Test
     void reportsBranchLiveSessionsAndRunConfigurations() {
@@ -47,6 +50,17 @@ class GetProjectToolTest {
 
         assertThat(result).contains("\"branch\":\"main\"").contains("\"status\":\"WORKING\"").contains("\"name\":\"app\"")
                 .doesNotContain("OFFLINE");
+    }
+
+    @Test
+    void groupListsItsMembersInsteadOfABranch() {
+        var path = Path.of("group");
+        when(projects.find(9)).thenReturn(Optional.of(new Project(9, "Stack", path, Instant.EPOCH, ModelSelection.DEFAULT, true, null)));
+        when(groups.members(9)).thenReturn(List.of(new Project(1, "api", Path.of("api"), Instant.EPOCH)));
+
+        var result = tool.call(JsonMapper.shared().readTree("{\"project\":9}"));
+
+        assertThat(result).contains("\"group\":true").contains("\"members\":[{").contains("\"name\":\"api\"").doesNotContain("branch");
     }
 
     @Test

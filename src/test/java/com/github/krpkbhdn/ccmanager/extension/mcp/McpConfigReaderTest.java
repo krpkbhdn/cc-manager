@@ -39,10 +39,10 @@ class McpConfigReaderTest {
         var servers = reader(HostEnvironment.OperatingSystem.WINDOWS).read(project);
 
         assertThat(servers).containsExactly(
-                new McpServerConfig("u", ExtensionScope.USER, "http", "https://u", McpApproval.NOT_REQUIRED),
+                new McpServerConfig("u", ExtensionScope.USER, "http", "https://u/…", McpApproval.NOT_REQUIRED),
                 new McpServerConfig("l", ExtensionScope.LOCAL, "stdio", "npx", McpApproval.NOT_REQUIRED),
                 new McpServerConfig("ok", ExtensionScope.PROJECT, "stdio", "a", McpApproval.APPROVED),
-                new McpServerConfig("off", ExtensionScope.PROJECT, "stdio", "https://b", McpApproval.DISABLED),
+                new McpServerConfig("off", ExtensionScope.PROJECT, "stdio", "https://b/…", McpApproval.DISABLED),
                 new McpServerConfig("new", ExtensionScope.PROJECT, "stdio", "c", McpApproval.PENDING));
         assertThat(servers.toString()).doesNotContain("secret");
     }
@@ -71,12 +71,12 @@ class McpConfigReaderTest {
     }
 
     @Test
-    void urlTargetsHideQueryValuesAndCredentials() throws IOException {
+    void urlTargetsHideCredentialsQueryAndPath() throws IOException {
         Files.writeString(home.resolve(".claude.json"), """
                 {"mcpServers":{"u":{"type":"http","url":"https://user:pw@host/mcp?api_key=SECRET&mode=a#f"}}}""");
 
         assertThat(reader(HostEnvironment.OperatingSystem.LINUX).read(null)).extracting(McpServerConfig::target)
-                .containsExactly("https://***@host/mcp?api_key=***&mode=***#f");
+                .containsExactly("https://host/…");
     }
 
     @Test

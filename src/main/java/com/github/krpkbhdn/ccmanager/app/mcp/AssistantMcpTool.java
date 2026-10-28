@@ -11,4 +11,9 @@ public interface AssistantMcpTool extends McpToolDescriptor {
      * @throws IllegalArgumentException or IllegalStateException with a message Claude can act on
      */
     String call(JsonNode arguments);
+
+    /** @return true when the Assistant may call the tool without a permission dialog (read-only or easily undone) */
+    default boolean autoApproved() {
+        return false;
+    }
 }

@@ -15,6 +15,11 @@ class ListProjectsTool extends AssistantTool {
     }
 
     @Override
+    public boolean autoApproved() {
+        return true;
+    }
+
+    @Override
     public String name() {
         return "list_projects";
     }
