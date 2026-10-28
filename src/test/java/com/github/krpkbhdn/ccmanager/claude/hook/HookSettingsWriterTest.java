@@ -20,6 +20,7 @@ class HookSettingsWriterTest {
     private static final String URL = "http://127.0.0.1:5555/hook/secret/abc-1";
     private static final String STATUS_LINE_URL = "http://127.0.0.1:5555/statusline/secret/abc-1";
     private static final String MCP_URL = "http://127.0.0.1:5555/mcp/secret/abc-1";
+    private static final String APP_MCP_URL = "http://127.0.0.1:5555/assistant-mcp/appsecret";
     private static final String DEAD_PID = String.valueOf(Integer.MAX_VALUE);
 
     private final JsonMapper mapper = JsonMapper.builder().build();

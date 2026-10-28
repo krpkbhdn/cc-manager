@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.claude.launch;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -13,6 +14,7 @@ import com.github.krpkbhdn.ccmanager.claude.plugin.ClaudePluginWriter;
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation;
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
+import com.github.krpkbhdn.ccmanager.config.AppProperties;
 import com.github.krpkbhdn.ccmanager.extension.mcp.ProjectMcpServers;
 import com.github.krpkbhdn.ccmanager.project.GroupWorkspace;
 import com.github.krpkbhdn.ccmanager.project.ModelSelection;
@@ -35,7 +37,8 @@ class ClaudeLauncherTest {
     private final HookSettingsWriter hooks = mock(HookSettingsWriter.class);
     private final SessionRegistry sessions = mock(SessionRegistry.class);
     private final ProjectGroupService groups = mock(ProjectGroupService.class);
-    private final ClaudeLauncher launcher = new ClaudeLauncher(projects, installation, hooks, mock(ClaudePluginWriter.class), sessions,
+    private final Path dataDir = Path.of("build", "launcher-test-data").toAbsolutePath();
+    private final ClaudeLauncher launcher = new ClaudeLauncher(projects, installation, hooks, mock(ClaudePluginWriter.class), sessions, new AppProperties(dataDir),
             groups, mock(GroupWorkspace.class), mock(ProjectMcpServers.class));
 
     @TempDir
@@ -106,6 +109,20 @@ class ClaudeLauncherTest {
 
         verify(sessions).markEnded("ccm-1", -1);
         verify(hooks).delete("ccm-1");
+    }
+
+    @Test
+    void assistantRegistersWithoutProjectAndCreatesItsDirectory() throws Exception {
+        Path notExecutable = Files.createFile(directory.resolve("claude-fake"));
+        when(installation.current()).thenReturn(new ClaudeInstallation(true, notExecutable, "1", null, null));
+        when(sessions.register(ClaudeLauncher.ASSISTANT_PROJECT_ID)).thenReturn("ccm-0");
+        when(hooks.write("ccm-0")).thenReturn(new SessionFiles(directory.resolve("s.json"), directory.resolve("m.json")));
+
+        assertThatThrownBy(launcher::launchAssistant).hasMessageStartingWith("Could not start Claude");
+
+        verify(sessions).register(0L);
+        verify(projects, never()).find(anyLong());
+        assertThat(dataDir.resolve("assistant")).isDirectory();
     }
 
     @Test

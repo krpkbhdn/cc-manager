@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.github.krpkbhdn.ccmanager.claude.hook.ActivityEntry
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation
+import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
 import com.github.krpkbhdn.ccmanager.claude.proposal.Proposal
 import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgent
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
@@ -17,6 +18,11 @@ import com.github.krpkbhdn.ccmanager.prompt.PlaceholderSubstitution
 import com.github.krpkbhdn.ccmanager.prompt.PlaceholderValues
 import com.github.krpkbhdn.ccmanager.prompt.PromptTemplate
 import com.github.krpkbhdn.ccmanager.team.Team
+import com.github.krpkbhdn.ccmanager.claude.install.LoginState
+import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartup
+import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartupState
+import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantState
+import com.github.krpkbhdn.ccmanager.ui.assistant.ToolSummary
 import com.github.krpkbhdn.ccmanager.ui.author.AuthorProfileState
 import com.github.krpkbhdn.ccmanager.ui.extensions.ExtensionContext
 import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.PluginsState
@@ -89,6 +95,9 @@ class AppState(
     var notificationsOpen by mutableStateOf(false)
     var usageOpen by mutableStateOf(false)
     var modelPickerOpen by mutableStateOf(false)
+    var quickRequestOpen by mutableStateOf(false)
+    var assistantHelpOpen by mutableStateOf(false)
+    val assistantTools: List<ToolSummary> = backend.assistantTools.map { ToolSummary(it.name(), it.description()) }
     var loginBannerDismissed by mutableStateOf(false)
     var taskDialogProjectId by mutableStateOf<Long?>(null)
     var taskDialogTemplateId by mutableStateOf<Long?>(null)
@@ -118,9 +127,18 @@ class AppState(
         backend, scope, { live }, { sessionUsage[it] }, { teams.defaultTeamOf(it) },
         onOpened = { projectId, id -> views[projectId] = viewOf(projectId).openSession(id) },
         onClosed = { projectId, id -> views[projectId] = viewOf(projectId).closeSession(id) },
-        showProject = { navigate(Route.Project(it)) },
+        showProject = { navigate(routeOf(it)) },
         requestConfirm = { confirm = it },
         reportError = notifications::reportError,
+    )
+    val assistant = AssistantState(
+        scope, backend.terminal, { live }, backend.dataDir.resolve("assistant"),
+        launch = { sessions.launchAssistant(it) }, show = { navigate(Route.Assistant) }, enqueue = { id, text -> queue.add(id, text) }, requestConfirm = { confirm = it },
+    )
+    val assistantStartup = AssistantStartupState(
+        scope, { settings.assistantStartup }, { mode -> updateSettings { it.copy(assistantStartup = mode) } },
+        blocked = { author.dialogOpen || author.startOfferPending || confirm != null },
+        startInBackground = assistant::startInBackground, start = assistant::start,
     )
     val queue = QueueState(backend.sessions, backend.terminal, scope, sessions::isAttached, sessions::sendQueued)
     val runs = RunState(
@@ -169,6 +187,7 @@ class AppState(
     /** The proposal dialog to show: the oldest unhidden proposal of the session whose terminal tab is open. */
     val proposalDialog: Proposal?
         get() {
+            if (route == Route.Assistant) return assistant.liveSessionId?.let { proposals.dialogFor(it) }
             val project = route as? Route.Project ?: return null
             val session = viewOf(project.id).selected as? ProjectTab.Session ?: return null
             return proposals.dialogFor(session.ccmSessionId)
@@ -199,6 +218,7 @@ class AppState(
         unsubscribers += backend.sessionUsage.subscribe { scope.launch { sessionUsage = backend.sessionUsage.all() } }
         unsubscribers += backend.notifications.subscribe { notification -> scope.launch { notifications.receive(notification) } }
         backend.sound?.setEnabled(settings.notificationSound)
+        backend.appControl?.let { unsubscribers += it.connect(AppControlAdapter(this, scope, backend.appControlProperties.uiTimeout())) }
         teams.start()
         prompts.start()
         queue.start()
@@ -212,7 +232,12 @@ class AppState(
         scope.launch { rateLimits = backend.rateLimits.current().orElse(null) }
         scope.launch { sessionUsage = backend.sessionUsage.all() }
         scope.launch { guarded { notifications.restore(io { backend.notifications.history() }) } }
-        scope.launch { guarded { installation = io { backend.installation.current() } } }
+        scope.launch {
+            guarded {
+                installation = io { backend.installation.current() }
+                assistantStartup.atStart(installation?.let { it.installed && it.login != LoginState.LOGGED_OUT } == true)
+            }
+        }
         scope.launch { guarded { ideAvailable = io { backend.ide.available() } } }
         scope.launch {
             var ticks = 0
@@ -289,8 +314,11 @@ class AppState(
     fun openSession(ccmSessionId: String) {
         val session = live.find(ccmSessionId) ?: return
         views[session.projectId] = viewOf(session.projectId).openSession(ccmSessionId)
-        navigate(Route.Project(session.projectId))
+        navigate(routeOf(session.projectId))
     }
+
+    private fun routeOf(projectId: Long): Route =
+        if (projectId == ClaudeLauncher.ASSISTANT_PROJECT_ID) Route.Assistant else Route.Project(projectId)
 
     fun select(projectId: Long, tab: ProjectTab) {
         views[projectId] = viewOf(projectId).select(tab)
@@ -304,7 +332,7 @@ class AppState(
 
     fun openNotification(target: AppNotification) {
         val session = target.ccmSessionId?.let { live.find(it) }
-        if (session != null) openSession(session.ccmSessionId) else navigate(Route.Project(target.projectId))
+        if (session != null) openSession(session.ccmSessionId) else navigate(routeOf(target.projectId))
     }
 
     fun openToast(toast: ToastItem) {
@@ -312,7 +340,7 @@ class AppState(
         val session = toast.ccmSessionId?.let { live.find(it) }
         when {
             session != null -> openSession(session.ccmSessionId)
-            toast.projectId != null -> navigate(Route.Project(toast.projectId))
+            toast.projectId != null -> navigate(routeOf(toast.projectId))
         }
     }
 
@@ -332,6 +360,8 @@ class AppState(
     fun setGroupSessionsByProject(group: Boolean) = updateSettings { it.copy(groupSessionsByProject = group) }
 
     fun toggleNotificationSound() = updateSettings { it.copy(notificationSound = !it.notificationSound) }
+
+    fun cycleAssistantStartup() = updateSettings { it.copy(assistantStartup = it.assistantStartup.next()) }
 
     fun toggleAgents() = updateSettings { it.copy(agentsOpen = !it.agentsOpen) }
 

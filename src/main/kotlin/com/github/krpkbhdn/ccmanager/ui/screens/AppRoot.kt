@@ -53,8 +53,12 @@ import com.github.krpkbhdn.ccmanager.ui.projectsettings.ProjectSettingsDialog
 import com.github.krpkbhdn.ccmanager.ui.prompts.PromptDialog
 import com.github.krpkbhdn.ccmanager.ui.prompts.PromptsScreen
 import com.github.krpkbhdn.ccmanager.ui.prompts.TemplatePickerDialog
+import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantHelpDialog
+import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartupDialog
+import com.github.krpkbhdn.ccmanager.ui.assistant.QuickRequestDialog
 import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalDialogHost
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
+import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantScreen
 import com.github.krpkbhdn.ccmanager.ui.sessions.SessionsScreen
 import com.github.krpkbhdn.ccmanager.ui.state.Route
 import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.PluginCommandDialog
@@ -115,6 +119,9 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
         state.author.manage?.let { open -> AuthorConfigurationDialog(open, open.projectId?.let { state.projects.find(it)?.name }, state.author) }
         state.author.report?.let { AuthorReportPanel(it, state.author::closeReport) }
         ProposalDialogHost(state)
+        if (state.quickRequestOpen) QuickRequestDialog({ state.assistant.request(it); state.quickRequestOpen = false }, { state.quickRequestOpen = false })
+        if (state.assistantStartup.asking) AssistantStartupDialog(state.assistantStartup)
+        if (state.assistantHelpOpen) AssistantHelpDialog(state.assistantTools) { state.assistantHelpOpen = false }
         state.confirm?.let { ConfirmDialog(it) { state.confirm = null } }
         state.projects.groupDialog?.let { key(it) { GroupDialog(it, state.projects) } }
         state.projects.renaming?.let { RenameDialog(it, { name -> state.projects.rename(it.project, name) }, { state.projects.renaming = null }) }
@@ -176,6 +183,7 @@ private fun RouteContent(state: AppState) {
     if (route == Route.Mcp) return McpScreen(state.mcp)
     if (route == Route.Skills) return SkillsScreen(state.skills)
     if (route == Route.Sessions) return SessionsScreen(state)
+    if (route == Route.Assistant) return AssistantScreen(state)
     val project = (route as? Route.Project)?.let { target -> state.projects.all.firstOrNull { it.id == target.id } }
     Crossfade(project?.id, label = "route") { shown ->
         val current = state.projects.all.firstOrNull { it.id == shown }

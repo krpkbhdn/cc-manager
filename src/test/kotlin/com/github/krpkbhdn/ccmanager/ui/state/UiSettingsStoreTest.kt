@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.ui.state
 
+import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartup
 import java.nio.file.Files
 import java.nio.file.Path
 import org.assertj.core.api.Assertions.assertThat
@@ -18,6 +19,16 @@ class UiSettingsStoreTest {
         val settings = UiSettings(ThemeMode.LIGHT, sidebarCollapsed = true, agentsOpen = false, quickBarOpen = false, window = WindowBounds(1500, 900, 40, 60, maximized = true))
         store.save(settings)
         assertThat(store.load()).isEqualTo(settings)
+    }
+
+    @Test
+    fun `assistant startup mode round trips and garbage falls back to ask`(@TempDir dir: Path) {
+        val file = dir.resolve("ui.properties")
+        val store = UiSettingsStore(file)
+        store.save(UiSettings(assistantStartup = AssistantStartup.AUTO_START))
+        assertThat(store.load().assistantStartup).isEqualTo(AssistantStartup.AUTO_START)
+        Files.writeString(file, "assistant.startup=SOMETIMES\n")
+        assertThat(store.load().assistantStartup).isEqualTo(AssistantStartup.ASK)
     }
 
     @Test

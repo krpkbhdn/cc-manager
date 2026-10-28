@@ -59,6 +59,7 @@ private fun Breadcrumb(state: AppState, modifier: Modifier) {
         Route.Mcp -> listOf("MCP servers")
         Route.Skills -> listOf("Skills")
         Route.Sessions -> listOf("All sessions")
+        Route.Assistant -> listOf("Assistant")
         is Route.Project -> listOf(state.projects.nameOf(route.id)) + listOfNotNull(state.viewOf(route.id).focusedSession?.let { state.live.find(it) }?.let(::sessionTitle))
     }
     Row(modifier.padding(start = Spacing.sm), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs + 1.dp)) {

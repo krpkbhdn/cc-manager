@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
 import com.github.krpkbhdn.ccmanager.project.ModelSelection
 import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.ui.sessions.UNKNOWN_PROJECT
@@ -52,7 +53,8 @@ class ProjectsState(
 
     fun membersOf(groupId: Long): List<Project> = all.filter { it.groupId == groupId }
 
-    fun nameOf(id: Long): String = all.firstOrNull { it.id == id }?.name ?: UNKNOWN_PROJECT
+    fun nameOf(id: Long): String =
+        if (id == ClaudeLauncher.ASSISTANT_PROJECT_ID) "Assistant" else all.firstOrNull { it.id == id }?.name ?: UNKNOWN_PROJECT
 
     fun find(id: Long): Project? = all.firstOrNull { it.id == id }
 

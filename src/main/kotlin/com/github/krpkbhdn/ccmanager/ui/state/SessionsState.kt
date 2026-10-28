@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateSetOf
 import androidx.compose.runtime.setValue
 import com.github.krpkbhdn.ccmanager.author.SessionHandoff
+import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
@@ -57,6 +58,9 @@ class SessionsState(
         }
     }
 
+    /** Starts the general session outside any project. */
+    fun launchAssistant(show: Boolean = true) = launchSession(ClaudeLauncher.ASSISTANT_PROJECT_ID, show = show) { backend.launcher.launchAssistant() }
+
     /** Starts a session with [task] as its first prompt, as a lead of [team] or, for null, without a team; [onStarted] runs only when the session really started. */
     fun launchTask(projectId: Long, team: Team?, task: String, onStarted: () -> Unit) =
         launchSession(projectId, team, onStarted, rememberTeam = true) {
@@ -67,7 +71,7 @@ class SessionsState(
     fun launchSetup(projectId: Long, handoff: SessionHandoff, onStarted: () -> Unit) =
         launchSession(projectId, onStarted = onStarted) { backend.launcher.launchSetup(projectId, handoff.firstMessage(), handoff.profileDirectory()) }
 
-    private fun launchSession(projectId: Long, team: Team? = null, onStarted: () -> Unit = {}, rememberTeam: Boolean = team != null, start: () -> LaunchedSession) {
+    private fun launchSession(projectId: Long, team: Team? = null, onStarted: () -> Unit = {}, rememberTeam: Boolean = team != null, show: Boolean = true, start: () -> LaunchedSession) {
         if (launching) return
         launching = true
         scope.launch {
@@ -78,7 +82,7 @@ class SessionsState(
                 if (rememberTeam) lastTeams[projectId] = team
                 backend.terminal.open(session)
                 onOpened(projectId, session.ccmSessionId())
-                showProject(projectId)
+                if (show) showProject(projectId)
             }
             launching = false
         }

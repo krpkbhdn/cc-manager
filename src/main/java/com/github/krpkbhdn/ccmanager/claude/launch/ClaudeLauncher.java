@@ -6,6 +6,7 @@ import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation;
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService;
 import com.github.krpkbhdn.ccmanager.claude.plugin.ClaudePluginWriter;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
+import com.github.krpkbhdn.ccmanager.config.AppProperties;
 import com.github.krpkbhdn.ccmanager.extension.mcp.ProjectMcpServers;
 import com.github.krpkbhdn.ccmanager.project.GroupWorkspace;
 import com.github.krpkbhdn.ccmanager.project.Project;
@@ -31,6 +32,9 @@ import org.springframework.stereotype.Service;
 @Service
 public class ClaudeLauncher {
 
+    /** Project id of sessions that belong to no project; SQLite ids start at 1. */
+    public static final long ASSISTANT_PROJECT_ID = 0L;
+    private static final String ASSISTANT_DIRECTORY = "assistant";
     private static final int SPAWN_FAILED_EXIT_CODE = -1;
     private static final Logger log = LoggerFactory.getLogger(ClaudeLauncher.class);
 
@@ -39,13 +43,15 @@ public class ClaudeLauncher {
     private final HookSettingsWriter hookSettings;
     private final ClaudePluginWriter plugin;
     private final SessionRegistry sessions;
+    private final Path dataDir;
     private final ProjectGroupService groups;
     private final GroupWorkspace groupWorkspace;
     private final ProjectMcpServers projectMcpServers;
 
     public ClaudeLauncher(ProjectService projects, ClaudeInstallationService installation,
-            HookSettingsWriter hookSettings, ClaudePluginWriter plugin, SessionRegistry sessions,
+            HookSettingsWriter hookSettings, ClaudePluginWriter plugin, SessionRegistry sessions, AppProperties properties,
             ProjectGroupService groups, GroupWorkspace groupWorkspace, ProjectMcpServers projectMcpServers) {
+        this.dataDir = properties.dataDir();
         this.groups = groups;
         this.groupWorkspace = groupWorkspace;
         this.projectMcpServers = projectMcpServers;
@@ -95,25 +101,42 @@ public class ClaudeLauncher {
                 (files, exe, selection) -> ClaudeCommand.attachArguments(exe, files, backgroundSessionId));
     }
 
+    /** A general session outside any project, started in the assistant directory under {@link #ASSISTANT_PROJECT_ID}. */
+    public LaunchedSession launchAssistant() {
+        Path directory = dataDir.resolve(ASSISTANT_DIRECTORY);
+        try {
+            Files.createDirectories(directory);
+        } catch (IOException e) {
+            throw new IllegalStateException("Could not create the assistant folder: " + e.getMessage(), e);
+        }
+        return start(ASSISTANT_PROJECT_ID, directory, ModelSelection.DEFAULT, ClaudeCommand.label(LaunchMode.NEW),
+                (files, exe, selection) -> ClaudeCommand.assistantArguments(exe, files, selection), List.of());
+    }
+
     private LaunchedSession start(long projectId, String label, CommandFactory commandFactory) {
         Project project = project(projectId);
-        Path directory = project.path();
-        List<Project> members = project.group() ? members(project) : List.of();
+        return start(projectId, project.path(), project.modelSelection(), label, commandFactory,
+                project.group() ? members(project) : List.of());
+    }
+
+    private LaunchedSession start(long projectId, Path directory, ModelSelection modelSelection, String label,
+            CommandFactory commandFactory, List<Project> members) {
+        boolean group = !members.isEmpty();
         Path executable = executable();
         String ccmSessionId = sessions.register(projectId);
         try {
             List<Path> memberPaths = members.stream().map(Project::path).toList();
-            if (project.group()) {
+            if (group) {
                 groupWorkspace.prepare(directory, members);
             }
-            SessionFiles files = project.group()
-                    ? hookSettings.write(ccmSessionId, projectMcpServers.approved(memberPaths))
+            SessionFiles files = projectId == ASSISTANT_PROJECT_ID ? hookSettings.writeAssistant(ccmSessionId)
+                    : group ? hookSettings.write(ccmSessionId, projectMcpServers.approved(memberPaths))
                     : hookSettings.write(ccmSessionId);
-            List<String> command = new ArrayList<>(commandFactory.build(files, executable, project.modelSelection()));
-            if (project.group()) {
+            List<String> command = new ArrayList<>(commandFactory.build(files, executable, modelSelection));
+            if (group) {
                 ClaudeCommand.addDirectories(command, memberPaths);
             }
-            Map<String, String> environment = project.group()
+            Map<String, String> environment = group
                     ? ClaudeCommand.groupEnvironment(System.getenv(), ccmSessionId)
                     : ClaudeCommand.environment(System.getenv(), ccmSessionId);
             PtyProcess process = PtySpawner.spawn(command, directory, environment);
