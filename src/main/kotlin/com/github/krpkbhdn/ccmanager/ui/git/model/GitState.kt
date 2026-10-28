@@ -135,6 +135,9 @@ class GitState(
 
     fun refresh() = refresher.request()
 
+    /** Reloads now and returns when done, for callers that load many projects one after another. */
+    suspend fun reloadNow() = reload()
+
     /** The toolbar Refresh: also re-reads tags, remotes and stashes, which a terminal can change without the watcher noticing. */
     fun refreshAll() {
         refresh()

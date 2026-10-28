@@ -111,6 +111,7 @@ fun limitsAt(fiveHourPercent: Double, sevenDayPercent: Double) = RateLimitSnapsh
 
 /** In-memory backend data for the dev preview; Mockito keeps it independent of the real services' constructors. */
 class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeRepoData = SampleRepos.busy(), val rateLimits: RateLimitSnapshot? = limitsAt(23.5, 41.2), selection: ModelSelection = ModelSelection("opus", "high")) {
+    init { git.notRepositories.add(Path.of("C:/Users/dev/Work/docs-site")) }
     val fakeMcp = FakeMcp()
     val proposals = PreviewProposals()
     val sessionUsage = mapOf(
@@ -184,7 +185,7 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
             null, ago(800), ago(20), emptyList(), 0, null,
         ),
         SessionSnapshot(
-            "s-silent", 2, "c6", AgentStatus.WORKING, "Running Bash: npm run docs:build", "default", "claude-opus-4-7",
+            "s-silent", 2, "c6", AgentStatus.WORKING, "Running Bash: npm run docs:build && npm run docs:lint && npm run docs:link-check && npm run docs:deploy -- --environment=staging --verbose --retries=3", "default", "claude-opus-4-7",
             "Rebuild the docs site", ago(2400), ago(1500), emptyList(), 0, null,
         ),
     )

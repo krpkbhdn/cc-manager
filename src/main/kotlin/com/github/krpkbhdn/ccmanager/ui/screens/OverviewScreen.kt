@@ -63,6 +63,7 @@ fun OverviewScreen(state: AppState, modifier: Modifier = Modifier) {
                     project = project,
                     status = state.live.statusOf(project.id),
                     sessions = state.live.of(project.id),
+                    git = state.gitSummaryOf(project.id),
                     now = { state.now },
                     actions = state.projectActions(project),
                     modifier = Modifier.animateItem(),

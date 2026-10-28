@@ -49,6 +49,7 @@ class FakeRepoData(
     @Volatile var topLevelFailure: GitException? = null
     val watchedPaths: MutableList<Path> = java.util.Collections.synchronizedList(mutableListOf())
     val statusRepos: MutableList<Path> = java.util.Collections.synchronizedList(mutableListOf())
+    val notRepositories: MutableSet<Path> = java.util.Collections.synchronizedSet(mutableSetOf())
     val calls: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
     val logContinuations: MutableList<GraphState?> = java.util.Collections.synchronizedList(mutableListOf())
     val patches: MutableList<Pair<String, Boolean>> = java.util.Collections.synchronizedList(mutableListOf())
@@ -86,7 +87,7 @@ class FakeGit(val data: FakeRepoData) {
         }
         override fun status(repo: Path): GitStatus {
             data.statusRepos.add(repo)
-            return data.status()
+            return if (repo in data.notRepositories) GitStatus.notARepository() else data.status()
         }
         override fun diff(repo: Path, path: String, staged: Boolean): GitDiff.FileDiff =
             (if (staged) data.stagedDiffs[path] else data.unstagedDiffs[path] ?: data.stagedDiffs[path])

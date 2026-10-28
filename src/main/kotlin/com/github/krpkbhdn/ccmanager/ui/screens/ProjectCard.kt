@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -35,6 +36,8 @@ import com.github.krpkbhdn.ccmanager.ui.components.Pressable
 import com.github.krpkbhdn.ccmanager.ui.components.ProjectAvatar
 import com.github.krpkbhdn.ccmanager.ui.components.StatusChip
 import com.github.krpkbhdn.ccmanager.ui.components.StatusDot
+import com.github.krpkbhdn.ccmanager.ui.git.GitSummaryLine
+import com.github.krpkbhdn.ccmanager.ui.git.model.GitSummary
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.state.byUrgency
 import com.github.krpkbhdn.ccmanager.ui.state.lastActivityAt
@@ -55,10 +58,12 @@ private const val MAX_PILLS = 3
 private const val ACTIVITY_LINES = 2
 private val cardMinHeight = 168.dp
 private val menuButtonSize = 24.dp
+private val gitLineHeight = 16.dp
+private val footerHeight = 28.dp
 
 /** Overview card of one project: identity, live activity line, session pills and last activity. */
 @Composable
-fun ProjectCard(project: Project, status: AgentStatus, sessions: List<SessionSnapshot>, now: () -> Instant, actions: ProjectActions, modifier: Modifier = Modifier) {
+fun ProjectCard(project: Project, status: AgentStatus, sessions: List<SessionSnapshot>, git: GitSummary?, now: () -> Instant, actions: ProjectActions, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(Radius.xl)
     val urgent = mostUrgent(sessions)
     val lastActive = lastActivityAt(sessions)
@@ -75,11 +80,13 @@ fun ProjectCard(project: Project, status: AgentStatus, sessions: List<SessionSna
                     StatusChip(status)
                     CardMenu(actions, hovered)
                 }
+                Box(Modifier.height(gitLineHeight)) { git?.let { GitSummaryLine(it) } }
                 Label(
                     urgent?.let { it.activity ?: sessionTitle(it) } ?: "No live sessions. Launch Claude to start one.",
                     color = if (urgent == null) colors.textTertiary else colors.textSecondary,
                     style = Type.body,
                     maxLines = ACTIVITY_LINES,
+                    minLines = ACTIVITY_LINES,
                 )
                 CardFooter(sessions, lastActive, now, hovered)
             }
@@ -99,7 +106,7 @@ private fun CardMenu(actions: ProjectActions, hovered: Boolean) {
 @Composable
 private fun CardFooter(sessions: List<SessionSnapshot>, lastActive: Instant?, now: () -> Instant, hovered: Boolean) {
     val arrow by animateFloatAsState(if (hovered) 1f else 0f, Motion.base(), label = "cardArrow")
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+    Row(Modifier.fillMaxWidth().height(footerHeight), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(Spacing.xs + 2.dp), verticalArrangement = Arrangement.spacedBy(Spacing.xs + 2.dp)) {
             byUrgency(sessions).take(MAX_PILLS).forEach { SessionPill(it) }
             if (sessions.size > MAX_PILLS) Label("+${sessions.size - MAX_PILLS}", color = colors.textTertiary, style = Type.captionMedium, modifier = Modifier.padding(top = 3.dp))

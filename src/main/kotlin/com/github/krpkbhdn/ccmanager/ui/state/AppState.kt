@@ -49,6 +49,7 @@ import kotlinx.coroutines.launch
 
 private const val TICK_MILLIS = 1_000L
 private const val STALE_REFRESH_TICKS = 30
+private const val UNOPENED_GIT_REFRESH_TICKS = 60
 private const val ACTIVITY_LIMIT = 300
 
 /**
@@ -107,7 +108,7 @@ class AppState(
         requestConfirm = { confirm = it },
         showProject = { navigate(Route.Project(it)) },
         onRemoved = { if (route == Route.Project(it)) route = Route.Overview },
-        onLoaded = ::forgetRemovedProjects,
+        onLoaded = { forgetRemovedProjects(it); loadGitOfNewProjects(it) },
         reportError = { title, message -> notifications.reportError(title, message) },
         reportActionError = { notifications.reportError(it) },
     )
@@ -157,7 +158,7 @@ class AppState(
     var exitApp: () -> Unit = {}
     val agents = AgentsState(backend.transcripts, scope, { live }, ::showSessionTerminal)
     private val unsubscribers = mutableListOf<Runnable>()
-    private val gitStates = mutableMapOf<Long, GitState>()
+    private val gitStates = mutableStateMapOf<Long, GitState>()
     private val gitHost = GitHost({ settings.git }, { change -> updateSettings { it.copy(git = change(it.git)) } }, notifications::toast, ::openWorktree, ::forgetWorktree, ::registerWorktree, ::stopWorktreeWork, ::hasRunningWork, ::openDirectory)
     private val projectReload = Refresher(scope) { guarded { projects.load() } }
     private val sessionReload = Refresher(scope) { guarded { loadSessions() } }
@@ -218,6 +219,7 @@ class AppState(
                 delay(TICK_MILLIS)
                 now = Instant.now()
                 if (++ticks % STALE_REFRESH_TICKS == 0) sessionReload.request()
+                if (ticks % UNOPENED_GIT_REFRESH_TICKS == 0) reloadGitOfUnopenedProjects()
             }
         }
     }
@@ -456,6 +458,19 @@ class AppState(
             confirmLabel = "Quit",
             onConfirm = quit,
         )
+    }
+
+    /** Loads git state of projects not seen yet, so the sidebar shows branches before a project is opened. */
+    private fun loadGitOfNewProjects(projectIds: Set<Long>) =
+        loadGitOneByOne(projectIds.filter { it !in gitStates }.mapNotNull(::gitOf))
+
+    /** Local state only (no fetch): the open project has its watcher, the others would otherwise go stale. */
+    private fun reloadGitOfUnopenedProjects() =
+        loadGitOneByOne(gitStates.filterKeys { Route.Project(it) != route }.values.toList())
+
+    /** One project at a time, so many projects do not start dozens of git processes at once. */
+    private fun loadGitOneByOne(states: List<GitState>) {
+        if (states.isNotEmpty()) scope.launch { states.forEach { it.reloadNow() } }
     }
 
     private fun forgetRemovedProjects(projectIds: Set<Long>) {
