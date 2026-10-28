@@ -64,6 +64,9 @@ fun Sidebar(state: AppState, modifier: Modifier = Modifier, forceCollapsed: Bool
             NavItem(Icons.Users, "Teams", state.route == Route.Teams, collapsed, 0) { state.navigate(Route.Teams) }
             ExtensionsGroup(state, collapsed)
             ProjectsSection(state, collapsed, Modifier.weight(1f))
+            Box(Modifier.padding(top = Spacing.sm, bottom = Spacing.lg)) {
+                NavItem(Icons.Settings, "Settings", state.settingsDialog.open, collapsed, 0) { state.settingsDialog.show() }
+            }
         }
         VerticalRule()
     }

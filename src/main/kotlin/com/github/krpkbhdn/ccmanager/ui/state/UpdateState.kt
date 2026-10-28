@@ -3,9 +3,12 @@ package com.github.krpkbhdn.ccmanager.ui.state
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.github.krpkbhdn.ccmanager.update.AvailableUpdate
 import com.github.krpkbhdn.ccmanager.update.UpdateService
 import java.awt.Desktop
 import java.io.IOException
+import java.net.URI
+import java.util.Optional
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,14 +33,45 @@ class UpdateState(
     var dismissed by mutableStateOf(false)
         private set
 
+    var checking by mutableStateOf(false)
+        private set
+
+    /** True after a manual check that found nothing newer; cleared when the next one starts. */
+    var upToDate by mutableStateOf(false)
+        private set
+
+    /** True after a manual check whose request failed; cleared when the next one starts. */
+    var checkFailed by mutableStateOf(false)
+        private set
+
     val canInstall: Boolean get() = updates?.canInstall() == true
+    val enabled: Boolean get() = updates?.enabled() == true
+    val currentVersion: String get() = updates?.currentVersion().orEmpty()
 
     fun start(): Job? {
         val service = updates?.takeIf { it.enabled() } ?: return null
         return scope.launch {
             while (true) {
-                check(service)
+                check(service, service::findUpdate)
                 delay(service.checkInterval().toMillis())
+            }
+        }
+    }
+
+    fun checkNow() {
+        val service = updates?.takeIf { it.enabled() } ?: return
+        if (checking) return
+        checking = true
+        upToDate = false
+        checkFailed = false
+        scope.launch {
+            try {
+                check(service, service::checkForUpdate)
+                upToDate = status == UpdateStatus.None
+            } catch (e: IllegalStateException) {
+                checkFailed = true
+            } finally {
+                checking = false
             }
         }
     }
@@ -79,8 +113,16 @@ class UpdateState(
 
     fun openReleasePage() {
         val update = (status as? UpdateStatus.Available)?.update ?: return
+        browse(update.releasePageUri())
+    }
+
+    fun openReleases() {
+        browse(updates?.releasesUri() ?: return)
+    }
+
+    private fun browse(uri: URI) {
         try {
-            Desktop.getDesktop().browse(update.releasePageUri())
+            Desktop.getDesktop().browse(uri)
         } catch (e: IOException) {
             reportError(UPDATE_FAILED_TITLE, e.message ?: UNKNOWN_ERROR)
         } catch (e: UnsupportedOperationException) {
@@ -88,9 +130,9 @@ class UpdateState(
         }
     }
 
-    private suspend fun check(service: UpdateService) {
+    private suspend fun check(service: UpdateService, find: () -> Optional<AvailableUpdate>) {
         if (status is UpdateStatus.Downloading || status is UpdateStatus.Ready) return
-        val found = withContext(Dispatchers.IO) { service.findUpdate() }.orElse(null) ?: return
+        val found = withContext(Dispatchers.IO) { find() }.orElse(null) ?: return
         if ((status as? UpdateStatus.Available)?.update != found) {
             status = UpdateStatus.Available(found)
             dismissed = false
