@@ -29,7 +29,7 @@ final class McpListParser {
     }
 
     private static String target(String text) {
-        return McpTarget.masked(TRANSPORT_SUFFIX.matcher(text.strip()).replaceFirst(""));
+        return McpTargetRedaction.redact(TRANSPORT_SUFFIX.matcher(text.strip()).replaceFirst(""));
     }
 
     private static McpStatus status(String text) {

@@ -8,6 +8,7 @@ import com.github.krpkbhdn.ccmanager.workspace.HostEnvironment;
 import com.github.krpkbhdn.ccmanager.workspace.TreeDeleter;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -53,6 +54,21 @@ public class SkillService {
             return Files.readString(skill.file());
         } catch (IOException e) {
             throw new ExtensionException("Cannot read " + skill.file() + ": " + e.getMessage());
+        }
+    }
+
+    /** Replaces the SKILL.md of a user or project skill; a SKILL.md or skill folder that is a link is refused. */
+    public void write(Skill skill, String content) {
+        if (skill.readOnly() || !Files.isRegularFile(skill.file(), LinkOption.NOFOLLOW_LINKS)) {
+            throw new ExtensionException("Only an existing user or project skill can be changed (a linked SKILL.md is refused)");
+        }
+        try {
+            if (!isDirectChildOf(skill.directory().getParent(), skill.directory())) {
+                throw new ExtensionException("Refusing to write " + skill.file() + ": its folder is a link to somewhere else");
+            }
+            Files.writeString(skill.file(), content);
+        } catch (IOException e) {
+            throw new ExtensionException("Cannot write " + skill.file() + ": " + e.getMessage());
         }
     }
 

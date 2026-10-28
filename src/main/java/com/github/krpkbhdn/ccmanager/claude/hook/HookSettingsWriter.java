@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.claude.hook;
 
+import com.github.krpkbhdn.ccmanager.app.mcp.AssistantMcpEndpoint;
 import com.github.krpkbhdn.ccmanager.config.AppProperties;
 import com.github.krpkbhdn.ccmanager.workspace.TreeDeleter;
 import jakarta.annotation.PostConstruct;
@@ -11,10 +12,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -84,6 +87,20 @@ public class HookSettingsWriter {
     }
 
     public SessionFiles write(String ccmSessionId) {
+        return write(ccmSessionId, Map.of());
+    }
+
+    /** [extraServers] join the MCP config; the app's own server name stays reserved. */
+    public SessionFiles write(String ccmSessionId, Map<String, JsonNode> extraServers) {
+        return write(ccmSessionId, mcpConfig(MCP_SERVER, server.mcpUrl(ccmSessionId), extraServers));
+    }
+
+    /** The Assistant session gets only the app server in its mcp file; the project server and the project-session secret stay out of it. */
+    public SessionFiles writeAssistant(String ccmSessionId) {
+        return write(ccmSessionId, mcpConfig(AssistantMcpEndpoint.SERVER_NAME, server.assistantMcpUrl(), Map.of()));
+    }
+
+    private SessionFiles write(String ccmSessionId, ObjectNode mcpConfig) {
         var file = fileOf(ccmSessionId);
         var mcpFile = mcpFileOf(ccmSessionId);
         try {
@@ -94,7 +111,7 @@ public class HookSettingsWriter {
             }
             Files.writeString(file, mapper.writeValueAsString(settings(ccmSessionId)));
             restrictToOwner(file, "rw-------");
-            Files.writeString(mcpFile, mapper.writeValueAsString(mcpConfig(ccmSessionId)));
+            Files.writeString(mcpFile, mapper.writeValueAsString(mcpConfig));
             restrictToOwner(mcpFile, "rw-------");
         } catch (IOException e) {
             throw new UncheckedIOException("Cannot write hook settings " + file, e);
@@ -140,9 +157,11 @@ public class HookSettingsWriter {
     }
 
     /** Only the read-only list tool is pre-approved; set and delete change a command the user later runs, so Claude asks first. */
-    private ObjectNode mcpConfig(String ccmSessionId) {
+    private ObjectNode mcpConfig(String serverName, String url, Map<String, JsonNode> extraServers) {
         var config = mapper.createObjectNode();
-        config.putObject("mcpServers").putObject(MCP_SERVER).put("type", "http").put("url", server.mcpUrl(ccmSessionId));
+        var servers = config.putObject("mcpServers");
+        servers.putObject(serverName).put("type", "http").put("url", url);
+        extraServers.forEach((name, definition) -> servers.putIfAbsent(name, definition.deepCopy()));
         return config;
     }
 

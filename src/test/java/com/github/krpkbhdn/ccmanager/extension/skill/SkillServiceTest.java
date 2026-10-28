@@ -107,6 +107,22 @@ class SkillServiceTest {
     }
 
     @Test
+    void writeRefusesALinkedSkillFile() throws IOException {
+        var service = service();
+        var created = service.create(ExtensionScope.USER, null, "linked-file", "d");
+        var outside = Files.writeString(project.resolve("outside.md"), "keep");
+        Files.delete(created.file());
+        try {
+            Files.createSymbolicLink(created.file(), outside);
+        } catch (IOException | UnsupportedOperationException | SecurityException e) {
+            Assumptions.abort("cannot create links here");
+        }
+
+        assertThatThrownBy(() -> service.write(created, "overwritten")).isInstanceOf(ExtensionException.class);
+        assertThat(outside).hasContent("keep");
+    }
+
+    @Test
     void deleteRemovesTheWholeDirectoryButNeverAPluginSkill() throws IOException {
         var service = service();
         var created = service.create(ExtensionScope.USER, null, "doomed", "d");
@@ -119,6 +135,20 @@ class SkillServiceTest {
         assertThatThrownBy(() -> service.delete(pluginSkill)).isInstanceOf(ExtensionException.class);
         var stray = new Skill("s", "d", ExtensionScope.USER, "", project.resolve("elsewhere/SKILL.md"));
         assertThatThrownBy(() -> service.delete(stray)).isInstanceOf(ExtensionException.class);
+    }
+
+    @Test
+    void writeReplacesTheContentButNeverOfAPluginOrMissingSkill() {
+        var service = service();
+        var created = service.create(ExtensionScope.USER, null, "mine", "d");
+
+        service.write(created, "new text");
+
+        assertThat(service.read(created)).isEqualTo("new text");
+        var pluginSkill = new Skill("s", "d", ExtensionScope.USER, "p@m", created.file());
+        assertThatThrownBy(() -> service.write(pluginSkill, "x")).isInstanceOf(ExtensionException.class);
+        var missing = new Skill("m", "d", ExtensionScope.USER, "", project.resolve("none/SKILL.md"));
+        assertThatThrownBy(() -> service.write(missing, "x")).isInstanceOf(ExtensionException.class);
     }
 
     @Test

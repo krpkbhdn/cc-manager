@@ -3,6 +3,7 @@ package com.github.krpkbhdn.ccmanager.extension.mcp;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.krpkbhdn.ccmanager.extension.ExtensionScope;
+import com.github.krpkbhdn.ccmanager.git.GitRunner;
 import com.github.krpkbhdn.ccmanager.workspace.FakeHostEnvironment;
 import com.github.krpkbhdn.ccmanager.workspace.HostEnvironment;
 import java.io.IOException;
@@ -20,7 +21,7 @@ class McpConfigReaderTest {
     Path project;
 
     private McpConfigReader reader(HostEnvironment.OperatingSystem os) {
-        return new McpConfigReader(new FakeHostEnvironment(os, home));
+        return new McpConfigReader(new FakeHostEnvironment(os, home), new GitRunner());
     }
 
     @Test
@@ -38,10 +39,10 @@ class McpConfigReaderTest {
         var servers = reader(HostEnvironment.OperatingSystem.WINDOWS).read(project);
 
         assertThat(servers).containsExactly(
-                new McpServerConfig("u", ExtensionScope.USER, "http", "https://u", McpApproval.NOT_REQUIRED),
+                new McpServerConfig("u", ExtensionScope.USER, "http", "https://u/…", McpApproval.NOT_REQUIRED),
                 new McpServerConfig("l", ExtensionScope.LOCAL, "stdio", "npx", McpApproval.NOT_REQUIRED),
                 new McpServerConfig("ok", ExtensionScope.PROJECT, "stdio", "a", McpApproval.APPROVED),
-                new McpServerConfig("off", ExtensionScope.PROJECT, "stdio", "https://b", McpApproval.DISABLED),
+                new McpServerConfig("off", ExtensionScope.PROJECT, "stdio", "https://b/…", McpApproval.DISABLED),
                 new McpServerConfig("new", ExtensionScope.PROJECT, "stdio", "c", McpApproval.PENDING));
         assertThat(servers.toString()).doesNotContain("secret");
     }
@@ -70,12 +71,12 @@ class McpConfigReaderTest {
     }
 
     @Test
-    void urlTargetsHideQueryValuesAndCredentials() throws IOException {
+    void urlTargetsHideCredentialsQueryAndPath() throws IOException {
         Files.writeString(home.resolve(".claude.json"), """
                 {"mcpServers":{"u":{"type":"http","url":"https://user:pw@host/mcp?api_key=SECRET&mode=a#f"}}}""");
 
         assertThat(reader(HostEnvironment.OperatingSystem.LINUX).read(null)).extracting(McpServerConfig::target)
-                .containsExactly("https://***@host/mcp?api_key=***&mode=***#f");
+                .containsExactly("https://host/…");
     }
 
     @Test
@@ -95,7 +96,7 @@ class McpConfigReaderTest {
         Files.writeString(project.resolve(".claude.json"), "{\"mcpServers\":{\"custom\":{\"command\":\"x\"}}}");
         var host = new FakeHostEnvironment(HostEnvironment.OperatingSystem.LINUX, home).withEnv("CLAUDE_CONFIG_DIR", project.toString());
 
-        assertThat(new McpConfigReader(host).read(null)).extracting(McpServerConfig::name).containsExactly("custom");
+        assertThat(new McpConfigReader(host, new GitRunner()).read(null)).extracting(McpServerConfig::name).containsExactly("custom");
     }
 
     @Test

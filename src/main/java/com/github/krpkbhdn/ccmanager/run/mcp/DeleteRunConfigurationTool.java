@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.run.mcp;
 
 import com.github.krpkbhdn.ccmanager.claude.mcp.McpTool;
+import com.github.krpkbhdn.ccmanager.claude.mcp.McpToolDescriptor;
 import com.github.krpkbhdn.ccmanager.run.RunConfigurationService;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
@@ -31,7 +32,7 @@ class DeleteRunConfigurationTool implements McpTool {
 
     @Override
     public String call(long projectId, JsonNode arguments) {
-        var name = McpTool.requiredText(arguments, "name");
+        var name = McpToolDescriptor.requiredText(arguments, "name");
         return configurations.delete(projectId, name) ? "Run configuration '" + name + "' deleted." : "No run configuration named '" + name + "' existed.";
     }
 }

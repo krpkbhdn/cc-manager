@@ -51,6 +51,12 @@ class SessionCommandWriterTest {
     }
 
     @Test
+    fun nothingIsTypedWhenADraftAppearsBeforeTheWrite() = runBlocking {
+        assertThat(writer.run("s1", "queued", clearDraft = false) { true }).isFalse()
+        assertThat(events).isEmpty()
+    }
+
+    @Test
     fun nothingIsTypedRightAfterTheUserPressedEnter() = runBlocking {
         val recentEnter = object : TerminalPort by terminal {
             override fun enterWithin(ccmSessionId: String, windowMillis: Long) = true

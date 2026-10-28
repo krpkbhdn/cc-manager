@@ -23,6 +23,10 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
             AppShortcut.TOGGLE_QUICK_ACTIONS -> handled(state::toggleQuickBar)
             AppShortcut.TOGGLE_THEME -> handled { state.toggleTheme(systemDark()) }
             AppShortcut.OVERVIEW -> handled { state.navigate(Route.Overview) }
+            AppShortcut.ALL_SESSIONS -> handled { state.navigate(Route.Sessions) }
+            AppShortcut.ASSISTANT -> handled { state.navigate(Route.Assistant) }
+            AppShortcut.QUICK_REQUEST -> handled { state.quickRequestOpen = true }
+            AppShortcut.NEXT_WAITING -> state.answerNextWaiting()
             AppShortcut.NOTIFICATIONS -> handled { state.notificationsOpen = !state.notificationsOpen }
             AppShortcut.USAGE -> handled { state.usageOpen = !state.usageOpen }
             AppShortcut.SHORTCUT_SHEET -> handled { state.shortcutsOpen = !state.shortcutsOpen }
@@ -32,6 +36,7 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
 
     private fun performInProject(shortcut: AppShortcut): Boolean {
         val project = currentProject() ?: return false
+        if (project.group && shortcut in PROJECT_ONLY) return false
         val view = state.viewOf(project.id)
         val session = (view.selected as? ProjectTab.Session)?.ccmSessionId
         return when (shortcut) {
@@ -60,9 +65,17 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
     }
 
     private fun openProject(slot: Int): Boolean {
-        val project = state.projects.all.getOrNull(slot - 1) ?: return false
+        val project = sidebarOrder().getOrNull(slot - 1) ?: return false
         state.navigate(Route.Project(project.id))
         return true
+    }
+
+    internal fun sidebarOrder(): List<Project> {
+        val projects = state.projects
+        val railShowsAll = state.settings.sidebarCollapsed
+        return projects.groups.flatMap { group ->
+            if (railShowsAll || group.id !in projects.foldedGroups) listOf(group) + projects.membersOf(group.id) else listOf(group)
+        } + projects.ungrouped
     }
 
     private fun closeOverlay(): Boolean {
@@ -73,8 +86,8 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
 
     private fun currentProject(): Project? = (state.route as? Route.Project)?.let { route -> state.projects.all.firstOrNull { it.id == route.id } }
 
-    private fun modalOpen() = state.proposalDialog != null || state.confirm != null || state.projects.renaming != null || state.projects.pickerOpen || state.projectSettings != null ||
-        state.taskDialogProjectId != null || state.runs.dialog != null || state.teams.dialog != null || state.agents.log != null || state.plugins.pending != null || state.mcp.adding || state.skills.creating || state.author.offer != null || state.author.manage != null || state.author.report != null ||
+    private fun modalOpen() = state.proposalDialog != null || state.quickRequestOpen || state.assistantHelpOpen || state.assistantStartup.asking || state.confirm != null || state.projects.renaming != null || state.projects.groupDialog != null || state.projects.pickerOpen || state.projectSettings != null ||
+        state.taskDialogProjectId != null || state.quickStartProjectId != null || state.queuePickTarget != null ||state.runs.dialog != null || state.teams.dialog != null || state.agents.log != null || state.plugins.pending != null || state.mcp.adding || state.skills.creating || state.author.offer != null || state.author.manage != null || state.author.report != null ||
         currentProject()?.let { state.gitOf(it.id)?.dialog } != null
 
     private fun handled(action: () -> Unit): Boolean {
@@ -82,3 +95,8 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
         return true
     }
 }
+
+private val PROJECT_ONLY = setOf(
+    AppShortcut.OPEN_TERMINAL, AppShortcut.GIT_TAB, AppShortcut.GIT_CHANGES, AppShortcut.GIT_COMMIT,
+    AppShortcut.GIT_BRANCHES, AppShortcut.GIT_PUSH, AppShortcut.RUN, AppShortcut.PROJECT_SETTINGS,
+)

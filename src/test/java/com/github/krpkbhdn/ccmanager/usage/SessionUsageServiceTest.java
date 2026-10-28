@@ -16,7 +16,7 @@ class SessionUsageServiceTest {
 
     @Test
     void forgetsUsageOfEndedSessions() {
-        var registry = new SessionRegistry(new SessionProperties(Duration.ofMinutes(1)), mock(TranscriptService.class));
+        var registry = new SessionRegistry(new SessionProperties(Duration.ofMinutes(1), Duration.ofMinutes(10)), mock(TranscriptService.class));
         var service = new SessionUsageService(registry);
         var id = registry.register(1L);
         service.on(new StatusLineReport(id, JsonMapper.builder().build().createObjectNode(), Instant.now()));

@@ -24,9 +24,9 @@ class McpListParserTest {
                 .containsExactly("claude.ai Claude Docs", "claude.ai Canva", "plugin:context7:context7", "local", "slow");
         assertThat(servers).extracting(McpHealth::status).containsExactly(McpStatus.CONNECTED,
                 McpStatus.NEEDS_AUTHENTICATION, McpStatus.NEEDS_AUTHENTICATION, McpStatus.FAILED, McpStatus.PENDING);
-        assertThat(servers.get(3).target()).isEqualTo("npx -y server --flag");
+        assertThat(servers.get(3).target()).isEqualTo("npx");
         assertThat(servers.get(2).fromPlugin()).isTrue();
-        assertThat(servers.get(2).target()).isEqualTo("https://mcp.context7.com/mcp?x=***");
+        assertThat(servers.get(2).target()).isEqualTo("https://mcp.context7.com/…");
         assertThat(servers.get(0).statusText()).isEqualTo("Connected");
     }
 

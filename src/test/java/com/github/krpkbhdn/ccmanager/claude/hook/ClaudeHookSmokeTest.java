@@ -37,7 +37,7 @@ class ClaudeHookSmokeTest {
         var events = new CopyOnWriteArrayList<HookEvent>();
         var server = new HookServer(mock(HookEventStore.class), event -> events.add((HookEvent) event), mapper,
                 new HookProperties(100, 1_048_576, 500, java.time.Duration.ofSeconds(1)),
-                mock(com.github.krpkbhdn.ccmanager.claude.mcp.McpEndpoint.class),
+                mock(com.github.krpkbhdn.ccmanager.claude.mcp.McpEndpoint.class), mock(com.github.krpkbhdn.ccmanager.app.mcp.AssistantMcpEndpoint.class),
                 mock(com.github.krpkbhdn.ccmanager.claude.proposal.ProposalService.class));
         server.start();
         try {

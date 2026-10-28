@@ -16,6 +16,8 @@ import com.github.krpkbhdn.ccmanager.git.GitStatus
 import com.github.krpkbhdn.ccmanager.git.GitStatusService
 import com.github.krpkbhdn.ccmanager.git.GitSyncService
 import com.github.krpkbhdn.ccmanager.git.GitWatcher
+import com.github.krpkbhdn.ccmanager.git.GitWorktreeService
+import com.github.krpkbhdn.ccmanager.git.Worktree
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitBackend
 import com.github.krpkbhdn.ccmanager.workspace.GitDiff
 import java.nio.file.Path
@@ -47,6 +49,7 @@ class FakeRepoData(
     @Volatile var topLevelFailure: GitException? = null
     val watchedPaths: MutableList<Path> = java.util.Collections.synchronizedList(mutableListOf())
     val statusRepos: MutableList<Path> = java.util.Collections.synchronizedList(mutableListOf())
+    val notRepositories: MutableSet<Path> = java.util.Collections.synchronizedSet(mutableSetOf())
     val calls: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
     val logContinuations: MutableList<GraphState?> = java.util.Collections.synchronizedList(mutableListOf())
     val patches: MutableList<Pair<String, Boolean>> = java.util.Collections.synchronizedList(mutableListOf())
@@ -71,7 +74,11 @@ class FakeRepoData(
 
 /** A complete fake [GitBackend] over [data]; every service reads and mutates the same in-memory repository. */
 class FakeGit(val data: FakeRepoData) {
-    val backend = GitBackend(status(), index(), branches(), sync(), log(), stashes(), history(), conflicts(), watcher())
+    val backend = GitBackend(status(), index(), branches(), sync(), log(), stashes(), history(), conflicts(), worktrees(), watcher())
+
+    private fun worktrees() = object : GitWorktreeService(GitRunner()) {
+        override fun list(repo: Path) = emptyList<Worktree>()
+    }
 
     private fun status() = object : GitStatusService(GitRunner()) {
         override fun topLevel(folder: Path): Path {
@@ -80,7 +87,7 @@ class FakeGit(val data: FakeRepoData) {
         }
         override fun status(repo: Path): GitStatus {
             data.statusRepos.add(repo)
-            return data.status()
+            return if (repo in data.notRepositories) GitStatus.notARepository() else data.status()
         }
         override fun diff(repo: Path, path: String, staged: Boolean): GitDiff.FileDiff =
             (if (staged) data.stagedDiffs[path] else data.unstagedDiffs[path] ?: data.stagedDiffs[path])

@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.claude.hook;
 
+import com.github.krpkbhdn.ccmanager.app.mcp.AssistantMcpEndpoint;
 import com.github.krpkbhdn.ccmanager.claude.mcp.McpEndpoint;
 import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalService;
 import com.sun.net.httpserver.HttpExchange;
@@ -13,6 +14,7 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -37,6 +39,7 @@ public class HookServer implements SmartLifecycle {
     private static final String CONTEXT_PATH = "/hook/";
     private static final String STATUS_LINE_CONTEXT_PATH = "/statusline/";
     private static final String MCP_CONTEXT_PATH = "/mcp/";
+    private static final String ASSISTANT_MCP_CONTEXT_PATH = "/assistant-mcp/";
     private static final int SECRET_BYTES = 32;
     private static final int OK = 200;
     private static final int ACCEPTED = 202;
@@ -51,18 +54,21 @@ public class HookServer implements SmartLifecycle {
     private final JsonMapper mapper;
     private final HookProperties properties;
     private final McpEndpoint mcp;
+    private final AssistantMcpEndpoint assistantMcp;
     private final ProposalService proposals;
     private final byte[] secret = secret();
+    private final byte[] assistantSecret = secret();
     private final ExecutorService worker = Executors.newSingleThreadExecutor(Thread.ofPlatform().name("hook-worker").daemon().factory());
     private HttpServer server;
 
     public HookServer(HookEventStore store, ApplicationEventPublisher publisher, JsonMapper mapper, HookProperties properties,
-            McpEndpoint mcp, ProposalService proposals) {
+            McpEndpoint mcp, AssistantMcpEndpoint assistantMcp, ProposalService proposals) {
         this.store = store;
         this.publisher = publisher;
         this.mapper = mapper;
         this.properties = properties;
         this.mcp = mcp;
+        this.assistantMcp = assistantMcp;
         this.proposals = proposals;
     }
 
@@ -81,6 +87,11 @@ public class HookServer implements SmartLifecycle {
     /** URL of the MCP server a session talks to; same secret, own path because it answers instead of just accepting. */
     public String mcpUrl(String ccmSessionId) {
         return hookUrl(ccmSessionId).replace(CONTEXT_PATH, MCP_CONTEXT_PATH);
+    }
+
+    /** URL of the app MCP server of the Assistant session; its own secret, never written into project session files. */
+    public String assistantMcpUrl() {
+        return "http://127.0.0.1:" + port() + ASSISTANT_MCP_CONTEXT_PATH + new String(assistantSecret, StandardCharsets.US_ASCII);
     }
 
     /** URL a session's statusLine command posts to; same secret, own path because the payload is no hook event. */
@@ -102,7 +113,8 @@ public class HookServer implements SmartLifecycle {
                 (ex, id, body) -> respondToHook(ex, id, body, this::acceptHook)));
         server.createContext(STATUS_LINE_CONTEXT_PATH, exchange -> serve(exchange, STATUS_LINE_CONTEXT_PATH,
                 (ex, id, body) -> respondToHook(ex, id, body, this::acceptStatusLine)));
-        server.createContext(MCP_CONTEXT_PATH, exchange -> serve(exchange, MCP_CONTEXT_PATH, this::respondToMcp));
+        server.createContext(MCP_CONTEXT_PATH, exchange -> serve(exchange, MCP_CONTEXT_PATH, (ex, id, body) -> respondToMcp(ex, bytes -> mcp.handle(id, bytes), body)));
+        server.createContext(ASSISTANT_MCP_CONTEXT_PATH, this::serveAssistantMcp);
         server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
         server.start();
         log.info("Hook server listening on 127.0.0.1:{}", server.getAddress().getPort());
@@ -138,6 +150,19 @@ public class HookServer implements SmartLifecycle {
         }
     }
 
+    private void serveAssistantMcp(HttpExchange exchange) throws IOException {
+        try (exchange) {
+            var candidate = exchange.getRequestURI().getPath().substring(ASSISTANT_MCP_CONTEXT_PATH.length());
+            if (!MessageDigest.isEqual(candidate.getBytes(StandardCharsets.UTF_8), assistantSecret)) {
+                exchange.sendResponseHeaders(NOT_FOUND, NO_RESPONSE_BODY);
+            } else if (!"POST".equals(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(METHOD_NOT_ALLOWED, NO_RESPONSE_BODY);
+            } else {
+                respondToMcp(exchange, assistantMcp::handle, exchange.getRequestBody().readNBytes(properties.maxBodyBytes() + 1));
+            }
+        }
+    }
+
     /** Answers at once with an empty 200, except calls that ask for a decision: those wait for the user (see holdForDecision). */
     private void respondToHook(HttpExchange exchange, String ccmSessionId, byte[] body, BodyConsumer consumer) throws IOException {
         var receivedAt = Instant.now();
@@ -150,12 +175,12 @@ public class HookServer implements SmartLifecycle {
         payload.ifPresent(parsed -> worker.execute(() -> consume(ccmSessionId, parsed, receivedAt, consumer)));
     }
 
-    private void respondToMcp(HttpExchange exchange, String ccmSessionId, byte[] body) throws IOException {
+    private void respondToMcp(HttpExchange exchange, Function<byte[], Optional<String>> handler, byte[] body) throws IOException {
         if (body.length > properties.maxBodyBytes()) {
             exchange.sendResponseHeaders(PAYLOAD_TOO_LARGE, NO_RESPONSE_BODY);
             return;
         }
-        var json = mcp.handle(ccmSessionId, body);
+        var json = handler.apply(body);
         if (json.isEmpty()) {
             exchange.sendResponseHeaders(ACCEPTED, NO_RESPONSE_BODY);
             return;

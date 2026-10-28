@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /** Pure builders for the claude command line and the child environment. */
 public final class ClaudeCommand {
@@ -17,8 +18,16 @@ public final class ClaudeCommand {
     static final String ENV_TERM = "TERM";
     static final String ENV_COLORTERM = "COLORTERM";
     static final String ENV_SESSION = "CCM_SESSION";
+    static final String ENV_ADDITIONAL_DIRECTORIES_CLAUDE_MD = "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD";
+    private static final String SETTINGS_FLAG = "--settings";
+    private static final String ENABLED = "1";
     static final String TERM_VALUE = "xterm-256color";
     static final String COLORTERM_VALUE = "truecolor";
+    static final String ASSISTANT_SYSTEM_PROMPT = "You control Claude Code Manager through the cc-manager-app MCP tools. "
+            + "Resolve project names with list_projects, act directly and report briefly. "
+            + "Destructive actions are confirmed by the user. "
+            + "For questions about Claude Code Manager itself, call get_help and answer from it.";
+    private static final String ASSISTANT_TOOL_PREFIX = "mcp__cc-manager-app__";
     /** Would turn off Claude colors or make it think it runs inside another agent (which also switches off transcripts, so no --resume) or terminal host. */
     private static final List<String> INHERITED_ENV_TO_DROP = List.of(
             "NO_COLOR", "FORCE_COLOR", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_CHILD_SESSION",
@@ -72,6 +81,20 @@ public final class ClaudeCommand {
         return command;
     }
 
+    /** The assistant session: the cc-manager-app MCP config (no plugin, there is no project) and a pre-allowed tool list; each variadic flag is followed by another flag. */
+    static List<String> assistantArguments(Path executable, SessionFiles files, ModelSelection selection,
+            List<String> allowedTools) {
+        List<String> command = base(executable, files);
+        command.addAll(selection.arguments());
+        command.addAll(List.of("--mcp-config", files.mcpConfig().toAbsolutePath().toString(),
+                "--allowedTools", allowedToolsArgument(allowedTools), "--append-system-prompt", ASSISTANT_SYSTEM_PROMPT));
+        return command;
+    }
+
+    private static String allowedToolsArgument(List<String> toolNames) {
+        return toolNames.stream().map(name -> ASSISTANT_TOOL_PREFIX + name).collect(Collectors.joining(","));
+    }
+
     static List<String> attachArguments(Path executable, SessionFiles files, String backgroundSessionId) {
         List<String> command = base(executable, files);
         command.add("attach");
@@ -83,6 +106,20 @@ public final class ClaudeCommand {
         Map<String, String> env = terminalEnvironment(parent);
         env.put(ENV_SESSION, ccmSessionId);
         return env;
+    }
+
+    /** A group session also loads the CLAUDE.md of its --add-dir members. */
+    static Map<String, String> groupEnvironment(Map<String, String> parent, String ccmSessionId) {
+        Map<String, String> env = environment(parent, ccmSessionId);
+        env.put(ENV_ADDITIONAL_DIRECTORIES_CLAUDE_MD, ENABLED);
+        return env;
+    }
+
+    /** Inserted right after "--settings <file>" so it works for every launch kind; --add-dir is variadic, so each directory repeats the flag. */
+    static void addDirectories(List<String> command, List<Path> directories) {
+        List<String> flags = new ArrayList<>();
+        directories.forEach(directory -> flags.addAll(List.of("--add-dir", directory.toAbsolutePath().toString())));
+        command.addAll(command.indexOf(SETTINGS_FLAG) + 2, flags);
     }
 
     /** The parent environment without Claude-specific variables and with a color terminal. */
@@ -134,7 +171,7 @@ public final class ClaudeCommand {
     private static List<String> base(Path executable, SessionFiles files) {
         List<String> command = new ArrayList<>();
         command.add(executable.toAbsolutePath().toString());
-        command.add("--settings");
+        command.add(SETTINGS_FLAG);
         command.add(files.settings().toAbsolutePath().toString());
         return command;
     }

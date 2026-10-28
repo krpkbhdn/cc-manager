@@ -1,5 +1,8 @@
 package com.github.krpkbhdn.ccmanager.ui.state
 
+import java.time.Duration
+import com.github.krpkbhdn.ccmanager.app.AppControlProperties
+import com.github.krpkbhdn.ccmanager.app.AppControlRegistry
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.github.krpkbhdn.ccmanager.author.AuthorProfileService
@@ -8,13 +11,17 @@ import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService
 import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgentService
 import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
+import com.github.krpkbhdn.ccmanager.app.mcp.AssistantMcpTool
 import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalService
+import com.github.krpkbhdn.ccmanager.claude.session.SessionProperties
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry
 import com.github.krpkbhdn.ccmanager.config.AppProperties
 import com.github.krpkbhdn.ccmanager.claude.session.TranscriptService
 import com.github.krpkbhdn.ccmanager.notification.NotificationService
 import com.github.krpkbhdn.ccmanager.notification.NotificationSoundService
+import com.github.krpkbhdn.ccmanager.project.ProjectGroupService
 import com.github.krpkbhdn.ccmanager.project.ProjectService
+import com.github.krpkbhdn.ccmanager.prompt.PromptTemplateService
 import com.github.krpkbhdn.ccmanager.run.RunConfigurationService
 import com.github.krpkbhdn.ccmanager.run.RunService
 import com.github.krpkbhdn.ccmanager.extension.mcp.McpService
@@ -52,6 +59,12 @@ interface TerminalPort {
     /** True when the user pressed Enter less than [windowMillis] ago, before the hook marks the session WORKING. */
     fun enterWithin(ccmSessionId: String, windowMillis: Long): Boolean = false
 
+    /** True while the user may have an unsent draft: typed or pasted since the last Enter, Ctrl+C or Esc. */
+    fun draftMayExist(ccmSessionId: String): Boolean = false
+
+    /** The text currently on the session's terminal screen; empty without a terminal. */
+    fun screenText(ccmSessionId: String): String = ""
+
     @Composable
     fun View(ccmSessionId: String, modifier: Modifier)
 }
@@ -64,6 +77,8 @@ object HostTerminalPort : TerminalPort {
     override fun focus(ccmSessionId: String) = TerminalHost.focus(ccmSessionId)
     override fun ctrlCWithin(ccmSessionId: String, windowMillis: Long) = TerminalHost.ctrlCWithin(ccmSessionId, windowMillis)
     override fun enterWithin(ccmSessionId: String, windowMillis: Long) = TerminalHost.enterWithin(ccmSessionId, windowMillis)
+    override fun draftMayExist(ccmSessionId: String) = TerminalHost.draftMayExist(ccmSessionId)
+    override fun screenText(ccmSessionId: String) = TerminalHost.sessionOf(ccmSessionId)?.screenText().orEmpty()
 
     @Composable
     override fun View(ccmSessionId: String, modifier: Modifier) = TerminalView(ccmSessionId, modifier, dark = colors.dark, background = colors.terminal)
@@ -72,6 +87,7 @@ object HostTerminalPort : TerminalPort {
 /** Every backend collaborator the UI talks to. */
 class Backend(
     val projects: ProjectService,
+    val groups: ProjectGroupService,
     val installation: ClaudeInstallationService,
     val sessions: SessionRegistry,
     val notifications: NotificationService,
@@ -94,14 +110,20 @@ class Backend(
     val shellLauncher: ShellLauncher,
     val author: AuthorProfileService,
     val proposals: ProposalService,
+    val promptTemplates: PromptTemplateService,
     val terminal: TerminalPort = HostTerminalPort,
     val updates: UpdateService? = null,
     val sound: NotificationSoundService? = null,
     val dataDir: Path = Path.of(System.getProperty("user.home"), ".cc-manager"),
+    val sessionProperties: SessionProperties,
+    val appControl: AppControlRegistry? = null,
+    val appControlProperties: AppControlProperties = AppControlProperties(Duration.ofSeconds(10)),
+    val assistantTools: List<AssistantMcpTool> = emptyList(),
 ) {
     companion object {
         fun from(context: ConfigurableApplicationContext) = Backend(
             projects = context.getBean(ProjectService::class.java),
+            groups = context.getBean(ProjectGroupService::class.java),
             installation = context.getBean(ClaudeInstallationService::class.java),
             sessions = context.getBean(SessionRegistry::class.java),
             notifications = context.getBean(NotificationService::class.java),
@@ -124,9 +146,14 @@ class Backend(
             shellLauncher = context.getBean(ShellLauncher::class.java),
             author = context.getBean(AuthorProfileService::class.java),
             proposals = context.getBean(ProposalService::class.java),
+            promptTemplates = context.getBean(PromptTemplateService::class.java),
             updates = context.getBean(UpdateService::class.java),
             sound = context.getBean(NotificationSoundService::class.java),
             dataDir = context.getBean(AppProperties::class.java).dataDir(),
+            sessionProperties = context.getBean(SessionProperties::class.java),
+            appControl = context.getBean(AppControlRegistry::class.java),
+            appControlProperties = context.getBean(AppControlProperties::class.java),
+            assistantTools = context.getBeansOfType(AssistantMcpTool::class.java).values.toList(),
         )
     }
 }

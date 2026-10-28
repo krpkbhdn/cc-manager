@@ -26,17 +26,18 @@ import com.github.krpkbhdn.ccmanager.ui.theme.colors
 private val segmentHeight = 28.dp
 private val chevronWidth = 24.dp
 
-/** Compact secondary button with a chevron segment opening [menu]; [label] may be null for an icon-only main segment. */
+/** Compact secondary button with a chevron segment opening [menu], or runs [onChevron] instead when given; [label] may be null for an icon-only main segment. */
 @Composable
 fun SplitActionButton(
     label: String?,
     icon: ImageVector,
     onClick: () -> Unit,
-    menu: List<MenuEntry>,
+    menu: List<MenuEntry> = emptyList(),
     modifier: Modifier = Modifier,
     loading: Boolean = false,
     enabled: Boolean = true,
     tooltip: String? = null,
+    onChevron: (() -> Unit)? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val left = RoundedCornerShape(topStart = Radius.md, bottomStart = Radius.md)
@@ -54,7 +55,7 @@ fun SplitActionButton(
         Box(Modifier.width(1.dp).height(segmentHeight).background(colors.borderStrong))
         Box {
             Pressable(
-                { expanded = true },
+                { onChevron?.invoke() ?: run { expanded = true } },
                 Modifier.height(segmentHeight).width(chevronWidth).border(1.dp, colors.borderStrong, right),
                 right,
                 base = colors.surfaceRaised,

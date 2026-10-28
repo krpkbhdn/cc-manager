@@ -56,7 +56,7 @@ fun TerminalView(
     background: Color? = null,
     foreground: Color? = null,
 ) {
-    val session = remember(ccmSessionId) { TerminalHost.sessionOf(ccmSessionId) } ?: return
+    val session = TerminalHost.sessionOf(ccmSessionId) ?: return
     TerminalSessionView(session, modifier, TerminalTheme(dark, background, foreground))
 }
 

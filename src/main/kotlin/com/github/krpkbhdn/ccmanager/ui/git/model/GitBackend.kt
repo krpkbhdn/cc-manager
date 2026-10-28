@@ -9,6 +9,7 @@ import com.github.krpkbhdn.ccmanager.git.GitStashService
 import com.github.krpkbhdn.ccmanager.git.GitStatusService
 import com.github.krpkbhdn.ccmanager.git.GitSyncService
 import com.github.krpkbhdn.ccmanager.git.GitWatcher
+import com.github.krpkbhdn.ccmanager.git.GitWorktreeService
 import org.springframework.context.ConfigurableApplicationContext
 
 /** Every git service the Git tab talks to; all calls block, so callers stay off the UI thread. */
@@ -21,6 +22,7 @@ class GitBackend(
     val stashes: GitStashService,
     val history: GitHistoryService,
     val conflicts: GitConflictService,
+    val worktrees: GitWorktreeService,
     val watcher: GitWatcher,
 ) {
     companion object {
@@ -33,6 +35,7 @@ class GitBackend(
             stashes = context.getBean(GitStashService::class.java),
             history = context.getBean(GitHistoryService::class.java),
             conflicts = context.getBean(GitConflictService::class.java),
+            worktrees = context.getBean(GitWorktreeService::class.java),
             watcher = context.getBean(GitWatcher::class.java),
         )
     }

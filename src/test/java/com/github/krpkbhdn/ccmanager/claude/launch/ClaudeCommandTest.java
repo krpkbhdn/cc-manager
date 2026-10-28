@@ -37,6 +37,39 @@ class ClaudeCommandTest {
     }
 
     @Test
+    void addDirectoriesGoRightAfterTheSettingsFileForNewContinueAndTask() {
+        var a = Path.of("a").toAbsolutePath();
+        var b = Path.of("b").toAbsolutePath();
+        var expectedHead = List.of(EXE.toString(), "--settings", SETTINGS.toString(), "--add-dir", a.toString(), "--add-dir", b.toString(), "--mcp-config");
+        var commands = List.of(
+                ClaudeCommand.launchArguments(EXE, FILES, PLUGIN, LaunchMode.NEW, ModelSelection.DEFAULT),
+                ClaudeCommand.launchArguments(EXE, FILES, PLUGIN, LaunchMode.CONTINUE, ModelSelection.DEFAULT),
+                ClaudeCommand.taskArguments(EXE, FILES, PLUGIN, ModelSelection.DEFAULT, "t"));
+
+        for (var arguments : commands) {
+            var command = new java.util.ArrayList<>(arguments);
+            ClaudeCommand.addDirectories(command, List.of(a, b));
+            assertThat(command.subList(0, expectedHead.size())).isEqualTo(expectedHead);
+            assertThat(command).containsSubsequence(arguments);
+        }
+    }
+
+    @Test
+    void groupEnvironmentLoadsTheClaudeMdOfAddedDirectories() {
+        assertThat(ClaudeCommand.groupEnvironment(Map.of(), "ccm-1")).containsEntry("CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD", "1")
+                .containsEntry("CCM_SESSION", "ccm-1");
+        assertThat(ClaudeCommand.environment(Map.of(), "ccm-1")).doesNotContainKey("CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD");
+    }
+
+    @Test
+    void assistantHasMcpConfigAndAllowedToolsBeforeSystemPromptButNoPlugin() {
+        assertThat(ClaudeCommand.assistantArguments(EXE, FILES, ModelSelection.DEFAULT, List.of("queue_prompt", "list_projects")))
+                .containsExactly(EXE.toString(), "--settings", SETTINGS.toString(), "--mcp-config", MCP.toString(),
+                        "--allowedTools", "mcp__cc-manager-app__queue_prompt,mcp__cc-manager-app__list_projects", "--append-system-prompt", ClaudeCommand.ASSISTANT_SYSTEM_PROMPT)
+                .doesNotContain("--plugin-dir");
+    }
+
+    @Test
     void attachHasNeitherMcpConfigNorPluginBecauseItIsASubcommand() {
         assertThat(ClaudeCommand.attachArguments(EXE, FILES, "ab12")).doesNotContain("--mcp-config", "--plugin-dir");
     }

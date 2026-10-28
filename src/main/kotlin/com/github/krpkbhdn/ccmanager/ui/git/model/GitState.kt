@@ -8,6 +8,7 @@ import com.github.krpkbhdn.ccmanager.git.GitBranch
 import com.github.krpkbhdn.ccmanager.git.GitException
 import com.github.krpkbhdn.ccmanager.git.GitMisc
 import com.github.krpkbhdn.ccmanager.git.GitStatus
+import com.github.krpkbhdn.ccmanager.git.Worktree
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.ui.state.Refresher
 import java.nio.file.Path
@@ -42,6 +43,12 @@ class GitHost(
     val prefs: () -> GitPrefs,
     val updatePrefs: ((GitPrefs) -> GitPrefs) -> Unit,
     val notify: (NotificationKind, String, String) -> Unit,
+    val openWorktree: (directory: Path, launchSession: Boolean) -> Unit = { _, _ -> },
+    val forgetWorktree: (directory: Path) -> Unit = {},
+    val registerWorktree: (directory: Path) -> Unit = {},
+    val stopWorktreeWork: (directory: Path) -> Unit = {},
+    val hasRunningWork: (directory: Path) -> Boolean = { false },
+    val openDirectory: (directory: Path) -> Unit = {},
 )
 
 /** The running mutation: what it does and the latest progress line git printed. */
@@ -78,6 +85,8 @@ class GitState(
         private set
     var tags by mutableStateOf<List<GitMisc.Tag>>(emptyList())
         private set
+    var worktrees by mutableStateOf<List<Worktree>>(emptyList())
+        private set
     var loading by mutableStateOf(false)
         private set
     var loadError by mutableStateOf<ErrorPlan?>(null)
@@ -104,9 +113,13 @@ class GitState(
     private var retry: (() -> Unit)? = null
     private var jobCount = 0
     private var refsSignature = ""
+    private var worktreesLoaded = false
     private var commitFocusHandled = 0
 
-    fun show(view: GitSubView) = host.updatePrefs { it.withView(projectId, view) }
+    fun show(view: GitSubView) {
+        host.updatePrefs { it.withView(projectId, view) }
+        if (view == GitSubView.WORKTREES && !worktreesLoaded) scope.launch { loadWorktrees() }
+    }
 
     fun requestCommitFocus() {
         show(GitSubView.CHANGES)
@@ -122,10 +135,20 @@ class GitState(
 
     fun refresh() = refresher.request()
 
+    /** Reloads now and returns when done, for callers that load many projects one after another. */
+    suspend fun reloadNow() = reload()
+
     /** The toolbar Refresh: also re-reads tags, remotes and stashes, which a terminal can change without the watcher noticing. */
     fun refreshAll() {
         refresh()
         scope.launch { loadAuxiliary() }
+    }
+
+    /** Re-reads the worktrees, apart from the other lists: each one costs a status and a merge check. */
+    suspend fun loadWorktrees() {
+        if (status?.repository() != true) return
+        worktrees = gitCall({ fail("Could not read worktrees", it) }) { git.worktrees.list(repo) } ?: return
+        worktreesLoaded = true
     }
 
     /** Stops the reload loop once the project is gone. */
@@ -153,6 +176,7 @@ class GitState(
     internal fun <T> act(
         label: String,
         handle: (GitException) -> Boolean = { false },
+        refreshWorktrees: Boolean = false,
         onSuccess: (T) -> Unit = {},
         call: GitBackend.((String) -> Unit) -> T,
     ) {
@@ -160,10 +184,11 @@ class GitState(
         job = GitJob(label)
         jobCount++
         scope.launch {
-            val outcome = attempt(label, handle, { act(label, handle, onSuccess, call) }, call)
+            val outcome = attempt(label, handle, { act(label, handle, refreshWorktrees, onSuccess, call) }, call)
             job = null
             refresh()
             loadAuxiliary()
+            if (refreshWorktrees) loadWorktrees()
             outcome?.let {
                 error = null
                 onSuccess(it.value)
@@ -220,6 +245,7 @@ class GitState(
         val signature = current.head().orEmpty() + currentBranches.joinToString { it.name() + it.commit() }
         if (signature != refsSignature && log.loaded) log.reload()
         refsSignature = signature
+        if (current.repository() && view == GitSubView.WORKTREES) loadWorktrees()
         if (current.repository() && (firstLoad || current.stashCount() != stashes.size || current.stashTop() != stashes.firstOrNull()?.hash())) loadAuxiliary()
     }
 

@@ -56,7 +56,7 @@ fun sessionUsageRows(sessions: List<SessionSnapshot>, usage: Map<String, Session
             model = figures?.modelName() ?: session.model(),
             effort = figures?.effort(),
             contextPercent = figures?.contextUsedPercent()?.roundToInt(),
-            costText = figures?.costUsd()?.let { "$" + "%.2f".format(Locale.ROOT, it) },
+            costText = figures?.costUsd()?.let(::formatCost),
         )
     }
 
@@ -73,3 +73,5 @@ private fun detail(title: String, window: RateLimitWindow, now: Instant, zone: Z
         resetsAtText = resetFormat.format(window.resetsAt().atZone(zone)),
     )
 }
+
+fun formatCost(usd: Double): String = "$" + "%.2f".format(Locale.ROOT, usd)

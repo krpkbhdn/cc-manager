@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.notification;
 
 import com.github.krpkbhdn.ccmanager.claude.hook.ActivityFormatter;
+import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher;
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot;
@@ -53,7 +54,7 @@ public class NotificationService {
     private void onSessionsChanged(SessionRegistry registry) {
         var created = new ArrayList<AppNotification>();
         synchronized (this) {
-            var sessions = registry.sessions();
+            var sessions = registry.sessions().stream().filter(session -> session.projectId() != ClaudeLauncher.ASSISTANT_PROJECT_ID).toList();
             seen.keySet().retainAll(sessions.stream().map(SessionSnapshot::ccmSessionId).collect(Collectors.toSet()));
             sessions.forEach(session -> observe(session).ifPresent(created::add));
         }

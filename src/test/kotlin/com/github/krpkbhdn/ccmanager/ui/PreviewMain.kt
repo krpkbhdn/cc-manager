@@ -12,7 +12,9 @@ import androidx.compose.ui.window.application
 import com.github.krpkbhdn.ccmanager.notification.AppNotification
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.ui.chrome.MainWindow
+import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartup
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
+import com.github.krpkbhdn.ccmanager.ui.state.GroupDialogRequest
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
 import com.github.krpkbhdn.ccmanager.ui.state.Route
 import com.github.krpkbhdn.ccmanager.ui.state.ThemeMode
@@ -42,7 +44,7 @@ fun main(args: Array<String>) {
     application {
         val state = remember {
             AppState(world.backend(PreviewTerminal), CoroutineScope(SupervisorJob() + Dispatchers.Main), UiSettingsStore(null))
-                .also { it.start(); it.setThemeMode(if (flags.dark) ThemeMode.DARK else ThemeMode.LIGHT) }
+                .also { it.updateSettings { s -> s.copy(assistantStartup = AssistantStartup.NEVER) }; it.start(); it.setThemeMode(if (flags.dark) ThemeMode.DARK else ThemeMode.LIGHT) }
         }
         val windowState = remember { WindowState(size = DpSize(flags.width.dp, flags.height.dp)) }
         val icon = remember { BitmapPainter(drawAppIcon(256).toComposeImageBitmap()) }
@@ -97,6 +99,12 @@ private suspend fun captureTour(capture: Capture, state: AppState, world: Previe
         return
     }
     capture.take("1-overview")
+    state.navigate(Route.Sessions)
+    capture.take("1b-all-sessions")
+    state.setGroupSessionsByProject(true)
+    capture.take("1c-all-sessions-grouped")
+    state.setGroupSessionsByProject(false)
+    state.navigate(Route.Overview)
     state.openSession("s-needs")
     state.openSession("s-working")
     capture.take("2-project-terminal")
@@ -124,6 +132,19 @@ private suspend fun captureTour(capture: Capture, state: AppState, world: Previe
     state.navigate(Route.Project(2))
     world.emit(AppNotification(99, Instant.now(), NotificationKind.NEEDS_ACTION, 1, "s-needs", "Needs your action", "Permission needed: Edit NotificationServiceTest.java"))
     capture.take("7-toast-other-project")
+    state.navigate(Route.Project(PREVIEW_GROUP_ID))
+    state.select(PREVIEW_GROUP_ID, ProjectTab.Git)
+    capture.take("7b-group-members")
+    state.projects.groupDialog = GroupDialogRequest(state.projects.find(PREVIEW_GROUP_ID))
+    capture.take("7c-group-dialog-edit")
+    state.projects.groupDialog = null
+    delay(SETTLE_MILLIS)
+    state.projects.groupDialog = GroupDialogRequest(null)
+    capture.take("7d-group-dialog-new")
+    state.projects.groupDialog = null
+    state.projects.toggleFolded(PREVIEW_GROUP_ID)
+    capture.take("7e-sidebar-group-folded")
+    state.projects.toggleFolded(PREVIEW_GROUP_ID)
     state.toggleSidebar()
     state.toggleAgents()
     capture.take("8-collapsed")

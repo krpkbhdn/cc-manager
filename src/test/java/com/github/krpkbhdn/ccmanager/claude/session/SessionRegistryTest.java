@@ -20,7 +20,7 @@ class SessionRegistryTest {
     private static final int THREADS = 8;
     private static final int SESSIONS_PER_THREAD = 50;
 
-    private final SessionRegistry registry = new SessionRegistry(new SessionProperties(java.time.Duration.ofMinutes(10)), mock(TranscriptService.class));
+    private final SessionRegistry registry = new SessionRegistry(new SessionProperties(java.time.Duration.ofMinutes(10), java.time.Duration.ofMinutes(10)), mock(TranscriptService.class));
 
     private HookEvent eventFor(String ccmId, String name, String json) {
         var template = of(name, json);
@@ -125,7 +125,7 @@ class SessionRegistryTest {
     }
 
     private final TranscriptService transcripts = mock(TranscriptService.class);
-    private final SessionRegistry topicRegistry = new SessionRegistry(new SessionProperties(java.time.Duration.ofMinutes(10)), transcripts);
+    private final SessionRegistry topicRegistry = new SessionRegistry(new SessionProperties(java.time.Duration.ofMinutes(10), java.time.Duration.ofMinutes(10)), transcripts);
 
     private SessionSnapshot afterEvent(String ccmId, String name, String json) {
         topicRegistry.on(eventFor(ccmId, name, json));

@@ -5,6 +5,7 @@ import static com.github.krpkbhdn.ccmanager.extension.Json.text;
 import com.github.krpkbhdn.ccmanager.extension.ExtensionException;
 import com.github.krpkbhdn.ccmanager.extension.ExtensionScope;
 import com.github.krpkbhdn.ccmanager.extension.Json;
+import com.github.krpkbhdn.ccmanager.git.GitRunner;
 import com.github.krpkbhdn.ccmanager.workspace.HostEnvironment;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -32,14 +33,18 @@ class McpConfigReader {
     private static final String USER_CONFIG_FILE = ".claude.json";
     private static final String PROJECT_CONFIG_FILE = ".mcp.json";
     private static final String PROJECTS = "projects";
+    private static final String TRUST_ACCEPTED = "hasTrustDialogAccepted";
     private static final String USER_SETTINGS_FILE = "settings.json";
     private static final String SETTINGS_FILE = ".claude/settings.json";
     private static final String SETTINGS_LOCAL_FILE = ".claude/settings.local.json";
 
     private final HostEnvironment host;
 
-    McpConfigReader(HostEnvironment host) {
+    private final GitRunner git;
+
+    McpConfigReader(HostEnvironment host, GitRunner git) {
         this.host = host;
+        this.git = git;
     }
 
     /** Claude keeps .claude.json in CLAUDE_CONFIG_DIR when that is set, else directly in the home directory. */
@@ -61,6 +66,34 @@ class McpConfigReader {
             servers.addAll(servers(readFile(projectDirectory.resolve(PROJECT_CONFIG_FILE)), ExtensionScope.PROJECT, approvals));
         }
         return List.copyOf(servers);
+    }
+
+    /**
+     * Names of the directory's .mcp.json servers that the user approved outside the repository. Needs the accepted trust dialog
+     * in ~/.claude.json and an approval in the directory's untracked .claude/settings.local.json or the user settings; a
+     * disabled entry in either wins. A settings.local.json committed to git is ignored, as a hostile repo could approve itself.
+     */
+    Set<String> approvedOutsideRepository(Path projectDirectory) {
+        if (!projectEntry(readFile(userConfigFile()), projectDirectory).path(TRUST_ACCEPTED).asBoolean(false)) {
+            return Set.of();
+        }
+        var local = projectDirectory.resolve(SETTINGS_LOCAL_FILE);
+        var sources = List.of(isTracked(projectDirectory, local) ? Json.parse("{}") : readFile(local),
+                readFile(host.claudeConfigDirectory().resolve(USER_SETTINGS_FILE)));
+        return servers(readFile(projectDirectory.resolve(PROJECT_CONFIG_FILE)), ExtensionScope.PROJECT, sources).stream()
+                .filter(server -> server.approval() == McpApproval.APPROVED).map(McpServerConfig::name).collect(Collectors.toSet());
+    }
+
+    /** Without a .git the file cannot be committed; with one, only git's own "not tracked" answer (exit 1) clears it, any other outcome counts as tracked. */
+    private boolean isTracked(Path projectDirectory, Path file) {
+        if (!Files.exists(file) || !Files.exists(projectDirectory.resolve(".git"))) {
+            return false;
+        }
+        try {
+            return git.tryRun(projectDirectory, "ls-files", "--error-unmatch", "--", SETTINGS_LOCAL_FILE).exitCode() != 1;
+        } catch (RuntimeException e) {
+            return true;
+        }
     }
 
     private JsonNode projectEntry(JsonNode userConfig, Path projectDirectory) {
@@ -90,7 +123,7 @@ class McpConfigReader {
             var command = text(entry.getValue(), "command");
             var type = text(entry.getValue(), "type");
             return new McpServerConfig(entry.getKey(), scope, type.isEmpty() ? STDIO : type,
-                    McpTarget.masked(command.isEmpty() ? text(entry.getValue(), "url") : command), approval.apply(entry.getKey()));
+                    McpTargetRedaction.redact(command.isEmpty() ? text(entry.getValue(), "url") : command), approval.apply(entry.getKey()));
         }).toList();
     }
 

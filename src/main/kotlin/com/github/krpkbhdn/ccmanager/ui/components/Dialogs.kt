@@ -104,8 +104,8 @@ fun DialogBody(
     headerTrailing: @Composable RowScope.() -> Unit = {},
     content: @Composable () -> Unit,
 ) {
-    Column(Modifier.padding(Spacing.xl), verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.md), verticalAlignment = Alignment.CenterVertically) {
+    Column(Modifier.padding(vertical = Spacing.xl), verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.xl), horizontalArrangement = Arrangement.spacedBy(Spacing.md), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(dialogIconBox).clip(RoundedCornerShape(Radius.md)).background(tint.copy(alpha = Alpha.SOFT)), contentAlignment = Alignment.Center) {
                 Glyph(icon, tint, size = IconSize.xlarge)
             }
@@ -115,10 +115,10 @@ fun DialogBody(
         val scroll = rememberScrollState()
         // The scrollbar fills the box height, so it sits in a matchParentSize box that cannot stretch the card.
         Box(Modifier.weight(1f, fill = false)) {
-            Column(Modifier.fillMaxWidth().verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(Spacing.lg)) { content() }
+            Column(Modifier.fillMaxWidth().verticalScroll(scroll).padding(horizontal = Spacing.xl), verticalArrangement = Arrangement.spacedBy(Spacing.lg)) { content() }
             Box(Modifier.matchParentSize()) { ThinScrollbar(scroll) }
         }
-        actions?.invoke()
+        actions?.let { Box(Modifier.padding(horizontal = Spacing.xl)) { it() } }
     }
 }
 

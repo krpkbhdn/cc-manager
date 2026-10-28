@@ -64,7 +64,7 @@ class ProjectActions(
 
 fun AppState.projectActions(project: Project) = ProjectActions(
     onOpen = { navigate(Route.Project(project.id)) },
-    onStartTask = { taskDialogProjectId = project.id },
+    onStartTask = { openTaskDialog(project.id) },
     onRename = { projects.renaming = RenameRequest(project) },
     onRemove = { projects.requestRemove(project) },
     onOpenFolder = { openFolder(project) },
@@ -92,12 +92,13 @@ fun ProjectRow(
     actions: ProjectActions,
     modifier: Modifier = Modifier,
     gitSummary: GitSummary? = null,
+    groupName: String? = null,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val marker by animateFloatAsState(if (selected) 1f else 0f, Motion.base(), label = "rowMarker")
     ContextMenuArea({ projectMenu(actions) }, modifier) {
         Box {
-            WithTooltip(if (collapsed) project.name else null) {
+            WithTooltip(if (collapsed) listOfNotNull(project.name, groupName?.let { "in $it" }).joinToString(" - ") else null) {
                 Pressable(
                     actions.onOpen,
                     Modifier.fillMaxWidth(),

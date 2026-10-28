@@ -6,9 +6,12 @@ import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 sealed interface Route {
     data object Overview : Route
     data object Teams : Route
+    data object Prompts : Route
     data object Plugins : Route
     data object Mcp : Route
     data object Skills : Route
+    data object Sessions : Route
+    data object Assistant : Route
     data class Project(val id: Long) : Route
 }
 

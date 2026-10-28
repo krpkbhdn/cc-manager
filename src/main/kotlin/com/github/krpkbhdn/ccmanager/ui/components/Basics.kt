@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -64,6 +65,7 @@ fun Label(
     color: Color = colors.textPrimary,
     style: TextStyle = Type.body,
     maxLines: Int = 1,
+    minLines: Int = 1,
     align: TextAlign = TextAlign.Unspecified,
     tooltipWhenTruncated: Boolean = false,
 ) {
@@ -74,6 +76,7 @@ fun Label(
             modifier = textModifier,
             style = style.copy(color = color, textAlign = align),
             maxLines = maxLines,
+            minLines = minLines,
             overflow = TextOverflow.Ellipsis,
             onTextLayout = { truncated = it.hasVisualOverflow },
         )
@@ -117,6 +120,17 @@ fun CountBadge(count: Int, modifier: Modifier = Modifier, tint: Color = colors.t
         contentAlignment = Alignment.Center,
     ) { Label(count.toString(), color = tint, style = Type.numericCaption) }
 }
+
+/** Accent-filled circle with a count, shown inline after a label; "9+" above [MAX_DOT_COUNT]. */
+@Composable
+fun CountDot(count: Int, modifier: Modifier = Modifier) {
+    Box(modifier.size(dotSize).clip(CircleShape).background(colors.accent), contentAlignment = Alignment.Center) {
+        Label(if (count > MAX_DOT_COUNT) "$MAX_DOT_COUNT+" else count.toString(), color = colors.onAccent, style = Type.numericCaption)
+    }
+}
+
+private val dotSize = 16.dp
+private const val MAX_DOT_COUNT = 9
 
 /** Keycap hint such as "Ctrl" or "K". */
 @Composable
