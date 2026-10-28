@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 /**
@@ -47,10 +48,13 @@ public class ClaudeLauncher {
     private final ProjectGroupService groups;
     private final GroupWorkspace groupWorkspace;
     private final ProjectMcpServers projectMcpServers;
+    private final ObjectProvider<AssistantToolPolicy> assistantToolPolicy;
 
     public ClaudeLauncher(ProjectService projects, ClaudeInstallationService installation,
             HookSettingsWriter hookSettings, ClaudePluginWriter plugin, SessionRegistry sessions, AppProperties properties,
-            ProjectGroupService groups, GroupWorkspace groupWorkspace, ProjectMcpServers projectMcpServers) {
+            ProjectGroupService groups, GroupWorkspace groupWorkspace, ProjectMcpServers projectMcpServers,
+            ObjectProvider<AssistantToolPolicy> assistantToolPolicy) {
+        this.assistantToolPolicy = assistantToolPolicy;
         this.dataDir = properties.dataDir();
         this.groups = groups;
         this.groupWorkspace = groupWorkspace;
@@ -110,7 +114,7 @@ public class ClaudeLauncher {
             throw new IllegalStateException("Could not create the assistant folder: " + e.getMessage(), e);
         }
         return start(ASSISTANT_PROJECT_ID, directory, ModelSelection.DEFAULT, ClaudeCommand.label(LaunchMode.NEW),
-                (files, exe, selection) -> ClaudeCommand.assistantArguments(exe, files, selection), List.of());
+                (files, exe, selection) -> ClaudeCommand.assistantArguments(exe, files, selection, assistantToolPolicy.getObject().autoApprovedToolNames()), List.of());
     }
 
     private LaunchedSession start(long projectId, String label, CommandFactory commandFactory) {

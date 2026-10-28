@@ -11,7 +11,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /** Pure builders for the claude command line and the child environment. */
 public final class ClaudeCommand {
@@ -26,13 +25,9 @@ public final class ClaudeCommand {
     static final String COLORTERM_VALUE = "truecolor";
     static final String ASSISTANT_SYSTEM_PROMPT = "You control Claude Code Manager through the cc-manager-app MCP tools. "
             + "Resolve project names with list_projects, act directly and report briefly. "
-            + "Destructive actions are confirmed by the user.";
-    /** Read-only and easily undone tools; the rest (remove project, git writes, worktrees) go through the permission dialog. */
-    static final String ASSISTANT_ALLOWED_TOOLS = Stream.of(
-                    "list_projects", "get_project", "add_project", "open_project", "navigate", "git_status", "git_branches",
-                    "git_fetch", "git_log", "git_diff", "git_worktrees", "list_runs", "start_run", "stop_run", "list_sessions", "start_session", "queue_prompt")
-            .map(tool -> "mcp__cc-manager-app__" + tool)
-            .collect(Collectors.joining(","));
+            + "Destructive actions are confirmed by the user. "
+            + "For questions about Claude Code Manager itself, call get_help and answer from it.";
+    private static final String ASSISTANT_TOOL_PREFIX = "mcp__cc-manager-app__";
     /** Would turn off Claude colors or make it think it runs inside another agent (which also switches off transcripts, so no --resume) or terminal host. */
     private static final List<String> INHERITED_ENV_TO_DROP = List.of(
             "NO_COLOR", "FORCE_COLOR", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_CHILD_SESSION",
@@ -87,12 +82,17 @@ public final class ClaudeCommand {
     }
 
     /** The assistant session: the cc-manager-app MCP config (no plugin, there is no project) and a pre-allowed tool list; each variadic flag is followed by another flag. */
-    static List<String> assistantArguments(Path executable, SessionFiles files, ModelSelection selection) {
+    static List<String> assistantArguments(Path executable, SessionFiles files, ModelSelection selection,
+            List<String> allowedTools) {
         List<String> command = base(executable, files);
         command.addAll(selection.arguments());
         command.addAll(List.of("--mcp-config", files.mcpConfig().toAbsolutePath().toString(),
-                "--allowedTools", ASSISTANT_ALLOWED_TOOLS, "--append-system-prompt", ASSISTANT_SYSTEM_PROMPT));
+                "--allowedTools", allowedToolsArgument(allowedTools), "--append-system-prompt", ASSISTANT_SYSTEM_PROMPT));
         return command;
+    }
+
+    private static String allowedToolsArgument(List<String> toolNames) {
+        return toolNames.stream().map(name -> ASSISTANT_TOOL_PREFIX + name).collect(Collectors.joining(","));
     }
 
     static List<String> attachArguments(Path executable, SessionFiles files, String backgroundSessionId) {

@@ -63,11 +63,10 @@ class ClaudeCommandTest {
 
     @Test
     void assistantHasMcpConfigAndAllowedToolsBeforeSystemPromptButNoPlugin() {
-        assertThat(ClaudeCommand.assistantArguments(EXE, FILES, ModelSelection.DEFAULT))
+        assertThat(ClaudeCommand.assistantArguments(EXE, FILES, ModelSelection.DEFAULT, List.of("queue_prompt", "list_projects")))
                 .containsExactly(EXE.toString(), "--settings", SETTINGS.toString(), "--mcp-config", MCP.toString(),
-                        "--allowedTools", ClaudeCommand.ASSISTANT_ALLOWED_TOOLS, "--append-system-prompt", ClaudeCommand.ASSISTANT_SYSTEM_PROMPT)
+                        "--allowedTools", "mcp__cc-manager-app__queue_prompt,mcp__cc-manager-app__list_projects", "--append-system-prompt", ClaudeCommand.ASSISTANT_SYSTEM_PROMPT)
                 .doesNotContain("--plugin-dir");
-        assertThat(ClaudeCommand.ASSISTANT_ALLOWED_TOOLS).contains("mcp__cc-manager-app__queue_prompt").doesNotContain("remove_project", "git_commit", "git_push");
     }
 
     @Test

@@ -20,6 +20,11 @@ class OpenProjectTool extends AssistantTool {
     }
 
     @Override
+    public boolean autoApproved() {
+        return true;
+    }
+
+    @Override
     public String name() {
         return "open_project";
     }

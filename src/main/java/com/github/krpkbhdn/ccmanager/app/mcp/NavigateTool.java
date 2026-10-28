@@ -18,6 +18,11 @@ class NavigateTool extends AssistantTool {
     }
 
     @Override
+    public boolean autoApproved() {
+        return true;
+    }
+
+    @Override
     public String name() {
         return "navigate";
     }

@@ -14,6 +14,11 @@ class StopRunTool implements AssistantMcpTool {
     }
 
     @Override
+    public boolean autoApproved() {
+        return true;
+    }
+
+    @Override
     public String name() {
         return "stop_run";
     }

@@ -24,6 +24,11 @@ class GitLogTool extends GitTool {
     }
 
     @Override
+    public boolean autoApproved() {
+        return true;
+    }
+
+    @Override
     public String name() {
         return "git_log";
     }
