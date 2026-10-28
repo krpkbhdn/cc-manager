@@ -53,6 +53,17 @@ class NotificationServiceTest {
     }
 
     @Test
+    void assistantSessionProducesNoNotifications() {
+        id = registry.register(com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher.ASSISTANT_PROJECT_ID);
+
+        fire("UserPromptSubmit", "{}");
+        fire("Stop", "{\"last_assistant_message\":\"done\"}");
+
+        assertThat(received).isEmpty();
+        assertThat(service.history()).isEmpty();
+    }
+
+    @Test
     void goingIdleOnlyBecauseABackgroundAgentWentStaleIsNotFinished() throws Exception {
         var shortLived = new SessionRegistry(new SessionProperties(java.time.Duration.ofMillis(200), java.time.Duration.ofMinutes(10)), mock(TranscriptService.class));
         var stale = new NotificationService(shortLived);

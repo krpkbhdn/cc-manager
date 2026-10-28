@@ -12,6 +12,7 @@ import androidx.compose.ui.window.application
 import com.github.krpkbhdn.ccmanager.notification.AppNotification
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.ui.chrome.MainWindow
+import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartup
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
 import com.github.krpkbhdn.ccmanager.ui.state.Route
@@ -42,7 +43,7 @@ fun main(args: Array<String>) {
     application {
         val state = remember {
             AppState(world.backend(PreviewTerminal), CoroutineScope(SupervisorJob() + Dispatchers.Main), UiSettingsStore(null))
-                .also { it.start(); it.setThemeMode(if (flags.dark) ThemeMode.DARK else ThemeMode.LIGHT) }
+                .also { it.updateSettings { s -> s.copy(assistantStartup = AssistantStartup.NEVER) }; it.start(); it.setThemeMode(if (flags.dark) ThemeMode.DARK else ThemeMode.LIGHT) }
         }
         val windowState = remember { WindowState(size = DpSize(flags.width.dp, flags.height.dp)) }
         val icon = remember { BitmapPainter(drawAppIcon(256).toComposeImageBitmap()) }

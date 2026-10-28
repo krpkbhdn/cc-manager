@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.run.mcp;
 
 import com.github.krpkbhdn.ccmanager.claude.mcp.McpTool;
+import com.github.krpkbhdn.ccmanager.claude.mcp.McpToolDescriptor;
 import com.github.krpkbhdn.ccmanager.run.RunConfigurationService;
 import java.nio.file.Path;
 import org.springframework.stereotype.Component;
@@ -39,8 +40,8 @@ class SetRunConfigurationTool implements McpTool {
 
     @Override
     public String call(long projectId, JsonNode arguments) {
-        var saved = configurations.save(projectId, McpTool.requiredText(arguments, "name"), McpTool.requiredText(arguments, "command"),
-                Path.of(McpTool.requiredText(arguments, "directory")));
+        var saved = configurations.save(projectId, McpToolDescriptor.requiredText(arguments, "name"), McpToolDescriptor.requiredText(arguments, "command"),
+                Path.of(McpToolDescriptor.requiredText(arguments, "directory")));
         return "Run configuration '%s' saved: `%s` in %s. The user can start it from cc-manager.".formatted(saved.name(), saved.command(), saved.directory());
     }
 }

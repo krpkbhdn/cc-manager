@@ -64,10 +64,11 @@ class AuthorProfileState(
         private set
 
     private val askedProjects = mutableSetOf<Long>()
-    private var startOfferPending = false
+    var startOfferPending = false
+        private set
     private var pendingSession: AuthorInstallReport? = null
 
-    private val dialogOpen get() = offer != null || manage != null || report != null
+    val dialogOpen get() = offer != null || manage != null || report != null
 
     val sessionProjectName: String? get() = sessionProject()?.name
 

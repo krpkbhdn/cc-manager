@@ -20,6 +20,7 @@ import com.github.krpkbhdn.ccmanager.ui.git.model.push
 import com.github.krpkbhdn.ccmanager.claude.proposal.QuestionsProposal
 import com.github.krpkbhdn.ccmanager.ui.proposal.QuestionsDraft
 import com.github.krpkbhdn.ccmanager.ui.screens.AppRoot
+import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartup
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.ConfirmRequest
 import com.github.krpkbhdn.ccmanager.ui.state.Route
@@ -213,6 +214,7 @@ private fun render(shot: Shot, dark: Boolean, width: Int, height: Int, out: Path
     val world = PreviewWorld(git = data, rateLimits = shot.limits, selection = shot.selection)
     val scope = CoroutineScope(SupervisorJob() + shotLoop)
     val state = AppState(world.backend(PreviewTerminal), scope, UiSettingsStore(null)).also {
+        it.updateSettings { s -> s.copy(assistantStartup = AssistantStartup.NEVER) }
         it.start()
         it.setThemeMode(if (dark) ThemeMode.DARK else ThemeMode.LIGHT)
     }

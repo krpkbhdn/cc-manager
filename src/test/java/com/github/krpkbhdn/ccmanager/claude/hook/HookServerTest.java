@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.github.krpkbhdn.ccmanager.app.mcp.AssistantMcpEndpoint;
 import com.github.krpkbhdn.ccmanager.claude.mcp.McpEndpoint;
 import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalService;
 import java.net.URI;
@@ -32,6 +33,7 @@ class HookServerTest {
     private final HookEventStore store = mock(HookEventStore.class);
     private final ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
     private final McpEndpoint mcp = mock(McpEndpoint.class);
+    private final AssistantMcpEndpoint assistantMcp = mock(AssistantMcpEndpoint.class);
     private final ProposalService proposals = mock(ProposalService.class);
     private final HttpClient client = HttpClient.newHttpClient();
     private HookServer server;
@@ -39,7 +41,7 @@ class HookServerTest {
     @BeforeEach
     void setUp() {
         server = new HookServer(store, publisher, JsonMapper.builder().build(),
-                new HookProperties(10, MAX_BODY, 500, Duration.ofSeconds(5)), mcp, proposals);
+                new HookProperties(10, MAX_BODY, 500, Duration.ofSeconds(5)), mcp, assistantMcp, proposals);
         server.start();
     }
 
@@ -177,6 +179,21 @@ class HookServerTest {
         assertThat(post(server.mcpUrl("sess-1"), "x".repeat(MAX_BODY + 1)).statusCode()).isEqualTo(413);
         verifyNoInteractions(mcp);
     }
+
+    @Test
+    void assistantMcpUsesItsOwnSecretAndRoute() throws Exception {
+        when(assistantMcp.handle("{}".getBytes(StandardCharsets.UTF_8))).thenReturn(Optional.of("{\"result\":{}}"));
+
+        var response = post(server.assistantMcpUrl(), "{}");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isEqualTo("{\"result\":{}}");
+        assertThat(server.assistantMcpUrl()).contains("/assistant-mcp/").doesNotContain(server.hookUrl("s").split("/")[4]);
+        assertThat(post(server.assistantMcpUrl() + "x", "{}").statusCode()).isEqualTo(404);
+        assertThat(post(server.mcpUrl("sess-1").replace("/mcp/", "/assistant-mcp/"), "{}").statusCode()).isEqualTo(404);
+        assertThat(post(server.assistantMcpUrl().replaceAll("[^/]+$", ""), "{}").statusCode()).isEqualTo(404);
+    }
+
     @Test
     void statusLinePostIsPublishedAsReportWithEmptyOk() throws Exception {
         var response = post(server.statusLineUrl("sess-1"), "{\"rate_limits\":{}}");
