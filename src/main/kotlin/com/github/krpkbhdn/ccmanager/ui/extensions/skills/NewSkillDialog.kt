@@ -5,7 +5,7 @@ import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.github.krpkbhdn.ccmanager.ui.components.AppTextArea
+import com.github.krpkbhdn.ccmanager.ui.voice.VoiceTextArea
 import com.github.krpkbhdn.ccmanager.ui.components.AppTextField
 import com.github.krpkbhdn.ccmanager.ui.components.DialogActions
 import com.github.krpkbhdn.ccmanager.ui.components.DialogBody
@@ -36,7 +36,7 @@ fun NewSkillDialog(context: ExtensionContext, state: SkillsState) {
                 AppTextField(name, Modifier.fillMaxWidth(), placeholder = "skill-name", mono = true)
             }
             FormField("Description", hint = "Claude reads this to decide when to use the skill") {
-                AppTextArea(description, Modifier.fillMaxWidth(), placeholder = "Reviews a diff for missing tests. Use when the user asks for a review.", minLines = 3, maxLines = 5, onSubmit = create)
+                VoiceTextArea(description, Modifier.fillMaxWidth(), placeholder = "Reviews a diff for missing tests. Use when the user asks for a review.", minLines = 3, maxLines = 5, onSubmit = create)
             }
             FormField("Created in", hint = scope.description()) { ScopeBadge(scope) }
         }

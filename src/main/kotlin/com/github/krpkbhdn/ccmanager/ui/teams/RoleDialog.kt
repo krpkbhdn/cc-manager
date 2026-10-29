@@ -22,7 +22,6 @@ import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.team.Team
 import com.github.krpkbhdn.ccmanager.ui.components.AppButton
 import com.github.krpkbhdn.ccmanager.ui.components.AppCheckbox
-import com.github.krpkbhdn.ccmanager.ui.components.AppTextArea
 import com.github.krpkbhdn.ccmanager.ui.components.AppTextField
 import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant
 import com.github.krpkbhdn.ccmanager.ui.components.HorizontalRule
@@ -34,6 +33,7 @@ import com.github.krpkbhdn.ccmanager.ui.screens.effortSegments
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
+import com.github.krpkbhdn.ccmanager.ui.voice.VoiceTextArea
 
 private val dialogWidth = 780.dp
 private const val HEIGHT_SHARE = 0.85f
@@ -74,10 +74,10 @@ private fun RoleFields(form: RoleForm, wasLead: Boolean, focus: FocusRequester, 
         AppTextField(form.name, Modifier.fillMaxWidth(), mono = true, placeholder = "developer", focusRequester = focus, onSubmit = save)
     }
     Field("When the lead delegates to this agent", DESCRIPTION_HINT) {
-        AppTextArea(form.description, Modifier.fillMaxWidth(), placeholder = "Use to write or change code: implement a feature, fix a bug", onSubmit = save)
+        VoiceTextArea(form.description, Modifier.fillMaxWidth(), placeholder = "Use to write or change code: implement a feature, fix a bug", onSubmit = save)
     }
     Field("Prompt", "Instructions the agent works by.") {
-        AppTextArea(form.prompt, Modifier.fillMaxWidth(), placeholder = "You are a careful developer. ...", minLines = PROMPT_MIN_LINES, maxLines = PROMPT_MAX_LINES, onSubmit = save)
+        VoiceTextArea(form.prompt, Modifier.fillMaxWidth(), placeholder = "You are a careful developer. ...", minLines = PROMPT_MIN_LINES, maxLines = PROMPT_MAX_LINES, onSubmit = save)
     }
     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.lg), verticalAlignment = Alignment.Top) {
         Field("Model", null) { ModelDropdown(form.model, if (form.lead) "Claude's default model" else "Inherit the lead's model", { form.model = it }) }

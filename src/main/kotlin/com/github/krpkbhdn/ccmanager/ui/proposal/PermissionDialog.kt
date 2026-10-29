@@ -14,7 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import com.github.krpkbhdn.ccmanager.claude.proposal.PermissionProposal
 import com.github.krpkbhdn.ccmanager.ui.components.AppCheckbox
-import com.github.krpkbhdn.ccmanager.ui.components.AppTextField
+import com.github.krpkbhdn.ccmanager.ui.voice.VoiceTextField
 import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant
 import com.github.krpkbhdn.ccmanager.ui.components.GhostButton
 import com.github.krpkbhdn.ccmanager.ui.components.Label
@@ -42,7 +42,7 @@ internal fun PermissionDialog(proposal: PermissionProposal, title: FrameTitle, c
     ) {
         permissionSummary(proposal.toolName(), proposal.toolInput()).forEach { SummaryBlockView(it) }
         if (proposal.suggestions().isNotEmpty()) Remember(proposal, draft)
-        AppTextField(draft.reason, Modifier.fillMaxWidth(), placeholder = "Tell Claude what to do instead (optional)", focusRequester = focus)
+        VoiceTextField(draft.reason, Modifier.fillMaxWidth(), placeholder = "Tell Claude what to do instead (optional)", focusRequester = focus)
     }
 }
 

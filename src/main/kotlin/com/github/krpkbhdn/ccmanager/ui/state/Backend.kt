@@ -38,6 +38,11 @@ import com.github.krpkbhdn.ccmanager.usage.RateLimitService
 import com.github.krpkbhdn.ccmanager.update.UpdateService
 import com.github.krpkbhdn.ccmanager.usage.SessionUsageService
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
+import com.github.krpkbhdn.ccmanager.ui.voice.VoiceBackend
+import com.github.krpkbhdn.ccmanager.voice.VoiceInputService
+import com.github.krpkbhdn.ccmanager.voice.asset.VoiceAssetService
+import com.github.krpkbhdn.ccmanager.voice.audio.Microphone
+import com.github.krpkbhdn.ccmanager.voice.device.DeviceService
 import com.github.krpkbhdn.ccmanager.workspace.DirectoryOpener
 import com.github.krpkbhdn.ccmanager.workspace.IdeLauncher
 import java.nio.file.Path
@@ -119,6 +124,7 @@ class Backend(
     val appControl: AppControlRegistry? = null,
     val appControlProperties: AppControlProperties = AppControlProperties(Duration.ofSeconds(10)),
     val assistantTools: List<AssistantMcpTool> = emptyList(),
+    val voice: VoiceBackend? = null,
 ) {
     companion object {
         fun from(context: ConfigurableApplicationContext) = Backend(
@@ -154,6 +160,12 @@ class Backend(
             appControl = context.getBean(AppControlRegistry::class.java),
             appControlProperties = context.getBean(AppControlProperties::class.java),
             assistantTools = context.getBeansOfType(AssistantMcpTool::class.java).values.toList(),
+            voice = VoiceBackend(
+                context.getBean(VoiceInputService::class.java),
+                context.getBean(DeviceService::class.java),
+                context.getBean(VoiceAssetService::class.java),
+                context.getBean(Microphone::class.java),
+            ),
         )
     }
 }

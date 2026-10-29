@@ -15,7 +15,6 @@ import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.ui.components.AnchoredPopup
 import com.github.krpkbhdn.ccmanager.ui.components.AppButton
-import com.github.krpkbhdn.ccmanager.ui.components.AppTextArea
 import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant
 import com.github.krpkbhdn.ccmanager.ui.components.CountDot
 import com.github.krpkbhdn.ccmanager.ui.components.IconButton
@@ -25,6 +24,7 @@ import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
+import com.github.krpkbhdn.ccmanager.ui.voice.VoiceTextArea
 
 private val panelWidth = 400.dp
 private const val QUEUE_NOTE = "A prompt is typed as soon as Claude is free, then one more after each finished turn. Nothing is sent while you are typing, while Claude waits for you, or right after an Esc interrupt."
@@ -65,7 +65,7 @@ private fun QueuePanel(state: AppState, project: Project, ccmSessionId: String) 
                     IconButton(Icons.Trash, { queue.remove(ccmSessionId, prompt.id) }, tooltip = "Remove from the queue", tint = colors.danger)
                 }
             }
-            AppTextArea(draft, Modifier.fillMaxWidth(), placeholder = "Prompt to send next", onSubmit = add)
+            VoiceTextArea(draft, Modifier.fillMaxWidth(), placeholder = "Prompt to send next", onSubmit = add)
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 AppButton("Add", add, variant = ButtonVariant.PRIMARY, icon = Icons.Plus, compact = true, enabled = draft.text.isNotBlank())
                 AppButton(

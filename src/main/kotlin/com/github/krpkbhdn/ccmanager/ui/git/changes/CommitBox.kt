@@ -20,7 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.ui.components.AppButton
 import com.github.krpkbhdn.ccmanager.ui.components.AppCheckbox
-import com.github.krpkbhdn.ccmanager.ui.components.AppTextArea
+import com.github.krpkbhdn.ccmanager.ui.voice.VoiceTextArea
 import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant
 import com.github.krpkbhdn.ccmanager.ui.components.IconButton
 import com.github.krpkbhdn.ccmanager.ui.components.Label
@@ -55,7 +55,7 @@ fun CommitBox(git: GitState, stagedCount: Int, conflicts: Int, modifier: Modifie
         if (ready) git.commit(draft.request(), thenPush) { draft.committed(sent) }
     }
     Column(modifier.padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-        AppTextArea(draft.message, Modifier.fillMaxWidth(), placeholder = if (draft.amend) "Amend message" else "Message (Ctrl+Enter to commit)", focusRequester = focus, onSubmit = { commit(false) })
+        VoiceTextArea(draft.message, Modifier.fillMaxWidth(), placeholder = if (draft.amend) "Amend message" else "Message (Ctrl+Enter to commit)", focusRequester = focus, onSubmit = { commit(false) })
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             AppCheckbox(draft.amend, { on -> scope.launch { draft.setAmend(on, if (on) git.lastCommitMessage() else null) } })
             Label("Amend", color = colors.textSecondary, style = Type.small)

@@ -24,12 +24,18 @@ data class UiSettings(
     val lastShell: String? = null,
     val groupSessionsByProject: Boolean = false,
     val assistantStartup: AssistantStartup = AssistantStartup.ASK,
+    val voiceEnabled: Boolean = false,
+    val voiceModel: String = DEFAULT_VOICE_MODEL,
+    val voiceDevice: String = DEFAULT_VOICE_DEVICE,
+    val voiceInput: String = "",
     val window: WindowBounds = WindowBounds(DEFAULT_WIDTH, DEFAULT_HEIGHT),
     val git: GitPrefs = GitPrefs(),
 ) {
     companion object {
         const val DEFAULT_WIDTH = 1280
         const val DEFAULT_HEIGHT = 820
+        const val DEFAULT_VOICE_MODEL = "base-q5_1"
+        const val DEFAULT_VOICE_DEVICE = "best"
     }
 }
 
@@ -41,6 +47,10 @@ private const val KEY_NOTIFICATION_SOUND = "notification.sound"
 private const val KEY_LAST_SHELL = "shell.last"
 private const val KEY_GROUP_SESSIONS = "sessions.group"
 private const val KEY_ASSISTANT_STARTUP = "assistant.startup"
+private const val KEY_VOICE_ENABLED = "voice.enabled"
+private const val KEY_VOICE_MODEL = "voice.model"
+private const val KEY_VOICE_DEVICE = "voice.device"
+private const val KEY_VOICE_INPUT = "voice.input"
 private const val KEY_WIDTH = "window.width"
 private const val KEY_HEIGHT = "window.height"
 private const val KEY_X = "window.x"
@@ -75,6 +85,10 @@ class UiSettingsStore(private val file: Path?) {
             settings.lastShell?.let { setProperty(KEY_LAST_SHELL, it) }
             setProperty(KEY_GROUP_SESSIONS, settings.groupSessionsByProject.toString())
             setProperty(KEY_ASSISTANT_STARTUP, settings.assistantStartup.name)
+            setProperty(KEY_VOICE_ENABLED, settings.voiceEnabled.toString())
+            setProperty(KEY_VOICE_MODEL, settings.voiceModel)
+            setProperty(KEY_VOICE_DEVICE, settings.voiceDevice)
+            setProperty(KEY_VOICE_INPUT, settings.voiceInput)
             setProperty(KEY_WIDTH, settings.window.width.toString())
             setProperty(KEY_HEIGHT, settings.window.height.toString())
             settings.window.x?.let { setProperty(KEY_X, it.toString()) }
@@ -103,6 +117,10 @@ class UiSettingsStore(private val file: Path?) {
             lastShell = props.getProperty(KEY_LAST_SHELL),
             groupSessionsByProject = props.flag(KEY_GROUP_SESSIONS, defaults.groupSessionsByProject),
             assistantStartup = AssistantStartup.entries.firstOrNull { it.name == props.getProperty(KEY_ASSISTANT_STARTUP) } ?: defaults.assistantStartup,
+            voiceEnabled = props.flag(KEY_VOICE_ENABLED, defaults.voiceEnabled),
+            voiceModel = props.getProperty(KEY_VOICE_MODEL) ?: defaults.voiceModel,
+            voiceDevice = props.getProperty(KEY_VOICE_DEVICE) ?: defaults.voiceDevice,
+            voiceInput = props.getProperty(KEY_VOICE_INPUT) ?: defaults.voiceInput,
             window = WindowBounds(
                 width = props.getProperty(KEY_WIDTH)?.toIntOrNull() ?: defaults.window.width,
                 height = props.getProperty(KEY_HEIGHT)?.toIntOrNull() ?: defaults.window.height,
