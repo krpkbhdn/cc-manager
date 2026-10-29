@@ -45,7 +45,7 @@ fun SessionsScreen(state: AppState, modifier: Modifier = Modifier) {
     val filter = selected.withMembersFrom(state.projects.all)
     var collapsed by remember { mutableStateOf(emptySet<Long>()) }
     val grouped = state.settings.groupSessionsByProject
-    val sessions = state.live.sessions
+    val sessions = projectSessions(state.live.sessions)
     val shown = board(sessions, filter)
     val grid = rememberLazyGridState()
     val card = @Composable { session: SessionSnapshot, cardModifier: Modifier ->
@@ -106,7 +106,7 @@ private fun GroupToggle(grouped: Boolean, onChange: (Boolean) -> Unit) {
 
 @Composable
 private fun FilterBar(state: AppState, filter: SessionFilter, onChange: (SessionFilter) -> Unit) {
-    val sessions = state.live.sessions
+    val sessions = projectSessions(state.live.sessions)
     val statuses = listOf<AgentStatus?>(null) + AgentStatus.entries.reversed()
     val projectIds = listOf<Long?>(null) + projectChoices(sessions, filter, state.projects.all)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.lg), verticalAlignment = Alignment.CenterVertically) {

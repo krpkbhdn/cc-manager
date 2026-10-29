@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.ui.sessions
 
+import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import com.github.krpkbhdn.ccmanager.project.Project
@@ -23,9 +24,13 @@ data class ProjectSessions(val projectId: Long, val name: String, val sessions: 
 
 private val startOrder = compareBy<SessionSnapshot>({ it.startedAt }, { it.ccmSessionId })
 
-/** Filtered sessions in a fixed order, oldest start first, so cards never jump when a status changes. */
+/** Sessions of registered projects; the Assistant has its own screen. */
+fun projectSessions(sessions: List<SessionSnapshot>): List<SessionSnapshot> =
+    sessions.filter { it.projectId != ClaudeLauncher.ASSISTANT_PROJECT_ID }
+
+/** Filtered project sessions in a fixed order, oldest start first, so cards never jump when a status changes. */
 fun board(sessions: List<SessionSnapshot>, filter: SessionFilter = SessionFilter()): List<SessionSnapshot> =
-    sessions.filter(filter::matches).sortedWith(startOrder)
+    projectSessions(sessions).filter(filter::matches).sortedWith(startOrder)
 
 /** The waiting session after [currentId] in board order, wrapping around; the first one when [currentId] is not waiting. */
 fun nextWaiting(sessions: List<SessionSnapshot>, currentId: String?): SessionSnapshot? {
