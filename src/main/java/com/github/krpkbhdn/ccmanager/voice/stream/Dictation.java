@@ -14,6 +14,9 @@ public final class Dictation {
 
     private static final int SAMPLE_RATE = 16_000;
     private static final int MILLIS_PER_SECOND = 1000;
+    private static final double LEVEL_FLOOR_DB = -52;
+    private static final double LEVEL_CEILING_DB = -28;
+    private static final double DB_PER_RMS_DECADE = 20;
 
     private final Recognizer recognizer;
     private final SpeechGate gate;
@@ -46,6 +49,7 @@ public final class Dictation {
         if (stopped) {
             return;
         }
+        listener.onLevel(levelOf(block));
         append(block);
         sinceTick += block.length;
         if (sinceTick >= tickSamples && busy.compareAndSet(false, true)) {
@@ -130,6 +134,20 @@ public final class Dictation {
 
     private synchronized void drop(int samples) {
         window = Arrays.copyOfRange(window, Math.min(samples, window.length), window.length);
+    }
+
+    /** The block's loudness on a dB scale from room noise (0) to loud speech (1), so quiet speech already moves a meter. */
+    public static double levelOf(float[] block) {
+        double sum = 0;
+        for (float sample : block) {
+            sum += sample * sample;
+        }
+        double rms = block.length == 0 ? 0 : Math.sqrt(sum / block.length);
+        if (rms <= 0) {
+            return 0;
+        }
+        double db = DB_PER_RMS_DECADE * Math.log10(rms);
+        return Math.max(0.0, Math.min(1.0, (db - LEVEL_FLOOR_DB) / (LEVEL_CEILING_DB - LEVEL_FLOOR_DB)));
     }
 
     private static int samplesOf(long millis) {

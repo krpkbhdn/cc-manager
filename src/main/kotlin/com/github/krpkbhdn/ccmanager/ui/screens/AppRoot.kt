@@ -107,7 +107,7 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
         if (state.paletteOpen) CommandPalette(paletteItems(state, colors.dark)) { state.paletteOpen = false }
         if (state.shortcutsOpen) ShortcutSheet { state.shortcutsOpen = false }
         (state.route as? Route.Project)?.let { state.gitOf(it.id) }?.let { GitDialogHost(it) }
-        state.taskDialogProjectId?.let { id -> state.projects.all.firstOrNull { it.id == id } }?.let { StartTaskDialog(it, state.teams, startTaskTemplates(state, it), startTaskActions(state, it)) }
+        state.taskDialogProjectId?.let { id -> state.projects.all.firstOrNull { it.id == id } }?.let { StartTaskDialog(it, state.teams, startTaskTemplates(state, it), startTaskActions(state, it), state.voice) }
         state.quickStartProjectId?.let { id -> state.projects.all.firstOrNull { it.id == id } }?.let { QuickStartPicker(state, it) }
         state.queuePickTarget?.let { (id, sessionId) -> state.projects.all.firstOrNull { it.id == id }?.let { QueuePicker(state, it, sessionId) } }
         state.prompts.dialog?.let { PromptDialog(it, state.prompts, state.projects.all, state.teams.teams) }

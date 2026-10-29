@@ -56,7 +56,7 @@ class DictationTest {
     void emitsPartialOnTick() {
         var dictation = dictation(Runnable::run);
         feed(dictation, TICK_BLOCKS - 1, 0.1f);
-        verifyNoInteractions(listener);
+        verifyNoResults();
         feed(dictation, 1, 0.1f);
         verify(listener).onPartial("hello");
         verify(listener, never()).onFinal(anyString());
@@ -97,7 +97,7 @@ class DictationTest {
         var dictation = dictation(Runnable::run);
         feed(dictation, TICK_BLOCKS, 0.1f);
         dictation.stop();
-        verifyNoInteractions(listener);
+        verifyNoResults();
     }
 
     @Test
@@ -115,7 +115,8 @@ class DictationTest {
         var dictation = dictation(Runnable::run);
         dictation.stop();
         dictation.stop();
-        verifyNoInteractions(recognizer, listener);
+        verifyNoInteractions(recognizer);
+        verifyNoResults();
     }
 
     @Test
@@ -131,7 +132,8 @@ class DictationTest {
     void emptyBlockIsHarmless() {
         var dictation = dictation(Runnable::run);
         dictation.feed(new float[0]);
-        verifyNoInteractions(recognizer, listener);
+        verifyNoInteractions(recognizer);
+        verifyNoResults();
     }
 
     @Test
@@ -205,5 +207,28 @@ class DictationTest {
         var dictation = dictation(Runnable::run);
         feed(dictation, TICK_BLOCKS * 2, 0.1f);
         verify(listener, times(1)).onPartial("hello");
+    }
+
+    private void verifyNoResults() {
+        verify(listener, never()).onPartial(anyString());
+        verify(listener, never()).onFinal(anyString());
+        verify(listener, never()).onError(any());
+    }
+
+    @Test
+    void reportsTheBlockLevelNormalisedToOne() {
+        assertThat(Dictation.levelOf(new float[0])).isZero();
+        assertThat(Dictation.levelOf(new float[] {0f, 0f})).isZero();
+        assertThat(Dictation.levelOf(new float[] {0.001f, -0.001f})).isZero();
+        assertThat(Dictation.levelOf(new float[] {0.05f, -0.05f})).isEqualTo(1.0);
+        assertThat(Dictation.levelOf(new float[] {0.02f, -0.02f})).isBetween(0.72, 0.78);
+        assertThat(Dictation.levelOf(new float[] {0.5f, -0.5f})).isEqualTo(1.0);
+    }
+
+    @Test
+    void feedsTheLevelToTheListener() {
+        var dictation = dictation(Runnable::run);
+        feed(dictation, 1, 0.1f);
+        verify(listener).onLevel(org.mockito.ArgumentMatchers.doubleThat(level -> level == 1.0));
     }
 }

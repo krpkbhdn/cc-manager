@@ -8,4 +8,8 @@ public interface DictationListener {
     void onFinal(String text);
 
     void onError(Throwable error);
+
+    /** The loudness of the latest audio block, 0 (silence) to 1; optional, called from the audio thread. */
+    default void onLevel(double level) {
+    }
 }

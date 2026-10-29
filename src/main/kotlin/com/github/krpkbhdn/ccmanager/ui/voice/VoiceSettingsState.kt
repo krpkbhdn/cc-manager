@@ -5,6 +5,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.github.krpkbhdn.ccmanager.ui.state.UiSettings
 import com.github.krpkbhdn.ccmanager.voice.DictationRequest
+import com.github.krpkbhdn.ccmanager.voice.DictationSession
+import com.github.krpkbhdn.ccmanager.voice.stream.DictationListener
 import com.github.krpkbhdn.ccmanager.voice.asset.RuntimeBuild
 import com.github.krpkbhdn.ccmanager.voice.asset.VoiceAsset
 import com.github.krpkbhdn.ccmanager.voice.asset.WhisperModel
@@ -46,6 +48,8 @@ class VoiceSettingsState(
     private val recomputing = Mutex()
     private val downloads = ResourceDownloads(backend.assets, scope, reportError) { recompute() }
     private val live = LiveTestController(backend.input, scope)
+    private val dictationStart = Any()
+    @Volatile private var dictationSession: DictationSession? = null
 
     /** True when the chosen device needs a whisper runtime other than the one this process already loaded. */
     var restartRequired by mutableStateOf(false)
@@ -76,6 +80,9 @@ class VoiceSettingsState(
         }
     val canLiveTest: Boolean get() = !liveTestActive && liveTestBlocker == null
 
+    /** True when hold-Space dictation may start: voice is ready and the live test does not hold the microphone. */
+    val dictationUsable: Boolean get() = liveTestBlocker == null && !liveTestActive
+
     init {
         launchRecompute { listInputs(); listDevices(refresh = false) }
     }
@@ -104,13 +111,25 @@ class VoiceSettingsState(
     fun downloadAllMissing() = downloads.start(resources.filter { it.canDownload }.map { it.asset })
 
     fun startLiveTest() {
-        if (canLiveTest) live.start(DictationRequest(model, resolved.spec, input, null))
+        if (canLiveTest) live.start(dictationRequest())
     }
 
     fun stopLiveTest() = live.stop()
 
+    /** Blocks while the model loads: call off the UI thread. */
+    fun startDictation(listener: DictationListener): DictationSession = synchronized(dictationStart) {
+        backend.input.start(dictationRequest(), listener).also { dictationSession = it }
+    }
+
+    fun dictationFailed(message: String) = reportError(HARDWARE_FAILED_TITLE, message)
+
     /** Stops a running live test and waits for the microphone; call when the page, dialog or app goes away. */
-    fun close() = live.close()
+    fun close() {
+        live.close()
+        dictationSession?.close()
+    }
+
+    private fun dictationRequest() = DictationRequest(model, resolved.spec, input, null)
 
     private fun modelOf(chosen: UiSettings) = WhisperModel.byAlias(chosen.voiceModel).orElse(WhisperModel.BASE_Q5_1)
 
