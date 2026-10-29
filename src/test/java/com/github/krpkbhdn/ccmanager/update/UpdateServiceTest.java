@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 import com.github.krpkbhdn.ccmanager.config.AppProperties;
+import com.github.krpkbhdn.ccmanager.download.VerifiedDownload;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -38,7 +39,7 @@ class UpdateServiceTest {
         server.createContext("/app.msi.sha256", exchange -> respond(exchange, (checksum + "  app.msi\n").getBytes(StandardCharsets.UTF_8)));
         server.start();
         var properties = new UpdateProperties("1.0.0", "o/r", "http://unused", 6, 5);
-        service = new UpdateService(properties, new AppProperties(dataDir), JsonMapper.builder().build(), mock(UpdateInstaller.class));
+        service = new UpdateService(properties, new AppProperties(dataDir), JsonMapper.builder().build(), mock(UpdateInstaller.class), new VerifiedDownload());
     }
 
     @AfterEach

@@ -10,6 +10,7 @@ enum class SettingsCategory(val label: String) {
     NOTIFICATIONS("Notifications"),
     SESSIONS("Sessions"),
     ASSISTANT("Assistant"),
+    VOICE("Voice input"),
     UPDATES("Updates"),
     AUTHOR("Author configuration"),
     ABOUT("About"),

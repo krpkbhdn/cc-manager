@@ -20,6 +20,8 @@ import com.github.krpkbhdn.ccmanager.prompt.PromptTemplate
 import com.github.krpkbhdn.ccmanager.team.Team
 import com.github.krpkbhdn.ccmanager.claude.install.LoginState
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartup
+import com.github.krpkbhdn.ccmanager.ui.voice.VoiceSettingsState
+import com.github.krpkbhdn.ccmanager.ui.voice.voiceSettingsOf
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartupState
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantState
 import com.github.krpkbhdn.ccmanager.ui.assistant.ToolSummary
@@ -175,6 +177,7 @@ class AppState(
         toast = notifications::toast,
     )
     val settingsDialog = SettingsState()
+    val voice: VoiceSettingsState? = voiceSettingsOf(backend.voice, scope, { settings }, ::updateSettings, notifications::reportError)
     val update = UpdateState(backend.updates, scope, notifications::reportError, ::requestQuit) { exitApp() }
     var exitApp: () -> Unit = {}
     val agents = AgentsState(backend.transcripts, scope, { live }, ::showSessionTerminal)
@@ -257,6 +260,7 @@ class AppState(
         teams.dispose()
         prompts.dispose()
         queue.dispose()
+        voice?.close()
         runs.dispose()
         proposals.dispose()
         unsubscribers.forEach { it.run() }

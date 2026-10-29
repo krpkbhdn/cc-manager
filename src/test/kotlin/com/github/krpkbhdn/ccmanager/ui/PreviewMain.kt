@@ -13,6 +13,7 @@ import com.github.krpkbhdn.ccmanager.notification.AppNotification
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.ui.chrome.MainWindow
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartup
+import com.github.krpkbhdn.ccmanager.ui.settings.SettingsCategory
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.GroupDialogRequest
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
@@ -27,6 +28,7 @@ import javax.imageio.ImageIO
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import com.github.krpkbhdn.ccmanager.voice.asset.WhisperModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
@@ -93,6 +95,43 @@ internal class Capture(val window: java.awt.Window, val dir: Path, val prefix: S
     }
 }
 
+private const val DOWNLOAD_SHOT_MILLIS = 400L
+private const val LIVE_TEST_SHOT_MILLIS = 2500L
+private const val VOICE_SHOT_HEIGHT = 1100
+
+private suspend fun captureVoicePage(capture: Capture, state: AppState, fake: PreviewVoice) {
+    val voice = state.voice ?: return
+    val window = capture.window
+    val size = window.size
+    state.settingsDialog.select(SettingsCategory.VOICE)
+    capture.take("1a1-voice-off")
+    voice.setEnabled(true)
+    voice.selectModel(WhisperModel.SMALL_Q5_1)
+    capture.take("1a2-voice-missing")
+    fake.failDownloads = true
+    voice.downloadAllMissing()
+    capture.take("1a3-voice-failed")
+    fake.failDownloads = false
+    voice.downloadAllMissing()
+    capture.take("1a4-voice-downloading", DOWNLOAD_SHOT_MILLIS)
+    delay(LIVE_TEST_SHOT_MILLIS)
+    voice.selectModel(WhisperModel.BASE_Q5_1)
+    delay(DOWNLOAD_SHOT_MILLIS)
+    fake.restartRequired = true
+    voice.refreshDevices()
+    capture.take("1a5-voice-restart")
+    fake.restartRequired = false
+    voice.refreshDevices()
+    delay(DOWNLOAD_SHOT_MILLIS)
+    window.setSize(size.width, VOICE_SHOT_HEIGHT)
+    voice.startLiveTest()
+    capture.take("1a6-voice-live-test", LIVE_TEST_SHOT_MILLIS)
+    voice.stopLiveTest()
+    window.setSize(size.width, size.height)
+    voice.setEnabled(false)
+    state.settingsDialog.select(SettingsCategory.APPEARANCE)
+}
+
 private suspend fun captureTour(capture: Capture, state: AppState, world: PreviewWorld, flags: PreviewFlags) {
     if (flags.empty) {
         capture.take("0-empty")
@@ -101,6 +140,7 @@ private suspend fun captureTour(capture: Capture, state: AppState, world: Previe
     capture.take("1-overview")
     state.settingsDialog.show()
     capture.take("1a-settings")
+    captureVoicePage(capture, state, world.voice)
     state.settingsDialog.close()
     state.navigate(Route.Sessions)
     capture.take("1b-all-sessions")
