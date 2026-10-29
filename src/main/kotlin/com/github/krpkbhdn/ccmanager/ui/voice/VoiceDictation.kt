@@ -37,6 +37,7 @@ import kotlinx.coroutines.withContext
 
 private const val HOLD_THRESHOLD_MILLIS = 350L
 private const val FAILURE_SHOWN_MILLIS = 6000L
+private val LINE_BREAKS = Regex("""\s*\R\s*""")
 
 /**
  * Hold-Space dictation into one [TextFieldState]. The first Space types a space as usual; if Space is still down after [HOLD_THRESHOLD_MILLIS]
@@ -49,6 +50,7 @@ class VoiceDictation internal constructor(
     private val usable: () -> Boolean,
     private val start: (DictationListener) -> DictationSession,
     private val fail: (String) -> Unit,
+    private val singleLine: Boolean = false,
 ) {
     var active by mutableStateOf(false)
         private set
@@ -194,7 +196,7 @@ class VoiceDictation internal constructor(
 
     private fun apply(current: Run, utterance: String, commit: Boolean) {
         if (run !== current || current.dead) return
-        val applied = current.edit.apply(state.text.toString(), utterance, commit)
+        val applied = current.edit.apply(state.text.toString(), if (singleLine) utterance.replace(LINE_BREAKS, " ") else utterance, commit)
         state.edit {
             replace(applied.replaceFrom.coerceAtMost(length), applied.replaceTo.coerceAtMost(length), applied.inserted)
             selection = TextRange(applied.caret.coerceAtMost(length))
@@ -246,10 +248,10 @@ class VoiceDictation internal constructor(
 }
 
 @Composable
-fun rememberVoiceDictation(state: TextFieldState, voice: VoiceSettingsState?): VoiceDictation? {
+fun rememberVoiceDictation(state: TextFieldState, voice: VoiceSettingsState?, singleLine: Boolean = false): VoiceDictation? {
     if (voice == null) return null
     val scope = rememberCoroutineScope()
-    val dictation = remember(state, voice) { VoiceDictation(state, scope, { voice.dictationUsable }, voice::startDictation, voice::dictationFailed) }
+    val dictation = remember(state, voice) { VoiceDictation(state, scope, { voice.dictationUsable }, voice::startDictation, voice::dictationFailed, singleLine) }
     DisposableEffect(dictation) { onDispose { dictation.release() } }
     return dictation
 }

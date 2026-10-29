@@ -18,8 +18,8 @@ import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.team.Team
 import com.github.krpkbhdn.ccmanager.ui.components.AppButton
-import com.github.krpkbhdn.ccmanager.ui.components.AppTextArea
 import com.github.krpkbhdn.ccmanager.ui.components.AppTextField
+import com.github.krpkbhdn.ccmanager.ui.voice.VoiceTextField
 import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant
 import com.github.krpkbhdn.ccmanager.ui.components.DialogBody
 import com.github.krpkbhdn.ccmanager.ui.components.Label
@@ -30,6 +30,7 @@ import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
+import com.github.krpkbhdn.ccmanager.ui.voice.VoiceTextArea
 
 private val dialogWidth = 560.dp
 const val ALL_PROJECTS = "All projects"
@@ -46,9 +47,9 @@ fun PromptDialog(form: PromptDialogState, prompts: PromptsState, projects: List<
     ModalHost(prompts::closeDialog, width = dialogWidth, takeFocus = false, hasInput = { form.hasInput }) {
         DialogBody(if (form.existing == null) "New prompt" else "Edit prompt", Icons.Message, colors.accent) {
             Field("Name") { AppTextField(form.name, Modifier.fillMaxWidth(), placeholder = "Review the branch", focusRequester = focus, onSubmit = save) }
-            Field("Description (optional)") { AppTextField(form.description, Modifier.fillMaxWidth(), placeholder = "What this prompt is for") }
+            Field("Description (optional)") { VoiceTextField(form.description, Modifier.fillMaxWidth(), placeholder = "What this prompt is for") }
             Field("Text") {
-                AppTextArea(form.text, Modifier.fillMaxWidth(), placeholder = "Review {project} on {branch} and list the risks", onSubmit = save)
+                VoiceTextArea(form.text, Modifier.fillMaxWidth(), placeholder = "Review {project} on {branch} and list the risks", onSubmit = save)
                 Label(PLACEHOLDER_HINT, color = colors.textTertiary, style = Type.caption, maxLines = 2)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.lg)) {

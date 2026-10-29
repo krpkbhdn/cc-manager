@@ -18,6 +18,7 @@ import com.github.krpkbhdn.ccmanager.claude.proposal.FormProposal
 import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalAnswer.FormAnswer
 import com.github.krpkbhdn.ccmanager.ui.components.AppCheckbox
 import com.github.krpkbhdn.ccmanager.ui.components.AppTextField
+import com.github.krpkbhdn.ccmanager.ui.voice.VoiceTextField
 import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant
 import com.github.krpkbhdn.ccmanager.ui.components.Label
 import com.github.krpkbhdn.ccmanager.ui.components.SecondaryButton
@@ -99,5 +100,6 @@ private fun FieldRow(field: FormField, value: String, error: String?, focus: Foc
 private fun TextInput(value: String, onChange: (String) -> Unit, numeric: Boolean, focus: FocusRequester?) {
     val state = remember { TextFieldState(value) }
     LaunchedEffect(state) { snapshotFlow { state.text.toString() }.collect(onChange) }
-    AppTextField(state, Modifier.fillMaxWidth(), placeholder = if (numeric) "Number" else "", mono = numeric, focusRequester = focus)
+    if (numeric) AppTextField(state, Modifier.fillMaxWidth(), placeholder = "Number", mono = true, focusRequester = focus)
+    else VoiceTextField(state, Modifier.fillMaxWidth(), focusRequester = focus)
 }

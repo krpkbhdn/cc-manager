@@ -72,13 +72,13 @@ internal fun rememberCaretMotion(level: Float): CaretMotion {
 
 /**
  * Draws [caretBar] at the selection of [state] over a field whose own caret is hidden; [gap] is the distance kept from the preceding character. [layout] is the field's latest text layout and [scroll]
- * its vertical scroll, since the layout rectangles are in unscrolled text coordinates.
+ * its scroll (vertical; horizontal for a single-line field), since the layout rectangles are in unscrolled text coordinates.
  */
-internal fun Modifier.dictationCaret(state: TextFieldState, layout: () -> TextLayoutResult?, scroll: ScrollState, motion: CaretMotion, grey: Color, gap: Float) =
+internal fun Modifier.dictationCaret(state: TextFieldState, layout: () -> TextLayoutResult?, scroll: ScrollState, motion: CaretMotion, grey: Color, gap: Float, horizontal: Boolean = false) =
     drawWithContent {
         drawContent()
         val result = layout() ?: return@drawWithContent
         val offset = state.selection.min.coerceIn(0, result.layoutInput.text.length)
-        val bar = caretBar(result.getCursorRect(offset), motion.level.value, barWidth.toPx(), restHeight.toPx(), gap).translate(0f, -scroll.value.toFloat())
+        val bar = caretBar(result.getCursorRect(offset), motion.level.value, barWidth.toPx(), restHeight.toPx(), gap).translate(if (horizontal) -scroll.value.toFloat() else 0f, if (horizontal) 0f else -scroll.value.toFloat())
         drawRect(caretColor(grey, motion.hue.value, motion.speaking.value), bar.topLeft, bar.size)
     }

@@ -6,7 +6,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import com.github.krpkbhdn.ccmanager.claude.proposal.PlanProposal
-import com.github.krpkbhdn.ccmanager.ui.components.AppTextField
+import com.github.krpkbhdn.ccmanager.ui.voice.VoiceTextField
 import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant
 import com.github.krpkbhdn.ccmanager.ui.components.Label
 import com.github.krpkbhdn.ccmanager.ui.components.Segment
@@ -34,7 +34,7 @@ internal fun PlanDialog(proposal: PlanProposal, title: FrameTitle, context: Prop
             DialogButton("Approve", { context.answer(draft.approve()) }, variant = ButtonVariant.PRIMARY)
         },
         aboveFooter = {
-            AppTextField(draft.feedback, Modifier.fillMaxWidth(), placeholder = "What should Claude change?", focusRequester = focus, onSubmit = { revise() })
+            VoiceTextField(draft.feedback, Modifier.fillMaxWidth(), placeholder = "What should Claude change?", focusRequester = focus, onSubmit = { revise() })
         },
         onCtrlEnter = { context.answer(draft.approve()) },
     ) {

@@ -14,12 +14,12 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
-import com.github.krpkbhdn.ccmanager.ui.components.AppTextArea
 import com.github.krpkbhdn.ccmanager.ui.components.DialogActions
 import com.github.krpkbhdn.ccmanager.ui.components.DialogBody
 import com.github.krpkbhdn.ccmanager.ui.components.ModalHost
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
+import com.github.krpkbhdn.ccmanager.ui.voice.VoiceTextArea
 
 private val dialogWidth = 560.dp
 
@@ -37,7 +37,7 @@ fun QuickRequestDialog(onSend: (String) -> Unit, onDismiss: () -> Unit) {
     }
     ModalHost(onDismiss, width = dialogWidth, takeFocus = false) {
         DialogBody("Ask assistant", Icons.Sparkles, colors.accent, actions = { DialogActions("Send", text.text.isNotBlank(), false, send, onDismiss) }) {
-            AppTextArea(text, enterSends, placeholder = "What should the assistant do? Enter sends, Shift+Enter adds a line", focusRequester = focus, minLines = 3, maxLines = 10, onSubmit = send)
+            VoiceTextArea(text, enterSends, placeholder = "What should the assistant do? Enter sends, Shift+Enter adds a line", focusRequester = focus, minLines = 3, maxLines = 10, onSubmit = send)
         }
     }
 }

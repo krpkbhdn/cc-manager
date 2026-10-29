@@ -26,7 +26,6 @@ import com.github.krpkbhdn.ccmanager.team.Team
 import com.github.krpkbhdn.ccmanager.ui.components.AppButton
 import com.github.krpkbhdn.ccmanager.ui.components.AppCheckbox
 import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant
-import com.github.krpkbhdn.ccmanager.ui.components.AppTextArea
 import com.github.krpkbhdn.ccmanager.ui.components.DialogActions
 import com.github.krpkbhdn.ccmanager.ui.components.DialogBody
 import com.github.krpkbhdn.ccmanager.ui.components.Label
@@ -39,10 +38,7 @@ import com.github.krpkbhdn.ccmanager.ui.prompts.teamForTemplate
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
-import com.github.krpkbhdn.ccmanager.ui.voice.DictationStatus
-import com.github.krpkbhdn.ccmanager.ui.voice.DictationStatusRow
-import com.github.krpkbhdn.ccmanager.ui.voice.VoiceSettingsState
-import com.github.krpkbhdn.ccmanager.ui.voice.rememberVoiceDictation
+import com.github.krpkbhdn.ccmanager.ui.voice.VoiceTextArea
 
 private val dialogWidth = 560.dp
 private const val NO_TEAM = "No team"
@@ -57,11 +53,10 @@ class StartTaskActions(val onStart: (team: Team?, task: String, makeDefault: Boo
 
 /** Pick a team (or none), describe the task, and see which roles the lead will have; Ctrl+Enter starts it. */
 @Composable
-fun StartTaskDialog(project: Project, teams: TeamsState, templates: TaskTemplates, actions: StartTaskActions, voice: VoiceSettingsState? = null) {
+fun StartTaskDialog(project: Project, teams: TeamsState, templates: TaskTemplates, actions: StartTaskActions) {
     var selected by remember { mutableStateOf(teams.defaultTeamOf(project.id)?.id) }
     var makeDefault by remember { mutableStateOf(false) }
     val task = rememberTextFieldState()
-    val dictation = rememberVoiceDictation(task, voice)
     val focus = remember { FocusRequester() }
     var picking by remember { mutableStateOf(false) }
     val apply: (PromptTemplate) -> Unit = { template ->
@@ -83,10 +78,7 @@ fun StartTaskDialog(project: Project, teams: TeamsState, templates: TaskTemplate
                 Label("Task", Modifier.weight(1f), color = colors.textSecondary, style = Type.smallMedium)
                 AppButton("From library", { picking = true }, icon = Icons.Message, compact = true, tooltip = "Fill the task from a saved prompt in the library")
             }
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
-                AppTextArea(task, Modifier.fillMaxWidth(), placeholder = "Describe what to do", focusRequester = focus, onSubmit = start, voice = dictation)
-                if (dictation != null && (voice?.dictationUsable == true || dictation.status != DictationStatus.Idle)) DictationStatusRow(dictation.status)
-            }
+            VoiceTextArea(task, Modifier.fillMaxWidth(), placeholder = "Describe what to do", focusRequester = focus, onSubmit = start)
             Label(if (team != null) TASK_HINT else NO_TEAM_TASK_HINT, color = colors.textTertiary, style = Type.caption, maxLines = 2)
             if (team != null) DefaultTeamToggle(makeDefault) { makeDefault = it }
             DialogActions("Start task", task.text.isNotBlank(), false, start, actions.onDismiss)
