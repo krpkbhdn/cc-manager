@@ -66,7 +66,7 @@ class QueueState(
         var waiting = false
         sessions.forEach { session ->
             if (dispatcher.observe(session.ccmSessionId, observationOf(session)) == QueueDecision.SEND) dispatch(session.ccmSessionId)
-            waiting = waiting || dispatcher.isWaiting(session.ccmSessionId)
+            waiting = waiting || dispatcher.needsRecheck(session.ccmSessionId)
         }
         if (waiting) scheduleRetry()
     }
@@ -79,6 +79,7 @@ class QueueState(
             queueEmpty = queues.of(id).isEmpty(),
             draftExists = terminal.draftMayExist(id),
             blockedReason = commandBlockedReason(session, isAttached(id)),
+            nowMillis = System.currentTimeMillis(),
         )
     }
 
@@ -89,12 +90,12 @@ class QueueState(
             try {
                 if (sendPrompt(ccmSessionId, prompt.text)) {
                     queues.remove(ccmSessionId, prompt.id)
-                    dispatcher.sent(ccmSessionId)
+                    dispatcher.sent(ccmSessionId, System.currentTimeMillis())
                 }
             } finally {
                 sending.remove(ccmSessionId)
             }
-            if (dispatcher.isWaiting(ccmSessionId)) scheduleRetry()
+            if (dispatcher.needsRecheck(ccmSessionId)) scheduleRetry()
         }
     }
 

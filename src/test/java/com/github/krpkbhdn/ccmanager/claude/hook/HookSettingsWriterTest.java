@@ -129,6 +129,18 @@ class HookSettingsWriterTest {
     }
 
     @Test
+    void projectSessionsDenyReadingTheHooksDirectoryButTheAssistantDoesNot() throws Exception {
+        when(server.assistantMcpUrl()).thenReturn("http://127.0.0.1:1/assistant-mcp/s");
+        var deny = mapper.readTree(Files.readString(writer.write("abc-1").settings())).path("permissions").path("deny");
+        var assistant = mapper.readTree(Files.readString(writer.writeAssistant("abc-1").settings())).path("permissions");
+
+        assertThat(deny.get(0).asString()).startsWith("Read(/").endsWith("/hooks/**)");
+        assertThat(assistant.has("deny")).isFalse();
+        var windowsDeny = mapper.readTree(Files.readString(windowsWriter.write("abc-1").settings())).path("permissions").path("deny");
+        assertThat(windowsDeny.get(0).asString()).doesNotContain(":", "\\").endsWith("/hooks/**)");
+    }
+
+    @Test
     void writesAnMcpConfigPointingAtTheMcpEndpointAndPreApprovesItsTools() throws Exception {
         var files = writer.write("abc-1");
 

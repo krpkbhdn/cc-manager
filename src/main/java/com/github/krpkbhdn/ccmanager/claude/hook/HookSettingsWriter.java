@@ -92,15 +92,15 @@ public class HookSettingsWriter {
 
     /** [extraServers] join the MCP config; the app's own server name stays reserved. */
     public SessionFiles write(String ccmSessionId, Map<String, JsonNode> extraServers) {
-        return write(ccmSessionId, mcpConfig(MCP_SERVER, server.mcpUrl(ccmSessionId), extraServers));
+        return write(ccmSessionId, mcpConfig(MCP_SERVER, server.mcpUrl(ccmSessionId), extraServers), true);
     }
 
     /** The Assistant session gets only the app server in its mcp file; the project server and the project-session secret stay out of it. */
     public SessionFiles writeAssistant(String ccmSessionId) {
-        return write(ccmSessionId, mcpConfig(AssistantMcpEndpoint.SERVER_NAME, server.assistantMcpUrl(), Map.of()));
+        return write(ccmSessionId, mcpConfig(AssistantMcpEndpoint.SERVER_NAME, server.assistantMcpUrl(), Map.of()), false);
     }
 
-    private SessionFiles write(String ccmSessionId, ObjectNode mcpConfig) {
+    private SessionFiles write(String ccmSessionId, ObjectNode mcpConfig, boolean projectSession) {
         var file = fileOf(ccmSessionId);
         var mcpFile = mcpFileOf(ccmSessionId);
         try {
@@ -109,7 +109,7 @@ public class HookSettingsWriter {
                 writeCurlConfig(ccmSessionId, HOOK_CURL, server.hookUrl(ccmSessionId));
                 writeCurlConfig(ccmSessionId, STATUS_LINE_CURL, server.statusLineUrl(ccmSessionId));
             }
-            Files.writeString(file, mapper.writeValueAsString(settings(ccmSessionId)));
+            Files.writeString(file, mapper.writeValueAsString(settings(ccmSessionId, projectSession)));
             restrictToOwner(file, "rw-------");
             Files.writeString(mcpFile, mapper.writeValueAsString(mcpConfig));
             restrictToOwner(mcpFile, "rw-------");
@@ -144,7 +144,7 @@ public class HookSettingsWriter {
         }
     }
 
-    ObjectNode settings(String ccmSessionId) {
+    ObjectNode settings(String ccmSessionId, boolean projectSession) {
         var hooks = mapper.createObjectNode();
         Arrays.stream(HookEventType.values())
                 .filter(type -> !NOT_SUBSCRIBED.contains(type))
@@ -152,8 +152,21 @@ public class HookSettingsWriter {
         var settings = mapper.createObjectNode();
         settings.set("hooks", hooks);
         settings.set("statusLine", statusLine(ccmSessionId));
-        settings.putObject("permissions").putArray("allow").add("mcp__" + MCP_SERVER + "__" + LIST_RUN_CONFIGURATIONS_TOOL);
+        var permissions = settings.putObject("permissions");
+        permissions.putArray("allow").add("mcp__" + MCP_SERVER + "__" + LIST_RUN_CONFIGURATIONS_TOOL);
+        if (projectSession) {
+            permissions.putArray("deny").add("Read(" + absoluteRule(hooksRoot) + "/**)");
+        }
         return settings;
+    }
+
+    /** Claude Code rules take an absolute path as {@code //path}; Windows drives are written Git Bash style ({@code //c/Users/...}). shortcut: Bash cat is not covered by Read rules. */
+    private String absoluteRule(Path path) {
+        var text = path.toAbsolutePath().toString().replace('\\', '/');
+        if (windows && text.length() > 1 && text.charAt(1) == ':') {
+            return "//" + Character.toLowerCase(text.charAt(0)) + text.substring(2);
+        }
+        return "/" + text;
     }
 
     /** Only the read-only list tool is pre-approved; set and delete change a command the user later runs, so Claude asks first. */

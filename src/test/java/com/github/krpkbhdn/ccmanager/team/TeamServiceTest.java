@@ -72,6 +72,29 @@ class TeamServiceTest {
     }
 
     @Test
+    void updateRefusesATeamWithAnUnreadableRoleSoItIsNotDeleted() {
+        var team = service.create("Squad", List.of(role("boss", true), role("dev", false)));
+        jdbc.sql("UPDATE team_role SET name = '' WHERE team_id = ? AND name = 'dev'").param(team.id()).update();
+
+        assertThatThrownBy(() -> service.update(team.id(), "Squad", List.of(role("boss", true))))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("unreadable");
+        assertThat(jdbc.sql("SELECT COUNT(*) FROM team_role WHERE team_id = ?").param(team.id()).query(Long.class).single()).isEqualTo(2L);
+    }
+
+    @Test
+    void aThrowingListenerDoesNotStopTheOthers() {
+        var calls = new AtomicInteger();
+        service.subscribe(() -> {
+            throw new IllegalStateException("boom");
+        });
+        service.subscribe(calls::incrementAndGet);
+
+        service.create("Squad", List.of(role("boss", true)));
+
+        assertThat(calls).hasValue(1);
+    }
+
+    @Test
     void storedRoleWithRetiredEffortStillLoadsWithoutIt() {
         var team = service.create("Squad", List.of(role("boss", true)));
         jdbc.sql("UPDATE team_role SET effort = 'retired' WHERE team_id = ?").param(team.id()).update();

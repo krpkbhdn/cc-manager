@@ -15,11 +15,6 @@ class SetPromptTool extends AssistantTool {
     }
 
     @Override
-    public boolean autoApproved() {
-        return true;
-    }
-
-    @Override
     public String name() {
         return "set_prompt";
     }

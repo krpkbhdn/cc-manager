@@ -7,6 +7,7 @@ import java.time.Duration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
@@ -56,6 +57,22 @@ class AppControlAdapterTest {
         adapter.queuePrompt("s-working", "  go on ")
 
         assertThat(state.queue.of("s-working").map { it.text }).containsExactly("go on")
+    }
+
+    @Test
+    fun `a call that timed out is cancelled and does not run later`() {
+        val release = java.util.concurrent.CountDownLatch(1)
+        val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+        val slow = CoroutineScope(SupervisorJob() + executor.asCoroutineDispatcher())
+        executor.execute { release.await() }
+
+        assertThatThrownBy { AppControlAdapter(state, slow, Duration.ofMillis(50)).navigate("teams") }.hasMessageContaining("did not respond")
+        release.countDown()
+        executor.submit {}.get()
+
+        assertThat(state.route).isNotEqualTo(Route.Teams)
+        slow.cancel()
+        executor.shutdown()
     }
 
     @Test

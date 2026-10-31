@@ -21,6 +21,8 @@ private const val APPLY_POLL_MILLIS = 200L
 private const val SWITCH_MODEL_HINT = "If claude asks \"Switch model?\", answer in the terminal."
 private const val BUSY_MESSAGE = "The session is not ready for a command yet. Try again in a moment."
 
+private const val LAUNCH_IN_PROGRESS_MESSAGE = "Another session is starting. Try again in a moment."
+
 /** Starting, attaching, closing and commanding the Claude sessions of the projects. */
 class SessionsState(
     private val backend: Backend,
@@ -74,7 +76,7 @@ class SessionsState(
         launchSession(projectId, onStarted = onStarted) { backend.launcher.launchSetup(projectId, handoff.firstMessage(), handoff.profileDirectory()) }
 
     private fun launchSession(projectId: Long, team: Team? = null, onStarted: () -> Unit = {}, rememberTeam: Boolean = team != null, show: Boolean = true, start: () -> LaunchedSession) {
-        if (launching) return
+        if (launching) return reportError(LAUNCH_IN_PROGRESS_MESSAGE)
         launching = true
         scope.launch {
             guarded {

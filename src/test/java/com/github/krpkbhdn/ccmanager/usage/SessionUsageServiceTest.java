@@ -38,4 +38,18 @@ class SessionUsageServiceTest {
 
         assertThat(service.of(id)).isEmpty();
     }
+
+    @Test
+    void aThrowingListenerDoesNotStopTheOthers() {
+        var registry = new SessionRegistry(new SessionProperties(Duration.ofMinutes(1), Duration.ofMinutes(10)), mock(TranscriptService.class));
+        var service = new SessionUsageService(registry);
+        var id = registry.register(1L);
+        var notified = new java.util.concurrent.atomic.AtomicInteger();
+        service.subscribe(() -> { throw new IllegalStateException("boom"); });
+        service.subscribe(notified::incrementAndGet);
+
+        service.on(new StatusLineReport(id, JsonMapper.builder().build().createObjectNode(), Instant.now()));
+
+        assertThat(notified).hasValue(1);
+    }
 }

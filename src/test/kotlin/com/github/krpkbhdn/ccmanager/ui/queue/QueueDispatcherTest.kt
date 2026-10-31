@@ -14,7 +14,7 @@ class QueueDispatcherTest {
         queueEmpty: Boolean = false,
         draft: Boolean = false,
         blocked: String? = null,
-    ) = dispatcher.observe("s", QueueObservation(status, interrupted, queueEmpty, draft, blocked))
+    ) = dispatcher.observe("s", QueueObservation(status, interrupted, queueEmpty, draft, blocked, 0))
 
     private fun finishATurn() {
         observe(AgentStatus.IDLE)
@@ -57,7 +57,7 @@ class QueueDispatcherTest {
     @Test
     fun twoPromptsAddedWhileIdleSendOneNowAndTheNextAfterTheNextTurn() {
         assertThat(observe(AgentStatus.IDLE)).isEqualTo(QueueDecision.SEND)
-        dispatcher.sent("s")
+        dispatcher.sent("s", 0)
         assertThat(observe(AgentStatus.IDLE)).isEqualTo(QueueDecision.WAIT)
         assertThat(observe(AgentStatus.WORKING)).isEqualTo(QueueDecision.WAIT)
         assertThat(observe(AgentStatus.IDLE)).isEqualTo(QueueDecision.SEND)
@@ -123,9 +123,34 @@ class QueueDispatcherTest {
         finishATurn()
         assertThat(observe(AgentStatus.IDLE)).isEqualTo(QueueDecision.SEND)
         assertThat(observe(AgentStatus.IDLE)).isEqualTo(QueueDecision.SEND)
-        dispatcher.sent("s")
+        dispatcher.sent("s", 0)
         assertThat(observe(AgentStatus.IDLE)).isEqualTo(QueueDecision.WAIT)
         assertThat(dispatcher.isWaiting("s")).isFalse()
+    }
+
+    private fun observeAt(nowMillis: Long) = dispatcher.observe("s", QueueObservation(AgentStatus.IDLE, false, false, false, null, nowMillis))
+
+    @Test
+    fun aSentPromptThatStartsNoTurnIsClearedAfterTheTimeout() {
+        assertThat(observeAt(0)).isEqualTo(QueueDecision.SEND)
+        dispatcher.sent("s", 0)
+        assertThat(observeAt(AWAIT_TURN_TIMEOUT_MILLIS)).isEqualTo(QueueDecision.SEND)
+    }
+
+    @Test
+    fun aSentPromptStaysHeldBeforeTheTimeout() {
+        observeAt(0)
+        dispatcher.sent("s", 0)
+        assertThat(observeAt(AWAIT_TURN_TIMEOUT_MILLIS - 1)).isEqualTo(QueueDecision.WAIT)
+        assertThat(dispatcher.needsRecheck("s")).isTrue()
+    }
+
+    @Test
+    fun aTurnThatStartsAfterASendStillSendsTheNextOneOnlyAtTurnEnd() {
+        observeAt(0)
+        dispatcher.sent("s", 0)
+        assertThat(observe(AgentStatus.WORKING)).isEqualTo(QueueDecision.WAIT)
+        assertThat(observeAt(1)).isEqualTo(QueueDecision.SEND)
     }
 
     @Test

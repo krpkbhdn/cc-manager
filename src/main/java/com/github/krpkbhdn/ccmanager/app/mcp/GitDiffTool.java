@@ -4,6 +4,8 @@ import com.github.krpkbhdn.ccmanager.git.GitStatus;
 import com.github.krpkbhdn.ccmanager.git.GitStatusService;
 import com.github.krpkbhdn.ccmanager.project.ProjectService;
 import com.github.krpkbhdn.ccmanager.workspace.GitDiff;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Stream;
@@ -15,6 +17,7 @@ import tools.jackson.databind.json.JsonMapper;
 class GitDiffTool extends GitTool {
 
     static final int MAX_CHARS = 20_000;
+    private static final String GIT_DIR = ".git";
 
     private final GitStatusService status;
 
@@ -48,6 +51,9 @@ class GitDiffTool extends GitTool {
     @Override
     String run(Path repo, JsonNode arguments) {
         var path = optionalText(arguments, "path");
+        if (!path.isEmpty()) {
+            requireInside(repo, path);
+        }
         var paths = path.isEmpty() ? status.status(repo).changes().stream().map(GitStatus.Change::path).toList() : List.of(path);
         var text = new StringBuilder();
         for (var changed : paths) {
@@ -60,6 +66,21 @@ class GitDiffTool extends GitTool {
             return "No changes";
         }
         return text.length() > MAX_CHARS ? text.substring(0, MAX_CHARS) + "\n... truncated" : text.toString();
+    }
+
+    /** The .git directory is refused too: its config holds remote URLs and tokens. An untracked path is read straight from disk by git diff --no-index, so it must stay inside the repository, symlinks included. */
+    private static void requireInside(Path repo, String path) {
+        try {
+            var root = Files.exists(repo) ? repo.toRealPath() : repo.normalize();
+            var target = repo.resolve(path).normalize();
+            var real = Files.exists(target) ? target.toRealPath() : target;
+            var gitDir = repo.normalize().resolve(GIT_DIR);
+            if (!target.startsWith(repo.normalize()) || !real.startsWith(root) || target.startsWith(gitDir)) {
+                throw new IllegalArgumentException("Path is outside the repository or inside .git: " + path);
+            }
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Cannot resolve path: " + path);
+        }
     }
 
     private static void append(StringBuilder text, GitDiff.FileDiff diff) {

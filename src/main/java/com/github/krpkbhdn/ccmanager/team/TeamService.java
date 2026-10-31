@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.team;
 
 import com.github.krpkbhdn.ccmanager.project.ModelSelection;
+import com.github.krpkbhdn.ccmanager.workspace.ChangeListeners;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -9,7 +10,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,7 +33,7 @@ public class TeamService {
 
     private final JdbcClient jdbc;
     private final TransactionTemplate transaction;
-    private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
+    private final ChangeListeners listeners = new ChangeListeners("Team");
 
     @Autowired
     public TeamService(JdbcClient jdbc, TransactionTemplate transaction) {
@@ -67,7 +67,11 @@ public class TeamService {
     /** Replaces the name and all roles; role ids change, the team id does not. */
     public Team update(long id, String name, List<RoleDraft> roles) {
         var cleanName = validate(name, roles);
-        find(id).orElseThrow(() -> new IllegalArgumentException("Team not found: " + id));
+        var current = find(id).orElseThrow(() -> new IllegalArgumentException("Team not found: " + id));
+        long stored = jdbc.sql("SELECT COUNT(*) FROM team_role WHERE team_id = ?").param(id).query(Long.class).single();
+        if (stored != current.roles().size()) {
+            throw new IllegalArgumentException("This team has unreadable roles; saving would delete them. Fix the broken role, or delete and recreate the team");
+        }
         transaction.executeWithoutResult(status -> {
             jdbc.sql("UPDATE team SET name = ? WHERE id = ?").param(cleanName).param(id).update();
             jdbc.sql("DELETE FROM team_role WHERE team_id = ?").param(id).update();
@@ -107,8 +111,7 @@ public class TeamService {
 
     /** @return unsubscribe handle; callback fires after any change to teams or a project's default team */
     public Runnable subscribe(Runnable onChange) {
-        listeners.add(onChange);
-        return () -> listeners.remove(onChange);
+        return listeners.add(onChange);
     }
 
     /** @return the stripped team name; @throws IllegalArgumentException with a user-readable message */
@@ -176,6 +179,6 @@ public class TeamService {
     }
 
     private void fireChanged() {
-        listeners.forEach(Runnable::run);
+        listeners.fire();
     }
 }
