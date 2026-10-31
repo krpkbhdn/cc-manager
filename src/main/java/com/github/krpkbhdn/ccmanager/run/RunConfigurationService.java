@@ -21,7 +21,7 @@ public class RunConfigurationService {
     public static final int MAX_NAME = 60;
     public static final int MAX_COMMAND = 4_000;
     private static final Logger log = LoggerFactory.getLogger(RunConfigurationService.class);
-    private static final String SELECT = "SELECT id, project_id, name, command, directory FROM run_configuration";
+    private static final String SELECT = "SELECT id, project_id, name, command, directory, confirmed FROM run_configuration";
 
     private final JdbcClient jdbc;
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
@@ -40,14 +40,31 @@ public class RunConfigurationService {
     }
 
     /**
-     * Creates the configuration or replaces command and directory of the one with this name.
+     * Creates the configuration or replaces command and directory of the one with this name; written by the user, so confirmed.
      *
      * @throws IllegalArgumentException with a user-readable message for invalid input
      */
     public RunConfiguration save(long projectId, String name, String command, Path directory) {
+        return upsert(projectId, name, command, directory, "1", "1");
+    }
+
+    /** Like {@link #save} for a configuration written by an agent: new, or with another command or directory, it needs the user's confirmation before it runs. */
+    public RunConfiguration saveByAgent(long projectId, String name, String command, Path directory) {
+        return upsert(projectId, name, command, directory, "0",
+                "CASE WHEN command = excluded.command AND directory = excluded.directory THEN confirmed ELSE 0 END");
+    }
+
+    /** The user has seen the full command and agreed to run it. */
+    public void confirm(long id) {
+        if (jdbc.sql("UPDATE run_configuration SET confirmed = 1 WHERE id = ?").param(id).update() > 0) {
+            fireChanged();
+        }
+    }
+
+    private RunConfiguration upsert(long projectId, String name, String command, Path directory, String insertedConfirmed, String conflictConfirmed) {
         var cleanName = validate(projectId, name, command, directory);
-        jdbc.sql("INSERT INTO run_configuration (project_id, name, command, directory) VALUES (?, ?, ?, ?) "
-                        + "ON CONFLICT (project_id, name) DO UPDATE SET command = excluded.command, directory = excluded.directory")
+        jdbc.sql("INSERT INTO run_configuration (project_id, name, command, directory, confirmed) VALUES (?, ?, ?, ?, " + insertedConfirmed + ") "
+                        + "ON CONFLICT (project_id, name) DO UPDATE SET command = excluded.command, directory = excluded.directory, confirmed = " + conflictConfirmed)
                 .param(projectId).param(cleanName).param(command).param(directory.toString()).update();
         fireChanged();
         return jdbc.sql(SELECT + " WHERE project_id = ? AND name = ?").param(projectId).param(cleanName)
@@ -64,7 +81,7 @@ public class RunConfigurationService {
             throw nameTaken(cleanName);
         }
         try {
-            jdbc.sql("UPDATE run_configuration SET name = ?, command = ?, directory = ? WHERE id = ?")
+            jdbc.sql("UPDATE run_configuration SET name = ?, command = ?, directory = ?, confirmed = 1 WHERE id = ?")
                     .param(cleanName).param(command).param(directory.toString()).param(id).update();
         } catch (DataAccessException e) {
             throw UniqueViolations.isUniqueViolation(e) ? nameTaken(cleanName) : e;
@@ -128,7 +145,7 @@ public class RunConfigurationService {
 
     private static RunConfiguration mapRow(ResultSet rs, int row) throws SQLException {
         return new RunConfiguration(rs.getLong("id"), rs.getLong("project_id"), rs.getString("name"),
-                rs.getString("command"), Path.of(rs.getString("directory")));
+                rs.getString("command"), Path.of(rs.getString("directory")), rs.getBoolean("confirmed"));
     }
 
     private void fireChanged() {

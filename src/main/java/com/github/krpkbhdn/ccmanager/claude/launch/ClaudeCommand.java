@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /** Pure builders for the claude command line and the child environment. */
@@ -21,6 +22,7 @@ public final class ClaudeCommand {
     static final String ENV_ADDITIONAL_DIRECTORIES_CLAUDE_MD = "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD";
     private static final String SETTINGS_FLAG = "--settings";
     private static final String ENABLED = "1";
+    private static final Pattern SAFE_ID = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_-]{0,63}");
     static final String TERM_VALUE = "xterm-256color";
     static final String COLORTERM_VALUE = "truecolor";
     static final String ASSISTANT_SYSTEM_PROMPT = "You control Claude Code Manager through the cc-manager-app MCP tools. "
@@ -96,6 +98,9 @@ public final class ClaudeCommand {
     }
 
     static List<String> attachArguments(Path executable, SessionFiles files, String backgroundSessionId) {
+        if (!SAFE_ID.matcher(backgroundSessionId).matches()) {
+            throw new IllegalArgumentException("Invalid background session id");
+        }
         List<String> command = base(executable, files);
         command.add("attach");
         command.add(backgroundSessionId);

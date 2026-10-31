@@ -35,7 +35,7 @@ public class GitRunner {
 
     private static final Set<String> NETWORK = Set.of("fetch", "pull", "push", "ls-remote", "clone");
     private static final Set<String> WRITES = Set.of("checkout", "switch", "restore", "reset", "merge", "rebase", "cherry-pick", "revert",
-            "stash", "commit", "add", "rm", "apply", "am", "clean", "pull");
+            "stash", "commit", "add", "rm", "apply", "am", "clean", "pull", "worktree");
     private static final ExecutorService PIPES = Executors.newVirtualThreadPerTaskExecutor();
     private static final List<String> BASE_COMMAND =
             List.of("git", "-c", "core.quotepath=false", "-c", "color.ui=never", "-c", "core.fsmonitor=false",

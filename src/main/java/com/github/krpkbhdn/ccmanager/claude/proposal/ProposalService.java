@@ -64,8 +64,9 @@ public class ProposalService {
         return held.values().stream().map(Held::proposal).sorted(Comparator.comparing(Proposal::createdAt)).toList();
     }
 
-    public List<Proposal> pending(String ccmSessionId) {
-        return pending().stream().filter(proposal -> proposal.ccmSessionId().equals(ccmSessionId)).toList();
+    /** Hands every held dialog back to the terminal, for shutdown. */
+    public void releaseAll() {
+        held.values().forEach(pending -> pending.decision().complete(Optional.empty()));
     }
 
     /**

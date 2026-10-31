@@ -67,6 +67,13 @@ class RunServiceTest {
     }
 
     @Test
+    void refusesToStartAnUnconfirmedAgentConfiguration() {
+        var configuration = configurations.saveByAgent(projectId, "agent", "exit 0", temp);
+
+        assertThatThrownBy(() -> runs.start(configuration.id())).isInstanceOf(IllegalStateException.class).hasMessageContaining("confirmation");
+    }
+
+    @Test
     void restartingUsesANewRunId() {
         var configuration = configurations.save(projectId, "again", "exit 0", temp);
 

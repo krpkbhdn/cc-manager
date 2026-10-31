@@ -41,7 +41,7 @@ class HookServerTest {
     @BeforeEach
     void setUp() {
         server = new HookServer(store, publisher, JsonMapper.builder().build(),
-                new HookProperties(10, MAX_BODY, 500, Duration.ofSeconds(5)), mcp, assistantMcp, proposals);
+                new HookProperties(10, MAX_BODY, 500, Duration.ofSeconds(5), Duration.ofDays(7)), mcp, assistantMcp, proposals);
         server.start();
     }
 
@@ -111,6 +111,17 @@ class HookServerTest {
     @Test
     void listensOnLoopbackOnly() {
         assertThat(server.hookUrl("x")).startsWith("http://127.0.0.1:" + server.port() + "/hook/");
+    }
+
+    @Test
+    void credentialOfOneSessionDoesNotAuthorizeAnother() throws Exception {
+        var otherSessionUrl = server.hookUrl("sess-2");
+        var stolen = server.hookUrl("sess-1").replace("sess-1", "sess-2");
+
+        assertThat(server.hookUrl("sess-1")).isNotEqualTo(otherSessionUrl.replace("sess-2", "sess-1"));
+        assertThat(post(stolen, "{\"hook_event_name\":\"Stop\"}").statusCode()).isEqualTo(404);
+        assertThat(post(server.mcpUrl("sess-1").replace("sess-1", "sess-2"), "{}").statusCode()).isEqualTo(404);
+        assertThat(post(otherSessionUrl, "{\"hook_event_name\":\"Stop\"}").statusCode()).isEqualTo(200);
     }
 
     @Test

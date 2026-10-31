@@ -6,11 +6,13 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 
 /**
  * Tunables of the hook pipeline: rows kept in hook_event, largest accepted request body, stored string length,
- * and how long a permission or elicitation call is held for an answer (a bit under the 600 s hook timeout in the settings file).
+ * and how long a permission or elicitation call is held for an answer (a bit under the 600 s hook timeout in the settings file),
+ * and the age after which another process's hook directory is removed even if its pid is alive (pid reuse).
  */
 @ConfigurationProperties("cc-manager.hooks")
 public record HookProperties(
         @DefaultValue("50000") int retention,
         @DefaultValue("33554432") int maxBodyBytes,
         @DefaultValue("500") int maxStoredTextLength,
-        @DefaultValue("590s") Duration decisionHold) {}
+        @DefaultValue("590s") Duration decisionHold,
+        @DefaultValue("7d") Duration staleHooksAfter) {}

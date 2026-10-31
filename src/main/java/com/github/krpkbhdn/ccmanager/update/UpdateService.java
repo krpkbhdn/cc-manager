@@ -96,7 +96,8 @@ public class UpdateService {
             var directory = Files.createDirectories(app.dataDir().resolve(UPDATES_DIRECTORY));
             deleteOldDownloads(directory);
             var target = directory.resolve(Path.of(update.installerName()).getFileName());
-            return downloads.fetch(update.installerUri(), expected, target, Duration.ofSeconds(properties.requestTimeoutSeconds()), progress);
+            return downloads.fetch(update.installerUri(), expected, target, Duration.ofSeconds(properties.requestTimeoutSeconds()), progress,
+                    update.installerSizeBytes());
         } catch (IOException e) {
             throw new UncheckedIOException("Could not download the update: " + e.getMessage(), e);
         }

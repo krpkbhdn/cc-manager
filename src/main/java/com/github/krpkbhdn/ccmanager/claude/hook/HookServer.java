@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
@@ -18,6 +19,8 @@ import java.util.function.Function;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -41,6 +44,7 @@ public class HookServer implements SmartLifecycle {
     private static final String MCP_CONTEXT_PATH = "/mcp/";
     private static final String ASSISTANT_MCP_CONTEXT_PATH = "/assistant-mcp/";
     private static final int SECRET_BYTES = 32;
+    private static final String HMAC_ALGORITHM = "HmacSHA256";
     private static final int OK = 200;
     private static final int ACCEPTED = 202;
     private static final int NOT_FOUND = 404;
@@ -60,6 +64,7 @@ public class HookServer implements SmartLifecycle {
     private final byte[] assistantSecret = secret();
     private final ExecutorService worker = Executors.newSingleThreadExecutor(Thread.ofPlatform().name("hook-worker").daemon().factory());
     private HttpServer server;
+    private ExecutorService requestExecutor;
 
     public HookServer(HookEventStore store, ApplicationEventPublisher publisher, JsonMapper mapper, HookProperties properties,
             McpEndpoint mcp, AssistantMcpEndpoint assistantMcp, ProposalService proposals) {
@@ -79,9 +84,9 @@ public class HookServer implements SmartLifecycle {
         return server.getAddress().getPort();
     }
 
-    /** URL a hook of the given ccm session posts to; contains the per-run secret. */
+    /** URL a hook of the given ccm session posts to; contains that session's credential. */
     public String hookUrl(String ccmSessionId) {
-        return "http://127.0.0.1:" + port() + CONTEXT_PATH + new String(secret, StandardCharsets.US_ASCII) + "/" + ccmSessionId;
+        return "http://127.0.0.1:" + port() + CONTEXT_PATH + new String(credential(ccmSessionId), StandardCharsets.US_ASCII) + "/" + ccmSessionId;
     }
 
     /** URL of the MCP server a session talks to; same secret, own path because it answers instead of just accepting. */
@@ -115,7 +120,8 @@ public class HookServer implements SmartLifecycle {
                 (ex, id, body) -> respondToHook(ex, id, body, this::acceptStatusLine)));
         server.createContext(MCP_CONTEXT_PATH, exchange -> serve(exchange, MCP_CONTEXT_PATH, (ex, id, body) -> respondToMcp(ex, bytes -> mcp.handle(id, bytes), body)));
         server.createContext(ASSISTANT_MCP_CONTEXT_PATH, this::serveAssistantMcp);
-        server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
+        requestExecutor = Executors.newVirtualThreadPerTaskExecutor();
+        server.setExecutor(requestExecutor);
         server.start();
         log.info("Hook server listening on 127.0.0.1:{}", server.getAddress().getPort());
     }
@@ -123,8 +129,10 @@ public class HookServer implements SmartLifecycle {
     @Override
     public synchronized void stop() {
         if (server != null) {
+            proposals.releaseAll();
             server.stop(0);
             server = null;
+            requestExecutor.shutdown();
         }
         worker.shutdown();
     }
@@ -226,7 +234,7 @@ public class HookServer implements SmartLifecycle {
     /** The session id of a request whose path carries the right secret, otherwise empty. */
     private Optional<String> authorizedSessionId(HttpExchange exchange, String contextPath) {
         var parts = exchange.getRequestURI().getPath().substring(contextPath.length()).split("/", -1);
-        return parts.length == PATH_PARTS && secretMatches(parts[0]) ? Optional.of(parts[1]) : Optional.empty();
+        return parts.length == PATH_PARTS && credentialMatches(parts[0], parts[1]) ? Optional.of(parts[1]) : Optional.empty();
     }
 
     private Optional<JsonNode> parseObject(String ccmSessionId, byte[] body) {
@@ -272,8 +280,20 @@ public class HookServer implements SmartLifecycle {
         }
     }
 
-    private boolean secretMatches(String candidate) {
-        return MessageDigest.isEqual(candidate.getBytes(StandardCharsets.UTF_8), secret);
+    private boolean credentialMatches(String candidate, String ccmSessionId) {
+        return MessageDigest.isEqual(candidate.getBytes(StandardCharsets.UTF_8), credential(ccmSessionId));
+    }
+
+    /** HMAC of the session id under the run secret, so a URL of one session never authorizes another. */
+    private byte[] credential(String ccmSessionId) {
+        try {
+            var mac = Mac.getInstance(HMAC_ALGORITHM);
+            mac.init(new SecretKeySpec(secret, HMAC_ALGORITHM));
+            var digest = mac.doFinal(ccmSessionId.getBytes(StandardCharsets.UTF_8));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(digest).getBytes(StandardCharsets.US_ASCII);
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("HMAC-SHA256 is unavailable", e);
+        }
     }
 
     @FunctionalInterface

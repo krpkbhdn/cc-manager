@@ -56,6 +56,9 @@ public class RunService {
     public synchronized LaunchedSession start(long configurationId) {
         var configuration = configurations.find(configurationId)
                 .orElseThrow(() -> new IllegalStateException("The run configuration no longer exists."));
+        if (!configuration.confirmed()) {
+            throw new IllegalStateException("The command of \"" + configuration.name() + "\" was written by an agent and needs the user's confirmation first.");
+        }
         if (!Files.isDirectory(configuration.directory())) {
             throw new IllegalStateException("The run directory is missing: " + configuration.directory());
         }

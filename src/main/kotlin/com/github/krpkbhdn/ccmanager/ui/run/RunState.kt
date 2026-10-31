@@ -71,7 +71,18 @@ class RunState(
         selection[projectId] = configurationId
     }
 
+    /** A command written by an agent is shown in full and runs only after the user agrees. */
     fun run(configurationId: Long) {
+        val unconfirmed = entries.values.flatten().firstOrNull { it.id == configurationId }?.configuration?.takeIf { !it.confirmed() }
+        if (unconfirmed == null) return start(configurationId)
+        requestConfirm(
+            ConfirmRequest("Run a command written by Claude?", "\"${unconfirmed.name()}\" in ${unconfirmed.directory()}:\n\n${unconfirmed.command()}", "Run", destructive = false) {
+                scope.launch { runGuarded(reportError) { io { configurations.confirm(configurationId) }; start(configurationId) } }
+            },
+        )
+    }
+
+    private fun start(configurationId: Long) {
         scope.launch {
             runGuarded(reportError) {
                 val session = io { runs.start(configurationId) }

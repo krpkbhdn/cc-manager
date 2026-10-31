@@ -43,6 +43,25 @@ class RunConfigurationServiceTest {
     }
 
     @Test
+    void agentWrittenConfigurationNeedsConfirmationUntilItsCommandChanges() {
+        var written = service.saveByAgent(projectId, "web", "npm start", temp);
+        assertThat(written.confirmed()).isFalse();
+
+        service.confirm(written.id());
+        assertThat(service.saveByAgent(projectId, "web", "npm start", temp).confirmed()).isTrue();
+        assertThat(service.saveByAgent(projectId, "web", "rm -rf x", temp).confirmed()).isFalse();
+    }
+
+    @Test
+    void editsAndSavesFromTheUiConfirmTheConfiguration() {
+        var written = service.saveByAgent(projectId, "web", "npm start", temp);
+
+        assertThat(service.update(written.id(), "web", "npm run dev", temp).confirmed()).isTrue();
+        assertThat(service.saveByAgent(projectId, "web", "x", temp).confirmed()).isFalse();
+        assertThat(service.save(projectId, "web", "y", temp).confirmed()).isTrue();
+    }
+
+    @Test
     void listIsOrderedByNameIgnoringCase() {
         service.save(projectId, "beta", "b", temp);
         service.save(projectId, "Alpha", "a", temp);

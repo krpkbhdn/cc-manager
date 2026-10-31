@@ -67,9 +67,22 @@ class UpdateServiceTest {
         assertThat(updates).isDirectoryContaining(path -> path.equals(installer)).isDirectoryNotContaining(path -> path.getFileName().toString().startsWith("old"));
     }
 
+    @Test
+    void installerLargerThanTheAdvertisedSizeIsRejected() {
+        checksum = "0".repeat(64);
+
+        assertThatThrownBy(() -> service.download(update(INSTALLER.length - 1), progress -> { })).isInstanceOf(java.io.UncheckedIOException.class)
+                .hasMessageContaining("larger than the expected");
+        assertThat(dataDir.resolve("updates")).isEmptyDirectory();
+    }
+
     private AvailableUpdate update() {
+        return update(INSTALLER.length);
+    }
+
+    private AvailableUpdate update(long sizeBytes) {
         var base = "http://127.0.0.1:" + server.getAddress().getPort();
-        return new AvailableUpdate("1.0.1", "app.msi", URI.create(base + "/app.msi"), URI.create(base + "/app.msi.sha256"), URI.create(base));
+        return new AvailableUpdate("1.0.1", "app.msi", sizeBytes, URI.create(base + "/app.msi"), URI.create(base + "/app.msi.sha256"), URI.create(base));
     }
 
     private static void respond(com.sun.net.httpserver.HttpExchange exchange, byte[] body) throws java.io.IOException {

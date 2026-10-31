@@ -31,6 +31,7 @@ class AssistantStateTest {
     private val shown = AtomicInteger()
     private val queued = CopyOnWriteArrayList<Pair<String, String>>()
     private val confirms = CopyOnWriteArrayList<ConfirmRequest>()
+    private val errors = CopyOnWriteArrayList<String>()
     @Volatile private var screen = ""
     @Volatile private var live = LiveSessions()
     private val terminal = object : TerminalPort {
@@ -43,7 +44,7 @@ class AssistantStateTest {
         override fun View(ccmSessionId: String, modifier: Modifier) = Unit
     }
     private val state = AssistantState(
-        scope, terminal, { live }, Path.of("assistant"), { launches.incrementAndGet() }, { shown.incrementAndGet() }, { id, text -> queued += id to text }, { confirms += it },
+        scope, terminal, { live }, Path.of("assistant"), { launches.incrementAndGet() }, { shown.incrementAndGet() }, { id, text -> queued += id to text }, { confirms += it }, { title, _ -> errors += title },
         pollMillis = 10, watchMillis = 400,
     )
 
@@ -122,6 +123,14 @@ class AssistantStateTest {
 
         assertThat(launches.get()).isEqualTo(1)
         assertThat(queued).containsExactly("ccm-a" to "first", "ccm-a" to "second")
+    }
+
+    @Test
+    fun `request is reported, not dropped silently, when the session never appears`() {
+        state.request("lost")
+        await { errors.isNotEmpty() }
+
+        assertThat(queued).isEmpty()
     }
 
     @Test

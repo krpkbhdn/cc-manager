@@ -14,7 +14,7 @@ class ReleaseParserTest {
     private String release(String tag, String... assetNames) {
         var assets = new StringBuilder();
         for (var name : assetNames) {
-            assets.append("{\"name\":\"").append(name).append("\",\"browser_download_url\":\"https://example.com/").append(name.replace(" ", "%20")).append("\"},");
+            assets.append("{\"name\":\"").append(name).append("\",\"size\":1234,\"browser_download_url\":\"https://example.com/").append(name.replace(" ", "%20")).append("\"},");
         }
         var list = assets.isEmpty() ? "" : assets.substring(0, assets.length() - 1);
         return "{\"tag_name\":\"" + tag + "\",\"html_url\":\"https://example.com/release\",\"assets\":[" + list + "]}";
@@ -27,6 +27,7 @@ class ReleaseParserTest {
         assertThat(update).hasValueSatisfying(found -> {
             assertThat(found.version()).isEqualTo("1.0.59");
             assertThat(found.installerName()).isEqualTo("app-1.0.59.msi");
+            assertThat(found.installerSizeBytes()).isEqualTo(1234);
             assertThat(found.checksumUri().toString()).endsWith("app-1.0.59.msi.sha256");
         });
     }

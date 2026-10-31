@@ -26,6 +26,7 @@ class AssistantState(
     private val show: () -> Unit,
     private val enqueue: (ccmSessionId: String, text: String) -> Unit,
     private val requestConfirm: (ConfirmRequest) -> Unit,
+    private val reportError: (title: String, message: String) -> Unit,
     private val pollMillis: Long = POLL_MILLIS,
     private val watchMillis: Long = WATCH_MILLIS,
 ) {
@@ -79,7 +80,9 @@ class AssistantState(
             delay(pollMillis)
             waited += pollMillis
         }
+        val dropped = pending.size
         pending.clear()
+        reportError("Assistant did not start", "$dropped queued request(s) were not delivered. Start the Assistant and ask again.")
     }
 
     /** Claude shows the dialog before SessionStart, so it ends once the session reports its claude id. */

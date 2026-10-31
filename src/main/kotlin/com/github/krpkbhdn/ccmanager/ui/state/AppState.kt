@@ -26,7 +26,6 @@ import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartupState
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantState
 import com.github.krpkbhdn.ccmanager.ui.assistant.ToolSummary
 import com.github.krpkbhdn.ccmanager.ui.author.AuthorProfileState
-import com.github.krpkbhdn.ccmanager.ui.extensions.ExtensionContext
 import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.PluginsState
 import com.github.krpkbhdn.ccmanager.ui.projectsettings.ProjectSettingsSection
 import com.github.krpkbhdn.ccmanager.ui.projectsettings.ProjectSettingsState
@@ -52,10 +51,10 @@ import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 private const val TICK_MILLIS = 1_000L
 private const val STALE_REFRESH_TICKS = 30
@@ -107,8 +106,7 @@ class AppState(
     var quickStartProjectId by mutableStateOf<Long?>(null)
     /** Project and live session whose queue receives the card chosen in the picker. */
     var queuePickTarget by mutableStateOf<Pair<Long, String>?>(null)
-    var projectSettings by mutableStateOf<ProjectSettingsState?>(null)
-        private set
+    val projectSettings: ProjectSettingsState? get() = projectSettingsHost.state
 
     val views = mutableStateMapOf<Long, ProjectView>()
     val backgroundAgents = mutableStateMapOf<Long, List<BackgroundAgent>>()
@@ -137,6 +135,7 @@ class AppState(
     val assistant = AssistantState(
         scope, backend.terminal, { live }, backend.dataDir.resolve("assistant"),
         launch = { sessions.launchAssistant(it) }, show = { navigate(Route.Assistant) }, enqueue = { id, text -> queue.add(id, text) }, requestConfirm = { confirm = it },
+        reportError = notifications::reportError,
     )
     val assistantStartup = AssistantStartupState(
         scope, { settings.assistantStartup }, { mode -> updateSettings { it.copy(assistantStartup = mode) } },
@@ -167,6 +166,7 @@ class AppState(
     val mcp = McpState(backend.mcp, null, scope, { confirm = it }, notifications::toast)
     private val skillHost = SkillHost(::openDirectory, ::openInIde) { ideAvailable }
     val skills = SkillsState(backend.skills, null, scope, { confirm = it }, notifications::toast, skillHost)
+    private val projectSettingsHost = ProjectSettingsHost(backend, scope, { confirm = it }, notifications, skillHost, ::reloadGlobalExtensions)
     val author = AuthorProfileState(
         backend.author, scope,
         sessionProject = { (route as? Route.Project)?.let { projects.find(it.id) }?.takeIf { !it.group } ?: projects.projects.firstOrNull() },
@@ -181,6 +181,7 @@ class AppState(
     val update = UpdateState(backend.updates, scope, notifications::reportError, ::requestQuit) { exitApp() }
     var exitApp: () -> Unit = {}
     val agents = AgentsState(backend.transcripts, scope, { live }, ::showSessionTerminal)
+    private val settingsSaveLock = Mutex()
     private val unsubscribers = mutableListOf<Runnable>()
     private val gitStates = mutableStateMapOf<Long, GitState>()
     private val gitHost = GitHost({ settings.git }, { change -> updateSettings { it.copy(git = change(it.git)) } }, notifications::toast, ::openWorktree, ::forgetWorktree, ::registerWorktree, ::stopWorktreeWork, ::hasRunningWork, ::openDirectory)
@@ -256,7 +257,7 @@ class AppState(
     }
 
     fun dispose() {
-        cancelProjectSettings()
+        projectSettingsHost.dispose()
         teams.dispose()
         prompts.dispose()
         queue.dispose()
@@ -274,33 +275,9 @@ class AppState(
     }
 
     /** Opens the settings dialog of [project] with its own extension states, so the global pages stay untouched. */
-    fun openProjectSettings(project: Project, section: ProjectSettingsSection = ProjectSettingsSection.PLUGINS) {
-        cancelProjectSettings()
-        val dialogScope = CoroutineScope(scope.coroutineContext + SupervisorJob(scope.coroutineContext[Job]))
-        projectSettings = ProjectSettingsState(
-            ExtensionContext.ForProject(project.id, project.name, project.path),
-            section,
-            dialogScope,
-            PluginsState(backend.plugins, dialogScope, { confirm = it }, notifications::toast),
-            McpState(backend.mcp, project.path, dialogScope, { confirm = it }, notifications::toast),
-            SkillsState(backend.skills, project.path, dialogScope, { confirm = it }, notifications::toast, skillHost),
-        )
-    }
+    fun openProjectSettings(project: Project, section: ProjectSettingsSection = ProjectSettingsSection.PLUGINS) = projectSettingsHost.open(project, section)
 
-    private fun cancelProjectSettings() {
-        projectSettings?.dispose()
-        projectSettings = null
-    }
-
-    fun closeProjectSettings() {
-        val dialog = projectSettings ?: return
-        if (dialog.busy) {
-            notifications.toast(NotificationKind.INFO, "Wait for the running action to finish", "Project settings can be closed afterwards.")
-            return
-        }
-        cancelProjectSettings()
-        reloadGlobalExtensions()
-    }
+    fun closeProjectSettings() = projectSettingsHost.close()
 
     /** The dialog may have changed what the global pages list; reload only pages already shown, without the catalogue or a health check. */
     private fun reloadGlobalExtensions() {
@@ -358,7 +335,8 @@ class AppState(
 
     fun updateSettings(transform: (UiSettings) -> UiSettings) {
         settings = transform(settings)
-        settingsStore.save(settings)
+        val saved = settings
+        scope.launch { settingsSaveLock.withLock { guarded { io { settingsStore.save(saved) } } } }
         backend.sound?.setEnabled(settings.notificationSound)
     }
 

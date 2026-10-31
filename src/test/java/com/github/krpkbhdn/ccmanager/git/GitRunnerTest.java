@@ -62,6 +62,7 @@ class GitRunnerTest {
 
         assertThat(runner.timeoutFor(List.of("-c", "core.editor=true", "rebase", "--continue"))).isEqualTo(properties.syncTimeout());
         assertThat(runner.timeoutFor(List.of("checkout", "x"))).isEqualTo(properties.syncTimeout());
+        assertThat(runner.timeoutFor(List.of("worktree", "add", "x"))).isEqualTo(properties.syncTimeout());
         assertThat(runner.timeoutFor(List.of("status"))).isEqualTo(properties.commandTimeout());
     }
 

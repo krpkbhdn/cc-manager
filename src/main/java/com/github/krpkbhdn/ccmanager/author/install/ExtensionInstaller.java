@@ -13,12 +13,12 @@ import com.github.krpkbhdn.ccmanager.extension.plugin.InstalledPlugin;
 import com.github.krpkbhdn.ccmanager.extension.plugin.Marketplace;
 import com.github.krpkbhdn.ccmanager.extension.plugin.PluginService;
 import com.github.krpkbhdn.ccmanager.extension.skill.SkillService;
+import com.github.krpkbhdn.ccmanager.workspace.TreeDeleter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -138,13 +138,8 @@ public class ExtensionInstaller {
     }
 
     private static void deleteRecursively(Path directory) throws IOException {
-        if (!Files.exists(directory)) {
-            return;
-        }
-        try (var paths = Files.walk(directory)) {
-            for (var path : paths.sorted(Comparator.reverseOrder()).toList()) {
-                Files.delete(path);
-            }
+        if (Files.exists(directory)) {
+            TreeDeleter.delete(directory);
         }
     }
 

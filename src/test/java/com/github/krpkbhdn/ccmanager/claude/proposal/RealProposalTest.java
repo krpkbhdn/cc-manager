@@ -144,8 +144,12 @@ class RealProposalTest {
     }
 
     private Proposal awaitProposal(ProposalService proposals, LaunchedSession session, Class<? extends Proposal> kind) throws InterruptedException {
-        await(() -> proposals.pending(session.ccmSessionId()).stream().anyMatch(kind::isInstance));
-        return proposals.pending(session.ccmSessionId()).stream().filter(kind::isInstance).findFirst().orElseThrow();
+        await(() -> ofSession(proposals, session).anyMatch(kind::isInstance));
+        return ofSession(proposals, session).filter(kind::isInstance).findFirst().orElseThrow();
+    }
+
+    private static java.util.stream.Stream<Proposal> ofSession(ProposalService proposals, LaunchedSession session) {
+        return proposals.pending().stream().filter(proposal -> proposal.ccmSessionId().equals(session.ccmSessionId()));
     }
 
     private HookEvent awaitEvent(HookEventType type, String tool) throws InterruptedException {

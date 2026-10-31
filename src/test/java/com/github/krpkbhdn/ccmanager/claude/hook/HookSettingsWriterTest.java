@@ -9,7 +9,10 @@ import static org.mockito.Mockito.when;
 import com.github.krpkbhdn.ccmanager.config.AppProperties;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.time.Duration;
+import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -22,6 +25,8 @@ class HookSettingsWriterTest {
     private static final String MCP_URL = "http://127.0.0.1:5555/mcp/secret/abc-1";
     private static final String APP_MCP_URL = "http://127.0.0.1:5555/assistant-mcp/appsecret";
     private static final String DEAD_PID = String.valueOf(Integer.MAX_VALUE);
+    private static final Duration STALE_AFTER = Duration.ofDays(7);
+    private static final HookProperties HOOK_PROPERTIES = new HookProperties(10, 1024, 500, Duration.ofSeconds(1), STALE_AFTER);
 
     private final JsonMapper mapper = JsonMapper.builder().build();
     private HookSettingsWriter writer;
@@ -37,8 +42,8 @@ class HookSettingsWriterTest {
         when(server.hookUrl("abc-1")).thenReturn(URL);
         when(server.statusLineUrl("abc-1")).thenReturn(STATUS_LINE_URL);
         when(server.mcpUrl("abc-1")).thenReturn(MCP_URL);
-        writer = new HookSettingsWriter(server, new AppProperties(dataDir), mapper, false);
-        windowsWriter = new HookSettingsWriter(server, new AppProperties(dataDir), mapper, true);
+        writer = new HookSettingsWriter(server, new AppProperties(dataDir), HOOK_PROPERTIES, mapper, false);
+        windowsWriter = new HookSettingsWriter(server, new AppProperties(dataDir), HOOK_PROPERTIES, mapper, true);
     }
 
     private Path ownDir() {
@@ -129,13 +134,13 @@ class HookSettingsWriterTest {
     }
 
     @Test
-    void projectSessionsDenyReadingTheHooksDirectoryButTheAssistantDoesNot() throws Exception {
+    void projectSessionsAndTheAssistantBothDenyReadingTheHooksDirectory() throws Exception {
         when(server.assistantMcpUrl()).thenReturn("http://127.0.0.1:1/assistant-mcp/s");
         var deny = mapper.readTree(Files.readString(writer.write("abc-1").settings())).path("permissions").path("deny");
         var assistant = mapper.readTree(Files.readString(writer.writeAssistant("abc-1").settings())).path("permissions");
 
         assertThat(deny.get(0).asString()).startsWith("Read(/").endsWith("/hooks/**)");
-        assertThat(assistant.has("deny")).isFalse();
+        assertThat(assistant.path("deny").get(0).asString()).isEqualTo(deny.get(0).asString());
         var windowsDeny = mapper.readTree(Files.readString(windowsWriter.write("abc-1").settings())).path("permissions").path("deny");
         assertThat(windowsDeny.get(0).asString()).doesNotContain(":", "\\").endsWith("/hooks/**)");
     }
@@ -198,10 +203,24 @@ class HookSettingsWriterTest {
     }
 
     @Test
+    void startupRemovesTheDirectoryOfALivePidOnceItIsOlderThanTheStaleAge() throws Exception {
+        var otherPid = ProcessHandle.current().parent();
+        assumeTrue(otherPid.isPresent());
+        var directory = Files.createDirectories(dataDir.resolve("hooks").resolve(String.valueOf(otherPid.get().pid())));
+        writer.deleteStaleFiles();
+        assertThat(directory).exists();
+
+        Files.setLastModifiedTime(directory, FileTime.from(Instant.now().minus(STALE_AFTER).minusSeconds(60)));
+        writer.deleteStaleFiles();
+
+        assertThat(directory).doesNotExist();
+    }
+
+    @Test
     void aSecondWriterInTheSameProcessLeavesTheRunningOnesFilesAlone() throws Exception {
         var live = writer.write("abc-1").settings();
 
-        new HookSettingsWriter(server, new AppProperties(dataDir), mapper, false).deleteStaleFiles();
+        new HookSettingsWriter(server, new AppProperties(dataDir), HOOK_PROPERTIES, mapper, false).deleteStaleFiles();
 
         assertThat(live).exists();
     }

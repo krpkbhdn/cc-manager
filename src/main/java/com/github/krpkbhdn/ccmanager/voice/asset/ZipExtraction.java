@@ -4,8 +4,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.Comparator;
 import java.util.zip.ZipFile;
+import com.github.krpkbhdn.ccmanager.workspace.TreeDeleter;
 
 /** Unpacks a zip beside its target as {@code .part} and moves it into place only when every entry stayed inside it. */
 final class ZipExtraction {
@@ -86,13 +86,8 @@ final class ZipExtraction {
     }
 
     static void deleteRecursively(Path path) throws IOException {
-        if (!Files.exists(path)) {
-            return;
-        }
-        try (var tree = Files.walk(path)) {
-            for (var entry : tree.sorted(Comparator.reverseOrder()).toList()) {
-                Files.delete(entry);
-            }
+        if (Files.exists(path)) {
+            TreeDeleter.delete(path);
         }
     }
 }

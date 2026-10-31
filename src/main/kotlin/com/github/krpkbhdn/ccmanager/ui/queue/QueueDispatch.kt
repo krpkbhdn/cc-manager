@@ -1,0 +1,87 @@
+package com.github.krpkbhdn.ccmanager.ui.queue
+
+import com.github.krpkbhdn.ccmanager.claude.hook.ActivityFormatter
+import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
+import com.github.krpkbhdn.ccmanager.ui.state.commandBlockedReason
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+const val QUEUE_RETRY_MILLIS = 1_000L
+
+/** Sends queued prompts through [sendPrompt] as [QueueDispatcher] allows and re-checks on a timer while one waits. Runs on [scope] only. */
+class QueueDispatch(
+    private val queues: PromptQueues,
+    private val sessions: () -> List<SessionSnapshot>,
+    private val draftMayExist: (String) -> Boolean,
+    private val isAttached: (String) -> Boolean,
+    private val sendPrompt: suspend (ccmSessionId: String, text: String) -> Boolean,
+    private val scope: CoroutineScope,
+    private val clock: () -> Long = System::currentTimeMillis,
+    private val retryMillis: Long = QUEUE_RETRY_MILLIS,
+) {
+    private val dispatcher = QueueDispatcher()
+    private val sending = mutableMapOf<String, Job>()
+    private var retry: Job? = null
+    private var disposed = false
+
+    fun promptAdded(ccmSessionId: String) = dispatcher.promptAdded(ccmSessionId)
+
+    fun evaluate() {
+        val snapshots = sessions()
+        val live = snapshots.map { it.ccmSessionId }.toSet()
+        queues.retainSessions(live)
+        dispatcher.retainSessions(live)
+        var waiting = false
+        snapshots.forEach { session ->
+            if (dispatcher.observe(session.ccmSessionId, observationOf(session)) == QueueDecision.SEND) dispatch(session.ccmSessionId)
+            waiting = waiting || dispatcher.needsRecheck(session.ccmSessionId)
+        }
+        if (waiting) scheduleRetry()
+    }
+
+    fun dispose() {
+        disposed = true
+        retry?.cancel()
+        sending.values.forEach { it.cancel() }
+        sending.clear()
+    }
+
+    private fun observationOf(session: SessionSnapshot): QueueObservation {
+        val id = session.ccmSessionId
+        return QueueObservation(
+            status = session.status,
+            interrupted = session.activity == ActivityFormatter.INTERRUPTED,
+            queueEmpty = queues.of(id).isEmpty(),
+            draftExists = draftMayExist(id),
+            blockedReason = commandBlockedReason(session, isAttached(id)),
+            nowMillis = clock(),
+        )
+    }
+
+    private fun dispatch(ccmSessionId: String) {
+        val prompt = queues.of(ccmSessionId).firstOrNull() ?: return
+        if (disposed || sending.containsKey(ccmSessionId)) return
+        sending[ccmSessionId] = scope.launch {
+            try {
+                if (sendPrompt(ccmSessionId, prompt.text)) {
+                    queues.remove(ccmSessionId, prompt.id)
+                    dispatcher.sent(ccmSessionId, clock())
+                }
+            } finally {
+                sending.remove(ccmSessionId)
+            }
+            if (dispatcher.needsRecheck(ccmSessionId)) scheduleRetry()
+        }
+    }
+
+    private fun scheduleRetry() {
+        if (disposed || retry?.isActive == true) return
+        retry = scope.launch {
+            delay(retryMillis)
+            retry = null
+            evaluate()
+        }
+    }
+}

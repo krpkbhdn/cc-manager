@@ -35,7 +35,7 @@ class ProposalServiceTest {
     private final String session = registry.register(1L);
 
     private ProposalService serviceHolding(Duration hold) {
-        return new ProposalService(registry, new HookProperties(10, 1024, 500, hold));
+        return new ProposalService(registry, new HookProperties(10, 1024, 500, hold, java.time.Duration.ofDays(7)));
     }
 
     private HookEvent event(String sessionId, HookEventType type, String json) {
@@ -60,7 +60,7 @@ class ProposalServiceTest {
     @Test
     void answerCompletesTheHeldCallWithTheRenderedOutputAndRemovesTheProposal() throws Exception {
         var held = holdBash();
-        var proposal = service.pending(session).getFirst();
+        var proposal = service.pending().getFirst();
 
         assertThat(service.answer(proposal.id(), PermissionAllow.once())).isTrue();
 
@@ -107,8 +107,20 @@ class ProposalServiceTest {
         service.hold(otherRequest);
 
         assertThat(service.pending()).hasSize(3);
-        assertThat(service.pending(session)).hasSize(2);
-        assertThat(service.pending(otherSession)).hasSize(1);
+        assertThat(service.pending()).filteredOn(proposal -> proposal.ccmSessionId().equals(session)).hasSize(2);
+        assertThat(service.pending()).filteredOn(proposal -> proposal.ccmSessionId().equals(otherSession)).hasSize(1);
+    }
+
+    @Test
+    void releaseAllHandsEveryHeldCallBackToTheTerminal() throws Exception {
+        var first = holdBash();
+        var second = holdBash("{\"tool_name\":\"Edit\",\"agent_id\":\"sub-1\",\"tool_input\":{}}");
+
+        service.releaseAll();
+
+        assertThat(released(first)).isTrue();
+        assertThat(released(second)).isTrue();
+        assertThat(service.pending()).isEmpty();
     }
 
     @Test
