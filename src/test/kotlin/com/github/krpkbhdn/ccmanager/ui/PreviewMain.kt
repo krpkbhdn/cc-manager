@@ -46,7 +46,7 @@ fun main(args: Array<String>) {
     application {
         val state = remember {
             AppState(world.backend(PreviewTerminal), CoroutineScope(SupervisorJob() + Dispatchers.Main), UiSettingsStore(null))
-                .also { it.updateSettings { s -> s.copy(assistantStartup = AssistantStartup.NEVER) }; it.start(); it.setThemeMode(if (flags.dark) ThemeMode.DARK else ThemeMode.LIGHT) }
+                .also { it.updateSettings { s -> s.copy(assistantStartup = AssistantStartup.NEVER) }; it.start(); it.prefs.setThemeMode(if (flags.dark) ThemeMode.DARK else ThemeMode.LIGHT) }
         }
         val windowState = remember { WindowState(size = DpSize(flags.width.dp, flags.height.dp)) }
         val icon = remember { BitmapPainter(drawAppIcon(256).toComposeImageBitmap()) }
@@ -144,9 +144,9 @@ private suspend fun captureTour(capture: Capture, state: AppState, world: Previe
     state.settingsDialog.close()
     state.navigate(Route.Sessions)
     capture.take("1b-all-sessions")
-    state.setGroupSessionsByProject(true)
+    state.prefs.setGroupSessionsByProject(true)
     capture.take("1c-all-sessions-grouped")
-    state.setGroupSessionsByProject(false)
+    state.prefs.setGroupSessionsByProject(false)
     state.navigate(Route.Overview)
     state.openSession("s-needs")
     state.openSession("s-working")
@@ -188,15 +188,15 @@ private suspend fun captureTour(capture: Capture, state: AppState, world: Previe
     state.projects.toggleFolded(PREVIEW_GROUP_ID)
     capture.take("7e-sidebar-group-folded")
     state.projects.toggleFolded(PREVIEW_GROUP_ID)
-    state.toggleSidebar()
-    state.toggleAgents()
+    state.prefs.toggleSidebar()
+    state.prefs.toggleAgents()
     capture.take("8-collapsed")
-    state.toggleSidebar()
-    state.toggleAgents()
+    state.prefs.toggleSidebar()
+    state.prefs.toggleAgents()
     state.requestQuit {}
     capture.take("9-quit-confirm")
     state.confirm = null
     world.claudeInstalled = false
-    state.recheckInstallation()
+    state.environment.recheckInstallation()
     capture.take("10-install-missing")
 }

@@ -16,7 +16,7 @@ import com.github.krpkbhdn.ccmanager.ui.state.Route
 /** "Git: ..." entries for the project on screen; each one opens the Git tab where its result is visible. */
 fun gitActions(state: AppState): List<PaletteItem> {
     val projectId = (state.route as? Route.Project)?.id ?: return emptyList()
-    val git = state.gitOf(projectId) ?: return emptyList()
+    val git = state.gits.of(projectId) ?: return emptyList()
     val here = state.projects.nameOf(projectId)
     fun item(id: String, title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, shortcut: AppShortcut? = null, run: (GitState) -> Unit) =
         PaletteItem("git-$id", "Git: $title", PaletteGroup.ACTIONS, "in $here", icon, shortcut = shortcut) { run(state.openGit(projectId) ?: git) }

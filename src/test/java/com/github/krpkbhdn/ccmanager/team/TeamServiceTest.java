@@ -155,6 +155,18 @@ class TeamServiceTest {
     }
 
     @Test
+    void duplicateOfALongNameFitsTheLimitAndStaysUnique() {
+        var longName = "x".repeat(58);
+        var original = service.create(longName, List.of(role("boss", true)));
+
+        var first = service.duplicate(original.id());
+        var second = service.duplicate(original.id());
+
+        assertThat(first.name()).hasSizeLessThanOrEqualTo(TeamService.MAX_NAME).endsWith(" copy").isNotEqualTo(longName);
+        assertThat(second.name()).hasSizeLessThanOrEqualTo(TeamService.MAX_NAME).isNotIn(longName, first.name());
+    }
+
+    @Test
     void validationRejectsBadTeams() {
         assertThatThrownBy(() -> service.create(" ", List.of(role("a", true)))).hasMessageContaining("Team name");
         assertThatThrownBy(() -> service.create("T", List.of())).hasMessageContaining("roles");

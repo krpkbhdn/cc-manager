@@ -78,7 +78,7 @@ private fun SidebarHeader(collapsed: Boolean, locked: Boolean, state: AppState) 
         if (collapsed) {
             if (!locked) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    IconButton(Icons.PanelLeftOpen, state::toggleSidebar, tooltip = "Expand sidebar", hint = AppShortcut.TOGGLE_SIDEBAR.hint())
+                    IconButton(Icons.PanelLeftOpen, state.prefs::toggleSidebar, tooltip = "Expand sidebar", hint = AppShortcut.TOGGLE_SIDEBAR.hint())
                 }
             }
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -87,7 +87,7 @@ private fun SidebarHeader(collapsed: Boolean, locked: Boolean, state: AppState) 
         } else {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 SearchTrigger({ state.paletteOpen = true }, Modifier.weight(1f))
-                IconButton(Icons.PanelLeftClose, state::toggleSidebar, tooltip = "Collapse sidebar", hint = AppShortcut.TOGGLE_SIDEBAR.hint())
+                IconButton(Icons.PanelLeftClose, state.prefs::toggleSidebar, tooltip = "Collapse sidebar", hint = AppShortcut.TOGGLE_SIDEBAR.hint())
             }
         }
     }
@@ -171,7 +171,7 @@ private fun SidebarProject(state: AppState, project: Project, collapsed: Boolean
         sessions = state.live.of(project.id),
         selected = state.route == Route.Project(project.id),
         collapsed = collapsed,
-        gitSummary = state.gitSummaryOf(project.id),
+        gitSummary = state.gits.summaryOf(project.id),
         actions = state.projectActions(project),
         modifier = modifier,
         groupName = project.groupId?.let(state.projects::nameOf),

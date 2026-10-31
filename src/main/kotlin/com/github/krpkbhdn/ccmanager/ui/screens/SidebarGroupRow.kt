@@ -52,7 +52,7 @@ class GroupActions(
 
 fun AppState.groupActions(group: Project) = GroupActions(
     onOpen = { navigate(Route.Project(group.id)) },
-    onStartTask = { openTaskDialog(group.id) },
+    onStartTask = { tasks.open(group.id) },
     onEdit = { projects.groupDialog = GroupDialogRequest(group) },
     onRename = { projects.renaming = RenameRequest(group) },
     onRemove = { projects.requestRemove(group) },

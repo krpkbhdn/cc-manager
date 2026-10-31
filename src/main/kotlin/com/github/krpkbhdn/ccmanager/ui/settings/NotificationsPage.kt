@@ -8,7 +8,7 @@ import com.github.krpkbhdn.ccmanager.ui.state.AppState
 fun NotificationsPage(state: AppState) {
     SettingGroup("Alerts") {
         SettingRow("Notification sound", "Play a sound when a session needs your attention.") {
-            AppSwitch(state.settings.notificationSound, { state.toggleNotificationSound() })
+            AppSwitch(state.settings.notificationSound, { state.prefs.toggleNotificationSound() })
         }
     }
 }

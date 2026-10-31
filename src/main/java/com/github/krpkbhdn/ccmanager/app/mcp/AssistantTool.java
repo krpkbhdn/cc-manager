@@ -9,6 +9,8 @@ import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot;
 import com.github.krpkbhdn.ccmanager.project.Project;
 import com.github.krpkbhdn.ccmanager.project.ProjectService;
+import com.github.krpkbhdn.ccmanager.prompt.PromptTemplate;
+import com.github.krpkbhdn.ccmanager.prompt.PromptTemplateService;
 import com.github.krpkbhdn.ccmanager.team.Team;
 import com.github.krpkbhdn.ccmanager.team.TeamService;
 import com.github.krpkbhdn.ccmanager.workspace.ProcessTree;
@@ -34,6 +36,10 @@ abstract class AssistantTool implements AssistantMcpTool {
             throw new IllegalArgumentException("Argument 'project' must be a numeric project id (see list_projects)");
         }
         return projects.find(id.asLong()).orElseThrow(() -> new IllegalArgumentException("Project not found: " + id.asLong()));
+    }
+
+    static PromptTemplate requiredPrompt(PromptTemplateService prompts, long id) {
+        return prompts.find(id).orElseThrow(() -> new IllegalArgumentException("Prompt not found: " + id));
     }
 
     static List<SessionSnapshot> liveSessions(SessionRegistry sessions, long projectId) {

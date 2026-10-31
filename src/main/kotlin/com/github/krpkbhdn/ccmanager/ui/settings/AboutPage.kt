@@ -12,7 +12,7 @@ fun AboutPage(state: AppState) {
             AppButton("Open releases", state.update::openReleases, enabled = state.update.enabled)
         }
     }
-    state.installation?.takeIf { it.installed }?.let { claude ->
+    state.environment.installation?.takeIf { it.installed }?.let { claude ->
         SettingGroup("Claude Code") {
             SettingRow("Installed version", claude.version.orEmpty().ifBlank { "Unknown" }) {}
             SettingRow("Login", claude.login.name.lowercase().replace('_', ' ')) {}

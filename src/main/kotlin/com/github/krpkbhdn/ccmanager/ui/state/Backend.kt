@@ -3,14 +3,11 @@ package com.github.krpkbhdn.ccmanager.ui.state
 import java.time.Duration
 import com.github.krpkbhdn.ccmanager.app.AppControlProperties
 import com.github.krpkbhdn.ccmanager.app.AppControlRegistry
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import com.github.krpkbhdn.ccmanager.author.AuthorProfileService
 import com.github.krpkbhdn.ccmanager.claude.hook.HookEventStore
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService
 import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgentService
 import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
-import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
 import com.github.krpkbhdn.ccmanager.app.mcp.AssistantMcpTool
 import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalService
 import com.github.krpkbhdn.ccmanager.claude.session.SessionProperties
@@ -27,17 +24,13 @@ import com.github.krpkbhdn.ccmanager.run.RunService
 import com.github.krpkbhdn.ccmanager.extension.mcp.McpService
 import com.github.krpkbhdn.ccmanager.extension.plugin.PluginService
 import com.github.krpkbhdn.ccmanager.extension.skill.SkillService
-import com.github.krpkbhdn.ccmanager.shell.LaunchedShell
 import com.github.krpkbhdn.ccmanager.shell.ShellDetector
 import com.github.krpkbhdn.ccmanager.shell.ShellLauncher
 import com.github.krpkbhdn.ccmanager.team.TeamService
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitBackend
-import com.github.krpkbhdn.ccmanager.ui.terminal.TerminalHost
-import com.github.krpkbhdn.ccmanager.ui.terminal.TerminalView
 import com.github.krpkbhdn.ccmanager.usage.RateLimitService
 import com.github.krpkbhdn.ccmanager.update.UpdateService
 import com.github.krpkbhdn.ccmanager.usage.SessionUsageService
-import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import com.github.krpkbhdn.ccmanager.ui.voice.VoiceBackend
 import com.github.krpkbhdn.ccmanager.voice.VoiceInputService
 import com.github.krpkbhdn.ccmanager.voice.asset.VoiceAssetService
@@ -47,47 +40,6 @@ import com.github.krpkbhdn.ccmanager.workspace.DirectoryOpener
 import com.github.krpkbhdn.ccmanager.workspace.IdeLauncher
 import java.nio.file.Path
 import org.springframework.context.ConfigurableApplicationContext
-
-/** The terminal widget layer, behind an interface so the UI can be previewed without a real PTY. */
-interface TerminalPort {
-    fun open(session: LaunchedSession)
-    fun openShell(shell: LaunchedShell) {}
-    fun send(ccmSessionId: String, text: String)
-    fun close(ccmSessionId: String)
-
-    /** Moves the keyboard focus into the session's terminal, if it has one. */
-    fun focus(ccmSessionId: String) {}
-
-    /** True when a Ctrl+C reached the session less than [windowMillis] ago. */
-    fun ctrlCWithin(ccmSessionId: String, windowMillis: Long): Boolean = false
-
-    /** True when the user pressed Enter less than [windowMillis] ago, before the hook marks the session WORKING. */
-    fun enterWithin(ccmSessionId: String, windowMillis: Long): Boolean = false
-
-    /** True while the user may have an unsent draft: typed or pasted since the last Enter, Ctrl+C or Esc. */
-    fun draftMayExist(ccmSessionId: String): Boolean = false
-
-    /** The text currently on the session's terminal screen; empty without a terminal. */
-    fun screenText(ccmSessionId: String): String = ""
-
-    @Composable
-    fun View(ccmSessionId: String, modifier: Modifier)
-}
-
-object HostTerminalPort : TerminalPort {
-    override fun open(session: LaunchedSession) = TerminalHost.open(session)
-    override fun openShell(shell: LaunchedShell) = TerminalHost.open(shell)
-    override fun send(ccmSessionId: String, text: String) = TerminalHost.send(ccmSessionId, text)
-    override fun close(ccmSessionId: String) = TerminalHost.close(ccmSessionId)
-    override fun focus(ccmSessionId: String) = TerminalHost.focus(ccmSessionId)
-    override fun ctrlCWithin(ccmSessionId: String, windowMillis: Long) = TerminalHost.ctrlCWithin(ccmSessionId, windowMillis)
-    override fun enterWithin(ccmSessionId: String, windowMillis: Long) = TerminalHost.enterWithin(ccmSessionId, windowMillis)
-    override fun draftMayExist(ccmSessionId: String) = TerminalHost.draftMayExist(ccmSessionId)
-    override fun screenText(ccmSessionId: String) = TerminalHost.sessionOf(ccmSessionId)?.screenText().orEmpty()
-
-    @Composable
-    override fun View(ccmSessionId: String, modifier: Modifier) = TerminalView(ccmSessionId, modifier, dark = colors.dark, background = colors.terminal)
-}
 
 /** Every backend collaborator the UI talks to. */
 class Backend(
@@ -122,7 +74,7 @@ class Backend(
     val dataDir: Path = Path.of(System.getProperty("user.home"), ".cc-manager"),
     val sessionProperties: SessionProperties,
     val appControl: AppControlRegistry? = null,
-    val appControlProperties: AppControlProperties = AppControlProperties(Duration.ofSeconds(10)),
+    val appControlProperties: AppControlProperties = AppControlProperties(Duration.ofSeconds(10), 20_000),
     val assistantTools: List<AssistantMcpTool> = emptyList(),
     val voice: VoiceBackend? = null,
 ) {

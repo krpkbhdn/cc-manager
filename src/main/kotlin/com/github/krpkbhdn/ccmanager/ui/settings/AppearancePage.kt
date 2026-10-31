@@ -18,12 +18,12 @@ private val themeSegments = listOf(
 fun AppearancePage(state: AppState) {
     SettingGroup("Theme") {
         SettingRow("Color theme", "System follows the operating system's light or dark mode.") {
-            SegmentedControl(themeSegments, state.settings.themeMode, state::setThemeMode)
+            SegmentedControl(themeSegments, state.settings.themeMode, state.prefs::setThemeMode)
         }
     }
     SettingGroup("Layout") {
         SettingRow("Collapse the sidebar", "Show only the icon rail on the left.") {
-            AppSwitch(state.settings.sidebarCollapsed, { state.toggleSidebar() })
+            AppSwitch(state.settings.sidebarCollapsed, { state.prefs.toggleSidebar() })
         }
     }
 }

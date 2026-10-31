@@ -39,7 +39,7 @@ private val chipHeight = 28.dp
 @Composable
 internal fun UsageIndicator(state: AppState) {
     Box {
-        UsageChip(usageMeters(state.rateLimits, state.now), state.usageOpen) { state.usageOpen = !state.usageOpen }
+        UsageChip(usageMeters(state.environment.rateLimits, state.now), state.usageOpen) { state.usageOpen = !state.usageOpen }
         if (state.usageOpen) UsagePanel(state) { state.usageOpen = false }
     }
 }

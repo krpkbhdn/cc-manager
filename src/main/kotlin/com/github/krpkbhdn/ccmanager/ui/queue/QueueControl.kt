@@ -69,7 +69,7 @@ private fun QueuePanel(state: AppState, project: Project, ccmSessionId: String) 
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 AppButton("Add", add, variant = ButtonVariant.PRIMARY, icon = Icons.Plus, compact = true, enabled = draft.text.isNotBlank())
                 AppButton(
-                    "From library", { queue.panelSessionId = null; state.queuePickTarget = project.id to ccmSessionId },
+                    "From library", { queue.panelSessionId = null; state.tasks.queuePickTarget = project.id to ccmSessionId },
                     icon = Icons.Message, compact = true, tooltip = "Queue a saved prompt from the library",
                 )
             }

@@ -41,7 +41,7 @@ class HookServerTest {
     @BeforeEach
     void setUp() {
         server = new HookServer(store, publisher, JsonMapper.builder().build(),
-                new HookProperties(10, MAX_BODY, 500, Duration.ofSeconds(5), Duration.ofDays(7)), mcp, assistantMcp, proposals);
+                new HookProperties(10, MAX_BODY, 500, Duration.ofSeconds(5)), mcp, assistantMcp, proposals);
         server.start();
     }
 

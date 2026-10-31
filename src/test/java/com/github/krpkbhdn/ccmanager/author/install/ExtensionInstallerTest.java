@@ -60,6 +60,18 @@ class ExtensionInstallerTest {
     }
 
     @Test
+    void failedMarketplaceListReportsFailureWithoutAddingAnything() {
+        when(plugins.marketplaces()).thenThrow(new ExtensionException("timed out"));
+        var set = new ExtensionSet(List.of(new ProfileMarketplace("fresh", "c/d")), null, null, null);
+
+        var outcome = installer.install(set, ExtensionScope.USER, null);
+
+        assertThat(outcome.failed()).hasSize(1);
+        assertThat(outcome.installed()).isEmpty();
+        verify(plugins, never()).addMarketplace(any(), any(), any());
+    }
+
+    @Test
     void installedPluginIsSkippedAndConfirmationIsNeverAccepted() {
         when(plugins.installed()).thenReturn(List.of(new InstalledPlugin("have@m", "1", ExtensionScope.USER, true, temp, null)));
         when(plugins.install("ask@m", ExtensionScope.USER, null))

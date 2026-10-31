@@ -6,7 +6,6 @@ import com.github.krpkbhdn.ccmanager.project.Project;
 import com.github.krpkbhdn.ccmanager.project.ProjectService;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,15 +32,11 @@ public class ShellLauncher {
             throw new IllegalStateException("The project folder is missing: " + project.path());
         }
         try {
-            var process = PtySpawner.spawn(shell.command(), project.path(), environment(System.getenv()));
+            var process = PtySpawner.spawn(shell.command(), project.path(), ClaudeCommand.terminalEnvironment(System.getenv()));
             return new LaunchedShell(TERMINAL_ID_PREFIX + UUID.randomUUID(), projectId, shell, process);
         } catch (IOException | RuntimeException e) {
             log.warn("{} failed to start in {}", shell.name(), project.path(), e);
             throw new IllegalStateException("Could not start " + shell.name() + ": " + e.getMessage(), e);
         }
-    }
-
-    static Map<String, String> environment(Map<String, String> parent) {
-        return ClaudeCommand.terminalEnvironment(parent);
     }
 }

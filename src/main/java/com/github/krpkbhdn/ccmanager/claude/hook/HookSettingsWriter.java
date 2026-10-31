@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.claude.hook;
 
-import com.github.krpkbhdn.ccmanager.app.mcp.AssistantMcpEndpoint;
+import com.github.krpkbhdn.ccmanager.claude.mcp.AssistantMcpServer;
+import com.github.krpkbhdn.ccmanager.claude.mcp.McpEndpoint;
 import com.github.krpkbhdn.ccmanager.config.AppProperties;
 import com.github.krpkbhdn.ccmanager.workspace.TreeDeleter;
 import jakarta.annotation.PostConstruct;
@@ -9,7 +10,6 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
@@ -30,7 +30,6 @@ public class HookSettingsWriter {
     private static final String HOOKS_DIR = "hooks";
     private static final String FILE_SUFFIX = ".json";
     private static final String MCP_SUFFIX = ".mcp.json";
-    private static final String MCP_SERVER = "cc-manager";
     private static final String LIST_RUN_CONFIGURATIONS_TOOL = "list_run_configurations";
     private static final String HOOK_CURL = "hook";
     private static final String STATUS_LINE_CURL = "status";
@@ -49,23 +48,21 @@ public class HookSettingsWriter {
     private final Path hooksDir;
     private final JsonMapper mapper;
     private final boolean windows;
-    private final HookProperties hookProperties;
 
     @Autowired
-    public HookSettingsWriter(HookServer server, AppProperties properties, HookProperties hookProperties, JsonMapper mapper) {
-        this(server, properties, hookProperties, mapper, System.getProperty("os.name").toLowerCase().startsWith("windows"));
+    public HookSettingsWriter(HookServer server, AppProperties properties, JsonMapper mapper) {
+        this(server, properties, mapper, System.getProperty("os.name").toLowerCase().startsWith("windows"));
     }
 
-    HookSettingsWriter(HookServer server, AppProperties properties, HookProperties hookProperties, JsonMapper mapper, boolean windows) {
+    HookSettingsWriter(HookServer server, AppProperties properties, JsonMapper mapper, boolean windows) {
         this.server = server;
         this.hooksRoot = properties.dataDir().resolve(HOOKS_DIR);
         this.hooksDir = hooksRoot.resolve(String.valueOf(ProcessHandle.current().pid()));
-        this.hookProperties = hookProperties;
         this.mapper = mapper;
         this.windows = windows;
     }
 
-    /** Removes the files of app processes that no longer run or whose directory is older than the stale age (a reused pid), and loose files from before the per-process directories. */
+    /** Removes the files of app processes that no longer run (a live process's directory stays however quiet its sessions are), and loose files from before the per-process directories. */
     @PostConstruct
     void deleteStaleFiles() throws IOException {
         if (!Files.isDirectory(hooksRoot)) {
@@ -75,15 +72,11 @@ public class HookSettingsWriter {
             for (var entry : entries) {
                 if (!Files.isDirectory(entry)) {
                     Files.deleteIfExists(entry);
-                } else if (!entry.equals(hooksDir) && (!isLiveProcess(entry.getFileName().toString()) || isStale(entry))) {
+                } else if (!entry.equals(hooksDir) && !isLiveProcess(entry.getFileName().toString())) {
                     TreeDeleter.delete(entry);
                 }
             }
         }
-    }
-
-    private boolean isStale(Path directory) throws IOException {
-        return Files.getLastModifiedTime(directory).toInstant().isBefore(Instant.now().minus(hookProperties.staleHooksAfter()));
     }
 
     private static boolean isLiveProcess(String directoryName) {
@@ -100,12 +93,12 @@ public class HookSettingsWriter {
 
     /** [extraServers] join the MCP config; the app's own server name stays reserved. */
     public SessionFiles write(String ccmSessionId, Map<String, JsonNode> extraServers) {
-        return write(ccmSessionId, mcpConfig(MCP_SERVER, server.mcpUrl(ccmSessionId), extraServers));
+        return write(ccmSessionId, mcpConfig(McpEndpoint.SERVER_NAME, server.mcpUrl(ccmSessionId), extraServers));
     }
 
     /** The Assistant session gets only the app server in its mcp file; the project server and the project-session secret stay out of it. */
     public SessionFiles writeAssistant(String ccmSessionId) {
-        return write(ccmSessionId, mcpConfig(AssistantMcpEndpoint.SERVER_NAME, server.assistantMcpUrl(), Map.of()));
+        return write(ccmSessionId, mcpConfig(AssistantMcpServer.SERVER_NAME, server.assistantMcpUrl(), Map.of()));
     }
 
     private SessionFiles write(String ccmSessionId, ObjectNode mcpConfig) {
@@ -165,7 +158,7 @@ public class HookSettingsWriter {
         settings.set("hooks", hooks);
         settings.set("statusLine", statusLine(ccmSessionId));
         var permissions = settings.putObject("permissions");
-        permissions.putArray("allow").add("mcp__" + MCP_SERVER + "__" + LIST_RUN_CONFIGURATIONS_TOOL);
+        permissions.putArray("allow").add("mcp__" + McpEndpoint.SERVER_NAME + "__" + LIST_RUN_CONFIGURATIONS_TOOL);
         permissions.putArray("deny").add("Read(" + absoluteRule(hooksRoot) + "/**)");
         return settings;
     }

@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 private const val APPLY_TIMEOUT_MILLIS = 6_000L
 private const val APPLY_POLL_MILLIS = 200L
 private const val SWITCH_MODEL_HINT = "If claude asks \"Switch model?\", answer in the terminal."
+private const val DRAFT_MESSAGE = "You have unsent text in the terminal. Send or clear it, then change the model."
 private const val BUSY_MESSAGE = "The session is not ready for a command yet. Try again in a moment."
 
 private const val LAUNCH_IN_PROGRESS_MESSAGE = "Another session is starting. Try again in a moment."
@@ -99,10 +100,12 @@ class SessionsState(
     fun applyToSession(session: SessionSnapshot, command: String, reached: (SessionUsage?) -> Boolean) {
         if ((modelTarget(session, modelApplying, isAttached(session.ccmSessionId)) as? ModelTarget.Running)?.blockedReason != null) return
         if (unconfirmed.remove(session.ccmSessionId)) return reportError(SWITCH_MODEL_HINT)
+        if (backend.terminal.draftMayExist(session.ccmSessionId)) return reportError(DRAFT_MESSAGE)
         modelApplying = true
         scope.launch {
             guarded {
-                if (!commandWriter.run(session.ccmSessionId, command)) return@guarded reportError(BUSY_MESSAGE)
+                val typed = commandWriter.run(session.ccmSessionId, command, clearDraft = false) { backend.terminal.draftMayExist(session.ccmSessionId) }
+                if (!typed) return@guarded reportError(BUSY_MESSAGE)
                 backend.terminal.focus(session.ccmSessionId)
                 var waited = 0L
                 while (!reached(usageOf(session.ccmSessionId)) && waited < APPLY_TIMEOUT_MILLIS) {

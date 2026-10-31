@@ -55,7 +55,7 @@ fun GroupMembersTab(state: AppState, group: Project, modifier: Modifier = Modifi
 @Composable
 private fun MemberCard(state: AppState, member: Project) {
     val sessions = byUrgency(state.live.of(member.id))
-    val git = state.gitSummaryOf(member.id)
+    val git = state.gits.summaryOf(member.id)
     Column(
         Modifier.fillMaxWidth().padding(vertical = Spacing.xxs),
         verticalArrangement = Arrangement.spacedBy(Spacing.xs),

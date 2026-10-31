@@ -60,6 +60,25 @@ class AppControlAdapterTest {
     }
 
     @Test
+    fun `a call that started before the timeout is awaited and returns normally`() {
+        val slow = AppControlAdapter(state, scope, Duration.ofMillis(100))
+        val started = java.util.concurrent.CountDownLatch(1)
+
+        slow.onUi { started.countDown(); Thread.sleep(250) }
+
+        assertThat(started.count).isZero()
+    }
+
+    @Test
+    fun `a call that started but never finishes fails instead of hanging`() {
+        val release = java.util.concurrent.CountDownLatch(1)
+        val hung = AppControlAdapter(state, scope, Duration.ofMillis(50))
+
+        assertThatThrownBy { hung.onUi { release.await() } }.hasMessageContaining("started but did not finish")
+        release.countDown()
+    }
+
+    @Test
     fun `a call that timed out is cancelled and does not run later`() {
         val release = java.util.concurrent.CountDownLatch(1)
         val executor = java.util.concurrent.Executors.newSingleThreadExecutor()

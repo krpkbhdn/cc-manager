@@ -3,8 +3,13 @@ package com.github.krpkbhdn.ccmanager.claude.hook;
 import static com.github.krpkbhdn.ccmanager.claude.HookEvents.of;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.spy;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -33,7 +38,7 @@ class HookEventStoreTest {
                 jdbc.sql(statement).update();
             }
         }
-        store = new HookEventStore(jdbc, JsonMapper.builder().build(), new HookProperties(RETENTION, 1024, MAX_TEXT, java.time.Duration.ofSeconds(1), java.time.Duration.ofDays(7)));
+        store = new HookEventStore(jdbc, JsonMapper.builder().build(), new HookProperties(RETENTION, 1024, MAX_TEXT, java.time.Duration.ofSeconds(1)));
     }
 
     @Test
@@ -58,6 +63,38 @@ class HookEventStoreTest {
         store.save(of("Stop"));
 
         assertThat(store.recent("s1", 2)).extracting(ActivityEntry::text).containsExactly("Compacting context", "Finished");
+    }
+
+    @Test
+    void recentPagesPastNewestRowsWithoutDescription() {
+        store.save(of("UserPromptSubmit", "{\"prompt\":\"old\"}"));
+        for (int i = 0; i < 20; i++) {
+            store.save(of("InstructionsLoaded"));
+        }
+
+        assertThat(store.recent("s1", 2)).extracting(ActivityEntry::text).containsExactly("Prompt: old");
+    }
+
+    @Test
+    void recentDoesNotRepeatEventsWhenRowsArriveBetweenPages() {
+        store.save(of("UserPromptSubmit", "{\"prompt\":\"b\"}"));
+        store.save(of("UserPromptSubmit", "{\"prompt\":\"a\"}"));
+        for (int i = 0; i < 11; i++) {
+            store.save(of("InstructionsLoaded"));
+        }
+        var spied = spy(jdbc);
+        var queries = new AtomicInteger();
+        doAnswer(call -> {
+            if (queries.incrementAndGet() == 2) {
+                for (int i = 0; i < 5; i++) {
+                    store.save(of("Stop"));
+                }
+            }
+            return call.callRealMethod();
+        }).when(spied).sql(anyString());
+        var paged = new HookEventStore(spied, JsonMapper.builder().build(), new HookProperties(RETENTION, 1024, MAX_TEXT, java.time.Duration.ofSeconds(1)));
+
+        assertThat(paged.recent("s1", 3)).extracting(ActivityEntry::text).containsExactly("Prompt: b", "Prompt: a");
     }
 
     @Test

@@ -47,9 +47,18 @@ class RunConfigurationServiceTest {
         var written = service.saveByAgent(projectId, "web", "npm start", temp);
         assertThat(written.confirmed()).isFalse();
 
-        service.confirm(written.id());
+        assertThat(service.confirm(written.id(), "npm start", temp)).isTrue();
         assertThat(service.saveByAgent(projectId, "web", "npm start", temp).confirmed()).isTrue();
         assertThat(service.saveByAgent(projectId, "web", "rm -rf x", temp).confirmed()).isFalse();
+    }
+
+    @Test
+    void confirmRefusesACommandThatChangedAfterItWasShown() {
+        var shown = service.saveByAgent(projectId, "web", "npm start", temp);
+        service.saveByAgent(projectId, "web", "rm -rf x", temp);
+
+        assertThat(service.confirm(shown.id(), shown.command(), shown.directory())).isFalse();
+        assertThat(service.find(shown.id()).orElseThrow().confirmed()).isFalse();
     }
 
     @Test

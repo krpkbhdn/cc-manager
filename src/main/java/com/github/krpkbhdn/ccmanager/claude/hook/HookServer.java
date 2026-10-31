@@ -1,8 +1,7 @@
 package com.github.krpkbhdn.ccmanager.claude.hook;
 
-import com.github.krpkbhdn.ccmanager.app.mcp.AssistantMcpEndpoint;
 import com.github.krpkbhdn.ccmanager.claude.mcp.McpEndpoint;
-import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalService;
+import com.github.krpkbhdn.ccmanager.claude.mcp.AssistantMcpServer;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -58,8 +57,8 @@ public class HookServer implements SmartLifecycle {
     private final JsonMapper mapper;
     private final HookProperties properties;
     private final McpEndpoint mcp;
-    private final AssistantMcpEndpoint assistantMcp;
-    private final ProposalService proposals;
+    private final AssistantMcpServer assistantMcp;
+    private final DecisionHolder proposals;
     private final byte[] secret = secret();
     private final byte[] assistantSecret = secret();
     private final ExecutorService worker = Executors.newSingleThreadExecutor(Thread.ofPlatform().name("hook-worker").daemon().factory());
@@ -67,7 +66,7 @@ public class HookServer implements SmartLifecycle {
     private ExecutorService requestExecutor;
 
     public HookServer(HookEventStore store, ApplicationEventPublisher publisher, JsonMapper mapper, HookProperties properties,
-            McpEndpoint mcp, AssistantMcpEndpoint assistantMcp, ProposalService proposals) {
+            McpEndpoint mcp, AssistantMcpServer assistantMcp, DecisionHolder proposals) {
         this.store = store;
         this.publisher = publisher;
         this.mapper = mapper;

@@ -74,8 +74,8 @@ class AssistantContextBootTest {
     @Test
     void allowedToolsFollowAutoApprovedAndExcludeDangerousOnes() {
         var allowed = endpoint.autoApprovedToolNames();
-        assertThat(allowed).contains("list_teams", "get_help", "resume_session", "list_plugins", "get_mcp_server")
-                .doesNotContain("delete_prompt", "delete_team", "set_skill", "delete_skill", "install_plugin", "uninstall_plugin",
+        assertThat(allowed).contains("list_teams", "get_help", "list_plugins", "get_mcp_server")
+                .doesNotContain("resume_session", "delete_prompt", "delete_team", "set_skill", "delete_skill", "install_plugin", "uninstall_plugin",
                         "add_mcp_server", "remove_mcp_server", "remove_project", "set_team", "git_commit", "git_push");
         var arguments = ClaudeCommand.assistantArguments(Path.of("claude"), new SessionFiles(Path.of("s.json"), Path.of("m.json")),
                 ModelSelection.DEFAULT, allowed);

@@ -5,6 +5,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -25,9 +27,10 @@ public class GitWorktreeService {
     public List<Worktree> list(Path repo) {
         var parsed = WorktreePorcelainParser.parse(git.out(repo, "worktree", "list", "--porcelain"));
         var mainHead = parsed.isEmpty() ? "" : parsed.getFirst().head();
+        var mergedBranches = mergedBranches(repo, mainHead);
         var result = new ArrayList<Worktree>();
         for (int i = 0; i < parsed.size(); i++) {
-            result.add(toWorktree(parsed.get(i), i == 0, mainHead));
+            result.add(toWorktree(parsed.get(i), i == 0, mainHead, mergedBranches));
         }
         return result;
     }
@@ -62,10 +65,19 @@ public class GitWorktreeService {
         git.out(repo, command.toArray(String[]::new));
     }
 
-    private Worktree toWorktree(ParsedWorktree entry, boolean main, String mainHead) {
+    /** One process for all branches instead of a merge-base per worktree. */
+    private Set<String> mergedBranches(Path repo, String mainHead) {
+        if (mainHead.isEmpty()) {
+            return Set.of();
+        }
+        var merged = git.tryRun(repo, "for-each-ref", "--merged=" + mainHead, "--format=%(refname)", BRANCH_REF);
+        return merged.ok() ? merged.stdout().lines().map(String::strip).collect(Collectors.toSet()) : Set.of();
+    }
+
+    private Worktree toWorktree(ParsedWorktree entry, boolean main, String mainHead, Set<String> mergedBranches) {
         var present = !entry.prunable() && !entry.bare() && Files.isDirectory(entry.path());
         var merged = present && !main && !entry.detached() && !entry.branch().isEmpty() && !entry.head().equals(mainHead)
-                && git.tryRun(entry.path(), "merge-base", "--is-ancestor", BRANCH_REF + entry.branch(), mainHead).ok();
+                && mergedBranches.contains(BRANCH_REF + entry.branch());
         return new Worktree(entry.path(), entry.branch(), entry.head(), main, entry.detached(), entry.locked(), entry.prunable(),
                 present && isDirty(entry.path()), merged);
     }

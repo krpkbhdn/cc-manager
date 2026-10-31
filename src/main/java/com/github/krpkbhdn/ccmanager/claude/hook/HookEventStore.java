@@ -45,24 +45,42 @@ public class HookEventStore {
         }
     }
 
-    /** Newest last. */
+    /** Newest last; pages back through older rows until {@code limit} events have a description. */
     public List<ActivityEntry> recent(String ccmSessionId, int limit) {
-        var entries = new ArrayList<>(jdbc.sql("""
-                        SELECT event, payload, received_at FROM hook_event
-                        WHERE ccm_session_id = ? ORDER BY id DESC LIMIT ?""")
-                .params(ccmSessionId, limit * OVER_FETCH_FACTOR)
-                .query((rs, row) -> new HookEvent(ccmSessionId, HookEventType.of(rs.getString("event")),
-                        rs.getString("event"), mapper.readTree(rs.getString("payload")),
-                        Instant.parse(rs.getString("received_at"))))
-                .list()
-                .stream()
-                .flatMap(event -> ActivityFormatter.describe(event)
-                        .map(text -> new ActivityEntry(event.receivedAt(), event.type(), nullIfEmpty(event.agentId()), text))
-                        .stream())
-                .limit(limit)
-                .toList());
+        var entries = new ArrayList<ActivityEntry>();
+        int pageSize = limit * OVER_FETCH_FACTOR;
+        long beforeId = Long.MAX_VALUE;
+        while (entries.size() < limit) {
+            var page = fetchPage(ccmSessionId, pageSize, beforeId);
+            page.stream()
+                    .map(StoredEvent::event)
+                    .flatMap(event -> ActivityFormatter.describe(event)
+                            .map(text -> new ActivityEntry(event.receivedAt(), event.type(), nullIfEmpty(event.agentId()), text))
+                            .stream())
+                    .limit(limit - entries.size())
+                    .forEach(entries::add);
+            if (page.size() < pageSize) {
+                break;
+            }
+            beforeId = page.getLast().id();
+        }
         Collections.reverse(entries);
         return List.copyOf(entries);
+    }
+
+    private record StoredEvent(long id, HookEvent event) {
+    }
+
+    private List<StoredEvent> fetchPage(String ccmSessionId, int pageSize, long beforeId) {
+        return jdbc.sql("""
+                        SELECT id, event, payload, received_at FROM hook_event
+                        WHERE ccm_session_id = ? AND id < ? ORDER BY id DESC LIMIT ?""")
+                .params(ccmSessionId, beforeId, pageSize)
+                .query((rs, row) -> new StoredEvent(rs.getLong("id"),
+                        new HookEvent(ccmSessionId, HookEventType.of(rs.getString("event")),
+                                rs.getString("event"), mapper.readTree(rs.getString("payload")),
+                                Instant.parse(rs.getString("received_at")))))
+                .list();
     }
 
     void prune() {

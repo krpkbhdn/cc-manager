@@ -8,7 +8,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -18,6 +20,8 @@ class GitDiffTool extends GitTool {
 
     static final int MAX_CHARS = 20_000;
     private static final String GIT_DIR = ".git";
+    private static final String GIT_SHORT_NAME = "GIT~1";
+    private static final Pattern TRAILING_DOTS_AND_SPACES = Pattern.compile("[. ]+$");
 
     private final GitStatusService status;
 
@@ -69,18 +73,24 @@ class GitDiffTool extends GitTool {
     }
 
     /** The .git directory is refused too: its config holds remote URLs and tokens. An untracked path is read straight from disk by git diff --no-index, so it must stay inside the repository, symlinks included. */
-    private static void requireInside(Path repo, String path) {
+    static void requireInside(Path repo, String path) {
         try {
             var root = Files.exists(repo) ? repo.toRealPath() : repo.normalize();
             var target = repo.resolve(path).normalize();
             var real = Files.exists(target) ? target.toRealPath() : target;
-            var gitDir = repo.normalize().resolve(GIT_DIR);
-            if (!target.startsWith(repo.normalize()) || !real.startsWith(root) || target.startsWith(gitDir)) {
+            if (!target.startsWith(repo.normalize()) || !real.startsWith(root)
+                    || hasGitSegment(repo.normalize().relativize(target)) || hasGitSegment(root.relativize(real))) {
                 throw new IllegalArgumentException("Path is outside the repository or inside .git: " + path);
             }
         } catch (IOException e) {
             throw new IllegalArgumentException("Cannot resolve path: " + path);
         }
+    }
+
+    /** Windows drops trailing dots and spaces and also serves .git under its 8.3 name. */
+    private static boolean hasGitSegment(Path relative) {
+        return StreamSupport.stream(relative.spliterator(), false).map(segment -> TRAILING_DOTS_AND_SPACES.matcher(segment.toString()).replaceFirst(""))
+                .anyMatch(name -> name.equalsIgnoreCase(GIT_DIR) || name.equalsIgnoreCase(GIT_SHORT_NAME));
     }
 
     private static void append(StringBuilder text, GitDiff.FileDiff diff) {

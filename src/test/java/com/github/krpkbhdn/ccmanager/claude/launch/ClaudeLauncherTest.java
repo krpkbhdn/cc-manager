@@ -12,6 +12,7 @@ import com.github.krpkbhdn.ccmanager.claude.hook.HookSettingsWriter;
 import com.github.krpkbhdn.ccmanager.claude.hook.SessionFiles;
 import com.github.krpkbhdn.ccmanager.claude.plugin.ClaudePluginWriter;
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation;
+import com.github.krpkbhdn.ccmanager.claude.mcp.AssistantMcpServer;
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
 import com.github.krpkbhdn.ccmanager.config.AppProperties;
@@ -29,7 +30,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.beans.factory.ObjectProvider;
 
 class ClaudeLauncherTest {
 
@@ -38,8 +38,7 @@ class ClaudeLauncherTest {
     private final HookSettingsWriter hooks = mock(HookSettingsWriter.class);
     private final SessionRegistry sessions = mock(SessionRegistry.class);
     private final ProjectGroupService groups = mock(ProjectGroupService.class);
-    @SuppressWarnings("unchecked")
-    private final ObjectProvider<AssistantToolPolicy> assistantEndpoint = mock(ObjectProvider.class);
+    private final AssistantMcpServer assistantEndpoint = mock(AssistantMcpServer.class);
     private final Path dataDir = Path.of("build", "launcher-test-data").toAbsolutePath();
     private final ClaudeLauncher launcher = new ClaudeLauncher(projects, installation, hooks, mock(ClaudePluginWriter.class), sessions, new AppProperties(dataDir),
             groups, mock(GroupWorkspace.class), mock(ProjectMcpServers.class), assistantEndpoint);
@@ -119,9 +118,7 @@ class ClaudeLauncherTest {
         Path notExecutable = Files.createFile(directory.resolve("claude-fake"));
         when(installation.current()).thenReturn(new ClaudeInstallation(true, notExecutable, "1", null, null));
         when(sessions.register(ClaudeLauncher.ASSISTANT_PROJECT_ID)).thenReturn("ccm-0");
-        var endpoint = mock(AssistantToolPolicy.class);
-        when(endpoint.autoApprovedToolNames()).thenReturn(List.of("list_projects"));
-        when(assistantEndpoint.getObject()).thenReturn(endpoint);
+        when(assistantEndpoint.autoApprovedToolNames()).thenReturn(List.of("list_projects"));
         when(hooks.write("ccm-0")).thenReturn(new SessionFiles(directory.resolve("s.json"), directory.resolve("m.json")));
 
         assertThatThrownBy(launcher::launchAssistant).hasMessageStartingWith("Could not start Claude");

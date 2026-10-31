@@ -54,11 +54,14 @@ public class RunConfigurationService {
                 "CASE WHEN command = excluded.command AND directory = excluded.directory THEN confirmed ELSE 0 END");
     }
 
-    /** The user has seen the full command and agreed to run it. */
-    public void confirm(long id) {
-        if (jdbc.sql("UPDATE run_configuration SET confirmed = 1 WHERE id = ?").param(id).update() > 0) {
+    /** The user agreed to run exactly this command and directory; false when the configuration changed since it was shown, so nothing is confirmed. */
+    public boolean confirm(long id, String command, Path directory) {
+        var updated = jdbc.sql("UPDATE run_configuration SET confirmed = 1 WHERE id = ? AND command = ? AND directory = ?")
+                .param(id).param(command).param(directory.toString()).update() > 0;
+        if (updated) {
             fireChanged();
         }
+        return updated;
     }
 
     private RunConfiguration upsert(long projectId, String name, String command, Path directory, String insertedConfirmed, String conflictConfirmed) {

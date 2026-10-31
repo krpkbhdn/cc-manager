@@ -25,8 +25,6 @@ class HookSettingsWriterTest {
     private static final String MCP_URL = "http://127.0.0.1:5555/mcp/secret/abc-1";
     private static final String APP_MCP_URL = "http://127.0.0.1:5555/assistant-mcp/appsecret";
     private static final String DEAD_PID = String.valueOf(Integer.MAX_VALUE);
-    private static final Duration STALE_AFTER = Duration.ofDays(7);
-    private static final HookProperties HOOK_PROPERTIES = new HookProperties(10, 1024, 500, Duration.ofSeconds(1), STALE_AFTER);
 
     private final JsonMapper mapper = JsonMapper.builder().build();
     private HookSettingsWriter writer;
@@ -42,8 +40,8 @@ class HookSettingsWriterTest {
         when(server.hookUrl("abc-1")).thenReturn(URL);
         when(server.statusLineUrl("abc-1")).thenReturn(STATUS_LINE_URL);
         when(server.mcpUrl("abc-1")).thenReturn(MCP_URL);
-        writer = new HookSettingsWriter(server, new AppProperties(dataDir), HOOK_PROPERTIES, mapper, false);
-        windowsWriter = new HookSettingsWriter(server, new AppProperties(dataDir), HOOK_PROPERTIES, mapper, true);
+        writer = new HookSettingsWriter(server, new AppProperties(dataDir), mapper, false);
+        windowsWriter = new HookSettingsWriter(server, new AppProperties(dataDir), mapper, true);
     }
 
     private Path ownDir() {
@@ -203,24 +201,24 @@ class HookSettingsWriterTest {
     }
 
     @Test
-    void startupRemovesTheDirectoryOfALivePidOnceItIsOlderThanTheStaleAge() throws Exception {
+    void startupKeepsTheDirectoryOfALivePidHoweverOldItIs() throws Exception {
         var otherPid = ProcessHandle.current().parent();
         assumeTrue(otherPid.isPresent());
         var directory = Files.createDirectories(dataDir.resolve("hooks").resolve(String.valueOf(otherPid.get().pid())));
         writer.deleteStaleFiles();
         assertThat(directory).exists();
 
-        Files.setLastModifiedTime(directory, FileTime.from(Instant.now().minus(STALE_AFTER).minusSeconds(60)));
+        Files.setLastModifiedTime(directory, FileTime.from(Instant.now().minus(Duration.ofDays(30))));
         writer.deleteStaleFiles();
 
-        assertThat(directory).doesNotExist();
+        assertThat(directory).exists();
     }
 
     @Test
     void aSecondWriterInTheSameProcessLeavesTheRunningOnesFilesAlone() throws Exception {
         var live = writer.write("abc-1").settings();
 
-        new HookSettingsWriter(server, new AppProperties(dataDir), HOOK_PROPERTIES, mapper, false).deleteStaleFiles();
+        new HookSettingsWriter(server, new AppProperties(dataDir), mapper, false).deleteStaleFiles();
 
         assertThat(live).exists();
     }

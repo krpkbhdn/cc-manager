@@ -18,6 +18,7 @@ public class VoiceAssetService {
 
     private static final String VOICE_DIRECTORY = "voice";
     private static final String DOWNLOAD_PREFIX = "download-";
+    private static final String PARTIAL_SUFFIX = ".part";
 
     private final Path root;
     private final VerifiedDownload downloads;
@@ -86,10 +87,16 @@ public class VoiceAssetService {
     }
 
     private void deleteStaleDownloads() throws IOException {
-        try (var files = Files.list(root)) {
-            for (var file : files.filter(path -> path.getFileName().toString().startsWith(DOWNLOAD_PREFIX)).toList()) {
+        try (var files = Files.walk(root)) {
+            for (var file : files.filter(this::isStaleDownload).toList()) {
                 Files.deleteIfExists(file);
             }
         }
+    }
+
+    /** Archives are fetched as {@code download-*} in the root; plain models leave {@code <name>.part} next to their target. */
+    private boolean isStaleDownload(Path path) {
+        var name = path.getFileName().toString();
+        return Files.isRegularFile(path) && (name.endsWith(PARTIAL_SUFFIX) || path.getParent().equals(root) && name.startsWith(DOWNLOAD_PREFIX));
     }
 }

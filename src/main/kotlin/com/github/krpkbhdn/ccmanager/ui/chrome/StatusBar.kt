@@ -44,7 +44,7 @@ fun StatusBar(state: AppState, modifier: Modifier = Modifier) {
         ) {
             Breadcrumb(state, Modifier.weight(1f))
             SessionCounters(state)
-            state.installation?.let { ClaudeSegment(it) }
+            state.environment.installation?.let { ClaudeSegment(it) }
         }
     }
 }

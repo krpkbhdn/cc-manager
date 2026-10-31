@@ -73,6 +73,18 @@ class TranscriptServiceTest {
     }
 
     @Test
+    void titleStaysWhenALaterGrowthOfTheFilePushesItOutOfTheTail() throws Exception {
+        var file = dir.resolve("big.jsonl");
+        Files.writeString(file, "{\"type\":\"ai-title\",\"aiTitle\":\"Kept\"}\n" + user("x") + "\n");
+        var service = service(dir);
+        assertThat(service.title(file.toString())).contains("Kept");
+
+        Files.writeString(file, user("y".repeat(1 << 21)) + "\n" + user("z") + "\n");
+
+        assertThat(service.title(file.toString())).contains("Kept");
+    }
+
+    @Test
     void filesOutsideTheProjectsDirectoryAreNotRead() throws Exception {
         var projects = Files.createDirectory(dir.resolve("projects"));
         var outside = dir.resolve("secret.jsonl");

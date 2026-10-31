@@ -163,7 +163,7 @@ public class GitStatusService {
     }
 
     private FileDiff firstFile(String diff, String path, ChangeType emptyChange) {
-        var files = UnifiedDiffParser.parse(diff, git.properties().maxDiffLines(), git.properties().maxDiffLines(), true);
+        var files = UnifiedDiffParser.parse(diff, git.properties().maxDiffLines(), UnifiedDiffParser.MAX_TOTAL_LINES, true);
         if (files.isEmpty()) {
             return new FileDiff(path, null, emptyChange, 0, 0, false, List.of());
         }

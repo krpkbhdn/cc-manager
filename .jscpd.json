@@ -10,8 +10,7 @@
     "**/jscpd-report/**"
   ],
   "ignorePattern": [
-    "^\\s*package\\s+[\\w.]+;?",
-    "^\\s*import\\s+(static\\s+)?[\\w.]+(\\.\\*)?;?"
+    "(?m)^[ \\t]*(?:package|import)[ \\t][^\\r\\n]*"
   ],
   "reporters": ["console", "html"],
   "output": "./jscpd-report"

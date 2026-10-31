@@ -161,6 +161,16 @@ class VoiceAssetServiceTest {
     }
 
     @Test
+    void partialModelDownloadLeftByACrashIsDeletedOnNextInstall() throws Exception {
+        Files.createDirectories(dataDir.resolve("voice/models"));
+        Files.writeString(dataDir.resolve("voice/models/big.bin.part"), "junk");
+
+        service.install(asset("/model", MODEL, "models/m.bin", false), progress -> { });
+
+        assertThat(dataDir.resolve("voice/models/big.bin.part")).doesNotExist();
+    }
+
+    @Test
     void wrongSizeIsRejectedAndTheFileDeleted() throws Exception {
         var asset = new VoiceAsset("m", url("/model"), sha256(MODEL), MODEL.length + 1, "models/m.bin", false);
 

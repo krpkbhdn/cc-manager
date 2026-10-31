@@ -1,6 +1,6 @@
 package com.github.krpkbhdn.ccmanager.app.mcp;
 
-import com.github.krpkbhdn.ccmanager.app.AssistantTextLimitProperties;
+import com.github.krpkbhdn.ccmanager.app.AppControlProperties;
 import com.github.krpkbhdn.ccmanager.prompt.PromptTemplate;
 import com.github.krpkbhdn.ccmanager.prompt.PromptTemplateService;
 import org.springframework.stereotype.Component;
@@ -10,9 +10,9 @@ import tools.jackson.databind.JsonNode;
 class GetPromptTool extends AssistantTool {
 
     private final PromptTemplateService prompts;
-    private final AssistantTextLimitProperties limits;
+    private final AppControlProperties limits;
 
-    GetPromptTool(PromptTemplateService prompts, AssistantTextLimitProperties limits) {
+    GetPromptTool(PromptTemplateService prompts, AppControlProperties limits) {
         this.prompts = prompts;
         this.limits = limits;
     }
@@ -40,7 +40,7 @@ class GetPromptTool extends AssistantTool {
     @Override
     public String call(JsonNode arguments) {
         var id = ToolArguments.requiredId(arguments, "id");
-        var prompt = prompts.find(id).orElseThrow(() -> new IllegalArgumentException("Prompt not found: " + id));
+        var prompt = requiredPrompt(prompts, id);
         return json(new PromptTemplate(prompt.id(), prompt.name(), prompt.description(), capped(prompt.text(), limits.maxTextLength()),
                 prompt.projectId(), prompt.defaultTeamId()));
     }

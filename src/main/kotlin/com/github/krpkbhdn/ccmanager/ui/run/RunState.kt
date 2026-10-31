@@ -77,7 +77,15 @@ class RunState(
         if (unconfirmed == null) return start(configurationId)
         requestConfirm(
             ConfirmRequest("Run a command written by Claude?", "\"${unconfirmed.name()}\" in ${unconfirmed.directory()}:\n\n${unconfirmed.command()}", "Run", destructive = false) {
-                scope.launch { runGuarded(reportError) { io { configurations.confirm(configurationId) }; start(configurationId) } }
+                scope.launch {
+                    runGuarded(reportError) {
+                        if (io { configurations.confirm(configurationId, unconfirmed.command(), unconfirmed.directory()) }) start(configurationId)
+                        else {
+                            reload.request()
+                            reportError("The configuration \"${unconfirmed.name()}\" changed or was removed. Review it and press Run again.")
+                        }
+                    }
+                }
             },
         )
     }

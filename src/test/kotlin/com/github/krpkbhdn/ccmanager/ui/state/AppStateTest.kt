@@ -104,7 +104,7 @@ class AppStateTest {
             "ccm-assistant", ClaudeLauncher.ASSISTANT_PROJECT_ID, "c0", AgentStatus.IDLE, null, null, null, null,
             Instant.now(), Instant.now(), emptyList(), 0, null,
         )
-        `when`(backend.sessions.sessions()).thenReturn(world.sessions + assistant)
+        org.mockito.Mockito.doReturn(world.sessions + assistant).`when`(backend.sessions).sessions()
         world.fire()
         await { state.live.find("ccm-assistant") != null }
 

@@ -8,7 +8,7 @@ import com.github.krpkbhdn.ccmanager.ui.state.AppState
 fun SessionsPage(state: AppState) {
     SettingGroup("All sessions") {
         SettingRow("Group by project", "List the sessions of the All sessions screen under their project.") {
-            AppSwitch(state.settings.groupSessionsByProject, state::setGroupSessionsByProject)
+            AppSwitch(state.settings.groupSessionsByProject, state.prefs::setGroupSessionsByProject)
         }
     }
 }

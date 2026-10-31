@@ -30,7 +30,7 @@ private fun AssistantStartup.description(): String = when (this) {
 fun AssistantPage(state: AppState) {
     SettingGroup("At app start") {
         AssistantStartup.entries.forEach { mode ->
-            StartupChoice(mode, state.settings.assistantStartup == mode) { state.setAssistantStartup(mode) }
+            StartupChoice(mode, state.settings.assistantStartup == mode) { state.prefs.setAssistantStartup(mode) }
         }
     }
     SettingGroup("Now") {

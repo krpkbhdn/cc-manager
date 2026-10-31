@@ -59,7 +59,7 @@ public class TranscriptService {
         return List.copyOf(entries.subList(Math.max(0, entries.size() - MAX_ENTRIES), entries.size()));
     }
 
-    /** Latest user-given title, else the latest generated one; empty when the transcript has none. */
+    /** Latest user-given title, else the latest generated one; empty when the transcript has none. Keeps the last title found when the tail window no longer holds one. */
     public Optional<String> title(String transcriptPath) {
         if (transcriptPath == null || transcriptPath.isBlank()) {
             return Optional.empty();
@@ -73,6 +73,9 @@ public class TranscriptService {
             return cached.title();
         }
         var title = readTitle(transcriptPath);
+        if (title.isEmpty() && cached != null) {
+            title = cached.title();
+        }
         titleCache.put(transcriptPath, new CachedTitle(stamp, title));
         return title;
     }

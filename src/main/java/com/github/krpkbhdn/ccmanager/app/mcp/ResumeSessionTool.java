@@ -26,11 +26,6 @@ class ResumeSessionTool extends AssistantTool {
     }
 
     @Override
-    public boolean autoApproved() {
-        return true;
-    }
-
-    @Override
     public String name() {
         return "resume_session";
     }

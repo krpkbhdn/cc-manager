@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.github.krpkbhdn.ccmanager.app.AssistantTextLimitProperties;
+import com.github.krpkbhdn.ccmanager.app.AppControlProperties;
 import com.github.krpkbhdn.ccmanager.prompt.PromptTemplate;
 import com.github.krpkbhdn.ccmanager.prompt.PromptTemplateService;
 import java.util.Optional;
@@ -15,7 +15,7 @@ import tools.jackson.databind.json.JsonMapper;
 class GetPromptToolTest {
 
     private final PromptTemplateService prompts = mock(PromptTemplateService.class);
-    private final GetPromptTool tool = new GetPromptTool(prompts, new AssistantTextLimitProperties(20));
+    private final GetPromptTool tool = new GetPromptTool(prompts, new AppControlProperties(java.time.Duration.ofSeconds(10), 20));
 
     @Test
     void returnsFullText() {

@@ -31,7 +31,7 @@ class DeletePromptTool extends AssistantTool {
     @Override
     public String call(JsonNode arguments) {
         var id = ToolArguments.requiredId(arguments, "id");
-        var prompt = prompts.find(id).orElseThrow(() -> new IllegalArgumentException("Prompt not found: " + id));
+        var prompt = requiredPrompt(prompts, id);
         prompts.delete(id);
         return "Prompt '%s' deleted.".formatted(prompt.name());
     }

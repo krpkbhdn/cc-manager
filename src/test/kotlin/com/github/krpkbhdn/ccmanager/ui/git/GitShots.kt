@@ -111,8 +111,8 @@ private val shots = listOf(
     Shot("role-new", prepare = { state, _, _ -> newRole(state) }),
     Shot("role-invalid", prepare = { state, _, _ -> newRole(state) { it.model = "-evil"; it.tools = ToolSelection(emptyList()); it.name.edit { replace(0, length, "Bad Name") } } }),
     Shot("role-tools-custom", prepare = { state, _, _ -> editRole(state, 1) { it.tools = ToolSelection.parse("Read, Grep, Glob, Edit, mcp__github__*, mcp__db__query") } }),
-    Shot("task-dialog", prepare = { state, _, _ -> waitFor { state.teams.teams.isNotEmpty() }; state.taskDialogProjectId = 1 }),
-    Shot("task-dialog-no-teams", prepare = { state, _, _ -> waitFor { state.teams.teams.isNotEmpty() }; state.teams.teams.forEach { state.teams.requestDeleteTeam(it); state.confirm?.onConfirm?.invoke() }; state.confirm = null; waitFor { state.teams.teams.isEmpty() }; state.taskDialogProjectId = 1 }),
+    Shot("task-dialog", prepare = { state, _, _ -> waitFor { state.teams.teams.isNotEmpty() }; state.tasks.projectId = 1 }),
+    Shot("task-dialog-no-teams", prepare = { state, _, _ -> waitFor { state.teams.teams.isNotEmpty() }; state.teams.teams.forEach { state.teams.requestDeleteTeam(it); state.confirm?.onConfirm?.invoke() }; state.confirm = null; waitFor { state.teams.teams.isEmpty() }; state.tasks.projectId = 1 }),
     Shot("session-team", prepare = { state, _, _ -> waitFor { state.teams.teams.isNotEmpty() }; state.sessions.sessionTeams["s-working"] = state.teams.teams.first(); state.openSession("s-working") }),
     Shot("agents-roles", prepare = { state, _, _ -> waitFor { state.teams.teams.isNotEmpty() }; state.sessions.sessionTeams["s-working"] = state.teams.teams.first() }),
     Shot("agents-rail", prepare = { state, _, _ -> state.openSession("s-agents") }),
@@ -121,41 +121,41 @@ private val shots = listOf(
     Shot("agents-log-live", prepare = { state, _, _ -> openAgentLog(state, 0) }),
     Shot("progress",prepare = { _, git, data -> data.progressDelayMillis = 4_000; git.fetchNow() }),
     Shot("plugins-installed", prepare = { state, _, _ -> openPlugins(state, PluginsTab.INSTALLED) }),
-    Shot("plugins-installed-detail", prepare = { state, _, _ -> openPlugins(state, PluginsTab.INSTALLED); state.plugins.selectedInstalled = state.plugins.installed.first { it.id.startsWith("frontend-design") }.key(); waitFor { state.plugins.details.values.any { it is DetailsState.Loaded } } }),
+    Shot("plugins-installed-detail", prepare = { state, _, _ -> openPlugins(state, PluginsTab.INSTALLED); state.extensions.plugins.selectedInstalled = state.extensions.plugins.installed.first { it.id.startsWith("frontend-design") }.key(); waitFor { state.extensions.plugins.details.values.any { it is DetailsState.Loaded } } }),
     Shot("plugins-marketplace", prepare = { state, _, _ -> openPlugins(state, PluginsTab.MARKETPLACE) }),
-    Shot("plugins-marketplace-detail", prepare = { state, _, _ -> openPlugins(state, PluginsTab.MARKETPLACE); state.plugins.selectedAvailable = "code-review@claude-plugins-official"; waitFor { state.plugins.details.values.any { it is DetailsState.Loaded } } }),
+    Shot("plugins-marketplace-detail", prepare = { state, _, _ -> openPlugins(state, PluginsTab.MARKETPLACE); state.extensions.plugins.selectedAvailable = "code-review@claude-plugins-official"; waitFor { state.extensions.plugins.details.values.any { it is DetailsState.Loaded } } }),
     Shot("plugins-sources", prepare = { state, _, _ -> openPlugins(state, PluginsTab.SOURCES) }),
-    Shot("plugins-command", prepare = { state, _, _ -> openPlugins(state, PluginsTab.MARKETPLACE); state.plugins.install(NEEDS_COMMAND_PLUGIN, ExtensionScope.USER, null); waitFor { state.plugins.pending != null } }),
-    Shot("plugins-failure", prepare = { state, _, _ -> openPlugins(state, PluginsTab.INSTALLED); state.plugins.failure = ExtensionFailure("Updating legacy-linter", "Could not update legacy-linter@acme-internal", "error: marketplace acme-internal is unreachable\nfatal: unable to access 'https://git.acme.dev/platform/claude-plugins.git/': Could not resolve host") }),
-    Shot("plugins-busy", prepare = { state, _, _ -> openPlugins(state, PluginsTab.INSTALLED); state.plugins.update(state.plugins.installed.first { it.id.startsWith("context7") }); waitFor { state.plugins.job != null } }),
-    Shot("mcp-list", prepare = { state, _, _ -> openMcp(state); waitFor { state.mcp.healthCheck == HealthCheck.DONE } }),
+    Shot("plugins-command", prepare = { state, _, _ -> openPlugins(state, PluginsTab.MARKETPLACE); state.extensions.plugins.install(NEEDS_COMMAND_PLUGIN, ExtensionScope.USER, null); waitFor { state.extensions.plugins.pending != null } }),
+    Shot("plugins-failure", prepare = { state, _, _ -> openPlugins(state, PluginsTab.INSTALLED); state.extensions.plugins.failure = ExtensionFailure("Updating legacy-linter", "Could not update legacy-linter@acme-internal", "error: marketplace acme-internal is unreachable\nfatal: unable to access 'https://git.acme.dev/platform/claude-plugins.git/': Could not resolve host") }),
+    Shot("plugins-busy", prepare = { state, _, _ -> openPlugins(state, PluginsTab.INSTALLED); state.extensions.plugins.update(state.extensions.plugins.installed.first { it.id.startsWith("context7") }); waitFor { state.extensions.plugins.job != null } }),
+    Shot("mcp-list", prepare = { state, _, _ -> openMcp(state); waitFor { state.extensions.mcp.healthCheck == HealthCheck.DONE } }),
     Shot("mcp-checking", prepare = { state, _, _ -> openMcp(state) }),
-    Shot("mcp-detail", prepare = { state, _, _ -> openMcp(state); state.mcp.selected = mcpKey(ExtensionScope.USER, "github"); waitFor { state.mcp.healthCheck == HealthCheck.DONE && state.mcp.details.values.any { it is RawDetails.Loaded } } }),
-    Shot("mcp-auth-needed", prepare = { state, _, _ -> openMcp(state); state.mcp.selected = mcpKey(ExtensionScope.USER, "notion"); waitFor { state.mcp.healthCheck == HealthCheck.DONE && state.mcp.details.values.any { it is RawDetails.Loaded } } }),
-    Shot("mcp-auth-logged-in", prepare = { state, _, _ -> openMcp(state); state.mcp.selected = mcpKey(ExtensionScope.USER, "github"); waitFor { state.mcp.healthCheck == HealthCheck.DONE && state.mcp.details.values.any { it is RawDetails.Loaded } } }),
-    Shot("mcp-auth-waiting", prepare = { state, _, _ -> openMcp(state); state.mcp.selected = mcpKey(ExtensionScope.USER, "sentry"); waitFor { state.mcp.healthCheck == HealthCheck.DONE && state.mcp.details.values.any { it is RawDetails.Loaded } }; state.mcp.signIn("sentry") }),
-    Shot("mcp-auth-connector", prepare = { state, _, _ -> openMcp(state); state.mcp.selected = mcpKey(null, "claude.ai Canva"); waitFor { state.mcp.healthCheck == HealthCheck.DONE && state.mcp.details.values.any { it is RawDetails.Loaded } } }),
-    Shot("mcp-auth-stdio", prepare = { state, _, _ -> openMcp(state); state.mcp.selected = mcpKey(ExtensionScope.USER, "context7"); waitFor { state.mcp.healthCheck == HealthCheck.DONE && state.mcp.details.values.any { it is RawDetails.Loaded } } }),
-    Shot("mcp-add-dialog", prepare = { state, _, _ -> openMcp(state); state.mcp.adding = true }),
+    Shot("mcp-detail", prepare = { state, _, _ -> openMcp(state); state.extensions.mcp.selected = mcpKey(ExtensionScope.USER, "github"); waitFor { state.extensions.mcp.healthCheck == HealthCheck.DONE && state.extensions.mcp.details.values.any { it is RawDetails.Loaded } } }),
+    Shot("mcp-auth-needed", prepare = { state, _, _ -> openMcp(state); state.extensions.mcp.selected = mcpKey(ExtensionScope.USER, "notion"); waitFor { state.extensions.mcp.healthCheck == HealthCheck.DONE && state.extensions.mcp.details.values.any { it is RawDetails.Loaded } } }),
+    Shot("mcp-auth-logged-in", prepare = { state, _, _ -> openMcp(state); state.extensions.mcp.selected = mcpKey(ExtensionScope.USER, "github"); waitFor { state.extensions.mcp.healthCheck == HealthCheck.DONE && state.extensions.mcp.details.values.any { it is RawDetails.Loaded } } }),
+    Shot("mcp-auth-waiting", prepare = { state, _, _ -> openMcp(state); state.extensions.mcp.selected = mcpKey(ExtensionScope.USER, "sentry"); waitFor { state.extensions.mcp.healthCheck == HealthCheck.DONE && state.extensions.mcp.details.values.any { it is RawDetails.Loaded } }; state.extensions.mcp.signIn("sentry") }),
+    Shot("mcp-auth-connector", prepare = { state, _, _ -> openMcp(state); state.extensions.mcp.selected = mcpKey(null, "claude.ai Canva"); waitFor { state.extensions.mcp.healthCheck == HealthCheck.DONE && state.extensions.mcp.details.values.any { it is RawDetails.Loaded } } }),
+    Shot("mcp-auth-stdio", prepare = { state, _, _ -> openMcp(state); state.extensions.mcp.selected = mcpKey(ExtensionScope.USER, "context7"); waitFor { state.extensions.mcp.healthCheck == HealthCheck.DONE && state.extensions.mcp.details.values.any { it is RawDetails.Loaded } } }),
+    Shot("mcp-add-dialog", prepare = { state, _, _ -> openMcp(state); state.extensions.mcp.adding = true }),
     Shot("skills-list", prepare = { state, _, _ -> openSkills(state) }),
-    Shot("skills-detail", prepare = { state, _, _ -> openSkills(state); state.skills.selected = state.skills.skills.first { it.name == "code-review" }.file.toString(); waitFor { state.skills.texts.values.any { it is SkillText.Loaded } } }),
+    Shot("skills-detail", prepare = { state, _, _ -> openSkills(state); state.extensions.skills.selected = state.extensions.skills.skills.first { it.name == "code-review" }.file.toString(); waitFor { state.extensions.skills.texts.values.any { it is SkillText.Loaded } } }),
     Shot("project-plugins", prepare = { state, _, _ -> openProjectSettings(state, ProjectSettingsSection.PLUGINS) }),
     Shot("project-plugins-marketplace", prepare = { state, _, _ -> openProjectSettings(state, ProjectSettingsSection.PLUGINS).plugins.tab = PluginsTab.MARKETPLACE }),
-    Shot("project-mcp", prepare = { state, _, _ -> openProjectSettings(state, ProjectSettingsSection.MCP); waitFor { state.projectSettings?.mcp?.healthCheck == HealthCheck.DONE } }),
+    Shot("project-mcp", prepare = { state, _, _ -> openProjectSettings(state, ProjectSettingsSection.MCP); waitFor { state.extensions.projectSettings?.mcp?.healthCheck == HealthCheck.DONE } }),
     Shot("project-mcp-add", prepare = { state, _, _ -> openProjectSettings(state, ProjectSettingsSection.MCP).mcp.adding = true }),
     Shot("project-skills", prepare = { state, _, _ -> openProjectSettings(state, ProjectSettingsSection.SKILLS) }),
     Shot("project-skills-new", prepare = { state, _, _ -> openProjectSettings(state, ProjectSettingsSection.SKILLS).skills.creating = true }),
-    Shot("skills-new-dialog", prepare = { state, _, _ -> openSkills(state); state.skills.creating = true }),
+    Shot("skills-new-dialog", prepare = { state, _, _ -> openSkills(state); state.extensions.skills.creating = true }),
     Shot("proposal-questions", prepare = { state, _, _ -> state.openSession("s-agents") }),
     Shot("proposal-permission", prepare = { state, _, _ -> state.openSession("s-needs") }),
     Shot("proposal-plan", prepare = { state, _, _ -> state.openSession("s-infra") }),
     Shot("proposal-form", prepare = { state, _, _ -> state.openSession("s-working") }),
     Shot("proposal-questions-multi", prepare = { state, _, _ -> state.openSession("s-agents"); questions(state).apply { toggle(0, 1); goTo(1); toggle(1, 0); toggle(1, 2) } }),
     Shot("proposal-questions-other", prepare = { state, _, _ -> state.openSession("s-agents"); questions(state).apply { goTo(2); toggleOther(2); other[2].edit { replace(0, length, "In the wiki") } } }),
-    Shot("proposal-hidden", prepare = { state, _, _ -> state.openSession("s-needs"); waitFor { state.proposalDialog != null }; state.proposals.hide(state.proposalDialog!!) }),
+    Shot("proposal-hidden", prepare = { state, _, _ -> state.openSession("s-needs"); waitFor { state.answers.dialog != null }; state.proposals.hide(state.answers.dialog!!) }),
     Shot("proposal-overview", prepare = { state, _, _ -> state.navigate(Route.Overview) }),
     Shot("dialog-confirm", prepare = { state, _, _ -> state.confirm = ConfirmRequest("Remove project", "Remove ccm-sandbox from the list? Files on disk are not touched.", "Remove", true) {} }, closing = { it.confirm = null }),
-    Shot("dialog-new-skill-close", prepare = { state, _, _ -> openSkills(state); state.skills.creating = true }, closing = { it.skills.creating = false }),
+    Shot("dialog-new-skill-close", prepare = { state, _, _ -> openSkills(state); state.extensions.skills.creating = true }, closing = { it.extensions.skills.creating = false }),
 )
 
 private fun GitState.pushNow() { push(); waitFor { error != null } }
@@ -216,9 +216,9 @@ private fun render(shot: Shot, dark: Boolean, width: Int, height: Int, out: Path
     val state = AppState(world.backend(PreviewTerminal), scope, UiSettingsStore(null)).also {
         it.updateSettings { s -> s.copy(assistantStartup = AssistantStartup.NEVER) }
         it.start()
-        it.setThemeMode(if (dark) ThemeMode.DARK else ThemeMode.LIGHT)
+        it.prefs.setThemeMode(if (dark) ThemeMode.DARK else ThemeMode.LIGHT)
     }
-    waitFor { state.projects.all.isNotEmpty() && state.installation != null }
+    waitFor { state.projects.all.isNotEmpty() && state.environment.installation != null }
     state.navigate(Route.Project(1))
     val git = state.openGit(1, shot.view)!!
     git.attach()
@@ -287,15 +287,15 @@ private fun addRoles(state: AppState, count: Int) {
 
 private fun openPlugins(state: AppState, tab: PluginsTab) {
     state.navigate(Route.Plugins)
-    state.plugins.tab = tab
-    state.plugins.ensureLoaded()
-    state.plugins.loadCatalog()
-    waitFor { state.plugins.loaded && state.plugins.catalog.isNotEmpty() }
+    state.extensions.plugins.tab = tab
+    state.extensions.plugins.ensureLoaded()
+    state.extensions.plugins.loadCatalog()
+    waitFor { state.extensions.plugins.loaded && state.extensions.plugins.catalog.isNotEmpty() }
 }
 
 private fun openProjectSettings(state: AppState, section: ProjectSettingsSection): ProjectSettingsState {
-    state.openProjectSettings(state.projects.all.first { it.id == 1L }, section)
-    val settings = state.projectSettings!!
+    state.extensions.openProjectSettings(state.projects.all.first { it.id == 1L }, section)
+    val settings = state.extensions.projectSettings!!
     settings.plugins.ensureLoaded()
     settings.plugins.loadCatalog()
     settings.mcp.ensureLoaded()
@@ -306,18 +306,18 @@ private fun openProjectSettings(state: AppState, section: ProjectSettingsSection
 
 private fun openMcp(state: AppState) {
     state.navigate(Route.Mcp)
-    state.mcp.ensureLoaded()
-    waitFor { state.mcp.loaded }
+    state.extensions.mcp.ensureLoaded()
+    waitFor { state.extensions.mcp.loaded }
 }
 
 private fun openSkills(state: AppState) {
     state.navigate(Route.Skills)
-    state.skills.ensureLoaded()
-    waitFor { state.skills.loaded }
+    state.extensions.skills.ensureLoaded()
+    waitFor { state.extensions.skills.loaded }
 }
 
 private fun questions(state: AppState): QuestionsDraft {
-    waitFor { state.proposalDialog != null }
-    val proposal = state.proposalDialog as QuestionsProposal
+    waitFor { state.answers.dialog != null }
+    val proposal = state.answers.dialog as QuestionsProposal
     return state.proposals.draft(proposal) { QuestionsDraft(proposal.questions()) }
 }

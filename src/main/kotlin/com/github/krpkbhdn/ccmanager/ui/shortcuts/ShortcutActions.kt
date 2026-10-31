@@ -18,15 +18,15 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
         return when (shortcut) {
             AppShortcut.PALETTE -> handled { state.paletteOpen = !state.paletteOpen }
             AppShortcut.ADD_PROJECT -> handled(state::requestAddProject)
-            AppShortcut.TOGGLE_SIDEBAR -> handled(state::toggleSidebar)
-            AppShortcut.TOGGLE_AGENTS -> handled(state::toggleAgents)
-            AppShortcut.TOGGLE_QUICK_ACTIONS -> handled(state::toggleQuickBar)
-            AppShortcut.TOGGLE_THEME -> handled { state.toggleTheme(systemDark()) }
+            AppShortcut.TOGGLE_SIDEBAR -> handled(state.prefs::toggleSidebar)
+            AppShortcut.TOGGLE_AGENTS -> handled(state.prefs::toggleAgents)
+            AppShortcut.TOGGLE_QUICK_ACTIONS -> handled(state.prefs::toggleQuickBar)
+            AppShortcut.TOGGLE_THEME -> handled { state.prefs.toggleTheme(systemDark()) }
             AppShortcut.OVERVIEW -> handled { state.navigate(Route.Overview) }
             AppShortcut.ALL_SESSIONS -> handled { state.navigate(Route.Sessions) }
             AppShortcut.ASSISTANT -> handled { state.navigate(Route.Assistant) }
             AppShortcut.QUICK_REQUEST -> handled { state.quickRequestOpen = true }
-            AppShortcut.NEXT_WAITING -> state.answerNextWaiting()
+            AppShortcut.NEXT_WAITING -> state.answers.answerNextWaiting()
             AppShortcut.NOTIFICATIONS -> handled { state.notificationsOpen = !state.notificationsOpen }
             AppShortcut.USAGE -> handled { state.usageOpen = !state.usageOpen }
             AppShortcut.APP_SETTINGS -> handled { state.settingsDialog.show() }
@@ -50,8 +50,8 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
             AppShortcut.GIT_CHANGES -> handled { state.openGit(project.id, GitSubView.CHANGES) }
             AppShortcut.GIT_COMMIT -> handled { state.openGit(project.id)?.requestCommitFocus() }
             AppShortcut.GIT_BRANCHES -> handled { state.openGit(project.id)?.branchPopupOpen = true }
-            AppShortcut.GIT_PUSH -> handled { state.gitOf(project.id)?.push() }
-            AppShortcut.PROJECT_SETTINGS -> handled { state.openProjectSettings(project) }
+            AppShortcut.GIT_PUSH -> handled { state.gits.of(project.id)?.push() }
+            AppShortcut.PROJECT_SETTINGS -> handled { state.extensions.openProjectSettings(project) }
             AppShortcut.RUN -> state.runs.selectedOf(project.id)?.takeIf { !it.directoryMissing }?.let { entry -> handled { state.runs.run(entry.id) } } ?: false
             AppShortcut.ACTIVITY_TAB -> handled { state.select(project.id, ProjectTab.Activity) }
             AppShortcut.FOCUS_TERMINAL -> session != null && handled { state.terminal.focus(session) }
@@ -87,9 +87,9 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
 
     private fun currentProject(): Project? = (state.route as? Route.Project)?.let { route -> state.projects.all.firstOrNull { it.id == route.id } }
 
-    private fun modalOpen() = state.proposalDialog != null || state.quickRequestOpen || state.assistantHelpOpen || state.assistantStartup.asking || state.confirm != null || state.projects.renaming != null || state.projects.groupDialog != null || state.projects.pickerOpen || state.projectSettings != null || state.settingsDialog.open ||
-        state.taskDialogProjectId != null || state.quickStartProjectId != null || state.queuePickTarget != null ||state.runs.dialog != null || state.teams.dialog != null || state.agents.log != null || state.plugins.pending != null || state.mcp.adding || state.skills.creating || state.author.offer != null || state.author.manage != null || state.author.report != null ||
-        currentProject()?.let { state.gitOf(it.id)?.dialog } != null
+    private fun modalOpen() = state.answers.dialog != null || state.quickRequestOpen || state.assistantHelpOpen || state.assistantStartup.asking || state.confirm != null || state.projects.renaming != null || state.projects.groupDialog != null || state.projects.pickerOpen || state.extensions.projectSettings != null || state.settingsDialog.open ||
+        state.tasks.projectId != null || state.tasks.quickStartProjectId != null || state.tasks.queuePickTarget != null ||state.runs.dialog != null || state.teams.dialog != null || state.agents.log != null || state.extensions.plugins.pending != null || state.extensions.mcp.adding || state.extensions.skills.creating || state.author.offer != null || state.author.manage != null || state.author.report != null ||
+        currentProject()?.let { state.gits.of(it.id)?.dialog } != null
 
     private fun handled(action: () -> Unit): Boolean {
         action()

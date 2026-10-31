@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.claude.proposal;
 
+import com.github.krpkbhdn.ccmanager.claude.hook.DecisionHolder;
 import com.github.krpkbhdn.ccmanager.claude.hook.HookEvent;
 import com.github.krpkbhdn.ccmanager.claude.hook.HookProperties;
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus;
@@ -23,7 +24,7 @@ import org.springframework.stereotype.Component;
  * Thread-safe.
  */
 @Component
-public class ProposalService {
+public class ProposalService implements DecisionHolder {
 
     private static final Logger log = LoggerFactory.getLogger(ProposalService.class);
 
@@ -42,6 +43,7 @@ public class ProposalService {
      * Registers the proposal behind a PermissionRequest or Elicitation event, in event order.
      * @return completes with the hook output to send back, or empty for an empty 200; already empty for any other event
      */
+    @Override
     public CompletableFuture<Optional<String>> hold(HookEvent event) {
         var proposal = ProposalParser.parse(event);
         if (proposal.isEmpty()) {
@@ -65,6 +67,7 @@ public class ProposalService {
     }
 
     /** Hands every held dialog back to the terminal, for shutdown. */
+    @Override
     public void releaseAll() {
         held.values().forEach(pending -> pending.decision().complete(Optional.empty()));
     }

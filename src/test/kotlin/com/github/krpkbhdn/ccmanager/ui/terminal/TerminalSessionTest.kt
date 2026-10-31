@@ -109,7 +109,15 @@ class TerminalSessionTest {
     }
 
     @Test
-    fun aDraftMayExistFromUserInputUntilEnterCtrlCOrEscNotProgrammaticSends() {
+    fun anEscapeOrArrowWithNoTypedTextLeavesNoDraft() {
+        val pressed = com.jediterm.core.input.KeyInputEvent.Type.PRESSED
+        session.onKey(com.jediterm.core.input.KeyInputEvent(pressed, java.awt.event.KeyEvent.VK_ESCAPE, '\u001b', 0))
+        session.onKey(com.jediterm.core.input.KeyInputEvent(pressed, java.awt.event.KeyEvent.VK_UP, '￿', 0))
+        assertThat(session.draftMayExist).isFalse()
+    }
+
+    @Test
+    fun aDraftMayExistFromUserTypingUntilEnterOrCtrlCNotProgrammaticSends() {
         val typed = com.jediterm.core.input.KeyInputEvent.Type.TYPED
         val pressed = com.jediterm.core.input.KeyInputEvent.Type.PRESSED
         session.send("draft")
@@ -120,9 +128,18 @@ class TerminalSessionTest {
         assertThat(session.draftMayExist).isFalse()
         session.onKey(com.jediterm.core.input.KeyInputEvent(typed, 0, 'a', 0))
         session.onKey(com.jediterm.core.input.KeyInputEvent(pressed, java.awt.event.KeyEvent.VK_ESCAPE, '\u001b', 0))
-        assertThat(session.draftMayExist).isFalse()
-        session.onKey(com.jediterm.core.input.KeyInputEvent(typed, 0, 'a', 0))
+        assertThat(session.draftMayExist).isTrue()
         session.onKey(com.jediterm.core.input.KeyInputEvent(pressed, java.awt.event.KeyEvent.VK_C, '\u0003', java.awt.event.InputEvent.CTRL_DOWN_MASK))
+        assertThat(session.draftMayExist).isFalse()
+    }
+
+    @Test
+    fun aProgrammaticClearAndEnterAfterUserTypingLeavesNoDraft() {
+        session.onKey(com.jediterm.core.input.KeyInputEvent(com.jediterm.core.input.KeyInputEvent.Type.TYPED, 0, 'a', 0))
+        assertThat(session.draftMayExist).isTrue()
+        session.send("\u0003")
+        session.send("/model x")
+        session.send("\r")
         assertThat(session.draftMayExist).isFalse()
     }
 

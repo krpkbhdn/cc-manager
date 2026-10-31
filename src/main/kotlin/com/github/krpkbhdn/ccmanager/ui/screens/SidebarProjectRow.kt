@@ -64,11 +64,11 @@ class ProjectActions(
 
 fun AppState.projectActions(project: Project) = ProjectActions(
     onOpen = { navigate(Route.Project(project.id)) },
-    onStartTask = { openTaskDialog(project.id) },
+    onStartTask = { tasks.open(project.id) },
     onRename = { projects.renaming = RenameRequest(project) },
     onRemove = { projects.requestRemove(project) },
-    onOpenFolder = { openFolder(project) },
-    onSettings = { openProjectSettings(project) },
+    onOpenFolder = { environment.openFolder(project) },
+    onSettings = { extensions.openProjectSettings(project) },
     onAuthorConfig = { author.openManage(project.id) },
 )
 

@@ -58,7 +58,7 @@ class ProposalDialogHostTest {
         until { state.live.find(SESSION) != null }
         state.openSession(SESSION)
         scene = ImageComposeScene(1000, 800, Density(1f)) { host { ProposalDialogHost(state) } }
-        until { state.proposalDialog != null }
+        until { state.answers.dialog != null }
         frames()
     }
 
@@ -91,7 +91,7 @@ class ProposalDialogHostTest {
     fun escapeHidesTheDialogAndKeepsTheProposalPending() {
         press(Key.Escape)
 
-        assertThat(state.proposalDialog).isNull()
+        assertThat(state.answers.dialog).isNull()
         assertThat(state.proposals.of(SESSION).map { it.id() }).contains("q1")
         assertThat(state.proposals.hiddenCount(SESSION)).isEqualTo(1)
         assertThat(world.proposals.service().pending().map { it.id() }).contains("q1")
@@ -102,7 +102,7 @@ class ProposalDialogHostTest {
         press(Key.Escape)
         state.proposals.reopen(SESSION)
 
-        assertThat(state.proposalDialog?.id()).isEqualTo("q1")
+        assertThat(state.answers.dialog?.id()).isEqualTo("q1")
     }
 
     @Test
@@ -112,10 +112,10 @@ class ProposalDialogHostTest {
         focused.clear()
 
         world.proposals.settle("q1")
-        until { state.proposalDialog?.id() == "p2" }
+        until { state.answers.dialog?.id() == "p2" }
         frames()
 
-        assertThat(state.proposals.positionOf(state.proposalDialog!!)).isNull()
+        assertThat(state.proposals.positionOf(state.answers.dialog!!)).isNull()
     }
 
     @Test
@@ -123,7 +123,7 @@ class ProposalDialogHostTest {
         focused.clear()
 
         world.proposals.settle("q1")
-        until { state.proposalDialog == null }
+        until { state.answers.dialog == null }
         frames()
 
         assertThat(focused).contains(SESSION)
@@ -137,7 +137,7 @@ class ProposalDialogHostTest {
         assertThat(actions.perform(AppShortcut.TOGGLE_SIDEBAR)).isFalse()
         assertThat(state.settings.sidebarCollapsed).isEqualTo(collapsed)
         world.proposals.settle("q1")
-        until { state.proposalDialog == null }
+        until { state.answers.dialog == null }
 
         assertThat(actions.perform(AppShortcut.TOGGLE_SIDEBAR)).isTrue()
     }

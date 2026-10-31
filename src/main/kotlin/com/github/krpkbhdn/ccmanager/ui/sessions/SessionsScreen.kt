@@ -52,12 +52,12 @@ fun SessionsScreen(state: AppState, modifier: Modifier = Modifier) {
         SessionCard(
             session = session,
             projectName = state.projects.nameOf(session.projectId),
-            usage = state.sessionUsage[session.ccmSessionId],
+            usage = state.environment.sessionUsage[session.ccmSessionId],
             now = state.now,
             stale = isStale(session, state.now, state.workingStaleAfter),
             proposalHeadline = state.proposals.headlineOf(session.ccmSessionId),
             onOpen = { state.openSession(session.ccmSessionId) },
-            onAnswer = { state.answerProposals(session.ccmSessionId) },
+            onAnswer = { state.answers.answer(session.ccmSessionId) },
             modifier = cardModifier,
         )
     }
@@ -74,7 +74,7 @@ fun SessionsScreen(state: AppState, modifier: Modifier = Modifier) {
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.weight(1f)) { SectionTitle("All sessions", sessions.size) }
-                        GroupToggle(grouped, state::setGroupSessionsByProject)
+                        GroupToggle(grouped, state.prefs::setGroupSessionsByProject)
                     }
                     FilterBar(state, filter) { selected = it }
                 }

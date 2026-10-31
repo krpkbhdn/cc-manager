@@ -53,9 +53,9 @@ class ShortcutActionsTest {
         assertThat(actions.perform(AppShortcut.PALETTE)).isFalse()
         state.projects.pickerOpen = false
 
-        state.taskDialogProjectId = 1L
+        state.tasks.projectId = 1L
         assertThat(actions.perform(AppShortcut.PALETTE)).isFalse()
-        state.taskDialogProjectId = null
+        state.tasks.projectId = null
 
         assertThat(actions.perform(AppShortcut.PALETTE)).isTrue()
     }
@@ -96,7 +96,7 @@ class ShortcutActionsTest {
         CONFIRMATION({ state.confirm = confirmation() }),
         FOLDER_PICKER({ state.projects.pickerOpen = true }),
         GROUP_DIALOG({ state.projects.groupDialog = GroupDialogRequest(null) }),
-        TASK_DIALOG({ state.taskDialogProjectId = 1L }),
+        TASK_DIALOG({ state.tasks.projectId = 1L }),
         RUN_CONFIGURATION({
             runBlocking { state.projects.load() }
             state.runs.openDialog(state.projects.all.first().id)

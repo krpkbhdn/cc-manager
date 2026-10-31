@@ -50,7 +50,7 @@ internal fun runReal(args: Array<String>) {
     application {
         val state = remember {
             AppState(backend, CoroutineScope(SupervisorJob() + Dispatchers.Main), UiSettingsStore(null))
-                .also { it.start(); it.setThemeMode(if (dark) ThemeMode.DARK else ThemeMode.LIGHT) }
+                .also { it.start(); it.prefs.setThemeMode(if (dark) ThemeMode.DARK else ThemeMode.LIGHT) }
         }
         val windowState = remember { WindowState(size = DpSize(size[0].dp, size[1].dp)) }
         val icon = remember { BitmapPainter(drawAppIcon(256).toComposeImageBitmap()) }

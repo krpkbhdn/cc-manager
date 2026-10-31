@@ -5,6 +5,7 @@ import com.github.krpkbhdn.ccmanager.workspace.CommandRunner;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -70,7 +71,7 @@ public class GitRunner {
     }
 
 
-    public record Result(int exitCode, String stdout, String stderr) {
+    public record Result(int exitCode, String stdout, String stderr, boolean truncated) {
 
         public boolean ok() {
             return exitCode == 0;
@@ -105,6 +106,9 @@ public class GitRunner {
             var kind = GitFailure.classify(output);
             throw new GitException(kind, GitFailure.message(kind, output), output);
         }
+        if (result.truncated()) {
+            throw new GitException(Kind.OTHER, "git " + GitFailure.subcommand(args) + " output is too large (over " + CommandRunner.MAX_OUTPUT_BYTES + " bytes)", "");
+        }
         return result;
     }
 
@@ -127,7 +131,8 @@ public class GitRunner {
             var process = builder.start();
             var stdout = new ByteArrayOutputStream();
             var stderr = new StringBuffer();
-            var readers = CompletableFuture.allOf(CommandRunner.drain(process.getInputStream(), stdout), async(() -> readLines(process, progress, stderr)));
+            var stdoutTruncated = CommandRunner.drain(process.getInputStream(), stdout);
+            var readers = CompletableFuture.allOf(stdoutTruncated, async(() -> readLines(process.getErrorStream(), progress, stderr, CommandRunner.MAX_OUTPUT_BYTES)));
             var stdinWritten = async(() -> writeAndClose(process, stdin));
             if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
                 process.descendants().forEach(ProcessHandle::destroyForcibly);
@@ -136,7 +141,7 @@ public class GitRunner {
             }
             stdinWritten.join();
             CommandRunner.awaitReaders(process, readers);
-            return new Result(process.exitValue(), stdout.toString(StandardCharsets.UTF_8), stderr.toString());
+            return new Result(process.exitValue(), stdout.toString(StandardCharsets.UTF_8), stderr.toString(), stdoutTruncated.getNow(false));
         } catch (IOException e) {
             throw new GitException(Kind.GIT_MISSING, "Git is not installed or not on PATH", String.valueOf(e.getMessage()));
         } catch (InterruptedException e) {
@@ -174,17 +179,20 @@ public class GitRunner {
         return null;
     }
 
-    private static Void readLines(Process process, Consumer<String> progress, StringBuffer text) {
-        try (var reader = new BufferedReader(new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
+    /** Progress still flows for every line, but {@code text} keeps at most {@code maxChars}, like the capped stdout. */
+    static Void readLines(InputStream stream, Consumer<String> progress, StringBuffer text, int maxChars) {
+        try (var reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
             var line = new StringBuilder();
             int c;
             while ((c = reader.read()) != -1) {
                 if (c == '\n' || c == '\r') {
                     emit(line, progress);
-                } else {
+                } else if (line.length() < maxChars) {
                     line.append((char) c);
                 }
-                text.append((char) c);
+                if (text.length() < maxChars) {
+                    text.append((char) c);
+                }
             }
             emit(line, progress);
         } catch (IOException e) {

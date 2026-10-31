@@ -35,7 +35,7 @@ class ProposalServiceTest {
     private final String session = registry.register(1L);
 
     private ProposalService serviceHolding(Duration hold) {
-        return new ProposalService(registry, new HookProperties(10, 1024, 500, hold, java.time.Duration.ofDays(7)));
+        return new ProposalService(registry, new HookProperties(10, 1024, 500, hold));
     }
 
     private HookEvent event(String sessionId, HookEventType type, String json) {
