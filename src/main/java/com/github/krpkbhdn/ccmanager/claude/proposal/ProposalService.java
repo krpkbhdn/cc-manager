@@ -49,12 +49,32 @@ public class ProposalService implements DecisionHolder {
         if (proposal.isEmpty()) {
             return CompletableFuture.completedFuture(Optional.empty());
         }
-        var decision = new CompletableFuture<Optional<String>>()
+        return holdProposal(proposal.get()).thenApply(answer -> answer.map(given -> given.hookOutput(proposal.get())));
+    }
+
+    /**
+     * Holds a proposal that has no hook call behind it (a tool of the app MCP server that needs the user's confirmation).
+     * @return completes with the user's answer, or with the reason there is none (timed out, over the cap, dismissed or session gone)
+     */
+    public CompletableFuture<AppDecision> holdForApp(PermissionProposal proposal) {
+        if (held.size() >= properties.maxHeldProposals()) {
+            return CompletableFuture.completedFuture(AppDecision.Unanswered.TOO_MANY_PENDING);
+        }
+        var started = System.nanoTime();
+        return holdProposal(proposal).thenApply(answer -> answer.<AppDecision>map(AppDecision.Answered::new)
+                .orElseGet(() -> System.nanoTime() - started >= properties.decisionHold().toNanos()
+                        ? AppDecision.Unanswered.TIMED_OUT : AppDecision.Unanswered.RELEASED));
+    }
+
+    private CompletableFuture<Optional<ProposalAnswer>> holdProposal(Proposal proposal) {
+        if (held.size() >= properties.maxHeldProposals()) {
+            return CompletableFuture.completedFuture(Optional.empty());
+        }
+        var decision = new CompletableFuture<Optional<ProposalAnswer>>()
                 .completeOnTimeout(Optional.empty(), properties.decisionHold().toMillis(), TimeUnit.MILLISECONDS);
-        var id = proposal.get().id();
-        held.put(id, new Held(proposal.get(), decision));
-        decision.whenComplete((output, error) -> {
-            held.remove(id);
+        held.put(proposal.id(), new Held(proposal, decision));
+        decision.whenComplete((answer, error) -> {
+            held.remove(proposal.id());
             notifyListeners();
         });
         notifyListeners();
@@ -84,7 +104,7 @@ public class ProposalService implements DecisionHolder {
         if (!answer.fits(pending.proposal())) {
             throw new IllegalArgumentException("Answer does not fit proposal " + proposalId);
         }
-        return pending.decision().complete(Optional.of(answer.hookOutput(pending.proposal())));
+        return pending.decision().complete(Optional.of(answer));
     }
 
     /** Hides the proposal from the app; the held call gets an empty body, so the terminal dialog keeps working. */
@@ -123,5 +143,5 @@ public class ProposalService implements DecisionHolder {
         }
     }
 
-    private record Held(Proposal proposal, CompletableFuture<Optional<String>> decision) {}
+    private record Held(Proposal proposal, CompletableFuture<Optional<ProposalAnswer>> decision) {}
 }

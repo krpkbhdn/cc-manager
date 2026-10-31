@@ -118,7 +118,7 @@ class ClaudeLauncherTest {
         Path notExecutable = Files.createFile(directory.resolve("claude-fake"));
         when(installation.current()).thenReturn(new ClaudeInstallation(true, notExecutable, "1", null, null));
         when(sessions.register(ClaudeLauncher.ASSISTANT_PROJECT_ID)).thenReturn("ccm-0");
-        when(assistantEndpoint.autoApprovedToolNames()).thenReturn(List.of("list_projects"));
+        when(assistantEndpoint.toolNames()).thenReturn(List.of("list_projects"));
         when(hooks.write("ccm-0")).thenReturn(new SessionFiles(directory.resolve("s.json"), directory.resolve("m.json")));
 
         assertThatThrownBy(launcher::launchAssistant).hasMessageStartingWith("Could not start Claude");

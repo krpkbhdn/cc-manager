@@ -96,7 +96,10 @@ public class HookSettingsWriter {
         return write(ccmSessionId, mcpConfig(McpEndpoint.SERVER_NAME, server.mcpUrl(ccmSessionId), extraServers));
     }
 
-    /** The Assistant session gets only the app server in its mcp file; the project server and the project-session secret stay out of it. */
+    /**
+     * The Assistant session gets only the app server in its mcp file; the project server and the project-session secret stay out of it.
+     * The secret alone reaches only auto-approved tools, every other tool needs the user's Allow in the app.
+     */
     public SessionFiles writeAssistant(String ccmSessionId) {
         return write(ccmSessionId, mcpConfig(AssistantMcpServer.SERVER_NAME, server.assistantMcpUrl(), Map.of()));
     }

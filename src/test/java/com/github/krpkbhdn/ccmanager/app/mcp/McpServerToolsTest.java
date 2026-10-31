@@ -43,23 +43,40 @@ class McpServerToolsTest {
     }
 
     @Test
-    void getReturnsConfigAndHealthWithoutSecrets() {
-        when(mcp.servers(null)).thenReturn(List.of(new McpServerConfig("remote", ExtensionScope.USER, "http", SECRET_URL, McpApproval.NOT_REQUIRED)));
-        when(mcp.health(null)).thenReturn(List.of(new McpHealth("remote", SECRET_URL, McpStatus.CONNECTED, "Connected")));
-
-        var result = new GetMcpServerTool(mcp, projects).call(args("{\"name\":\"remote\",\"health\":true}"));
-
-        assertThat(result).contains("\"status\":\"CONNECTED\"", "\"scope\":\"user\"", "https://example.com/…").doesNotContain("pw-secret", "tok-123");
-    }
-
-    @Test
-    void getDoesNotRunTheHealthCheckUnlessAsked() {
+    void getReturnsConfigWithoutSecrets() {
         when(mcp.servers(null)).thenReturn(List.of(new McpServerConfig("remote", ExtensionScope.USER, "http", SECRET_URL, McpApproval.NOT_REQUIRED)));
 
         var result = new GetMcpServerTool(mcp, projects).call(args("{\"name\":\"remote\"}"));
 
+        assertThat(result).contains("\"scope\":\"user\"", "https://example.com/…").doesNotContain("pw-secret", "tok-123");
+    }
+
+    @Test
+    void getNeverRunsTheHealthCheckEvenWhenAsked() {
+        when(mcp.servers(null)).thenReturn(List.of(new McpServerConfig("remote", ExtensionScope.USER, "http", SECRET_URL, McpApproval.NOT_REQUIRED)));
+
+        var result = new GetMcpServerTool(mcp, projects).call(args("{\"name\":\"remote\",\"health\":true}"));
+
         assertThat(result).doesNotContain("status");
         org.mockito.Mockito.verify(mcp, org.mockito.Mockito.never()).health(any());
+    }
+
+    @Test
+    void checkHealthReturnsStatusWithoutSecrets() {
+        when(mcp.health(null)).thenReturn(List.of(new McpHealth("remote", SECRET_URL, McpStatus.CONNECTED, "Connected")));
+
+        var result = new CheckMcpHealthTool(mcp, projects).call(args("{\"name\":\"remote\"}"));
+
+        assertThat(result).contains("\"status\":\"CONNECTED\"", "https://example.com/…").doesNotContain("pw-secret", "tok-123");
+    }
+
+    @Test
+    void checkHealthAsksPermissionAndRejectsUnknownServer() {
+        when(mcp.health(null)).thenReturn(List.of());
+        var tool = new CheckMcpHealthTool(mcp, projects);
+
+        assertThat(tool.autoApproved()).isFalse();
+        assertThatThrownBy(() -> tool.call(args("{\"name\":\"x\"}"))).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("x");
     }
 
     @Test
@@ -87,7 +104,6 @@ class McpServerToolsTest {
     @Test
     void getNeverUsesRawCliDetails() {
         when(mcp.servers(null)).thenReturn(List.of(new McpServerConfig("remote", ExtensionScope.USER, "http", SECRET_URL, McpApproval.NOT_REQUIRED)));
-        when(mcp.health(null)).thenReturn(List.of());
 
         new GetMcpServerTool(mcp, projects).call(args("{\"name\":\"remote\"}"));
 
@@ -97,7 +113,6 @@ class McpServerToolsTest {
     @Test
     void getRejectsUnknownServer() {
         when(mcp.servers(null)).thenReturn(List.of());
-        when(mcp.health(null)).thenReturn(List.of());
 
         assertThatThrownBy(() -> new GetMcpServerTool(mcp, projects).call(args("{\"name\":\"x\"}")))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("x");

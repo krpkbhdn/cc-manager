@@ -55,4 +55,17 @@ class ProposalStateTest {
         until { errors.isNotEmpty() }
         assertThat(state.dialogFor("s")).isSameAs(proposal)
     }
+
+    @Test
+    fun aProposalIsAnnouncedOnceWhenItArrives() {
+        val arrived = java.util.concurrent.CopyOnWriteArrayList<String>()
+        val announcing = ProposalState(service, scope, { errors += it }, onArrived = { arrived += it.id() })
+
+        announcing.start()
+        until { arrived.isNotEmpty() }
+        announcing.start()
+        Thread.sleep(POLL_MILLIS * 5)
+
+        assertThat(arrived).containsExactly("p")
+    }
 }

@@ -24,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import com.github.krpkbhdn.ccmanager.ui.components.AppButton
+import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant
 import com.github.krpkbhdn.ccmanager.ui.components.HorizontalRule
 import com.github.krpkbhdn.ccmanager.ui.components.IconButton
 import com.github.krpkbhdn.ccmanager.ui.components.Label
@@ -47,6 +49,13 @@ fun ExtensionToolbar(modifier: Modifier = Modifier, content: @Composable RowScop
         Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.md), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md), content = content)
         HorizontalRule()
     }
+}
+
+/** Primary add button and refresh icon that close a toolbar; both stay disabled while a job runs. */
+@Composable
+fun AddAndRefreshActions(addLabel: String, onAdd: () -> Unit, jobRunning: Boolean, loading: Boolean, onRefresh: () -> Unit) {
+    AppButton(addLabel, onAdd, variant = ButtonVariant.PRIMARY, icon = Icons.Plus, enabled = !jobRunning, compact = true)
+    IconButton(Icons.Refresh, onRefresh, tooltip = "Refresh", enabled = !loading && !jobRunning)
 }
 
 /** A list that gives way to a [detail] pane on its right while something is selected. */

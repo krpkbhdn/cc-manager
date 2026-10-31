@@ -1,4 +1,4 @@
-package com.github.krpkbhdn.ccmanager.claude.launch;
+package com.github.krpkbhdn.ccmanager.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

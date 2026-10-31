@@ -2,6 +2,7 @@ package com.github.krpkbhdn.ccmanager.claude.hook;
 
 import static com.github.krpkbhdn.ccmanager.claude.HookEvents.of;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
@@ -9,6 +10,7 @@ import static org.mockito.Mockito.spy;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,6 +23,7 @@ class HookEventStoreTest {
 
     private static final int RETENTION = 5;
     private static final int MAX_TEXT = 20;
+    private static final int MAX_SCANNED = 1000;
 
     private JdbcClient jdbc;
     private HookEventStore store;
@@ -38,7 +41,52 @@ class HookEventStoreTest {
                 jdbc.sql(statement).update();
             }
         }
-        store = new HookEventStore(jdbc, JsonMapper.builder().build(), new HookProperties(RETENTION, 1024, MAX_TEXT, java.time.Duration.ofSeconds(1)));
+        store = new HookEventStore(jdbc, JsonMapper.builder().build(), properties(MAX_SCANNED));
+    }
+
+    private static HookProperties properties(int maxScanned) {
+        return new HookProperties(RETENTION, 1024, MAX_TEXT, java.time.Duration.ofSeconds(1), 10, maxScanned);
+    }
+
+    @Test
+    void secretsAndUnreadToolFieldsAreNotStored() {
+        store.save(of("PreToolUse", "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"TOKEN=abc123\",\"env\":\"hidden\"},"
+                + "\"tool_response\":\"out\"}"));
+        store.save(of("PostToolUse", "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"a.txt\",\"content\":\"filebody\"}}"));
+
+        var stored = String.join("", jdbc.sql("SELECT payload FROM hook_event").query(String.class).list());
+
+        assertThat(stored).doesNotContain("abc123", "hidden", "out\"", "filebody").contains("TOKEN=[redacted]", "a.txt");
+        assertThat(store.recent("s1", 10)).extracting(ActivityEntry::text).containsExactly("Bash: TOKEN=[redacted]", "Wrote a.txt");
+    }
+
+    @Test
+    void aHugeUnbrokenTextIsCutBeforeRedactionSoTheHookThreadDoesNotStall() {
+        var huge = "tokentoken".repeat(20_000);
+
+        assertTimeoutPreemptively(Duration.ofSeconds(5), () -> store.save(of("UserPromptSubmit", "{\"prompt\":\"" + huge + "\"}")));
+
+        assertThat(jdbc.sql("SELECT payload FROM hook_event").query(String.class).single().length()).isLessThan(huge.length());
+    }
+
+    @Test
+    void aSecretCrossingTheCutLimitLeaksNothingBeyondTheKeptPrefix() {
+        store.save(of("UserPromptSubmit", "{\"prompt\":\"aaaa password=hunter2secret\"}"));
+        store.save(of("UserPromptSubmit", "{\"prompt\":\"aaaaaaaaaa password=hunter2secret\"}"));
+
+        var stored = String.join("", jdbc.sql("SELECT payload FROM hook_event").query(String.class).list());
+
+        assertThat(stored).doesNotContain("hunter", "secret\"").contains("password=[redacted]");
+    }
+
+    @Test
+    void recentStopsScanningAfterMaxScannedRows() {
+        store.save(of("UserPromptSubmit", "{\"prompt\":\"old\"}"));
+        for (int i = 0; i < 20; i++) {
+            store.save(of("InstructionsLoaded"));
+        }
+
+        assertThat(new HookEventStore(jdbc, JsonMapper.builder().build(), properties(8)).recent("s1", 2)).isEmpty();
     }
 
     @Test
@@ -92,7 +140,7 @@ class HookEventStoreTest {
             }
             return call.callRealMethod();
         }).when(spied).sql(anyString());
-        var paged = new HookEventStore(spied, JsonMapper.builder().build(), new HookProperties(RETENTION, 1024, MAX_TEXT, java.time.Duration.ofSeconds(1)));
+        var paged = new HookEventStore(spied, JsonMapper.builder().build(), properties(MAX_SCANNED));
 
         assertThat(paged.recent("s1", 3)).extracting(ActivityEntry::text).containsExactly("Prompt: b", "Prompt: a");
     }

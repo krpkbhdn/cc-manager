@@ -6,7 +6,9 @@ import com.github.krpkbhdn.ccmanager.ui.state.commandBlockedReason
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 const val QUEUE_RETRY_MILLIS = 1_000L
 
@@ -65,7 +67,7 @@ class QueueDispatch(
         if (disposed || sending.containsKey(ccmSessionId)) return
         sending[ccmSessionId] = scope.launch {
             try {
-                if (sendPrompt(ccmSessionId, prompt.text)) {
+                if (withContext(NonCancellable) { sendPrompt(ccmSessionId, prompt.text) }) {
                     queues.remove(ccmSessionId, prompt.id)
                     dispatcher.sent(ccmSessionId, clock())
                 }

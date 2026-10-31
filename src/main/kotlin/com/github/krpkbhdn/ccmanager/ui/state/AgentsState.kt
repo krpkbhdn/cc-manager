@@ -8,6 +8,7 @@ import com.github.krpkbhdn.ccmanager.claude.session.SubagentSnapshot
 import com.github.krpkbhdn.ccmanager.claude.session.TranscriptService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -42,9 +43,12 @@ class AgentsState(
         reload()
     }
 
+    private var reloading: Job? = null
+
     fun reload() {
         val shown = log ?: return
-        scope.launch {
+        reloading?.cancel()
+        reloading = scope.launch {
             val entries = withContext(Dispatchers.IO) { transcripts.read(current(shown).transcriptPath) }
             if (log?.agent?.agentId == shown.agent.agentId) log = shown.copy(entries = entries)
         }

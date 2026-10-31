@@ -3,17 +3,12 @@ package com.github.krpkbhdn.ccmanager.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridScope
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,11 +16,11 @@ import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import com.github.krpkbhdn.ccmanager.project.Project
+import com.github.krpkbhdn.ccmanager.ui.components.CardGrid
 import com.github.krpkbhdn.ccmanager.ui.components.AppButton
 import com.github.krpkbhdn.ccmanager.ui.components.CountBadge
 import com.github.krpkbhdn.ccmanager.ui.components.Label
 import com.github.krpkbhdn.ccmanager.ui.components.StatusDot
-import com.github.krpkbhdn.ccmanager.ui.components.ThinScrollbar
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.mostUrgent
@@ -36,8 +31,6 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
-private val cardMinWidth = 320.dp
-private val gridPadding = 28.dp
 private val heroDot = 12.dp
 
 /** Mission control: what needs the user first, then every project at a glance. */
@@ -48,42 +41,31 @@ fun OverviewScreen(state: AppState, modifier: Modifier = Modifier) {
         return
     }
     val attention = needingAttention(state.live.sessions)
-    val grid = rememberLazyGridState()
-    Box(modifier.fillMaxSize()) {
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(cardMinWidth),
-            modifier = Modifier.fillMaxSize(),
-            state = grid,
-            contentPadding = PaddingValues(horizontal = gridPadding, vertical = Spacing.xl),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.lg),
-            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
-        ) {
-            fullWidth { OverviewHero(state, attention.size) }
-            if (attention.isNotEmpty()) attentionCards(attention, state)
-            fullWidth { SectionTitle("Projects", state.projects.topLevelCount) }
-            items(state.projects.groups, key = { "group-${it.id}" }) { group ->
-                GroupCard(
-                    name = group.name,
-                    status = state.live.statusOf(group.id),
-                    members = state.projects.membersOf(group.id).map { state.memberSummary(it) },
-                    onOpen = state.projectActions(group).onOpen,
-                    modifier = Modifier.animateItem(),
-                )
-            }
-            items(state.projects.ungrouped, key = { it.id }) { project ->
-                ProjectCard(
-                    project = project,
-                    status = state.live.statusOf(project.id),
-                    sessions = state.live.of(project.id),
-                    git = state.gits.summaryOf(project.id),
-                    now = { state.now },
-                    actions = state.projectActions(project),
-                    modifier = Modifier.animateItem(),
-                )
-            }
-            item(key = "add") { AddProjectCard(state::requestAddProject, Modifier.animateItem()) }
+    CardGrid(modifier) {
+        fullWidth { OverviewHero(state, attention.size) }
+        if (attention.isNotEmpty()) attentionCards(attention, state)
+        fullWidth { SectionTitle("Projects", state.projects.topLevelCount) }
+        items(state.projects.groups, key = { "group-${it.id}" }) { group ->
+            GroupCard(
+                name = group.name,
+                status = state.live.statusOf(group.id),
+                members = state.projects.membersOf(group.id).map { state.memberSummary(it) },
+                onOpen = state.projectActions(group).onOpen,
+                modifier = Modifier.animateItem(),
+            )
         }
-        ThinScrollbar(grid)
+        items(state.projects.ungrouped, key = { it.id }) { project ->
+            ProjectCard(
+                project = project,
+                status = state.live.statusOf(project.id),
+                sessions = state.live.of(project.id),
+                git = state.gits.summaryOf(project.id),
+                now = { state.now },
+                actions = state.projectActions(project),
+                modifier = Modifier.animateItem(),
+            )
+        }
+        item(key = "add") { AddProjectCard(state::requestAddProject, Modifier.animateItem()) }
     }
 }
 

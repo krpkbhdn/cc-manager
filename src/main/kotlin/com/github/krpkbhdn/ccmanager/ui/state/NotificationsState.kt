@@ -60,6 +60,14 @@ class NotificationsState(
             projectId = notification.projectId,
             ccmSessionId = notification.ccmSessionId,
         )
+        show(toast)
+    }
+
+    /** An answer is wanted in a session that raises no notification of its own (the Assistant); clicking the toast opens it. */
+    fun needsAnswer(projectId: Long, ccmSessionId: String, title: String, body: String) =
+        show(ToastItem(nextToastId(), NotificationKind.NEEDS_ACTION, title, body, projectId, ccmSessionId))
+
+    private fun show(toast: ToastItem) {
         when (toastPlaceFor(windowActive())) {
             ToastPlace.IN_APP -> pushToast(toast)
             ToastPlace.DESKTOP_POPUP -> popups = (popups + toast).takeLast(MAX_TOASTS)

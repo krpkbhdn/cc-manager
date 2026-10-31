@@ -4,16 +4,11 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridScope
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -22,21 +17,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
+import com.github.krpkbhdn.ccmanager.ui.components.CardGrid
 import com.github.krpkbhdn.ccmanager.ui.components.EmptyState
 import com.github.krpkbhdn.ccmanager.ui.components.Segment
 import com.github.krpkbhdn.ccmanager.ui.components.SegmentedControl
-import com.github.krpkbhdn.ccmanager.ui.components.ThinScrollbar
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.screens.SectionTitle
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.statusLabel
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
-
-private val cardMinWidth = 320.dp
-private val gridPadding = 28.dp
 
 /** Every session of every project as a card in start order, flat or grouped by project, filtered by status and project. */
 @Composable
@@ -47,7 +38,6 @@ fun SessionsScreen(state: AppState, modifier: Modifier = Modifier) {
     val grouped = state.settings.groupSessionsByProject
     val sessions = projectSessions(state.live.sessions)
     val shown = board(sessions, filter)
-    val grid = rememberLazyGridState()
     val card = @Composable { session: SessionSnapshot, cardModifier: Modifier ->
         SessionCard(
             session = session,
@@ -61,33 +51,23 @@ fun SessionsScreen(state: AppState, modifier: Modifier = Modifier) {
             modifier = cardModifier,
         )
     }
-    Box(modifier.fillMaxSize()) {
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(cardMinWidth),
-            modifier = Modifier.fillMaxSize(),
-            state = grid,
-            contentPadding = PaddingValues(horizontal = gridPadding, vertical = Spacing.xl),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.lg),
-            verticalArrangement = Arrangement.spacedBy(Spacing.lg),
-        ) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.weight(1f)) { SectionTitle("All sessions", sessions.size) }
-                        GroupToggle(grouped, state.prefs::setGroupSessionsByProject)
-                    }
-                    FilterBar(state, filter) { selected = it }
+    CardGrid(modifier) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) { SectionTitle("All sessions", sessions.size) }
+                    GroupToggle(grouped, state.prefs::setGroupSessionsByProject)
                 }
-            }
-            if (shown.isEmpty()) {
-                item(span = { GridItemSpan(maxLineSpan) }) { NoSessions(sessions.isEmpty()) }
-            } else if (grouped) {
-                groups(groupByProject(sessions, filter, state.projects.all, state.now, state.workingStaleAfter), collapsed, { id -> collapsed = if (id in collapsed) collapsed - id else collapsed + id }, card)
-            } else {
-                items(shown, key = { it.ccmSessionId }) { card(it, Modifier.animateItem()) }
+                FilterBar(state, filter) { selected = it }
             }
         }
-        ThinScrollbar(grid)
+        if (shown.isEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) { NoSessions(sessions.isEmpty()) }
+        } else if (grouped) {
+            groups(groupByProject(sessions, filter, state.projects.all, state.now, state.workingStaleAfter), collapsed, { id -> collapsed = if (id in collapsed) collapsed - id else collapsed + id }, card)
+        } else {
+            items(shown, key = { it.ccmSessionId }) { card(it, Modifier.animateItem()) }
+        }
     }
 }
 

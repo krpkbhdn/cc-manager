@@ -35,7 +35,7 @@ class ClaudeHookSmokeTest {
         assumeTrue(claudeVersion() != null, "claude is not on PATH");
         var mapper = JsonMapper.builder().build();
         var events = new CopyOnWriteArrayList<HookEvent>();
-        var hookProperties = new HookProperties(100, 1_048_576, 500, java.time.Duration.ofSeconds(1));
+        var hookProperties = new HookProperties(100, 1_048_576, 500, java.time.Duration.ofSeconds(1), 10, 1000);
         var server = new HookServer(mock(HookEventStore.class), event -> events.add((HookEvent) event), mapper,
                 hookProperties,
                 mock(com.github.krpkbhdn.ccmanager.claude.mcp.McpEndpoint.class), mock(com.github.krpkbhdn.ccmanager.app.mcp.AssistantMcpEndpoint.class),

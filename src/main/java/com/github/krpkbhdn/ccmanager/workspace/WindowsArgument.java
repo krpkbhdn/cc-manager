@@ -1,4 +1,4 @@
-package com.github.krpkbhdn.ccmanager.claude.launch;
+package com.github.krpkbhdn.ccmanager.workspace;
 
 import java.nio.file.Path;
 import java.util.List;

@@ -103,21 +103,24 @@ class SessionsState(
         if (backend.terminal.draftMayExist(session.ccmSessionId)) return reportError(DRAFT_MESSAGE)
         modelApplying = true
         scope.launch {
-            guarded {
-                val typed = commandWriter.run(session.ccmSessionId, command, clearDraft = false) { backend.terminal.draftMayExist(session.ccmSessionId) }
-                if (!typed) return@guarded reportError(BUSY_MESSAGE)
-                backend.terminal.focus(session.ccmSessionId)
-                var waited = 0L
-                while (!reached(usageOf(session.ccmSessionId)) && waited < APPLY_TIMEOUT_MILLIS) {
-                    delay(APPLY_POLL_MILLIS)
-                    waited += APPLY_POLL_MILLIS
+            try {
+                guarded {
+                    val typed = commandWriter.run(session.ccmSessionId, command, clearDraft = false) { backend.terminal.draftMayExist(session.ccmSessionId) }
+                    if (!typed) return@guarded reportError(BUSY_MESSAGE)
+                    backend.terminal.focus(session.ccmSessionId)
+                    var waited = 0L
+                    while (!reached(usageOf(session.ccmSessionId)) && waited < APPLY_TIMEOUT_MILLIS) {
+                        delay(APPLY_POLL_MILLIS)
+                        waited += APPLY_POLL_MILLIS
+                    }
+                    if (!reached(usageOf(session.ccmSessionId))) {
+                        unconfirmed.add(session.ccmSessionId)
+                        reportError(SWITCH_MODEL_HINT)
+                    }
                 }
-                if (!reached(usageOf(session.ccmSessionId))) {
-                    unconfirmed.add(session.ccmSessionId)
-                    reportError(SWITCH_MODEL_HINT)
-                }
+            } finally {
+                modelApplying = false
             }
-            modelApplying = false
         }
     }
 

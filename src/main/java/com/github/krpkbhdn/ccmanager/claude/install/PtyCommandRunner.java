@@ -1,4 +1,4 @@
-package com.github.krpkbhdn.ccmanager.extension;
+package com.github.krpkbhdn.ccmanager.claude.install;
 
 import com.github.krpkbhdn.ccmanager.workspace.CommandRunner;
 import com.github.krpkbhdn.ccmanager.workspace.ProcessTree;

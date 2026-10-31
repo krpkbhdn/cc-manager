@@ -7,9 +7,11 @@ import com.github.krpkbhdn.ccmanager.extension.plugin.PluginService;
 import com.github.krpkbhdn.ccmanager.workspace.HostEnvironment;
 import com.github.krpkbhdn.ccmanager.workspace.TreeDeleter;
 import java.io.IOException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -77,13 +79,12 @@ public class SkillService {
         description = description.replaceAll("\\s+", " ").strip();
         requireValid(name, description);
         var directory = skillsRoot(scope, projectDirectory).resolve(name);
-        if (Files.exists(directory)) {
-            throw new ExtensionException("A skill named " + name + " already exists");
-        }
         var file = directory.resolve(SKILL_FILE);
         try {
             Files.createDirectories(directory);
-            Files.writeString(file, SkillFrontmatter.render(name, description));
+            Files.writeString(file, SkillFrontmatter.render(name, description), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+        } catch (FileAlreadyExistsException e) {
+            throw new ExtensionException("A skill named " + name + " already exists");
         } catch (IOException e) {
             throw new ExtensionException("Cannot create the skill: " + e.getMessage());
         }

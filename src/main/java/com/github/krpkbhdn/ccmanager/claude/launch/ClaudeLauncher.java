@@ -114,7 +114,7 @@ public class ClaudeLauncher {
             throw new IllegalStateException("Could not create the assistant folder: " + e.getMessage(), e);
         }
         return start(ASSISTANT_PROJECT_ID, directory, ModelSelection.DEFAULT, ClaudeCommand.label(LaunchMode.NEW),
-                (files, exe, selection) -> ClaudeCommand.assistantArguments(exe, files, selection, assistantMcp.autoApprovedToolNames()), List.of());
+                (files, exe, selection) -> ClaudeCommand.assistantArguments(exe, files, selection, assistantMcp.toolNames()), List.of());
     }
 
     private LaunchedSession start(long projectId, String label, CommandFactory commandFactory) {

@@ -2,6 +2,10 @@ package com.github.krpkbhdn.ccmanager.app.mcp;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import static org.mockito.Mockito.mock;
+
+import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalService;
+import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
@@ -21,14 +25,14 @@ class AssistantAutoApprovalTest {
 
     @Test
     void onlyReadOnlyAndEasilyUndoneToolsAreAutoApproved() {
-        var endpoint = new AssistantMcpEndpoint(AssistantTools.all(), JsonMapper.builder().build());
+        var endpoint = new AssistantMcpEndpoint(AssistantTools.all(), JsonMapper.builder().build(), mock(ProposalService.class), mock(SessionRegistry.class));
 
         assertThat(endpoint.autoApprovedToolNames()).containsExactlyElementsOf(AUTO_APPROVED);
     }
 
     @Test
     void writesDeletesAndConfigurationToolsAskPermission() {
-        var endpoint = new AssistantMcpEndpoint(AssistantTools.all(), JsonMapper.builder().build());
+        var endpoint = new AssistantMcpEndpoint(AssistantTools.all(), JsonMapper.builder().build(), mock(ProposalService.class), mock(SessionRegistry.class));
 
         assertThat(endpoint.autoApprovedToolNames()).doesNotContainAnyElementsOf(NEEDS_PERMISSION);
         assertThat(AssistantTools.all().stream().map(AssistantMcpTool::name)).containsAll(NEEDS_PERMISSION);

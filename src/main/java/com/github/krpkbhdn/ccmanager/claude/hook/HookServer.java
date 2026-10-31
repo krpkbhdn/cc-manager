@@ -61,7 +61,7 @@ public class HookServer implements SmartLifecycle {
     private final DecisionHolder proposals;
     private final byte[] secret = secret();
     private final byte[] assistantSecret = secret();
-    private final ExecutorService worker = Executors.newSingleThreadExecutor(Thread.ofPlatform().name("hook-worker").daemon().factory());
+    private volatile ExecutorService worker;
     private HttpServer server;
     private ExecutorService requestExecutor;
 
@@ -108,6 +108,7 @@ public class HookServer implements SmartLifecycle {
         if (server != null) {
             return;
         }
+        worker = Executors.newSingleThreadExecutor(Thread.ofPlatform().name("hook-worker").daemon().factory());
         try {
             server = HttpServer.create(new InetSocketAddress(InetAddress.getByAddress(new byte[] {127, 0, 0, 1}), 0), 0);
         } catch (IOException e) {
@@ -132,8 +133,8 @@ public class HookServer implements SmartLifecycle {
             server.stop(0);
             server = null;
             requestExecutor.shutdown();
+            worker.shutdown();
         }
-        worker.shutdown();
     }
 
     @Override

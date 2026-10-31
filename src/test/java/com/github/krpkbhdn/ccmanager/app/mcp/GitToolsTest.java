@@ -3,7 +3,9 @@ package com.github.krpkbhdn.ccmanager.app.mcp;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -167,6 +169,19 @@ class GitToolsTest {
         var result = call(new GitDiffTool(projects, status, mapper), "{\"project\":7,\"path\":\"a.txt\"}");
 
         assertThat(result).startsWith("--- a.txt").endsWith("... truncated").hasSizeLessThan(GitDiffTool.MAX_CHARS + 50);
+    }
+
+    @Test
+    void diffStopsAfterTheFileLimitAndSaysSo() {
+        var changes = java.util.stream.IntStream.range(0, GitDiffTool.MAX_FILES + 50)
+                .mapToObj(i -> new Change("f" + i, null, GitStatus.Kind.NONE, GitStatus.Kind.MODIFIED)).toList();
+        when(status.status(REPO)).thenReturn(new GitStatus(true, "main", "abc", false, null, 0, 0, GitStatus.Operation.NONE, 0, null, changes));
+        when(status.diff(any(), any(), anyBoolean())).thenReturn(new GitDiff.FileDiff("f", null, GitDiff.ChangeType.MODIFIED, 0, 0, false, List.of()));
+
+        var result = call(new GitDiffTool(projects, status, mapper), "{\"project\":7}");
+
+        assertThat(result).contains("truncated", "first " + GitDiffTool.MAX_FILES + " of " + (GitDiffTool.MAX_FILES + 50));
+        verify(status, times(GitDiffTool.MAX_FILES * 2)).diff(any(), any(), anyBoolean());
     }
 
     @Test

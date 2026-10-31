@@ -67,4 +67,14 @@ class ProjectGroupMigrationTest {
         assertThat(groups.members(group.id())).extracting(Project::id).containsExactly(b.id());
         assertThat(projects.find(group.id())).isPresent();
     }
+
+    @Test
+    void groupIdColumnIsIndexed() {
+        var dataSource = new DriverManagerDataSource("jdbc:sqlite:" + temp.resolve("idx.db") + "?foreign_keys=on");
+        Flyway.configure().dataSource(dataSource).load().migrate();
+
+        var indexes = JdbcClient.create(dataSource).sql("SELECT name FROM pragma_index_list('project')").query(String.class).list();
+
+        assertThat(indexes).contains("idx_project_group_id");
+    }
 }

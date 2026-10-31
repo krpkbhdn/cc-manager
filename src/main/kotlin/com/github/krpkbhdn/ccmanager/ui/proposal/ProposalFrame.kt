@@ -19,6 +19,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.Dp
+import com.github.krpkbhdn.ccmanager.claude.mcp.AssistantMcpServer
 import com.github.krpkbhdn.ccmanager.claude.proposal.Proposal
 import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalAnswer
 import com.github.krpkbhdn.ccmanager.ui.components.AppButton
@@ -42,6 +43,9 @@ internal class ProposalContext(private val state: ProposalState, val proposal: P
 
     fun dismiss() = state.dismiss(proposal)
 
+    /** A tool call of the Assistant's app server is held in the app, not in the terminal: dismissing it denies it. */
+    val viaApp = proposal.toolName().startsWith(AssistantMcpServer.TOOL_NAME_PREFIX)
+
     fun hide() = state.hide(proposal)
 
     fun <T : Any> draft(create: () -> T): T = state.draft(proposal, create)
@@ -54,7 +58,7 @@ internal fun DialogButton(text: String, onClick: () -> Unit, modifier: Modifier 
 
 /**
  * Shared dialog of every proposal: Esc or a click outside only hides it (the proposal stays pending), "Answer in terminal" hands
- * it back to claude. [onCtrlEnter] is the dialog's default action, tried before any field sees the key. The footer is one row:
+ * it back to claude (for a cc-manager-app request, the header button denies it). [onCtrlEnter] is the dialog's default action, tried before any field sees the key. The footer is one row:
  * [leading] controls, the key [hints], then [actions]; [aboveFooter] stays pinned right over it.
  */
 @Composable
@@ -81,7 +85,7 @@ internal fun ProposalDialogFrame(
                 title.tags.forEach { Chip(it, colors.textSecondary) }
                 title.position?.let { Chip(it, colors.accent) }
                 Box(Modifier.weight(1f))
-                GhostButton("Answer in terminal", context::dismiss)
+                GhostButton(if (context.viaApp) "Deny" else "Answer in terminal", context::dismiss)
             },
             content = {
                 LaunchedEffect(Unit) { runCatching { initialFocus.requestFocus() } }

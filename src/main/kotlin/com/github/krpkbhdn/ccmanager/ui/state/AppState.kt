@@ -20,7 +20,9 @@ import com.github.krpkbhdn.ccmanager.ui.git.model.GitHost
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitState
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
 import com.github.krpkbhdn.ccmanager.ui.prompts.PromptsState
+import com.github.krpkbhdn.ccmanager.claude.proposal.Proposal
 import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalState
+import com.github.krpkbhdn.ccmanager.ui.proposal.proposalHeadline
 import com.github.krpkbhdn.ccmanager.ui.queue.QueueState
 import com.github.krpkbhdn.ccmanager.ui.run.RunState
 import com.github.krpkbhdn.ccmanager.ui.settings.SettingsState
@@ -122,7 +124,7 @@ class AppState(
         onClosed = { projectId, id -> views[projectId]?.let { views[projectId] = it.closeShell(id) } },
         reportError = notifications::reportError,
     )
-    val proposals = ProposalState(backend.proposals, scope, notifications::reportError) { terminal.focus(it) }
+    val proposals = ProposalState(backend.proposals, scope, notifications::reportError, focusTerminal = { terminal.focus(it) }, onArrived = ::announceAssistantProposal)
     val answers = ProposalAnswers(proposals, assistant, { route }, ::viewOf, { live }, notifications::toast, ::openSession)
     val teams = TeamsState(backend.teams, scope, { confirm = it }, notifications::reportError)
     val prompts = PromptsState(backend.promptTemplates, scope, { confirm = it }, notifications::reportError, listOf(backend.projects::subscribe, backend.teams::subscribe))
@@ -194,11 +196,17 @@ class AppState(
         teams.dispose()
         prompts.dispose()
         queue.dispose()
-        voice?.close()
+        voice?.let { Thread(it::close, "voice-close").apply { isDaemon = false }.start() }
         runs.dispose()
         proposals.dispose()
         unsubscribers.forEach { it.run() }
         unsubscribers.clear()
+    }
+
+    private fun announceAssistantProposal(proposal: Proposal) {
+        if (route != Route.Assistant && proposal.ccmSessionId() == assistant.liveSessionId) {
+            notifications.needsAnswer(ClaudeLauncher.ASSISTANT_PROJECT_ID, proposal.ccmSessionId(), "Assistant: needs your answer", proposalHeadline(proposal))
+        }
     }
 
     fun navigate(target: Route) {

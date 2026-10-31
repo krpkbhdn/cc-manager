@@ -4,13 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.github.krpkbhdn.ccmanager.CcManagerApplication;
 import com.github.krpkbhdn.ccmanager.app.mcp.AssistantMcpEndpoint;
+import com.github.krpkbhdn.ccmanager.claude.hook.HookEvent;
+import com.github.krpkbhdn.ccmanager.claude.hook.HookEventType;
 import com.github.krpkbhdn.ccmanager.claude.hook.SessionFiles;
+import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalAnswer.PermissionAllow;
+import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalService;
+import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
 import com.github.krpkbhdn.ccmanager.config.AppProperties;
 import com.github.krpkbhdn.ccmanager.project.ModelSelection;
 import com.github.krpkbhdn.ccmanager.project.ProjectService;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import org.junit.jupiter.api.AfterAll;
@@ -37,6 +43,16 @@ class AssistantContextBootTest {
                 .run("--cc-manager.data-dir=" + dataDir.toAbsolutePath());
         assertThat(context.getBean(AppProperties.class).dataDir()).isEqualTo(dataDir.toAbsolutePath());
         endpoint = context.getBean(AssistantMcpEndpoint.class);
+        allowEveryAppConfirmation();
+    }
+
+    /** Stands in for the user: tools that need confirmation need a live Assistant session and an Allow in the app. */
+    private static void allowEveryAppConfirmation() {
+        var registry = context.getBean(SessionRegistry.class);
+        var assistant = registry.register(ClaudeLauncher.ASSISTANT_PROJECT_ID);
+        registry.on(new HookEvent(assistant, HookEventType.PRE_TOOL_USE, "PreToolUse", MAPPER.readTree("{}"), Instant.now()));
+        var proposals = context.getBean(ProposalService.class);
+        proposals.subscribe(() -> proposals.pending().forEach(proposal -> proposals.answer(proposal.id(), PermissionAllow.once())));
     }
 
     @AfterAll
@@ -72,11 +88,9 @@ class AssistantContextBootTest {
     }
 
     @Test
-    void allowedToolsFollowAutoApprovedAndExcludeDangerousOnes() {
-        var allowed = endpoint.autoApprovedToolNames();
-        assertThat(allowed).contains("list_teams", "get_help", "list_plugins", "get_mcp_server")
-                .doesNotContain("resume_session", "delete_prompt", "delete_team", "set_skill", "delete_skill", "install_plugin", "uninstall_plugin",
-                        "add_mcp_server", "remove_mcp_server", "remove_project", "set_team", "git_commit", "git_push");
+    void everyToolIsAllowedBecauseTheAppDialogGatesTheDangerousOnes() {
+        var allowed = endpoint.toolNames();
+        assertThat(allowed).contains("list_teams", "get_help", "resume_session", "remove_project", "git_push");
         var arguments = ClaudeCommand.assistantArguments(Path.of("claude"), new SessionFiles(Path.of("s.json"), Path.of("m.json")),
                 ModelSelection.DEFAULT, allowed);
         var list = arguments.get(arguments.indexOf("--allowedTools") + 1);

@@ -20,7 +20,7 @@ Direction (not built yet): one coordinating Claude that routes user requests to 
 - Java 25 on **JetBrains Runtime (JBR) 25** (Gradle toolchain `vendor = JETBRAINS`, provisioned via the Foojay resolver, ~670 MB once): Jewel 0.41 classes are Java 25 bytecode, and JBR gives the custom title bar with native snap/maximize (`DecoratedWindow`). Without JBR the app falls back to the plain OS frame. Spring Boot 4.1, Kotlin 2.4 (UI only).
 - UI: Compose Multiplatform 1.12 + Jewel standalone (`jewel-int-ui-standalone`). Compose is Kotlin-only, hence the Kotlin source set.
 - Storage: SQLite (`sqlite-jdbc`, WAL) in `~/.cc-manager/cc-manager.db` (`cc-manager.data-dir`), schema via Flyway SQL migrations in `src/main/resources/db/migration` (`V<n>__name.sql`, never edit an applied one). Access through `JdbcClient`, not JPA.
-- Gradle (Kotlin DSL) — the Compose plugin owns desktop packaging (`packageMsi` / `packageDeb` / `packageDmg`), so no Maven.
+- Gradle (Kotlin DSL) — the Compose plugin owns desktop packaging (`packageMsi` / `packageExe` / `packageDeb` / `packageDmg`), so no Maven.
 - Single module for now: `src/main/java` (Spring, domain logic) and `src/main/kotlin` (Compose UI). Package root `com.github.krpkbhdn.ccmanager`; UI in `.ui`.
 - Spring runs **in-process without a web server** (`WebApplicationType.NONE`, `headless(false)`); the UI is started from `ui/Main.kt` and calls Spring beans directly.
 
@@ -64,7 +64,7 @@ Run from repo root (use `./gradlew`; Git Bash or PowerShell `.\gradlew.bat`).
 ./gradlew run          # launch the desktop app
 ./gradlew test         # JUnit 5 tests
 ./gradlew build        # compile + test + jar
-./gradlew packageMsi   # installer for the current OS (packageDeb / packageDmg elsewhere; must run on that OS)
+./gradlew packageMsi   # installer for the current OS (packageExe also on Windows; packageDeb / packageDmg elsewhere; must run on that OS)
 ```
 
 The `compose.desktop` block points `javaHome` at the Java 25 toolchain; without it `run` uses Gradle's own JDK.

@@ -40,6 +40,7 @@ internal fun PermissionDialog(proposal: PermissionProposal, title: FrameTitle, c
         },
         onCtrlEnter = { context.answer(draft.allow()) },
     ) {
+        if (context.viaApp) Label("Requested by the Assistant through cc-manager-app; it runs only if you allow it here.", color = colors.textTertiary, maxLines = Int.MAX_VALUE)
         permissionSummary(proposal.toolName(), proposal.toolInput()).forEach { SummaryBlockView(it) }
         if (proposal.suggestions().isNotEmpty()) Remember(proposal, draft)
         VoiceTextField(draft.reason, Modifier.fillMaxWidth(), placeholder = "Tell Claude what to do instead (optional)", focusRequester = focus)

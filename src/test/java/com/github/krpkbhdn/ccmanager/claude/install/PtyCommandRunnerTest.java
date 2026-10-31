@@ -1,4 +1,4 @@
-package com.github.krpkbhdn.ccmanager.extension;
+package com.github.krpkbhdn.ccmanager.claude.install;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

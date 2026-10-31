@@ -19,6 +19,7 @@ import tools.jackson.databind.json.JsonMapper;
 class GitDiffTool extends GitTool {
 
     static final int MAX_CHARS = 20_000;
+    static final int MAX_FILES = 200;
     private static final String GIT_DIR = ".git";
     private static final String GIT_SHORT_NAME = "GIT~1";
     private static final Pattern TRAILING_DOTS_AND_SPACES = Pattern.compile("[. ]+$");
@@ -59,17 +60,21 @@ class GitDiffTool extends GitTool {
             requireInside(repo, path);
         }
         var paths = path.isEmpty() ? status.status(repo).changes().stream().map(GitStatus.Change::path).toList() : List.of(path);
+        var tooManyFiles = paths.size() > MAX_FILES;
         var text = new StringBuilder();
-        for (var changed : paths) {
+        for (var changed : paths.subList(0, Math.min(paths.size(), MAX_FILES))) {
             Stream.of(true, false).map(staged -> status.diff(repo, changed, staged)).forEach(diff -> append(text, diff));
             if (text.length() > MAX_CHARS) {
                 break;
             }
         }
-        if (text.isEmpty()) {
+        if (text.isEmpty() && !tooManyFiles) {
             return "No changes";
         }
-        return text.length() > MAX_CHARS ? text.substring(0, MAX_CHARS) + "\n... truncated" : text.toString();
+        if (text.length() > MAX_CHARS) {
+            return text.substring(0, MAX_CHARS) + "\n... truncated";
+        }
+        return tooManyFiles ? text + "... truncated: only the first " + MAX_FILES + " of " + paths.size() + " changed files were diffed\n" : text.toString();
     }
 
     /** The .git directory is refused too: its config holds remote URLs and tokens. An untracked path is read straight from disk by git diff --no-index, so it must stay inside the repository, symlinks included. */

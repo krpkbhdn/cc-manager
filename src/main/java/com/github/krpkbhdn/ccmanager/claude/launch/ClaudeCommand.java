@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.claude.launch;
 
 import com.github.krpkbhdn.ccmanager.claude.hook.SessionFiles;
+import com.github.krpkbhdn.ccmanager.claude.mcp.AssistantMcpServer;
 import com.github.krpkbhdn.ccmanager.project.ModelSelection;
 import com.github.krpkbhdn.ccmanager.team.Team;
 import com.github.krpkbhdn.ccmanager.team.TeamAgentsJson;
@@ -29,7 +30,6 @@ public final class ClaudeCommand {
             + "Resolve project names with list_projects, act directly and report briefly. "
             + "Destructive actions are confirmed by the user. "
             + "For questions about Claude Code Manager itself, call get_help and answer from it.";
-    private static final String ASSISTANT_TOOL_PREFIX = "mcp__cc-manager-app__";
     /** Would turn off Claude colors or make it think it runs inside another agent (which also switches off transcripts, so no --resume) or terminal host. */
     private static final List<String> INHERITED_ENV_TO_DROP = List.of(
             "NO_COLOR", "FORCE_COLOR", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_CHILD_SESSION",
@@ -94,7 +94,7 @@ public final class ClaudeCommand {
     }
 
     private static String allowedToolsArgument(List<String> toolNames) {
-        return toolNames.stream().map(name -> ASSISTANT_TOOL_PREFIX + name).collect(Collectors.joining(","));
+        return toolNames.stream().map(name -> AssistantMcpServer.TOOL_NAME_PREFIX + name).collect(Collectors.joining(","));
     }
 
     static List<String> attachArguments(Path executable, SessionFiles files, String backgroundSessionId) {

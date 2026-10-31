@@ -1,9 +1,11 @@
-package com.github.krpkbhdn.ccmanager.extension;
+package com.github.krpkbhdn.ccmanager.claude.install;
 
-import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService;
-import com.github.krpkbhdn.ccmanager.claude.launch.WindowsArgument;
+import com.github.krpkbhdn.ccmanager.extension.ClaudeCli;
+import com.github.krpkbhdn.ccmanager.extension.ExtensionException;
+import com.github.krpkbhdn.ccmanager.extension.ExtensionProperties;
 import com.github.krpkbhdn.ccmanager.workspace.CommandRunner;
 import com.github.krpkbhdn.ccmanager.workspace.HostEnvironment;
+import com.github.krpkbhdn.ccmanager.workspace.WindowsArgument;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
