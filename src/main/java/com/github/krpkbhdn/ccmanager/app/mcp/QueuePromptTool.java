@@ -19,11 +19,6 @@ class QueuePromptTool implements AssistantMcpTool {
     }
 
     @Override
-    public boolean autoApproved() {
-        return true;
-    }
-
-    @Override
     public String name() {
         return "queue_prompt";
     }

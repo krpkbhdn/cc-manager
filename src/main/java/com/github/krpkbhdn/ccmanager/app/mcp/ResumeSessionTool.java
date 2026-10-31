@@ -50,7 +50,7 @@ class ResumeSessionTool extends AssistantTool {
         var control = app.require();
         var project = requiredProject(projects, arguments);
         var launched = launchWithDefaultTeam(launcher.getObject(), teams, project.id(), LaunchMode.CONTINUE, "");
-        control.attachSession(launched);
+        attachOrDestroy(control, launched);
         return "Session %s resumed in project %s.".formatted(launched.ccmSessionId(), project.id());
     }
 }

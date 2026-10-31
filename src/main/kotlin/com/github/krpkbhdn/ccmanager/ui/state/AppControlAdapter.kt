@@ -39,10 +39,11 @@ class AppControlAdapter(private val state: AppState, private val scope: Coroutin
 
     private fun onUi(action: () -> Unit) {
         val done = CompletableFuture<Unit>()
-        scope.launch { runCatching(action).fold({ done.complete(Unit) }, done::completeExceptionally) }
+        val job = scope.launch { runCatching(action).fold({ done.complete(Unit) }, done::completeExceptionally) }
         try {
             done.get(timeout.toMillis(), TimeUnit.MILLISECONDS)
         } catch (e: TimeoutException) {
+            job.cancel()
             throw IllegalStateException("The UI did not respond within $timeout", e)
         } catch (e: ExecutionException) {
             throw (e.cause as? RuntimeException) ?: IllegalStateException(e.cause)

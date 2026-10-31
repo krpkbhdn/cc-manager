@@ -47,6 +47,28 @@ class SessionsStateTest {
     private fun session(id: String) = LaunchedSession(id, 1, "claude", mock(PtyProcess::class.java))
 
     @Test
+    fun `starting a session while another is launching reports an error`() {
+        val release = java.util.concurrent.CountDownLatch(1)
+        val errors = CopyOnWriteArrayList<String>()
+        `when`(backend.launcher.launch(anyLong(), org.mockito.ArgumentMatchers.eq(LaunchMode.NEW), org.mockito.ArgumentMatchers.eq(team))).thenAnswer {
+            release.await()
+            session("ccm-slow")
+        }
+        val state = SessionsState(
+            backend, scope, { error("not used") }, { null }, { team },
+            onOpened = { _, id -> opened += id }, onClosed = { _, _ -> }, showProject = {}, requestConfirm = {}, reportError = { errors += it },
+        )
+
+        state.launch(1, LaunchMode.NEW)
+        await { state.launching }
+        state.launch(1, LaunchMode.NEW)
+        release.countDown()
+
+        assertThat(errors).hasSize(1)
+        await { "ccm-slow" in opened }
+    }
+
+    @Test
     fun `launch with a default team starts every mode with the team and records it for the session`() {
         for (mode in LaunchMode.entries) {
             val id = "ccm-$mode"

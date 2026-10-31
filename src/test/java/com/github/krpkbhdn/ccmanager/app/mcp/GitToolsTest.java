@@ -170,6 +170,24 @@ class GitToolsTest {
     }
 
     @Test
+    void diffRejectsAPathOutsideTheRepository() {
+        var tool = new GitDiffTool(projects, status, mapper);
+
+        assertThatThrownBy(() -> call(tool, "{\"project\":7,\"path\":\"../../.ssh/id_rsa\"}")).hasMessageContaining("outside the repository");
+        assertThatThrownBy(() -> call(tool, "{\"project\":7,\"path\":" + mapper.writeValueAsString(REPO.getRoot().resolve("etc").toString()) + "}"))
+                .hasMessageContaining("outside the repository");
+        verify(status, never()).diff(any(), any(), eq(false));
+    }
+
+    @Test
+    void diffRejectsAPathInsideTheGitDirectory() {
+        var tool = new GitDiffTool(projects, status, mapper);
+
+        assertThatThrownBy(() -> call(tool, "{\"project\":7,\"path\":\".git/config\"}")).hasMessageContaining("inside .git");
+        verify(status, never()).diff(any(), any(), eq(false));
+    }
+
+    @Test
     void toolsAreForTheAssistant() {
         assertThat(new GitStatusTool(projects, status, mapper)).isInstanceOf(AssistantMcpTool.class).isNotInstanceOf(McpTool.class);
     }

@@ -45,4 +45,15 @@ class RateLimitServiceTest {
 
         assertThat(service.current().orElseThrow().fiveHour().usedPercent()).isEqualTo(10);
     }
+
+    @Test
+    void aThrowingListenerDoesNotStopTheOthers() {
+        var notified = new AtomicInteger();
+        service.subscribe(() -> { throw new IllegalStateException("boom"); });
+        service.subscribe(notified::incrementAndGet);
+
+        service.on(report(10, T0));
+
+        assertThat(notified).hasValue(1);
+    }
 }
