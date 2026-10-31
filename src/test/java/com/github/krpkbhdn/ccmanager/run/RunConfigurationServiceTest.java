@@ -61,6 +61,16 @@ class RunConfigurationServiceTest {
     }
 
     @Test
+    void concurrentRenameOntoTheSameNameGivesTheAlreadyExistsMessage() {
+        var web = service.save(projectId, "web", "a", temp);
+        jdbc.sql("CREATE TRIGGER rival BEFORE UPDATE ON run_configuration BEGIN "
+                + "INSERT INTO run_configuration (project_id, name, command, directory) VALUES (OLD.project_id, NEW.name, 'x', 'x'); END").update();
+
+        assertThatThrownBy(() -> service.update(web.id(), "site", "c", temp))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("already exists");
+    }
+
+    @Test
     void deleteByNameAndById() {
         var web = service.save(projectId, "web", "a", temp);
         service.save(projectId, "api", "b", temp);

@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.run;
 
+import com.github.krpkbhdn.ccmanager.config.UniqueViolations;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.ResultSet;
@@ -9,6 +10,7 @@ import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
@@ -59,12 +61,20 @@ public class RunConfigurationService {
         var clashes = jdbc.sql("SELECT COUNT(*) FROM run_configuration WHERE project_id = ? AND name = ? AND id <> ?")
                 .param(existing.projectId()).param(cleanName).param(id).query(Long.class).single();
         if (clashes > 0) {
-            throw new IllegalArgumentException("A run configuration named \"" + cleanName + "\" already exists in this project.");
+            throw nameTaken(cleanName);
         }
-        jdbc.sql("UPDATE run_configuration SET name = ?, command = ?, directory = ? WHERE id = ?")
-                .param(cleanName).param(command).param(directory.toString()).param(id).update();
+        try {
+            jdbc.sql("UPDATE run_configuration SET name = ?, command = ?, directory = ? WHERE id = ?")
+                    .param(cleanName).param(command).param(directory.toString()).param(id).update();
+        } catch (DataAccessException e) {
+            throw UniqueViolations.isUniqueViolation(e) ? nameTaken(cleanName) : e;
+        }
         fireChanged();
         return find(id).orElseThrow();
+    }
+
+    private static IllegalArgumentException nameTaken(String name) {
+        return new IllegalArgumentException("A run configuration named \"" + name + "\" already exists in this project.");
     }
 
     /** @return whether a configuration with that name existed */

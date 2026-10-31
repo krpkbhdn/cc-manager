@@ -23,11 +23,6 @@ class StartSessionTool extends AssistantTool {
     }
 
     @Override
-    public boolean autoApproved() {
-        return true;
-    }
-
-    @Override
     public String name() {
         return "start_session";
     }

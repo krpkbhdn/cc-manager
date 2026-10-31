@@ -8,7 +8,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -28,8 +31,16 @@ public class TranscriptService {
     private static final int TEXT_LIMIT = 6000;
     private static final int INPUT_LIMIT = 400;
 
+    private static final int TITLE_CACHE_SIZE = 64;
+
     private final JsonMapper mapper;
     private final Path projectsRoot;
+    private final Map<String, CachedTitle> titleCache = Collections.synchronizedMap(new LinkedHashMap<>(16, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, CachedTitle> eldest) {
+            return size() > TITLE_CACHE_SIZE;
+        }
+    });
 
     @Autowired
     public TranscriptService(JsonMapper mapper, HostEnvironment host) {
@@ -50,6 +61,36 @@ public class TranscriptService {
 
     /** Latest user-given title, else the latest generated one; empty when the transcript has none. */
     public Optional<String> title(String transcriptPath) {
+        if (transcriptPath == null || transcriptPath.isBlank()) {
+            return Optional.empty();
+        }
+        var stamp = stampOf(transcriptPath);
+        if (stamp == null) {
+            return readTitle(transcriptPath);
+        }
+        var cached = titleCache.get(transcriptPath);
+        if (cached != null && cached.stamp().equals(stamp)) {
+            return cached.title();
+        }
+        var title = readTitle(transcriptPath);
+        titleCache.put(transcriptPath, new CachedTitle(stamp, title));
+        return title;
+    }
+
+    private record FileStamp(long size, long modifiedMillis) {}
+
+    private record CachedTitle(FileStamp stamp, Optional<String> title) {}
+
+    private static FileStamp stampOf(String transcriptPath) {
+        try {
+            var file = Path.of(transcriptPath);
+            return new FileStamp(Files.size(file), Files.getLastModifiedTime(file).toMillis());
+        } catch (IOException | RuntimeException e) {
+            return null;
+        }
+    }
+
+    private Optional<String> readTitle(String transcriptPath) {
         String custom = null;
         String generated = null;
         for (var line : tail(transcriptPath)) {

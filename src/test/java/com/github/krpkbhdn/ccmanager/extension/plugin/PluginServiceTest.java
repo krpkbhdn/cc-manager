@@ -61,6 +61,16 @@ class PluginServiceTest {
     }
 
     @Test
+    void argumentsThatLookLikeOptionsNeverReachTheCli() {
+        assertThatThrownBy(() -> service.addMarketplace("--evil", ExtensionScope.USER, null)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.removeMarketplace("-x")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.updateMarketplace("-x")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.update("-x", ExtensionScope.USER, null)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.install("-x", ExtensionScope.USER, null)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(cli.directories).isEmpty();
+    }
+
+    @Test
     void failedInstallSurfacesTheCliMessage() {
         cli.answering(1, "", "Plugin \"zzz\" not found");
 

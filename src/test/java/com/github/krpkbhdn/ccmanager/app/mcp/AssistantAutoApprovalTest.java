@@ -9,14 +9,14 @@ import tools.jackson.databind.json.JsonMapper;
 class AssistantAutoApprovalTest {
 
     private static final List<String> AUTO_APPROVED = List.of(
-            "add_project", "get_help", "get_mcp_server", "get_plugin", "get_project", "get_prompt", "get_skill", "git_branches",
+            "get_help", "get_mcp_server", "get_plugin", "get_project", "get_prompt", "get_skill", "git_branches",
             "git_diff", "git_fetch", "git_log", "git_status", "git_worktrees", "list_mcp_servers", "list_plugins", "list_projects",
             "list_prompts", "list_runs", "list_sessions", "list_skills", "list_teams", "navigate", "open_project", "queue_prompt",
-            "resume_session", "set_group", "set_prompt", "start_run", "start_session", "stop_run");
+            "resume_session", "set_group", "set_prompt", "stop_run");
 
     private static final List<String> NEEDS_PERMISSION = List.of(
             "delete_prompt", "delete_skill", "delete_team", "set_skill", "set_team", "install_plugin", "uninstall_plugin", "set_plugin_enabled",
-            "add_marketplace", "remove_marketplace", "add_mcp_server", "remove_mcp_server", "remove_project", "git_commit",
+            "add_project", "start_run", "start_session", "add_marketplace", "remove_marketplace", "add_mcp_server", "remove_mcp_server", "remove_project", "git_commit",
             "git_push", "git_pull", "git_checkout", "git_add_worktree", "git_remove_worktree");
 
     @Test

@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.project;
 
+import com.github.krpkbhdn.ccmanager.config.UniqueViolations;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -13,6 +14,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.stereotype.Service;
@@ -46,17 +48,25 @@ public class ProjectService {
     public Project add(Path directory) {
         var path = realDirectory(directory);
         if (findByPath(path).isPresent()) {
-            throw new IllegalArgumentException("This directory is already added as a project: " + path);
+            throw alreadyAdded(path);
         }
         var keys = new GeneratedKeyHolder();
-        jdbc.sql("INSERT INTO project (name, path, created_at) VALUES (?, ?, ?)")
-                .param(nameOf(path))
-                .param(path.toString())
-                .param(Instant.now().toString())
-                .update(keys);
+        try {
+            jdbc.sql("INSERT INTO project (name, path, created_at) VALUES (?, ?, ?)")
+                    .param(nameOf(path))
+                    .param(path.toString())
+                    .param(Instant.now().toString())
+                    .update(keys);
+        } catch (DataAccessException e) {
+            throw UniqueViolations.isUniqueViolation(e) ? alreadyAdded(path) : e;
+        }
         var project = find(keys.getKey().longValue()).orElseThrow();
         fireChanged();
         return project;
+    }
+
+    private static IllegalArgumentException alreadyAdded(Path path) {
+        return new IllegalArgumentException("This directory is already added as a project: " + path);
     }
 
     public Project rename(long id, String name) {

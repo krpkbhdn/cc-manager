@@ -36,11 +36,28 @@ final class ZipExtraction {
                     }
                 }
             }
-            deleteRecursively(directory);
-            moveIntoPlace(partial, directory);
+            replace(directory, partial);
         } finally {
             deleteRecursively(partial);
         }
+    }
+
+    private static void replace(Path directory, Path partial) throws IOException {
+        var previous = directory.resolveSibling(directory.getFileName() + ".old");
+        deleteRecursively(previous);
+        var hadPrevious = Files.exists(directory);
+        if (hadPrevious) {
+            moveIntoPlace(directory, previous);
+        }
+        try {
+            moveIntoPlace(partial, directory);
+        } catch (IOException e) {
+            if (hadPrevious) {
+                moveIntoPlace(previous, directory);
+            }
+            throw e;
+        }
+        deleteRecursively(previous);
     }
 
     /** Retries because on Windows a virus scanner or indexer may briefly hold the freshly written files. */

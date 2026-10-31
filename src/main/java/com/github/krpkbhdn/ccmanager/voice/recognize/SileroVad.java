@@ -57,9 +57,11 @@ final class SileroVad implements AutoCloseable {
             if (segments.equals(MemorySegment.NULL)) {
                 return true;
             }
-            int count = (int) segmentCount.invoke(segments);
-            freeSegments.invoke(segments);
-            return count > 0;
+            try {
+                return (int) segmentCount.invoke(segments) > 0;
+            } finally {
+                freeSegments.invoke(segments);
+            }
         } catch (Throwable e) {
             throw NativeFailure.of(FAILED, e);
         }

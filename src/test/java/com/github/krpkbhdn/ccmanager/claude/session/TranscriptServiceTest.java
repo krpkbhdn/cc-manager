@@ -57,6 +57,22 @@ class TranscriptServiceTest {
     }
 
     @Test
+    void titleIsCachedUntilTheFileChanges() throws Exception {
+        var file = dir.resolve("t.jsonl");
+        Files.writeString(file, "{\"type\":\"ai-title\",\"aiTitle\":\"One\"}\n" + user("x") + "\n");
+        var service = service(dir);
+        assertThat(service.title(file.toString())).contains("One");
+
+        var modified = Files.getLastModifiedTime(file);
+        Files.writeString(file, "{\"type\":\"ai-title\",\"aiTitle\":\"Two\"}\n" + user("x") + "\n");
+        Files.setLastModifiedTime(file, modified);
+        assertThat(service.title(file.toString())).contains("One");
+
+        Files.writeString(file, "{\"type\":\"ai-title\",\"aiTitle\":\"Three!\"}\n" + user("x") + "\n");
+        assertThat(service.title(file.toString())).contains("Three!");
+    }
+
+    @Test
     void filesOutsideTheProjectsDirectoryAreNotRead() throws Exception {
         var projects = Files.createDirectory(dir.resolve("projects"));
         var outside = dir.resolve("secret.jsonl");

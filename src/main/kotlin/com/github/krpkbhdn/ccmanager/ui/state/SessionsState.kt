@@ -43,6 +43,8 @@ class SessionsState(
     /** The team each project's latest session started with: claude does not persist --agents, so Continue/Resume must pass it again. */
     private val lastTeams = mutableMapOf<Long, Team?>()
     private val attachedSessions = mutableStateSetOf<String>()
+    private val attachedBackgrounds = mutableMapOf<String, String>()
+    private val attachingBackgrounds = mutableSetOf<String>()
     private val commandWriter = SessionCommandWriter(backend.terminal)
 
     fun isAttached(ccmSessionId: String) = ccmSessionId in attachedSessions
@@ -122,13 +124,17 @@ class SessionsState(
     }
 
     fun attach(projectId: Long, backgroundId: String) {
+        if (backgroundId in attachingBackgrounds || backgroundId in attachedBackgrounds.values) return
+        attachingBackgrounds.add(backgroundId)
         scope.launch {
             guarded {
                 val session = io { backend.launcher.attach(projectId, backgroundId) }
                 attachedSessions.add(session.ccmSessionId())
+                attachedBackgrounds[session.ccmSessionId()] = backgroundId
                 backend.terminal.open(session)
                 onOpened(projectId, session.ccmSessionId())
             }
+            attachingBackgrounds.remove(backgroundId)
         }
     }
 
@@ -145,6 +151,7 @@ class SessionsState(
 
     fun close(projectId: Long, ccmSessionId: String) {
         attachedSessions.remove(ccmSessionId)
+        attachedBackgrounds.remove(ccmSessionId)
         sessionTeams.remove(ccmSessionId)
         unconfirmed.remove(ccmSessionId)
         onClosed(projectId, ccmSessionId)

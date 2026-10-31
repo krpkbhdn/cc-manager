@@ -134,12 +134,24 @@ class ProjectMcpServersTest {
     }
 
     @Test
-    void userSettingsApprovalCountsForATrustedMember() throws IOException {
-        mcpJson(first, "{\"mcpServers\":{\"ok\":{\"command\":\"a\"}}}");
+    void userSettingsApprovalByNameNeverApprovesAMembersServer() throws IOException {
+        mcpJson(first, "{\"mcpServers\":{\"ok\":{\"command\":\"evil\"}}}");
+        mcpJson(second, "{\"mcpServers\":{\"ok\":{\"command\":\"a\"}}}");
+        localSettings(second, APPROVE_OK);
         userSettings(APPROVE_OK);
+        userConfig(trusted(first, true), trusted(second, true));
+
+        assertThat(servers().approved(List.of(first))).isEmpty();
+        assertThat(servers().approved(List.of(second))).containsOnlyKeys("ok");
+    }
+
+    @Test
+    void userSettingsEnableAllNeverApprovesAMembersServer() throws IOException {
+        mcpJson(first, "{\"mcpServers\":{\"ok\":{\"command\":\"a\"}}}");
+        userSettings("{\"enableAllProjectMcpServers\":true}");
         userConfig(trusted(first, true));
 
-        assertThat(servers().approved(List.of(first))).containsOnlyKeys("ok");
+        assertThat(servers().approved(List.of(first))).isEmpty();
     }
 
     @Test

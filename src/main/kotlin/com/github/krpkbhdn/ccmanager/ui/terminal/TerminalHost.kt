@@ -37,8 +37,9 @@ object TerminalHost {
     fun open(shell: LaunchedShell) = open(shell.terminalId(), shell.shell().name(), shell.process(), isClaude = false)
 
     private fun open(id: String, label: String, process: PtyProcess, isClaude: Boolean) {
-        terminals.computeIfAbsent(id) { createTerminal(id, label, process, isClaude) }
-        openedCount++
+        var created = false
+        terminals.computeIfAbsent(id) { created = true; createTerminal(id, label, process, isClaude) }
+        if (created) openedCount++ else process.destroyForcibly()
     }
 
     /** Types text into the session console exactly as if the user typed it (CR = Enter, ESC = Esc). */

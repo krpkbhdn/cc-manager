@@ -10,7 +10,7 @@ plugins {
 }
 
 group = "com.github.krpkbhdn"
-version = "1.3.7"
+version = "1.3.8"
 
 java {
     toolchain {
@@ -33,7 +33,6 @@ dependencies {
     implementation("org.xerial:sqlite-jdbc:3.50.3.0")
     implementation("org.jetbrains.pty4j:pty4j:0.14.0")
     implementation("org.jetbrains.jediterm:jediterm-core:3.76")
-    implementation("org.jetbrains.jediterm:jediterm-ui:3.76")
     implementation(compose.desktop.currentOs)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing")
     implementation("org.jetbrains.jewel:jewel-int-ui-standalone:0.41.0-262.10968.63")

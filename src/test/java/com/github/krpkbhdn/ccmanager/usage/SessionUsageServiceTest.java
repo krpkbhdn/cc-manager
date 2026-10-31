@@ -26,4 +26,16 @@ class SessionUsageServiceTest {
 
         assertThat(service.of(id)).isEmpty();
     }
+
+    @Test
+    void ignoresReportsOfSessionsThatAreGone() {
+        var registry = new SessionRegistry(new SessionProperties(Duration.ofMinutes(1), Duration.ofMinutes(10)), mock(TranscriptService.class));
+        var service = new SessionUsageService(registry);
+        var id = registry.register(1L);
+        registry.markEnded(id, 0);
+
+        service.on(new StatusLineReport(id, JsonMapper.builder().build().createObjectNode(), Instant.now()));
+
+        assertThat(service.of(id)).isEmpty();
+    }
 }

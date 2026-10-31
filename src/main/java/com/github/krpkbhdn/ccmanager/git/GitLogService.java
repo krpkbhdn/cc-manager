@@ -92,7 +92,7 @@ public class GitLogService {
             if (existingFile || isSingleFile(query.path())) {
                 args.add(args.size() - 1, "--follow");
             }
-            args.add(existingFile ? ":(literal)" + query.path() : query.path());
+            args.add(":(literal)" + query.path());
         }
     }
 

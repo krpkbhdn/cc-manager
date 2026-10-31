@@ -25,6 +25,9 @@ public class SessionUsageService {
 
     @EventListener
     public void on(StatusLineReport report) {
+        if (sessions.find(report.ccmSessionId()).isEmpty()) {
+            return;
+        }
         bySession.put(report.ccmSessionId(), SessionUsageParser.parse(report.ccmSessionId(), report.payload(), report.receivedAt()));
         listeners.forEach(Runnable::run);
     }
