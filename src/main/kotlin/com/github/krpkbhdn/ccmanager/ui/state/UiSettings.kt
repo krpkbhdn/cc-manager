@@ -21,6 +21,11 @@ data class UiSettings(
     val agentsOpen: Boolean = true,
     val quickBarOpen: Boolean = true,
     val notificationSound: Boolean = true,
+    val osNotifyNeedsAction: Boolean = true,
+    val osNotifyFinished: Boolean = true,
+    val osNotifyError: Boolean = true,
+    val doNotDisturb: Boolean = false,
+    val minimizeToTray: Boolean = true,
     val lastShell: String? = null,
     val groupSessionsByProject: Boolean = false,
     val assistantStartup: AssistantStartup = AssistantStartup.ASK,
@@ -44,6 +49,12 @@ private const val KEY_SIDEBAR = "sidebar.collapsed"
 private const val KEY_AGENTS = "agents.open"
 private const val KEY_QUICK_BAR = "quickbar.open"
 private const val KEY_NOTIFICATION_SOUND = "notification.sound"
+private const val KEY_OS_NEEDS_ACTION = "notification.os.needsAction"
+// Renamed when the default flipped to true: files saved earlier hold an explicit false the user never chose.
+private const val KEY_OS_FINISHED = "notification.os.finished.v2"
+private const val KEY_OS_ERROR = "notification.os.error"
+private const val KEY_DO_NOT_DISTURB = "notification.dnd"
+private const val KEY_MINIMIZE_TO_TRAY = "window.minimizeToTray"
 private const val KEY_LAST_SHELL = "shell.last"
 private const val KEY_GROUP_SESSIONS = "sessions.group"
 private const val KEY_ASSISTANT_STARTUP = "assistant.startup"
@@ -82,6 +93,11 @@ class UiSettingsStore(private val file: Path?) {
             setProperty(KEY_AGENTS, settings.agentsOpen.toString())
             setProperty(KEY_QUICK_BAR, settings.quickBarOpen.toString())
             setProperty(KEY_NOTIFICATION_SOUND, settings.notificationSound.toString())
+            setProperty(KEY_OS_NEEDS_ACTION, settings.osNotifyNeedsAction.toString())
+            setProperty(KEY_OS_FINISHED, settings.osNotifyFinished.toString())
+            setProperty(KEY_OS_ERROR, settings.osNotifyError.toString())
+            setProperty(KEY_DO_NOT_DISTURB, settings.doNotDisturb.toString())
+            setProperty(KEY_MINIMIZE_TO_TRAY, settings.minimizeToTray.toString())
             settings.lastShell?.let { setProperty(KEY_LAST_SHELL, it) }
             setProperty(KEY_GROUP_SESSIONS, settings.groupSessionsByProject.toString())
             setProperty(KEY_ASSISTANT_STARTUP, settings.assistantStartup.name)
@@ -114,6 +130,11 @@ class UiSettingsStore(private val file: Path?) {
             agentsOpen = props.flag(KEY_AGENTS, defaults.agentsOpen),
             quickBarOpen = props.flag(KEY_QUICK_BAR, defaults.quickBarOpen),
             notificationSound = props.flag(KEY_NOTIFICATION_SOUND, defaults.notificationSound),
+            osNotifyNeedsAction = props.flag(KEY_OS_NEEDS_ACTION, defaults.osNotifyNeedsAction),
+            osNotifyFinished = props.flag(KEY_OS_FINISHED, defaults.osNotifyFinished),
+            osNotifyError = props.flag(KEY_OS_ERROR, defaults.osNotifyError),
+            doNotDisturb = props.flag(KEY_DO_NOT_DISTURB, defaults.doNotDisturb),
+            minimizeToTray = props.flag(KEY_MINIMIZE_TO_TRAY, defaults.minimizeToTray),
             lastShell = props.getProperty(KEY_LAST_SHELL),
             groupSessionsByProject = props.flag(KEY_GROUP_SESSIONS, defaults.groupSessionsByProject),
             assistantStartup = AssistantStartup.entries.firstOrNull { it.name == props.getProperty(KEY_ASSISTANT_STARTUP) } ?: defaults.assistantStartup,

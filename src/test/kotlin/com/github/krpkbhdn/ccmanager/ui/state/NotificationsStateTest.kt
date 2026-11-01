@@ -22,7 +22,7 @@ class NotificationsStateTest {
     fun `a session leaving needs action dismisses its toast and popup`() {
         state.receive(needsAction(1, "s1"))
         windowActive = false
-        state.receive(needsAction(2, "s1"))
+        state.popup(OsNotice(NotificationKind.NEEDS_ACTION, "project-1: Needs you", "b", "s1", 1))
         assertThat(state.toasts).hasSize(1)
         assertThat(state.popups).hasSize(1)
 

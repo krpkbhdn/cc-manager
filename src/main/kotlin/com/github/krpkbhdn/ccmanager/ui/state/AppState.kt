@@ -10,6 +10,7 @@ import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgent
 import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.notification.AppNotification
+import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartupState
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantState
@@ -25,7 +26,6 @@ import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalState
 import com.github.krpkbhdn.ccmanager.ui.proposal.proposalHeadline
 import com.github.krpkbhdn.ccmanager.ui.queue.QueueState
 import com.github.krpkbhdn.ccmanager.ui.queue.QueuedPrompt
-import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.ui.run.RunState
 import com.github.krpkbhdn.ccmanager.ui.settings.SettingsState
 import com.github.krpkbhdn.ccmanager.ui.teams.TeamsState
@@ -128,6 +128,16 @@ class AppState(
     )
     val proposals = ProposalState(backend.proposals, scope, notifications::reportError, focusTerminal = { terminal.focus(it) }, onArrived = ::announceAssistantProposal)
     val answers = ProposalAnswers(proposals, assistant, { route }, ::viewOf, { live }, notifications::toast, ::openSession)
+    val osNotifications = OsNotifications(
+        scope, { settings }, { windowActive },
+        isWaiting = { live.find(it)?.status == AgentStatus.NEEDS_ACTION },
+        proposalOf = { proposals.of(it).firstOrNull() },
+        projectName = { projects.nameOf(it) },
+        show = notifications::popup,
+    )
+    var flashTaskbar: (NotificationKind) -> Unit = {}
+    var trayAvailable by mutableStateOf(false)
+    val waitingCount: Int get() = live.sessions.count { it.status == AgentStatus.NEEDS_ACTION }
     val teams = TeamsState(backend.teams, scope, { confirm = it }, notifications::reportError)
     val prompts = PromptsState(backend.promptTemplates, scope, { confirm = it }, notifications::reportError, listOf(backend.projects::subscribe, backend.teams::subscribe))
     val extensions = ExtensionStates(backend, scope, { confirm = it }, notifications, environment)
@@ -166,7 +176,13 @@ class AppState(
     fun start() {
         unsubscribers += backend.projects.subscribe { projectReload.request() }
         unsubscribers += backend.sessions.subscribe { sessionReload.request() }
-        unsubscribers += backend.notifications.subscribe { notification -> scope.launch { notifications.receive(notification) } }
+        unsubscribers += backend.notifications.subscribe { notification ->
+            scope.launch {
+                notifications.receive(notification)
+                osNotifications.offer(notification)
+                flashTaskbar(notification.kind)
+            }
+        }
         backend.appControl?.let { unsubscribers += it.connect(AppControlAdapter(this, scope, backend.appControlProperties.uiTimeout())) }
         teams.start()
         prompts.start()
@@ -247,8 +263,11 @@ class AppState(
         notifications.dismissToast(toast.id)
         val session = toast.ccmSessionId?.let { live.find(it) }
         when {
+            session != null && toast.kind == NotificationKind.NEEDS_ACTION -> answers.answer(session.ccmSessionId)
             session != null -> openSession(session.ccmSessionId)
             toast.projectId != null -> navigate(routeOf(toast.projectId))
+            toast.summary && toast.kind == NotificationKind.NEEDS_ACTION -> answers.answerNextWaiting()
+            toast.summary -> navigate(Route.Sessions)
         }
     }
 

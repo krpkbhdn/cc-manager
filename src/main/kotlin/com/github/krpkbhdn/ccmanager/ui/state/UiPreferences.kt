@@ -38,6 +38,16 @@ class UiPreferences(
 
     fun toggleNotificationSound() = update { it.copy(notificationSound = !it.notificationSound) }
 
+    fun toggleOsNotifyNeedsAction() = update { it.copy(osNotifyNeedsAction = !it.osNotifyNeedsAction) }
+
+    fun toggleOsNotifyFinished() = update { it.copy(osNotifyFinished = !it.osNotifyFinished) }
+
+    fun toggleOsNotifyError() = update { it.copy(osNotifyError = !it.osNotifyError) }
+
+    fun toggleMinimizeToTray() = update { it.copy(minimizeToTray = !it.minimizeToTray) }
+
+    fun toggleDoNotDisturb() = update { it.copy(doNotDisturb = !it.doNotDisturb) }
+
     fun setAssistantStartup(mode: AssistantStartup) = update { it.copy(assistantStartup = mode) }
 
     fun cycleAssistantStartup() = update { it.copy(assistantStartup = it.assistantStartup.next()) }

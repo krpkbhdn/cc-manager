@@ -76,6 +76,8 @@ fun ApplicationScope.AppWindow(backend: Backend, onShutdown: () -> Unit, setting
     var restoreRequests by remember { mutableIntStateOf(0) }
     val handledRestores = remember { intArrayOf(0) }
     val restore: () -> Unit = { visible = true; windowState.isMinimized = false; restoreRequests++ }
+    // A hidden window may never recompose again, so its SideEffect cannot be trusted to clear windowActive.
+    val hideToTray = { visible = false; state.windowActive = false }
     val exiting = remember { AtomicBoolean(false) }
     val exit = {
         if (exiting.compareAndSet(false, true)) {
@@ -93,10 +95,21 @@ fun ApplicationScope.AppWindow(backend: Backend, onShutdown: () -> Unit, setting
     state.exitApp = exit
     val quit = { state.requestQuit(exit) }
     LaunchedEffect(Unit) { installMacQuitHandler({ state.live.sessions.isNotEmpty() }) { restore(); quit() } }
+    state.trayAvailable = isTraySupported
+    val waiting = state.waitingCount
+    val taskbar = remember { TaskbarAttention() }
+    state.flashTaskbar = { taskbar.flashFor(state.settings, it, state.windowActive) }
+    LaunchedEffect(waiting) { taskbar.showWaiting(waiting) }
     if (isTraySupported) {
-        val trayIcon = remember { BitmapPainter(drawAppIcon(TRAY_ICON_SIZE).toComposeImageBitmap()) }
-        Tray(icon = trayIcon, tooltip = WINDOW_TITLE, onAction = restore) {
+        val plainIcon = remember { BitmapPainter(drawAppIcon(TRAY_ICON_SIZE).toComposeImageBitmap()) }
+        val badgedIcon = remember(waiting) { BitmapPainter(drawAppIcon(TRAY_ICON_SIZE, waiting).toComposeImageBitmap()) }
+        Tray(
+            icon = if (waiting > 0) badgedIcon else plainIcon,
+            tooltip = if (waiting > 0) "$WINDOW_TITLE: $waiting waiting" else WINDOW_TITLE,
+            onAction = restore,
+        ) {
             Item("Open $WINDOW_TITLE", onClick = restore)
+            Item("Answer next waiting", onClick = { restore(); state.answers.answerNextWaiting() })
             Item("Quit", onClick = { restore(); quit() })
         }
     }
@@ -105,9 +118,9 @@ fun ApplicationScope.AppWindow(backend: Backend, onShutdown: () -> Unit, setting
     val keepWindowAlive = remember { reportingExceptionHandlers(state, defaultHandlers, WindowRecovery()) { windowGeneration++ } }
     CompositionLocalProvider(LocalWindowExceptionHandlerFactory provides keepWindowAlive) {
         key(windowGeneration) {
-            MainWindow(state, windowState, WINDOW_TITLE, icon, if (isTraySupported) ({ visible = false }) else quit, visible) {
-                val focused = LocalWindowInfo.current.isWindowFocused
-                SideEffect { state.windowActive = focused && visible && !windowState.isMinimized }
+            MainWindow(state, windowState, WINDOW_TITLE, icon, if (isTraySupported && state.settings.minimizeToTray) ({ hideToTray() }) else quit, visible) {
+                val active = LocalWindowInfo.current.isWindowFocused && visible && !windowState.isMinimized
+                SideEffect { state.windowActive = active; taskbar.window = window }
                 LaunchedEffect(restoreRequests) {
                     if (restoreRequests == handledRestores[0]) return@LaunchedEffect
                     handledRestores[0] = restoreRequests

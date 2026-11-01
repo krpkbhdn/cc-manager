@@ -25,6 +25,7 @@ data class ToastItem(
     val body: String,
     val projectId: Long? = null,
     val ccmSessionId: String? = null,
+    val summary: Boolean = false,
 )
 
 data class ConfirmRequest(

@@ -77,6 +77,7 @@ private fun globalActions(state: AppState, systemDark: Boolean): List<PaletteIte
     PaletteItem("notifications", "Show notifications", PaletteGroup.ACTIONS, icon = Icons.Bell, shortcut = AppShortcut.NOTIFICATIONS) { state.notificationsOpen = true },
     PaletteItem("usage", "Show usage", PaletteGroup.ACTIONS, "Limits, context and cost", Icons.Gauge, shortcut = AppShortcut.USAGE) { state.usageOpen = true },
     PaletteItem("toggle-sound", "Toggle notification sound", PaletteGroup.ACTIONS, if (state.settings.notificationSound) "Currently on" else "Currently off", Icons.Bell) { state.prefs.toggleNotificationSound() },
+    PaletteItem("toggle-dnd", "Toggle do not disturb", PaletteGroup.ACTIONS, if (state.settings.doNotDisturb) "Currently on" else "Currently off", Icons.Bell) { state.prefs.toggleDoNotDisturb() },
     PaletteItem("toggle-theme", "Toggle light and dark theme", PaletteGroup.ACTIONS, icon = Icons.Sun, shortcut = AppShortcut.TOGGLE_THEME) { state.prefs.toggleTheme(systemDark) },
     PaletteItem("system-theme", "Use the system theme", PaletteGroup.ACTIONS, icon = Icons.Monitor) { state.prefs.setThemeMode(ThemeMode.SYSTEM) },
     PaletteItem("settings", "Settings", PaletteGroup.ACTIONS, "Theme, notifications, Assistant, updates and more", Icons.Settings, shortcut = AppShortcut.APP_SETTINGS) { state.settingsDialog.show() },

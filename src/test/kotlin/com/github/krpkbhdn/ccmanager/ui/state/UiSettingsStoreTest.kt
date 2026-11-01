@@ -32,6 +32,33 @@ class UiSettingsStoreTest {
     }
 
     @Test
+    fun `system notification settings default sensibly and round trip`(@TempDir dir: Path) {
+        val store = UiSettingsStore(dir.resolve("ui.properties"))
+        assertThat(store.load()).extracting({ it.osNotifyNeedsAction }, { it.osNotifyFinished }, { it.osNotifyError }, { it.doNotDisturb }, { it.minimizeToTray })
+            .containsExactly(true, true, true, false, true)
+        val settings = UiSettings(osNotifyNeedsAction = false, osNotifyFinished = false, osNotifyError = false, doNotDisturb = true, minimizeToTray = false)
+        store.save(settings)
+        assertThat(store.load()).isEqualTo(settings)
+    }
+
+    @Test
+    fun `file without the notification keys reads with defaults`(@TempDir dir: Path) {
+        val file = dir.resolve("ui.properties")
+        java.nio.file.Files.writeString(file, listOf("theme=DARK", "sidebar.collapsed=true").joinToString(System.lineSeparator()))
+        val loaded = UiSettingsStore(file).load()
+        assertThat(loaded.themeMode).isEqualTo(ThemeMode.DARK)
+        assertThat(loaded).extracting({ it.osNotifyNeedsAction }, { it.osNotifyFinished }, { it.osNotifyError }, { it.doNotDisturb }, { it.minimizeToTray }, { it.notificationSound })
+            .containsExactly(true, true, true, false, true, true)
+    }
+
+    @Test
+    fun `a finished flag saved under the old key does not override the new default`(@TempDir dir: Path) {
+        val file = dir.resolve("ui.properties")
+        Files.writeString(file, "notification.os.finished=false\n")
+        assertThat(UiSettingsStore(file).load().osNotifyFinished).isTrue()
+    }
+
+    @Test
     fun `voice settings default to off and round trip`(@TempDir dir: Path) {
         val store = UiSettingsStore(dir.resolve("ui.properties"))
         assertThat(store.load()).extracting({ it.voiceEnabled }, { it.voiceModel }, { it.voiceDevice }, { it.voiceInput }).containsExactly(false, "base-q5_1", "best", "")
