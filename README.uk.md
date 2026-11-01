@@ -134,14 +134,6 @@ cd cc-manager
 
 Перша збірка потребує інтернету: вона завантажує Gradle і JBR 25, тож триває довго. Без JBR застосунок повертається до звичайної рамки вікна ОС; `-Dccm.nativeFrame=true` примусово вмикає нативну рамку ОС, навіть на JBR.
 
-### Перегляд інтерфейсу без Claude (для контриб'юторів)
-
-```sh
-./gradlew runPreview                                   # інтерфейс з імітованими сервісами
-./gradlew runPreview --args="--shots --out=build/shots --size=1600x1000"
-./gradlew gitShots --args="--out=build/shots --dark"   # вкладка Git, рендер без вікна
-```
-
 ## Гарячі клавіші
 
 <details>
