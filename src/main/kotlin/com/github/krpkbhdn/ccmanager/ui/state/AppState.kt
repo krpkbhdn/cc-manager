@@ -24,6 +24,8 @@ import com.github.krpkbhdn.ccmanager.claude.proposal.Proposal
 import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalState
 import com.github.krpkbhdn.ccmanager.ui.proposal.proposalHeadline
 import com.github.krpkbhdn.ccmanager.ui.queue.QueueState
+import com.github.krpkbhdn.ccmanager.ui.queue.QueuedPrompt
+import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.ui.run.RunState
 import com.github.krpkbhdn.ccmanager.ui.settings.SettingsState
 import com.github.krpkbhdn.ccmanager.ui.teams.TeamsState
@@ -311,6 +313,9 @@ class AppState(
         agents.prune(sessions.map { it.ccmSessionId })
         notifications.dismissResolvedAttention(previous, sessions)
         projectsBecameIdle(previous, sessions).forEach { gits.refresh(it) }
+        if (gits.anyReviewTurnEnded(previous, sessions) { id -> queue.of(id).map(QueuedPrompt::id) }) {
+            notifications.toast(NotificationKind.INFO, "Agent finished", "Re-check review comments")
+        }
     }
 
     private suspend fun guarded(onError: (String) -> Unit = notifications::reportError, block: suspend () -> Unit) = runGuarded(onError, block)

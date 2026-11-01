@@ -36,6 +36,9 @@ import com.github.krpkbhdn.ccmanager.ui.git.model.applyPatch
 import com.github.krpkbhdn.ccmanager.ui.git.model.changeItems
 import com.github.krpkbhdn.ccmanager.ui.git.model.changeSections
 import com.github.krpkbhdn.ccmanager.ui.git.model.markResolved
+import com.github.krpkbhdn.ccmanager.ui.git.model.reanchorReview
+import com.github.krpkbhdn.ccmanager.ui.git.model.reviewCommentOf
+import com.github.krpkbhdn.ccmanager.ui.state.diffRows
 import com.github.krpkbhdn.ccmanager.ui.git.model.requestDiscard
 import com.github.krpkbhdn.ccmanager.ui.git.model.resolveConflict
 import com.github.krpkbhdn.ccmanager.ui.git.model.stage
@@ -53,7 +56,7 @@ private const val LIST_SHARE = 0.42f
 
 /** The heart of the Git tab: file lists with the commit box on the left, the selected file's diff on the right. */
 @Composable
-fun ChangesView(git: GitState, system: GitSystemActions, modifier: Modifier = Modifier) {
+fun ChangesView(git: GitState, system: GitSystemActions, review: ReviewTarget, modifier: Modifier = Modifier) {
     val status = git.status ?: return
     val sections = remember(status) { changeSections(status.changes()) }
     if (sections.isClean) {
@@ -72,7 +75,7 @@ fun ChangesView(git: GitState, system: GitSystemActions, modifier: Modifier = Mo
                 CommitBox(git, sections.staged.size, sections.conflicts.size)
             }
             VerticalRule()
-            DiffArea(git, sections.conflicts.any { it.path() == git.selected?.path }, system, Modifier.weight(1f))
+            DiffArea(git, sections.conflicts.any { it.path() == git.selected?.path }, system, review, Modifier.weight(1f))
         }
     }
 }
@@ -105,8 +108,9 @@ private fun listActions(git: GitState, system: GitSystemActions) = ChangeListAct
 )
 
 @Composable
-private fun DiffArea(git: GitState, conflicted: Boolean, system: GitSystemActions, modifier: Modifier) {
+private fun DiffArea(git: GitState, conflicted: Boolean, system: GitSystemActions, target: ReviewTarget, modifier: Modifier) {
     val ref = git.selected
+    LaunchedEffect(git.status) { git.reanchorReview(false) }
     val loaded by produceState<Pair<ChangeRef, GitDiff.FileDiff?>?>(null, ref, git.status) {
         value = ref?.let { it to git.diffOf(it) }
     }
@@ -114,8 +118,19 @@ private fun DiffArea(git: GitState, conflicted: Boolean, system: GitSystemAction
         if (conflicted && ref != null) ConflictBar(git, ref, system)
         val context = if (ref?.staged == true) DiffContext.STAGED else DiffContext.UNSTAGED
         val current = loaded?.takeIf { it.first == ref }?.second
-        GitDiffPane(current, context, Modifier.weight(1f), current?.let { hunkActions(git, it, context) }, loading = ref != null && loaded?.first != ref, busy = git.busy)
+        GitDiffPane(current, context, Modifier.weight(1f), current?.let { hunkActions(git, it, context) }, loading = ref != null && loaded?.first != ref, busy = git.busy, review = current?.let { reviewEditing(git, it) })
+        ReviewCommentsPanel(git, target, { git.selected = refOf(git, it) })
     }
+}
+
+private fun reviewEditing(git: GitState, file: GitDiff.FileDiff) = ReviewEditing(
+    git.review.forPath(file.path),
+    onAdd = { range, text -> git.review.add(reviewCommentOf(file.path, diffRows(file.lines), range, text)) },
+)
+
+private fun refOf(git: GitState, path: String): ChangeRef {
+    val sections = changeSections(git.status?.changes().orEmpty())
+    return ChangeRef(path, staged = sections.unstaged.none { it.path() == path } && sections.staged.any { it.path() == path })
 }
 
 /** Null for a cut-off diff: a patch built from it would be corrupt. */

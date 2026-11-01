@@ -67,23 +67,23 @@ class SessionsState(
     /** Starts the general session outside any project. */
     fun launchAssistant(show: Boolean = true) = launchSession(ClaudeLauncher.ASSISTANT_PROJECT_ID, show = show) { backend.launcher.launchAssistant() }
 
-    /** Starts a session with [task] as its first prompt, as a lead of [team] or, for null, without a team; [onStarted] runs only when the session really started. */
-    fun launchTask(projectId: Long, team: Team?, task: String, onStarted: () -> Unit) =
+    /** Starts a session with [task] as its first prompt, as a lead of [team] or, for null, without a team; [onStarted] gets the new session's id and runs only when it really started. */
+    fun launchTask(projectId: Long, team: Team?, task: String, onStarted: (ccmSessionId: String) -> Unit) =
         launchSession(projectId, team, onStarted, rememberTeam = true) {
             if (team == null) backend.launcher.launchTask(projectId, task) else backend.launcher.launchTeam(projectId, team, task)
         }
 
     /** Starts the session that finishes the author's setup in [projectId]; [onStarted] runs only when the session really started. */
     fun launchSetup(projectId: Long, handoff: SessionHandoff, onStarted: () -> Unit) =
-        launchSession(projectId, onStarted = onStarted) { backend.launcher.launchSetup(projectId, handoff.firstMessage(), handoff.profileDirectory()) }
+        launchSession(projectId, onStarted = { onStarted() }) { backend.launcher.launchSetup(projectId, handoff.firstMessage(), handoff.profileDirectory()) }
 
-    private fun launchSession(projectId: Long, team: Team? = null, onStarted: () -> Unit = {}, rememberTeam: Boolean = team != null, show: Boolean = true, start: () -> LaunchedSession) {
+    private fun launchSession(projectId: Long, team: Team? = null, onStarted: (String) -> Unit = {}, rememberTeam: Boolean = team != null, show: Boolean = true, start: () -> LaunchedSession) {
         if (launching) return reportError(LAUNCH_IN_PROGRESS_MESSAGE)
         launching = true
         scope.launch {
             guarded {
                 val session = io(start)
-                onStarted()
+                onStarted(session.ccmSessionId())
                 team?.let { sessionTeams[session.ccmSessionId()] = it }
                 if (rememberTeam) lastTeams[projectId] = team
                 backend.terminal.open(session)

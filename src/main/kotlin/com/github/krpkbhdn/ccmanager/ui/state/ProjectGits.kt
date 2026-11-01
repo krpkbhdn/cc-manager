@@ -1,6 +1,8 @@
 package com.github.krpkbhdn.ccmanager.ui.state
 
 import androidx.compose.runtime.mutableStateMapOf
+import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
+import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitBackend
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitHost
@@ -24,6 +26,13 @@ class ProjectGits(
         val project = projectOf(projectId)?.takeIf { !it.group } ?: return null
         return GitState(projectId, project.path, git, scope, host).also { states[projectId] = it }
     }
+
+    /** The git states created so far; creates none. */
+    fun loaded(): Collection<GitState> = states.values.toList()
+
+    /** Asks every project's review comments (all of them, no short-circuit) whether the finished turn was theirs. */
+    fun anyReviewTurnEnded(previous: Map<String, AgentStatus>, sessions: List<SessionSnapshot>, queued: (String) -> List<Long>): Boolean =
+        loaded().count { it.review.turnEnded(previous, sessions, queued) } > 0
 
     fun summaryOf(projectId: Long): GitSummary? = states[projectId]?.summary
 

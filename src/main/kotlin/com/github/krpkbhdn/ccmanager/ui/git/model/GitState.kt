@@ -101,6 +101,7 @@ class GitState(
         private set
 
     val draft = CommitDraft()
+    val review = ReviewComments()
     val log = LogModel({ repo }, git, scope) { fail("Could not read history", it) }
 
     val view: GitSubView get() = host.prefs().viewOf(projectId)

@@ -27,6 +27,7 @@ import com.github.krpkbhdn.ccmanager.ui.components.SkeletonBlock
 import com.github.krpkbhdn.ccmanager.ui.components.Spinner
 import com.github.krpkbhdn.ccmanager.ui.git.branch.BranchesView
 import com.github.krpkbhdn.ccmanager.ui.git.changes.ChangesView
+import com.github.krpkbhdn.ccmanager.ui.git.changes.ReviewTarget
 import com.github.krpkbhdn.ccmanager.ui.git.log.LogView
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitState
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
@@ -42,7 +43,7 @@ private const val MONO_PROGRESS_LINES = 1
 
 /** The project's Git tab: toolbar, banners, a section switcher and the section itself, all driven by one [GitState]. */
 @Composable
-fun GitTab(git: GitState, system: GitSystemActions, now: () -> Instant, modifier: Modifier = Modifier) {
+fun GitTab(git: GitState, system: GitSystemActions, review: ReviewTarget, now: () -> Instant, modifier: Modifier = Modifier) {
     val status = git.status
     val loadError = git.loadError
     Box(modifier.fillMaxSize()) {
@@ -54,14 +55,14 @@ fun GitTab(git: GitState, system: GitSystemActions, now: () -> Instant, modifier
                 status == null && loadError == null -> TabSkeleton()
                 status == null -> EmptyState(Icons.Alert, loadError!!.title, loadError.headline, tint = colors.danger)
                 !status.repository() -> EmptyState(Icons.Branch, "Not a git repository", "Run git init in this folder to track history, branches and changes here.")
-                else -> Sections(git, system, now)
+                else -> Sections(git, system, review, now)
             }
         }
     }
 }
 
 @Composable
-private fun Sections(git: GitState, system: GitSystemActions, now: () -> Instant) {
+private fun Sections(git: GitState, system: GitSystemActions, review: ReviewTarget, now: () -> Instant) {
     HorizontalRule()
     Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
         SegmentedControl(segments(git), git.view, git::show)
@@ -69,7 +70,7 @@ private fun Sections(git: GitState, system: GitSystemActions, now: () -> Instant
     HorizontalRule()
     Crossfade(git.view, Modifier.fillMaxSize(), animationSpec = Motion.base(), label = "gitSection") { view ->
         when (view) {
-            GitSubView.CHANGES -> ChangesView(git, system)
+            GitSubView.CHANGES -> ChangesView(git, system, review)
             GitSubView.LOG -> LogView(git, now)
             GitSubView.BRANCHES -> BranchesView(git)
             GitSubView.STASHES -> StashesView(git, now)

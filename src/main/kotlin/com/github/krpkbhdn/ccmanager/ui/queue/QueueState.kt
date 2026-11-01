@@ -25,11 +25,13 @@ class QueueState(
 
     fun of(ccmSessionId: String): List<QueuedPrompt> = queues.of(ccmSessionId)
 
-    fun add(ccmSessionId: String, text: String) {
-        if (text.isBlank()) return
-        queues.add(ccmSessionId, text.trim())
+    /** Returns the id of the queued prompt, null when the text is blank. */
+    fun add(ccmSessionId: String, text: String): Long? {
+        if (text.isBlank()) return null
+        val id = queues.add(ccmSessionId, text.trim())
         dispatch.promptAdded(ccmSessionId)
         dispatch.evaluate()
+        return id
     }
 
     fun remove(ccmSessionId: String, promptId: Long) = queues.remove(ccmSessionId, promptId)

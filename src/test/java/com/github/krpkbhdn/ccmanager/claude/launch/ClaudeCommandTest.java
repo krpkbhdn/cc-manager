@@ -95,6 +95,15 @@ class ClaudeCommandTest {
     }
 
     @Test
+    void multiLineTaskWithQuotesAndBackticksStaysOneQuotedArgument() {
+        var task = "Fix:\n1. \"a\" `b`\n";
+        var command = ClaudeCommand.taskArguments(EXE, FILES, PLUGIN, ModelSelection.DEFAULT, task);
+
+        assertThat(command).endsWith("--", task);
+        assertThat(WindowsArgument.quote(task)).isEqualTo("\"Fix:\n1. \\\"a\\\" `b`\n\"");
+    }
+
+    @Test
     void taskWithoutTeamAndDefaultSelectionHasOnlyTheTask() {
         assertThat(ClaudeCommand.taskArguments(EXE, FILES, PLUGIN, ModelSelection.DEFAULT, "t"))
                 .doesNotContain("--model", "--effort", "--agents").endsWith("--", "t");

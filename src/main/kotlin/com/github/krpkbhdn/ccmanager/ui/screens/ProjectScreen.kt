@@ -43,6 +43,7 @@ import com.github.krpkbhdn.ccmanager.ui.queue.QueueControl
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.git.GitSystemActions
 import com.github.krpkbhdn.ccmanager.ui.git.GitTab
+import com.github.krpkbhdn.ccmanager.ui.git.changes.ReviewTarget
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectView
@@ -249,7 +250,13 @@ private fun GitTabHost(state: AppState, project: Project) {
             ideAvailable = ideAvailable,
         )
     }
-    GitTab(git, system, now = { state.now })
+    val review = ReviewTarget(
+        sessions = { state.live.of(project.id) },
+        preferred = { state.viewOf(project.id).focusedSession?.takeIf { state.live.find(it) != null } },
+        send = state.queue::add,
+        startAndSend = { prompt, onStarted -> state.sessions.launchTask(project.id, state.teams.defaultTeamOf(project.id), prompt, onStarted) },
+    )
+    GitTab(git, system, review, now = { state.now })
 }
 
 @Composable
