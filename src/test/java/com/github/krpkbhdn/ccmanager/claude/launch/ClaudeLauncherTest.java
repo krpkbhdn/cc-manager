@@ -17,6 +17,8 @@ import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
 import com.github.krpkbhdn.ccmanager.config.AppProperties;
 import com.github.krpkbhdn.ccmanager.extension.mcp.ProjectMcpServers;
+import com.github.krpkbhdn.ccmanager.git.GitWorktreeService;
+import com.github.krpkbhdn.ccmanager.git.Worktree;
 import com.github.krpkbhdn.ccmanager.project.GroupWorkspace;
 import com.github.krpkbhdn.ccmanager.project.ModelSelection;
 import com.github.krpkbhdn.ccmanager.project.ProjectGroupService;
@@ -39,12 +41,71 @@ class ClaudeLauncherTest {
     private final SessionRegistry sessions = mock(SessionRegistry.class);
     private final ProjectGroupService groups = mock(ProjectGroupService.class);
     private final AssistantMcpServer assistantEndpoint = mock(AssistantMcpServer.class);
+    private final GitWorktreeService worktrees = mock(GitWorktreeService.class);
     private final Path dataDir = Path.of("build", "launcher-test-data").toAbsolutePath();
     private final ClaudeLauncher launcher = new ClaudeLauncher(projects, installation, hooks, mock(ClaudePluginWriter.class), sessions, new AppProperties(dataDir),
-            groups, mock(GroupWorkspace.class), mock(ProjectMcpServers.class), assistantEndpoint);
+            groups, mock(GroupWorkspace.class), mock(ProjectMcpServers.class), assistantEndpoint, new WorkDirectories(worktrees));
 
     @TempDir
     Path directory;
+
+    private Worktree worktreeAt(Path path) {
+        return new Worktree(path, "task", "abc", false, false, false, false, false, false);
+    }
+
+    private void claudeInstalledAndSpawnFails() throws Exception {
+        Path notExecutable = Files.createFile(directory.resolve("claude-fake"));
+        when(installation.current()).thenReturn(new ClaudeInstallation(true, notExecutable, "1", null, null));
+        when(sessions.register(1)).thenReturn("ccm-1");
+        when(hooks.write("ccm-1")).thenReturn(new SessionFiles(directory.resolve("s.json"), directory.resolve("m.json")));
+    }
+
+    @Test
+    void launchInRefusesAForeignDirectory() throws Exception {
+        var foreign = Files.createDirectories(directory.resolveSibling(directory.getFileName() + "-foreign"));
+        when(worktrees.list(directory)).thenReturn(List.of(worktreeAt(directory)));
+
+        assertThatThrownBy(() -> launcher.launchIn(1, foreign, LaunchMode.NEW, null)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> launcher.launchTaskIn(1, foreign, null, "t")).isInstanceOf(IllegalArgumentException.class);
+        verify(sessions, never()).register(anyLong());
+    }
+
+    @Test
+    void launchInAcceptsALinkedWorktreeOfTheProject() throws Exception {
+        var worktree = Files.createDirectories(directory.resolveSibling(directory.getFileName() + "-wt"));
+        when(worktrees.list(directory)).thenReturn(List.of(worktreeAt(directory), worktreeAt(worktree)));
+        claudeInstalledAndSpawnFails();
+
+        assertThatThrownBy(() -> launcher.launchTaskIn(1, worktree, null, "t")).hasMessageStartingWith("Could not start Claude");
+        verify(sessions).register(1);
+    }
+
+    @Test
+    void launchInAcceptsTheProjectFolderWithoutAskingGit() throws Exception {
+        claudeInstalledAndSpawnFails();
+
+        assertThatThrownBy(() -> launcher.launchIn(1, directory, LaunchMode.NEW, null)).hasMessageStartingWith("Could not start Claude");
+        verify(sessions).register(1);
+        verify(worktrees, never()).list(directory);
+    }
+
+    @Test
+    void launchInIsRefusedForAGroup() {
+        when(projects.find(2)).thenReturn(Optional.of(group()));
+
+        assertThatThrownBy(() -> launcher.launchIn(2, directory, LaunchMode.NEW, null)).isInstanceOf(IllegalArgumentException.class);
+        verify(sessions, never()).register(anyLong());
+    }
+
+    @Test
+    void resumeKeepsAWorktreeCwdAndFallsBackForAForeignOne() throws Exception {
+        var worktree = Files.createDirectories(directory.resolveSibling(directory.getFileName() + "-wt"));
+        var foreign = Files.createDirectories(directory.resolveSibling(directory.getFileName() + "-foreign"));
+        when(worktrees.list(directory)).thenReturn(List.of(worktreeAt(directory), worktreeAt(worktree)));
+
+        assertThat(new WorkDirectories(worktrees).accepts(projects.find(1).orElseThrow(), worktree)).isTrue();
+        assertThat(new WorkDirectories(worktrees).accepts(projects.find(1).orElseThrow(), foreign)).isFalse();
+    }
 
     @BeforeEach
     void projectExists() {

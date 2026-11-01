@@ -49,6 +49,7 @@ import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectView
 import com.github.krpkbhdn.ccmanager.ui.state.byUrgency
 import com.github.krpkbhdn.ccmanager.ui.state.sessionTitle
+import com.github.krpkbhdn.ccmanager.ui.state.sessionsWorkingIn
 import com.github.krpkbhdn.ccmanager.ui.teams.TeamRoleStrip
 import com.github.krpkbhdn.ccmanager.ui.teams.runningAgentTypes
 import com.github.krpkbhdn.ccmanager.ui.theme.Motion
@@ -63,13 +64,20 @@ fun ProjectScreen(state: AppState, project: Project, modifier: Modifier = Modifi
     val view = state.viewOf(project.id)
     val gitState = state.gits.of(project.id)
     LaunchedEffect(project.id) { state.refreshBackgroundAgents(project.id) }
-    DisposableEffect(project.id) {
-        val unsubscribe = gitState?.attach()
-        onDispose { unsubscribe?.run() }
+    val mainGit = state.gits.mainOf(project.id)
+    DisposableEffect(project.id, gitState, mainGit) {
+        // The main folder stays watched while a worktree is shown: the sidebar and the context selector read it.
+        val unsubscribes = listOfNotNull(gitState, mainGit).distinct().map { it.attach() }
+        onDispose { unsubscribes.forEach(Runnable::run) }
     }
     val windowFocused = LocalWindowInfo.current.isWindowFocused
-    LaunchedEffect(windowFocused) {
-        if (windowFocused) gitState?.refresh()
+    LaunchedEffect(windowFocused, gitState, mainGit) {
+        if (!windowFocused) return@LaunchedEffect
+        gitState?.refresh()
+        if (mainGit !== gitState) {
+            mainGit?.refresh()
+            mainGit?.loadWorktrees()
+        }
     }
     LaunchedEffect(project.id, windowFocused) { if (windowFocused) state.runs.track(project.id) }
     Column(modifier.fillMaxSize()) {
@@ -201,7 +209,7 @@ private fun MainContent(state: AppState, project: Project, view: ProjectView) {
 private fun tabSpecs(state: AppState, view: ProjectView, project: Project): List<TabSpec> {
     val sessions = view.openSessions.map { id ->
         val snapshot = state.live.find(id)
-        TabSpec(ProjectTab.Session(id), snapshot?.let(::sessionTitle) ?: ENDED_SESSION_LABEL, snapshot?.status ?: AgentStatus.OFFLINE, null, closable = true)
+        TabSpec(ProjectTab.Session(id), snapshot?.let(::sessionTitle) ?: ENDED_SESSION_LABEL, snapshot?.status ?: AgentStatus.OFFLINE, null, closable = true, badge = state.gits.worktreeBadgeOf(project.id, id))
     }
     val shells = view.openShells.map { id -> TabSpec(ProjectTab.Shell(id), state.shells.labelOf(id), null, Icons.SquareTerminal, closable = true) }
     val git = if (project.group) TabSpec(ProjectTab.Git, "Members", null, Icons.FolderTree, closable = false)
@@ -239,11 +247,19 @@ internal fun TerminalPane(state: AppState, terminalId: String, overlay: @Composa
 
 internal val TERMINAL_INSET = 10.dp
 
+/** A review session starts in the worktree the Git tab shows, else in the project folder. */
+private fun startReviewSession(state: AppState, project: Project, prompt: String, onStarted: (String) -> Unit) {
+    val team = state.teams.defaultTeamOf(project.id)
+    val worktree = state.gits.activeDirectoryOf(project.id)
+    if (worktree == null) state.sessions.launchTask(project.id, team, prompt, onStarted = onStarted)
+    else state.sessions.launchTaskIn(project.id, worktree, team, prompt, onNotStarted = state.notifications::reportError, onStarted = onStarted)
+}
+
 @Composable
 private fun GitTabHost(state: AppState, project: Project) {
     val git = state.gits.of(project.id) ?: return
     val ideAvailable = state.environment.ideAvailable
-    val system = remember(project, ideAvailable) {
+    val system = remember(project, ideAvailable, git) {
         GitSystemActions(
             openFolder = { path -> state.environment.openDirectory(git.repo.resolve(path).parent ?: git.repo) },
             openInIde = { path -> state.environment.openInIde(git.repo.resolve(path)) },
@@ -251,12 +267,12 @@ private fun GitTabHost(state: AppState, project: Project) {
         )
     }
     val review = ReviewTarget(
-        sessions = { state.live.of(project.id) },
+        sessions = { sessionsWorkingIn(state.live.of(project.id), state.sessions.sessionDirectories, state.gits.activeDirectoryOf(project.id), project.path) },
         preferred = { state.viewOf(project.id).focusedSession?.takeIf { state.live.find(it) != null } },
         send = state.queue::add,
-        startAndSend = { prompt, onStarted -> state.sessions.launchTask(project.id, state.teams.defaultTeamOf(project.id), prompt, onStarted) },
+        startAndSend = { prompt, onStarted -> startReviewSession(state, project, prompt, onStarted) },
     )
-    GitTab(git, system, review, now = { state.now })
+    GitTab(git, system, review, now = { state.now }, work = workContextActions(state, project))
 }
 
 @Composable

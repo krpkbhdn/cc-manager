@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 public class GitWorktreeService {
 
     private static final String BRANCH_REF = "refs/heads/";
+    private static final String IGNORED_PREFIX = "!! ";
 
     private final GitRunner git;
 
@@ -63,6 +64,12 @@ public class GitWorktreeService {
         }
         command.add(worktree.toString());
         git.out(repo, command.toArray(String[]::new));
+    }
+
+    /** Top-level ignored entries (.env, build output): {@link #remove} deletes them with the folder, git never lists them as changes. */
+    public List<String> ignoredEntries(Path worktree) {
+        var status = git.tryRun(worktree, "status", "--porcelain", "--ignored");
+        return status.ok() ? status.stdout().lines().filter(line -> line.startsWith(IGNORED_PREFIX)).map(line -> line.substring(IGNORED_PREFIX.length())).toList() : List.of();
     }
 
     /** One process for all branches instead of a merge-base per worktree. */

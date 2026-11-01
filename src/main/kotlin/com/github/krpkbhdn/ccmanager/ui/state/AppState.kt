@@ -100,6 +100,7 @@ class AppState(
         showProject = { navigate(routeOf(it)) },
         requestConfirm = { confirm = it },
         reportError = notifications::reportError,
+        projectPath = { projects.find(it)?.path },
     )
     val assistant = AssistantState(
         scope, backend.terminal, { live }, backend.dataDir.resolve("assistant"),
@@ -160,16 +161,20 @@ class AppState(
     var exitApp: () -> Unit = {}
     val agents = AgentsState(backend.transcripts, scope, { live }, ::showSessionTerminal)
     private val unsubscribers = mutableListOf<Runnable>()
-    val worktrees = WorktreeActions(projects, sessions, { runs.stopRunning(it) }, { live.of(it).isNotEmpty() }, ::navigate)
+    val worktrees: WorktreeActions = WorktreeActions(projects, sessions, shells, runs, backend.git.taskWorktrees, backend.terminal) { gits }
     val gits = ProjectGits(
         backend.git, scope,
         GitHost(
             { settings.git }, { change -> prefs.update { it.copy(git = change(it.git)) } }, notifications::toast,
-            worktrees::open, worktrees::forget, worktrees::register, worktrees::stopWork, worktrees::hasRunningWork, environment::openDirectory,
+            worktrees::showWorktree, worktrees::forget, worktrees::stopWork, worktrees::hasRunningWork, worktrees::workStopping, environment::openDirectory,
+            backend.runConfigurations::deleteByDirectory, { dir -> backend.runConfigurations.listByDirectory(dir).map { it.name() } },
+            worktrees::forgetStored,
         ),
         projects::find,
+        backend.git.taskWorktrees::forProject,
+        { sessions.sessionDirectories },
     )
-    val tasks = TaskDialogState(sessions, teams, queue, gits::branchOf)
+    val tasks = TaskDialogState(sessions, teams, queue, scope, backend.git.taskWorktrees, notifications::reportError, gits::branchOf, { projectId, sessionId -> gits.branchOf(projectId, sessionId) }, gits::taskRowsChanged)
     private val projectReload = Refresher(scope) { guarded { projects.load() } }
     private val sessionReload = Refresher(scope) { guarded { loadSessions() } }
 

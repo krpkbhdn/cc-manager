@@ -6,6 +6,8 @@ import androidx.compose.ui.Modifier
 import com.github.krpkbhdn.ccmanager.ui.chrome.TopBar
 import androidx.compose.ui.unit.Density
 import com.github.krpkbhdn.ccmanager.git.GitException
+import com.github.krpkbhdn.ccmanager.git.TaskWorktree
+import com.github.krpkbhdn.ccmanager.git.Worktree
 import com.github.krpkbhdn.ccmanager.project.ModelSelection
 import com.github.krpkbhdn.ccmanager.ui.PreviewTerminal
 import com.github.krpkbhdn.ccmanager.ui.limitsAt
@@ -73,6 +75,14 @@ private val shots = listOf(
     Shot("log-filter", GitSubView.LOG, prepare = { _, git, _ -> git.log.update { it.copy(author = "Priya") }; waitFor { git.log.rows.isNotEmpty() && !git.log.loading } }),
     Shot("branches", GitSubView.BRANCHES),
     Shot("branch-popup", prepare = { _, git, _ -> git.branchPopupOpen = true }),
+    Shot("task-context", prepare = { state, git, data -> inTaskWorktree(state, git, data, TASK_TEXT) }),
+    Shot("task-context-popup", prepare = { state, git, data -> inTaskWorktree(state, git, data, TASK_TEXT).contextPopupOpen = true }),
+    Shot("task-context-no-task", prepare = { state, git, data -> inTaskWorktree(state, git, data, null) }),
+    Shot("task-context-merged", prepare = { state, git, data -> inTaskWorktree(state, git, data, TASK_TEXT).apply { mergedInto = "main" } }),
+    Shot("task-context-main-popup", prepare = { state, git, data -> inTaskWorktree(state, git, data, TASK_TEXT); state.gits.switchTo(1, null); state.gits.of(1)!!.contextPopupOpen = true }),
+    Shot("task-worktrees", GitSubView.WORKTREES, prepare = { state, git, data -> inTaskWorktree(state, git, data, TASK_TEXT).show(GitSubView.WORKTREES) }),
+    Shot("task-context-session-tab", prepare = { state, git, data -> inTaskWorktree(state, git, data, TASK_TEXT); state.sessions.sessionDirectories["s-idle"] = git.repo.resolveSibling("ccm-sandbox-wt-fix-login"); state.openSession("s-idle") }),
+    Shot("task-context-sessions", prepare = { state, git, data -> inTaskWorktree(state, git, data, TASK_TEXT); state.navigate(Route.Sessions) }),
     Shot("stashes", GitSubView.STASHES),
     Shot("tags", GitSubView.TAGS),
     Shot("merging", data = SampleRepos::merging, prepare = selectFile("src/main/java/com/acme/HookServer.java", false)),
@@ -320,4 +330,28 @@ private fun questions(state: AppState): QuestionsDraft {
     waitFor { state.answers.dialog != null }
     val proposal = state.answers.dialog as QuestionsProposal
     return state.proposals.draft(proposal) { QuestionsDraft(proposal.questions()) }
+}
+
+private const val TASK_TEXT = "Fix the login redirect loop after the session expires\nSee ticket 482: users land on /login again and again"
+
+/** Adds a linked worktree (a task one when [task] is given) with a working session, switches the project to it and returns its state. */
+private fun inTaskWorktree(state: AppState, main: GitState, data: FakeRepoData, task: String?): GitState {
+    val linked = main.repo.resolveSibling("ccm-sandbox-wt-fix-login")
+    val branch = "task/fix-login-redirect"
+    data.branch = branch
+    data.worktrees += listOf(
+        Worktree(main.repo, "main", "a1b2c3d", true, false, false, false, false, false),
+        Worktree(linked, branch, "d4e5f6a", false, false, false, false, true, false),
+        Worktree(main.repo.resolveSibling("ccm-sandbox-wt-docs"), "docs/readme", "0f1e2d3", false, false, false, false, false, false),
+    )
+    state.sessions.sessionDirectories["s-working"] = linked
+    state.gits.switchTo(1, linked)
+    val shown = state.gits.of(1)!!
+
+    shown.attach()
+    waitFor(SETTLE_MILLIS) { false }
+    task?.let { shown.task = TaskWorktree(1, 1, linked, branch, "main", it) }
+    waitFor { shown.status != null && shown.branches.isNotEmpty() && main.worktrees.isNotEmpty() }
+    waitFor(SETTLE_MILLIS) { false }
+    return shown
 }

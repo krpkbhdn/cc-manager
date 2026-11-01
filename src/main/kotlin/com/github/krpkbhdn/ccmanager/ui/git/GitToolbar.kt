@@ -3,8 +3,10 @@ package com.github.krpkbhdn.ccmanager.ui.git
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -22,6 +24,15 @@ import com.github.krpkbhdn.ccmanager.ui.components.Label
 import com.github.krpkbhdn.ccmanager.ui.components.MenuEntry
 import com.github.krpkbhdn.ccmanager.ui.components.Pressable
 import com.github.krpkbhdn.ccmanager.ui.components.Spinner
+import com.github.krpkbhdn.ccmanager.ui.components.WithTooltip
+import com.github.krpkbhdn.ccmanager.ui.git.model.ChipTone
+import com.github.krpkbhdn.ccmanager.ui.git.model.PullRequestChip
+import com.github.krpkbhdn.ccmanager.ui.git.model.contextSelectorVisible
+import com.github.krpkbhdn.ccmanager.ui.git.model.pullRequestChip
+import com.github.krpkbhdn.ccmanager.ui.git.model.canCreatePullRequest
+import com.github.krpkbhdn.ccmanager.ui.git.model.startPullRequest
+import java.awt.Desktop
+import java.net.URI
 import com.github.krpkbhdn.ccmanager.ui.components.SplitActionButton
 import com.github.krpkbhdn.ccmanager.ui.git.branch.BranchPopup
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitDialog
@@ -39,41 +50,90 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
 private val compactWidth = 640.dp
+private val stackedWidth = 760.dp
 private val chipHeight = 28.dp
 private val chipMaxWidth = 240.dp
 
-/** Branch chip with ahead / behind counters on the left; Fetch, Pull, Push, Stash and refresh on the right. */
+/** Context selector and branch chip with ahead / behind counters on the left; Fetch, Pull, Push, Stash and refresh on the right, on a second line when the selector leaves no room. */
 @Composable
-fun GitToolbar(git: GitState, modifier: Modifier = Modifier) {
-    val status = git.status
+fun GitToolbar(git: GitState, work: WorkContextActions, pullRequestHere: Boolean, modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val compact = maxWidth < compactWidth
-        Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.sm), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-            BranchChip(git)
-            if (status != null) Counters(status.ahead(), status.behind(), status.upstream())
-            Box(Modifier.weight(1f))
-            val enabled = !git.busy && status?.repository() == true
-            val busyLabel = git.job?.label
-            if (compact) {
-                IconButton(Icons.Download, { git.fetch() }, tooltip = "Fetch all remotes", enabled = enabled)
-            } else {
-                AppButton("Fetch", { git.fetch() }, icon = Icons.Download, enabled = enabled, loading = busyLabel == "Fetching", compact = true, tooltip = "Fetch all remotes")
+        val selector = contextSelectorVisible(work.contexts)
+        val stacked = selector && maxWidth < stackedWidth
+        val left: @Composable RowScope.() -> Unit = { ToolbarLeading(git, work, pullRequestHere, selector) }
+        val right = @Composable { ToolbarActions(git, compact) }
+        val padding = Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.sm)
+        if (stacked) {
+            Column(padding, verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) { left() }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm, Alignment.End)) { right() }
             }
-            PullButton(git, compact, enabled)
-            PushButton(git, compact, enabled)
-            IconButton(Icons.Archive, { git.dialog = GitDialog.SaveStash() }, tooltip = "Stash changes", enabled = enabled)
-            IconButton(Icons.Refresh, git::refreshAll, tooltip = "Refresh", enabled = !git.loading)
-            if (git.loading) Spinner(size = 14.dp)
+        } else {
+            Row(padding, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                left()
+                Box(Modifier.weight(1f))
+                right()
+            }
         }
     }
 }
 
 @Composable
-private fun BranchChip(git: GitState) {
+private fun RowScope.ToolbarLeading(git: GitState, work: WorkContextActions, pullRequestHere: Boolean, selector: Boolean) {
+    val status = git.status
+    val shrink = Modifier.weight(1f, fill = false)
+    if (selector) WorkContextSelector(git, work, shrink)
+    BranchChip(git, shrink)
+    if (status != null) Counters(status.ahead(), status.behind(), status.upstream())
+    pullRequestChip(git.ghStatus, git.pullRequest, git.hasGithubRemote)?.let { CiChip(it) }
+    if (pullRequestHere && canCreatePullRequest(status?.branch(), git.ghStatus, git.pullRequest, git.hasGithubRemote)) {
+        AppButton("Create PR", { git.startPullRequest() }, icon = Icons.Push, enabled = !git.busy && git.dialog == null && git.noChangesHint == null, compact = true, tooltip = git.noChangesHint ?: "Draft a pull request for this branch")
+    }
+}
+
+@Composable
+private fun ToolbarActions(git: GitState, compact: Boolean) {
+    val enabled = !git.busy && git.status?.repository() == true
+    if (compact) {
+        IconButton(Icons.Download, { git.fetch() }, tooltip = "Fetch all remotes", enabled = enabled)
+    } else {
+        AppButton("Fetch", { git.fetch() }, icon = Icons.Download, enabled = enabled, loading = git.job?.label == "Fetching", compact = true, tooltip = "Fetch all remotes")
+    }
+    PullButton(git, compact, enabled)
+    PushButton(git, compact, enabled)
+    IconButton(Icons.Archive, { git.dialog = GitDialog.SaveStash() }, tooltip = "Stash changes", enabled = enabled)
+    IconButton(Icons.Refresh, git::refreshAll, tooltip = "Refresh", enabled = !git.loading)
+    if (git.loading) Spinner(size = 14.dp)
+}
+
+
+@Composable
+private fun CiChip(chip: PullRequestChip) {
+    val tint = when (chip.tone) {
+        ChipTone.NEUTRAL -> colors.textTertiary
+        ChipTone.SUCCESS -> colors.success
+        ChipTone.DANGER -> colors.danger
+        ChipTone.WARNING -> colors.warning
+    }
+    val shape = RoundedCornerShape(Radius.md)
+    val url = chip.url
+    WithTooltip(chip.hint) {
+        Pressable({ url?.let { runCatching { Desktop.getDesktop().browse(URI(it)) } } }, Modifier.height(chipHeight).border(1.dp, colors.borderStrong, shape), shape, base = colors.surfaceRaised, hover = colors.surfaceHover, enabled = url != null) {
+            Row(Modifier.padding(horizontal = Spacing.md - 2.dp).height(chipHeight), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm - 1.dp)) {
+                Glyph(if (url == null) Icons.CircleAlert else Icons.CircleCheck, tint, size = IconSize.medium)
+                Label(chip.text, Modifier.widthIn(max = chipMaxWidth), color = tint, style = Type.small, tooltipWhenTruncated = true)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BranchChip(git: GitState, modifier: Modifier = Modifier) {
     val status = git.status
     val shape = RoundedCornerShape(Radius.md)
     val label = status?.branch() ?: status?.head()?.take(DETACHED_HASH)?.let { "detached $it" } ?: "Loading..."
-    Box {
+    Box(modifier) {
         Pressable({ git.branchPopupOpen = true }, Modifier.height(chipHeight).border(1.dp, colors.borderStrong, shape), shape, base = colors.surfaceRaised, hover = colors.surfaceHover, enabled = status?.repository() == true) {
             Row(Modifier.padding(horizontal = Spacing.md - 2.dp).height(chipHeight), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm - 1.dp)) {
                 Glyph(Icons.Branch, colors.accent, size = IconSize.large)

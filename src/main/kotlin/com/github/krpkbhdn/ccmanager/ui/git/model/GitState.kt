@@ -8,7 +8,10 @@ import com.github.krpkbhdn.ccmanager.git.GitBranch
 import com.github.krpkbhdn.ccmanager.git.GitException
 import com.github.krpkbhdn.ccmanager.git.GitMisc
 import com.github.krpkbhdn.ccmanager.git.GitStatus
+import com.github.krpkbhdn.ccmanager.git.TaskWorktree
 import com.github.krpkbhdn.ccmanager.git.Worktree
+import com.github.krpkbhdn.ccmanager.github.GhAvailability
+import com.github.krpkbhdn.ccmanager.github.PullRequest
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.ui.state.Refresher
 import java.nio.file.Path
@@ -43,12 +46,19 @@ class GitHost(
     val prefs: () -> GitPrefs,
     val updatePrefs: ((GitPrefs) -> GitPrefs) -> Unit,
     val notify: (NotificationKind, String, String) -> Unit,
-    val openWorktree: (directory: Path, launchSession: Boolean) -> Unit = { _, _ -> },
+    /** Shows [directory], a worktree of [projectId], and optionally starts a session there under that project. */
+    val showWorktree: (projectId: Long, directory: Path, launchSession: Boolean) -> Unit = { _, _, _ -> },
+    /** In-memory part of forgetting a removed worktree; the stored part is [forgetStoredWorktree]. */
     val forgetWorktree: (directory: Path) -> Unit = {},
-    val registerWorktree: (directory: Path) -> Unit = {},
     val stopWorktreeWork: (directory: Path) -> Unit = {},
     val hasRunningWork: (directory: Path) -> Boolean = { false },
+    /** True while processes of closed sessions and shells are still being ended, so their folders may still be locked. */
+    val workStopping: () -> Boolean = { false },
     val openDirectory: (directory: Path) -> Unit = {},
+    /** These three touch the database: call them off the UI thread. */
+    val deleteRunConfigurations: (directory: Path) -> Unit = {},
+    val runConfigurationNames: (directory: Path) -> List<String> = { emptyList() },
+    val forgetStoredWorktree: (directory: Path) -> Unit = {},
 )
 
 /** The running mutation: what it does and the latest progress line git printed. */
@@ -67,7 +77,21 @@ class GitState(
     internal val git: GitBackend,
     internal val scope: CoroutineScope,
     internal val host: GitHost,
+    /** The task row when this state is for a task worktree: its base branch and task text; null for the main folder and other worktrees. */
+    task: TaskWorktree? = null,
 ) {
+    /** Filled in after the state exists when the task row is read off the UI thread. */
+    var task by mutableStateOf(task)
+        internal set
+
+    /** Whether the worktree differs from its task base; null while unknown (not a task worktree, or not checked yet). */
+    var baseChanges by mutableStateOf<Boolean?>(null)
+        internal set
+
+    /** The branch this one was merged into locally during this run; set only by the merge flow. */
+    var mergedInto by mutableStateOf<String?>(null)
+        internal set
+
     /** The repository top level, re-read on every reload: git reports paths relative to it, whatever subfolder the project is. */
     @Volatile
     var repo: Path = folder
@@ -87,6 +111,10 @@ class GitState(
         private set
     var worktrees by mutableStateOf<List<Worktree>>(emptyList())
         private set
+    var ghStatus by mutableStateOf<GhAvailability?>(null)
+        internal set
+    var pullRequest by mutableStateOf<PullRequest?>(null)
+        internal set
     var loading by mutableStateOf(false)
         private set
     var loadError by mutableStateOf<ErrorPlan?>(null)
@@ -97,6 +125,7 @@ class GitState(
     var dialog by mutableStateOf<GitDialog?>(null)
     var selected by mutableStateOf<ChangeRef?>(null)
     var branchPopupOpen by mutableStateOf(false)
+    var contextPopupOpen by mutableStateOf(false)
     var commitFocusTick by mutableIntStateOf(0)
         private set
 
@@ -109,6 +138,10 @@ class GitState(
     val flat: Boolean get() = host.prefs().flatChanges
     val busy: Boolean get() = job != null
     val summary: GitSummary? get() = status?.let(::summaryOf)
+    val hasGithubRemote: Boolean get() = remotes.any { isGithubRemote(it.pushUrl() ?: it.fetchUrl()) }
+
+    /** Why publishing or merging has nothing to do, or null when it has something (or that is not known). */
+    val noChangesHint: String? get() = task?.baseBranch()?.takeIf { baseChanges == false }?.let { "No changes against $it" }
 
     private val refresher = Refresher(scope) { reload() }
     private var retry: (() -> Unit)? = null
@@ -178,6 +211,7 @@ class GitState(
         label: String,
         handle: (GitException) -> Boolean = { false },
         refreshWorktrees: Boolean = false,
+        folderVanishes: Boolean = false,
         onSuccess: (T) -> Unit = {},
         call: GitBackend.((String) -> Unit) -> T,
     ) {
@@ -185,16 +219,20 @@ class GitState(
         job = GitJob(label)
         jobCount++
         scope.launch {
-            val outcome = attempt(label, handle, { act(label, handle, refreshWorktrees, onSuccess, call) }, call)
+            val outcome = attempt(label, handle, { act(label, handle, refreshWorktrees, folderVanishes, onSuccess, call) }, call)
             job = null
-            refresh()
-            loadAuxiliary()
-            if (refreshWorktrees) loadWorktrees()
+            if (outcome == null || !folderVanishes) reloadAfterAct(refreshWorktrees)
             outcome?.let {
                 error = null
                 onSuccess(it.value)
             }
         }
+    }
+
+    private suspend fun reloadAfterAct(refreshWorktrees: Boolean) {
+        refresh()
+        loadAuxiliary()
+        if (refreshWorktrees) loadWorktrees()
     }
 
     private class Success<T>(val value: T)
@@ -240,6 +278,10 @@ class GitState(
 
     private suspend fun applyLoaded(current: GitStatus, currentBranches: List<GitBranch>) {
         val firstLoad = status == null
+        if (current.branch() != status?.branch()) {
+            pullRequest = null
+            mergedInto = null
+        }
         status = current
         branches = currentBranches
         selected = selected?.takeIf { ref -> current.changes().any { it.path() == ref.path && (if (ref.staged) it.hasStaged() else it.hasUnstaged()) } }

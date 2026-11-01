@@ -2,9 +2,13 @@ package com.github.krpkbhdn.ccmanager.git;
 
 import com.github.krpkbhdn.ccmanager.git.GitException.Kind;
 import com.github.krpkbhdn.ccmanager.git.GitMisc.MergeMode;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -16,6 +20,7 @@ public class GitBranchService {
     private static final String REMOTE_REF = "refs/remotes/";
     private static final String AUTOSTASH_MESSAGE = "cc-manager autostash";
     private static final String STASH_REF = "refs/stash";
+    private static final int MAX_MERGE_MESSAGE = 60_000;
 
     private final GitRunner git;
     private final BranchRefs refs;
@@ -98,8 +103,95 @@ public class GitBranchService {
 
     /** Merges {@code branch} into the current branch. A conflict surfaces as GitException(CONFLICT); the repo stays in the merging state. */
     public void merge(Path repo, String branch, MergeMode mode) {
+        merge(repo, branch, mode, null);
+    }
+
+    /**
+     * Like {@link #merge(Path, String, MergeMode)} with a custom merge commit message (only used when a merge commit is created).
+     * The message goes through a temporary file: it never touches argv (quoting, length limit) and {@code git merge} cannot read stdin.
+     */
+    public void merge(Path repo, String branch, MergeMode mode, String message) {
         GitRevisions.requireNotOption(branch);
-        git.out(repo, "merge", mergeFlag(mode), branch);
+        var command = new ArrayList<>(List.of("merge", mergeFlag(mode)));
+        var text = mergeMessage(message);
+        if (text.isEmpty() || mode == MergeMode.SQUASH || mode == MergeMode.FAST_FORWARD_ONLY) {
+            command.add(branch);
+            git.out(repo, command.toArray(String[]::new));
+            return;
+        }
+        Path file = null;
+        try {
+            file = Files.createTempFile("ccm-merge-", ".txt");
+            Files.writeString(file, text, StandardCharsets.UTF_8);
+            command.addAll(List.of("-F", file.toString(), branch));
+            git.out(repo, command.toArray(String[]::new));
+        } catch (IOException e) {
+            throw new GitException(Kind.OTHER, "Cannot write the merge message: " + e.getMessage(), "");
+        } finally {
+            deleteQuietly(file);
+        }
+    }
+
+    private static String mergeMessage(String message) {
+        if (message == null) {
+            return "";
+        }
+        var text = message.replace("\r\n", "\n").replace('\r', '\n').replace("\0", "").strip();
+        if (text.length() > MAX_MERGE_MESSAGE) {
+            text = text.substring(0, MAX_MERGE_MESSAGE).strip();
+        }
+        return text.isEmpty() ? "" : text + "\n";
+    }
+
+    private static void deleteQuietly(Path file) {
+        if (file != null) {
+            try {
+                Files.deleteIfExists(file);
+            } catch (IOException ignored) {
+                // a leftover temp file is harmless
+            }
+        }
+    }
+
+    /** True when {@code commit} is reachable from {@code branch} (git merge-base --is-ancestor). */
+    public boolean isAncestor(Path repo, String commit, String branch) {
+        GitRevisions.requireNotOption(commit);
+        GitRevisions.requireNotOption(branch);
+        var result = git.tryRun(repo, "merge-base", "--is-ancestor", commit, branch);
+        return switch (result.exitCode()) {
+            case 0 -> true;
+            case 1 -> false;
+            default -> {
+                var output = (result.stderr() + "\n" + result.stdout()).strip();
+                throw new GitException(GitFailure.classify(output), GitFailure.message(GitFailure.classify(output), output), output);
+            }
+        };
+    }
+
+    /** The folder where {@code branch} is checked out (main or a linked worktree), if any. */
+    public Optional<Path> worktreeOf(Path repo, String branch) {
+        GitRevisions.requireNotOption(branch);
+        return WorktreePorcelainParser.parse(git.out(repo, "worktree", "list", "--porcelain")).stream()
+                .filter(entry -> !entry.detached() && !entry.bare() && branch.equals(entry.branch()))
+                .map(WorktreePorcelainParser.ParsedWorktree::path)
+                .findFirst();
+    }
+
+    /** Staged or unstaged changes to tracked files; untracked files are ignored. */
+    public boolean hasTrackedChanges(Path repo) {
+        return !git.out(repo, "status", "--porcelain", "--untracked-files=no").isBlank();
+    }
+
+    /** A merge, rebase, cherry-pick or revert is stopped in this worktree. */
+    public boolean mergeInProgress(Path repo) {
+        return RepositoryOperations.detect(Path.of(git.out(repo, "rev-parse", "--absolute-git-dir").strip())) != GitStatus.Operation.NONE;
+    }
+
+    /** One line per commit of {@code base..branch}, newest first, at most {@code limit}. */
+    public List<String> commitsAhead(Path repo, String base, String branch, int limit) {
+        GitRevisions.requireNotOption(base);
+        GitRevisions.requireNotOption(branch);
+        return git.out(repo, "log", "--format=%s", "--max-count=" + limit, base + ".." + branch).lines().filter(line -> !line.isBlank()).toList();
     }
 
     /** Rebases the current branch onto {@code onto}. A conflict surfaces as GitException(CONFLICT); the rebase stays stopped. */

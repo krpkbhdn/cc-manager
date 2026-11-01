@@ -114,7 +114,7 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
             if (state.paletteOpen) CommandPalette(paletteItems(state, colors.dark)) { state.paletteOpen = false }
             if (state.shortcutsOpen) ShortcutSheet { state.shortcutsOpen = false }
             (state.route as? Route.Project)?.let { state.gits.of(it.id) }?.let { GitDialogHost(it) }
-            state.tasks.projectId?.let { id -> state.projects.all.firstOrNull { it.id == id } }?.let { StartTaskDialog(it, state.teams, startTaskTemplates(state, it), startTaskActions(state, it)) }
+            state.tasks.projectId?.let { id -> state.projects.all.firstOrNull { it.id == id } }?.let { StartTaskDialog(it, state.teams, startTaskTemplates(state, it), startTaskActions(state, it), state.gits.branchOf(it.id) != null) }
             state.tasks.quickStartProjectId?.let { id -> state.projects.all.firstOrNull { it.id == id } }?.let { QuickStartPicker(state, it) }
             state.tasks.queuePickTarget?.let { (id, sessionId) -> state.projects.all.firstOrNull { it.id == id }?.let { QueuePicker(state, it, sessionId) } }
             state.prompts.dialog?.let { PromptDialog(it, state.prompts, state.projects.all, state.teams.teams) }
@@ -233,6 +233,6 @@ private fun QueuePicker(state: AppState, project: Project, ccmSessionId: String)
     TemplatePickerDialog(state.prompts.forProject(project.id), project.id, state.teams.teams, { state.tasks.queueFromTemplate(project, ccmSessionId, it) }, { state.tasks.queuePickTarget = null })
 
 private fun startTaskActions(state: AppState, project: Project) = StartTaskActions(
-    onStart = { team, task, makeDefault -> state.tasks.start(project, team, task, makeDefault) },
+    onStart = { team, task, makeDefault, isolated -> state.tasks.start(project, team, task, makeDefault, isolated) },
     onDismiss = state.tasks::close,
 )

@@ -7,6 +7,7 @@ import com.github.krpkbhdn.ccmanager.run.ActiveRun
 import com.github.krpkbhdn.ccmanager.run.RunConfiguration
 import com.github.krpkbhdn.ccmanager.run.RunConfigurationService
 import com.github.krpkbhdn.ccmanager.run.RunService
+import com.github.krpkbhdn.ccmanager.ui.await
 import com.github.krpkbhdn.ccmanager.ui.state.TerminalPort
 import java.nio.file.Path
 import java.util.Optional
@@ -53,8 +54,7 @@ class RunStateTest {
     private fun reload() = state.track(1)
 
     private fun awaitEvents(vararg expected: String) {
-        val deadline = System.nanoTime() + 5_000_000_000L
-        while (events.toList() != expected.toList() && System.nanoTime() < deadline) Thread.sleep(10)
+        await { events.toList() == expected.toList() }
         assertThat(events).containsExactly(*expected)
     }
 
@@ -83,5 +83,24 @@ class RunStateTest {
         configurationList = emptyList()
         reload()
         awaitEvents("open:run-7-1", "close:run-7-1")
+    }
+
+    @Test
+    fun `runningIn matches the directory however it is spelled and ignores other folders`() {
+        activeRun = runWithId("run-7-1")
+        reload()
+        awaitEvents("open:run-7-1")
+
+        assertThat(state.runningIn(directory.resolve("..").resolve("app"))).hasSize(1)
+        assertThat(state.runningIn(directory.resolve("other"))).isEmpty()
+    }
+
+    @Test
+    fun `a finished run is not running work`() {
+        activeRun = ActiveRun(7, "run-7-1", "dev", null, OptionalInt.of(0))
+        reload()
+        awaitEvents("open:run-7-1")
+
+        assertThat(state.runningIn(directory)).isEmpty()
     }
 }

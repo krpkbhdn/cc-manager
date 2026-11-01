@@ -113,6 +113,22 @@ public class RunConfigurationService {
         }
     }
 
+    /** The configurations of every project that run in [directory] (compared normalized), e.g. to list what a worktree removal deletes. */
+    public List<RunConfiguration> listByDirectory(Path directory) {
+        var target = directory.toAbsolutePath().normalize();
+        return jdbc.sql(SELECT + " ORDER BY name COLLATE NOCASE, id").query(RunConfigurationService::mapRow).list().stream()
+                .filter(configuration -> configuration.directory().toAbsolutePath().normalize().equals(target)).toList();
+    }
+
+    /** Deletes what [listByDirectory] returns, e.g. after its worktree was removed. */
+    public void deleteByDirectory(Path directory) {
+        var found = listByDirectory(directory);
+        found.forEach(configuration -> jdbc.sql("DELETE FROM run_configuration WHERE id = ?").param(configuration.id()).update());
+        if (!found.isEmpty()) {
+            fireChanged();
+        }
+    }
+
     /** @return unsubscribe handle; callback fires (any thread) after any change to run configurations */
     public Runnable subscribe(Runnable onChange) {
         listeners.add(onChange);

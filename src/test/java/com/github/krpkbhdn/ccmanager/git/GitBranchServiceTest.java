@@ -279,6 +279,93 @@ class GitBranchServiceTest {
     }
 
     @Test
+    void noFastForwardMergeUsesTheGivenMessage() {
+        prepare();
+        commitOnBranch("topic", "t.txt", "t\n");
+        sandbox.git("checkout", "main");
+
+        service.merge(sandbox.repo, "topic", MergeMode.NO_FAST_FORWARD, "Merge task: topic");
+
+        assertThat(sandbox.git("log", "-1", "--format=%s").strip()).isEqualTo("Merge task: topic");
+        assertThat(sandbox.git("rev-list", "--merges", "--count", "HEAD").strip()).isEqualTo("1");
+    }
+
+    @Test
+    void mergeMessageWithQuotesNewlinesUnicodeAndHugeBodyIsKeptIntact() {
+        prepare();
+        commitOnBranch("topic", "t.txt", "t\n");
+        sandbox.git("checkout", "main");
+        var title = "Merge \"task\": 'topic' \u00e9\u4e2d`x`";
+
+        service.merge(sandbox.repo, "topic", MergeMode.NO_FAST_FORWARD, title + "\r\n\r\n" + "line \"q\"\n".repeat(10_000));
+
+        assertThat(sandbox.git("log", "-1", "--format=%s").strip()).isEqualTo(title);
+        assertThat(sandbox.git("log", "-1", "--format=%b")).contains("line \"q\"").hasSizeLessThan(61_000);
+    }
+
+    @Test
+    void conflictingMergeWithMessageCanBeAborted() {
+        prepare();
+        commitOnBranch("topic", "a.txt", "topic\n");
+        sandbox.git("checkout", "main");
+        sandbox.write("a.txt", "main\n");
+        sandbox.commitAll("main edit");
+
+        var failure = failureOf(() -> service.merge(sandbox.repo, "topic", MergeMode.NO_FAST_FORWARD, "msg"));
+        var merging = service.mergeInProgress(sandbox.repo);
+        new GitConflictService(sandbox.runner).abortOperation(sandbox.repo);
+
+        assertThat(failure.kind()).isEqualTo(Kind.CONFLICT);
+        assertThat(merging).isTrue();
+        assertThat(service.mergeInProgress(sandbox.repo)).isFalse();
+        assertThat(Files.exists(sandbox.repo.resolve(".git/MERGE_HEAD"))).isFalse();
+    }
+
+    @Test
+    void isAncestorBeforeAndAfterMerge() {
+        prepare();
+        commitOnBranch("topic", "t.txt", "t\n");
+        sandbox.git("checkout", "main");
+
+        assertThat(service.isAncestor(sandbox.repo, "main", "topic")).isTrue();
+        assertThat(service.isAncestor(sandbox.repo, "topic", "main")).isFalse();
+        service.merge(sandbox.repo, "topic", MergeMode.NO_FAST_FORWARD, null);
+        assertThat(service.isAncestor(sandbox.repo, "topic", "main")).isTrue();
+        assertThat(failureOf(() -> service.isAncestor(sandbox.repo, "nope", "main"))).isNotNull();
+    }
+
+    @Test
+    void findsTheWorktreeWhereABranchIsCheckedOut() throws java.io.IOException {
+        prepare();
+        sandbox.git("branch", "topic");
+        var linked = root.resolve("linked");
+        sandbox.git("worktree", "add", linked.toString(), "topic");
+
+        assertThat(service.worktreeOf(sandbox.repo, "main")).hasValue(sandbox.repo);
+        assertThat(service.worktreeOf(sandbox.repo, "topic").orElseThrow().toRealPath()).isEqualTo(linked.toRealPath());
+        assertThat(service.worktreeOf(sandbox.repo, "other")).isEmpty();
+    }
+
+    @Test
+    void trackedChangesIgnoreUntrackedFiles() {
+        prepare();
+        sandbox.write("untracked.txt", "u\n");
+        assertThat(service.hasTrackedChanges(sandbox.repo)).isFalse();
+
+        sandbox.write("a.txt", "changed\n");
+        assertThat(service.hasTrackedChanges(sandbox.repo)).isTrue();
+    }
+
+    @Test
+    void listsCommitsAheadOfBase() {
+        prepare();
+        commitOnBranch("topic", "t.txt", "t\n");
+
+        assertThat(service.commitsAhead(sandbox.repo, "main", "topic", 10)).containsExactly("topic change");
+        assertThat(service.commitsAhead(sandbox.repo, "topic", "main", 10)).isEmpty();
+    }
+
+    @Test
     void rebasesOntoAnotherBranchAndReportsConflicts() {
         prepare();
         commitOnBranch("topic", "t.txt", "t\n");

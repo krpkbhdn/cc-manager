@@ -17,11 +17,14 @@ import com.github.krpkbhdn.ccmanager.git.GitStatusService
 import com.github.krpkbhdn.ccmanager.git.GitSyncService
 import com.github.krpkbhdn.ccmanager.git.GitWatcher
 import com.github.krpkbhdn.ccmanager.git.GitWorktreeService
+import com.github.krpkbhdn.ccmanager.git.TaskWorktree
+import com.github.krpkbhdn.ccmanager.git.TaskWorktreeService
 import com.github.krpkbhdn.ccmanager.git.Worktree
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitBackend
 import com.github.krpkbhdn.ccmanager.workspace.GitDiff
 import java.nio.file.Path
 import java.time.Instant
+import java.util.Optional
 import java.util.function.Consumer
 
 /** What a fake repository holds; mutated by the fake services so the UI sees realistic results of its actions. */
@@ -42,6 +45,7 @@ class FakeRepoData(
     var identity: GitMisc.Identity = GitMisc.Identity("Dev User", "dev@acme.dev"),
     var repository: Boolean = true,
     var detailFiles: List<GitDiff.FileDiff> = emptyList(),
+    val worktrees: MutableList<Worktree> = mutableListOf(),
 ) {
     /** One-shot failure thrown by the next mutating call. */
     @Volatile var failure: GitException? = null
@@ -74,10 +78,17 @@ class FakeRepoData(
 
 /** A complete fake [GitBackend] over [data]; every service reads and mutates the same in-memory repository. */
 class FakeGit(val data: FakeRepoData) {
-    val backend = GitBackend(status(), index(), branches(), sync(), log(), stashes(), history(), conflicts(), worktrees(), watcher())
+    val backend = GitBackend(status(), index(), branches(), sync(), log(), stashes(), history(), conflicts(), worktrees(), watcher(), noTaskRows())
+
+    /** No database behind it: nothing is recorded, so every query answers empty. */
+    private fun noTaskRows() = object : TaskWorktreeService(branches(), worktrees(), null) {
+        override fun forProject(projectId: Long): List<TaskWorktree> = emptyList()
+        override fun find(path: Path): Optional<TaskWorktree> = Optional.empty()
+        override fun forget(path: Path) = Unit
+    }
 
     private fun worktrees() = object : GitWorktreeService(GitRunner()) {
-        override fun list(repo: Path) = emptyList<Worktree>()
+        override fun list(repo: Path): List<Worktree> = data.worktrees.toList()
     }
 
     private fun status() = object : GitStatusService(GitRunner()) {

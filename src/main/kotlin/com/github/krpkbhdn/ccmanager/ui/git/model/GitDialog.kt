@@ -17,5 +17,9 @@ sealed interface GitDialog {
     data object CreateWorktree : GitDialog
     data class RemoveWorktree(val worktree: Worktree) : GitDialog
     data class Confirm(val request: ConfirmRequest) : GitDialog
+    /** Waiting for the drafted pull request or merge text; closing the dialog cancels [job]. */
+    data class Drafting(val title: String, val job: kotlinx.coroutines.Job) : GitDialog
+    data class PullRequest(val form: PullRequestForm) : GitDialog
+    data class MergeTask(val form: TaskMergeForm) : GitDialog
     data class Output(val title: String, val text: String) : GitDialog
 }

@@ -47,6 +47,19 @@ class GitWorktreeServiceTest {
     }
 
     @Test
+    void ignoredEntriesListsIgnoredFilesAndFoldersButNotTrackedOrUntrackedOnes() throws Exception {
+        Files.writeString(sandbox.repo.resolve(".gitignore"), ".env\nbuild/\n");
+        sandbox.commitAll("ignore");
+        service.add(sandbox.repo, "feature", "main", target);
+        Files.writeString(target.resolve(".env"), "SECRET=1");
+        Files.createDirectories(target.resolve("build"));
+        Files.writeString(target.resolve("build/out.txt"), "x");
+        Files.writeString(target.resolve("new.txt"), "x");
+
+        assertThat(service.ignoredEntries(target)).containsExactlyInAnyOrder(".env", "build/");
+    }
+
+    @Test
     void branchWithOwnCommitIsNotMergedAndUntrackedFileMakesItDirty() throws Exception {
         service.add(sandbox.repo, "feature", "main", target);
         Files.writeString(target.resolve("b.txt"), "b");

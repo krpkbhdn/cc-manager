@@ -50,6 +50,9 @@ object TerminalHost {
 
     fun hasTerminal(ccmSessionId: String): Boolean = terminals.containsKey(ccmSessionId)
 
+    /** True until every closed terminal's process has been ended. */
+    fun closing(): Boolean = pendingClose.isNotEmpty()
+
     fun ctrlCWithin(ccmSessionId: String, windowMillis: Long): Boolean =
         terminals[ccmSessionId]?.connector?.ctrlCWithin(windowMillis) == true
 

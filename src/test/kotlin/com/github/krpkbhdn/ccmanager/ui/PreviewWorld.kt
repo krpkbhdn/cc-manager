@@ -311,6 +311,8 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         val launcher = mock(ClaudeLauncher::class.java)
         `when`(launcher.launch(anyLong(), any())).thenThrow(IllegalStateException("Preview mode: Claude cannot be launched here."))
         `when`(launcher.launchTeam(anyLong(), any(), anyString())).thenThrow(IllegalStateException("Preview mode: Claude cannot be launched here."))
+        `when`(launcher.launchIn(anyLong(), any(), any(), any())).thenThrow(IllegalStateException("Preview mode: Claude cannot be launched here."))
+        `when`(launcher.launchTaskIn(anyLong(), any(), any(), anyString())).thenThrow(IllegalStateException("Preview mode: Claude cannot be launched here."))
         `when`(launcher.attach(anyLong(), anyString())).thenThrow(IllegalStateException("Preview mode: nothing to attach to."))
 
         val background = mock(BackgroundAgentService::class.java)
@@ -334,6 +336,7 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         `when`(shellDetector.detect()).thenReturn(listOf(ShellProfile("PowerShell", Path.of("pwsh.exe"), emptyList()), ShellProfile("Git Bash", Path.of("bash.exe"), listOf("--login", "-i"))))
         val shellLauncher = mock(ShellLauncher::class.java)
         `when`(shellLauncher.launch(anyLong(), any())).thenThrow(IllegalStateException("Preview mode: shells cannot be started here."))
+        `when`(shellLauncher.launch(anyLong(), any(), any())).thenThrow(IllegalStateException("Preview mode: shells cannot be started here."))
 
         return Backend(projectService, fakeGroupService(), installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), TranscriptService(JsonMapper.builder().build(), previewTranscriptDir), runConfigurationService(), runService(), shellDetector, shellLauncher, mock(AuthorProfileService::class.java), proposals.service(), mock(PromptTemplateService::class.java), previewSessionSearch(), terminal = terminal, sessionProperties = SessionProperties(Duration.ofMinutes(10), Duration.ofMinutes(10)), voice = voice.backend)
     }

@@ -28,11 +28,17 @@ data class ToastItem(
     val summary: Boolean = false,
 )
 
+const val DEFAULT_CONFIRM_LINES = 5
+
+/** For a confirm whose whole text must be readable; the dialog body scrolls. */
+const val ALL_CONFIRM_LINES = Int.MAX_VALUE
+
 data class ConfirmRequest(
     val title: String,
     val message: String,
     val confirmLabel: String,
     val destructive: Boolean = true,
+    val messageLines: Int = DEFAULT_CONFIRM_LINES,
     val onConfirm: () -> Unit,
 )
 
