@@ -64,6 +64,7 @@ private fun globalActions(state: AppState, systemDark: Boolean): List<PaletteIte
     PaletteItem("overview", "Go to overview", PaletteGroup.ACTIONS, icon = Icons.Grid, shortcut = AppShortcut.OVERVIEW) { state.navigate(Route.Overview) },
     PaletteItem("sessions", "All sessions", PaletteGroup.ACTIONS, "Every session of every project", Icons.Layers, shortcut = AppShortcut.ALL_SESSIONS) { state.navigate(Route.Sessions) },
     PaletteItem("search-sessions", "Search sessions", PaletteGroup.ACTIONS, "Find text in past conversations", Icons.Search, shortcut = AppShortcut.SEARCH_SESSIONS) { state.navigate(Route.SessionSearch) },
+    PaletteItem("usage-history", "Show usage history", PaletteGroup.ACTIONS, "Cost per day, project and model", Icons.Gauge) { state.navigate(Route.Usage) },
     PaletteItem("ask-assistant", "Ask assistant", PaletteGroup.ACTIONS, "Send a request to the Assistant", Icons.Sparkles, shortcut = AppShortcut.QUICK_REQUEST) { state.quickRequestOpen = true },
     PaletteItem("assistant", "Assistant", PaletteGroup.ACTIONS, "Ask Claude something unrelated to your projects", Icons.Sparkles, shortcut = AppShortcut.ASSISTANT) { state.navigate(Route.Assistant) },
     PaletteItem("assistant-help", "Assistant help", PaletteGroup.ACTIONS, "Hotkeys and what the Assistant can do", Icons.Book) { state.assistantHelpOpen = true },

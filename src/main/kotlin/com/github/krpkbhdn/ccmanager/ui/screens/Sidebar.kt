@@ -60,6 +60,7 @@ fun Sidebar(state: AppState, modifier: Modifier = Modifier, forceCollapsed: Bool
             NavItem(Icons.Grid, "Overview", state.route == Route.Overview, collapsed, state.live.sessions.size) { state.navigate(Route.Overview) }
             NavItem(Icons.Layers, "All sessions", state.route == Route.Sessions, collapsed, state.live.sessions.count { it.status == AgentStatus.NEEDS_ACTION }) { state.navigate(Route.Sessions) }
             NavItem(Icons.Search, "Search sessions", state.route == Route.SessionSearch, collapsed, 0) { state.navigate(Route.SessionSearch) }
+            NavItem(Icons.Gauge, "Usage", state.route == Route.Usage, collapsed, 0) { state.navigate(Route.Usage) }
             NavItem(Icons.Sparkles, "Assistant", state.route == Route.Assistant, collapsed, 0) { state.navigate(Route.Assistant) }
             NavItem(Icons.Message, "Prompt Library", state.route == Route.Prompts, collapsed, 0) { state.navigate(Route.Prompts) }
             NavItem(Icons.Users, "Teams", state.route == Route.Teams, collapsed, 0) { state.navigate(Route.Teams) }

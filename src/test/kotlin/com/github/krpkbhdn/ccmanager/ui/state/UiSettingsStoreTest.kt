@@ -81,6 +81,17 @@ class UiSettingsStoreTest {
     }
 
     @Test
+    fun `usage thresholds default to absent and round trip`(@TempDir dir: Path) {
+        val store = UiSettingsStore.inDataDir(dir)
+        assertThat(store.load().usageFiveHourPercent).isNull()
+        store.save(UiSettings(usageFiveHourPercent = 0, usageSevenDayPercent = 90, usageDailyBudgetUsd = 12.5))
+        val loaded = store.load()
+        assertThat(loaded.usageFiveHourPercent).isEqualTo(0)
+        assertThat(loaded.usageSevenDayPercent).isEqualTo(90)
+        assertThat(loaded.usageDailyBudgetUsd).isEqualTo(12.5)
+    }
+
+    @Test
     fun `window position is optional`(@TempDir dir: Path) {
         val store = UiSettingsStore(dir.resolve("ui.properties"))
         store.save(UiSettings(window = WindowBounds(1000, 700)))

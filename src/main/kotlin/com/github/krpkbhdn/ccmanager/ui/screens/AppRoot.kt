@@ -62,6 +62,9 @@ import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalDialogHost
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantScreen
 import com.github.krpkbhdn.ccmanager.ui.sessions.SessionsScreen
+import com.github.krpkbhdn.ccmanager.ui.state.usageWindowDetails
+import com.github.krpkbhdn.ccmanager.ui.usage.UsageScreen
+import com.github.krpkbhdn.ccmanager.ui.usage.projectLabel
 import com.github.krpkbhdn.ccmanager.ui.state.Route
 import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.PluginCommandDialog
 import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.PluginsScreen
@@ -191,6 +194,7 @@ private fun RouteContent(state: AppState) {
     if (route == Route.Skills) return SkillsScreen(state.extensions.skills)
     if (route == Route.Sessions) return SessionsScreen(state)
     if (route == Route.SessionSearch) return SessionSearchScreen(state.sessionSearch, state.projects.projects, { project, hit -> state.sessions.resume(project.id, hit.claudeSessionId, Path.of(hit.cwd)) })
+    if (route == Route.Usage) return UsageScreen(state.usage, usageWindowDetails(state.environment.rateLimits, state.now), projectName = { id -> projectLabel(id) { state.projects.find(it)?.name } })
     if (route == Route.Assistant) return AssistantScreen(state)
     val project = (route as? Route.Project)?.let { target -> state.projects.all.firstOrNull { it.id == target.id } }
     Crossfade(project?.id, label = "route") { shown ->

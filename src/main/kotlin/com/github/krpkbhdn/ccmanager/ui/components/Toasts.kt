@@ -58,6 +58,7 @@ fun notificationIcon(kind: NotificationKind): ImageVector = when (kind) {
     NotificationKind.FINISHED -> Icons.CircleCheck
     NotificationKind.NEEDS_ACTION -> Icons.Hand
     NotificationKind.ERROR -> Icons.Alert
+    NotificationKind.USAGE_ALERT -> Icons.Alert
     NotificationKind.INFO -> Icons.Info
 }
 

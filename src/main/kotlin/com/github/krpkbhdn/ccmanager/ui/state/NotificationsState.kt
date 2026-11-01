@@ -55,7 +55,7 @@ class NotificationsState(
         val toast = ToastItem(
             id = notification.id,
             kind = notification.kind,
-            title = "${projectName(notification.projectId)}: ${notification.title}",
+            title = if (notification.kind == NotificationKind.USAGE_ALERT) notification.title else "${projectName(notification.projectId)}: ${notification.title}",
             body = notification.body,
             projectId = notification.projectId,
             ccmSessionId = notification.ccmSessionId,

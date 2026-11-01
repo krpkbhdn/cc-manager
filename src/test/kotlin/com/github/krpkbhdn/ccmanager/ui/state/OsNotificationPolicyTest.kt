@@ -23,6 +23,7 @@ class OsNotificationPolicyTest {
         assertThat(shouldNotify(defaults, NotificationKind.FINISHED, false)).isTrue()
         assertThat(shouldNotify(defaults, NotificationKind.ERROR, false)).isTrue()
         assertThat(shouldNotify(defaults, NotificationKind.INFO, false)).isFalse()
+        assertThat(shouldNotify(defaults, NotificationKind.USAGE_ALERT, false)).isTrue()
     }
 
     @Test

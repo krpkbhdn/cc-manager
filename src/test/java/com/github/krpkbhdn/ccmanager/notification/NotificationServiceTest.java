@@ -34,6 +34,16 @@ class NotificationServiceTest {
     }
 
     @Test
+    void postDeliversToSubscriberAndKeepsHistory() {
+        var posted = service.post(NotificationKind.USAGE_ALERT, 0, null, "Usage", "80% of 5h");
+
+        assertThat(received).containsExactly(posted);
+        assertThat(service.history()).containsExactly(posted);
+        assertThat(posted.projectId()).isZero();
+        assertThat(posted.ccmSessionId()).isNull();
+    }
+
+    @Test
     void initialIdleProducesNothing() {
         assertThat(service.history()).isEmpty();
     }

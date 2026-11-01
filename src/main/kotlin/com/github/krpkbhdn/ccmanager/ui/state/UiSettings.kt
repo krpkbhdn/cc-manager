@@ -33,6 +33,9 @@ data class UiSettings(
     val voiceModel: String = DEFAULT_VOICE_MODEL,
     val voiceDevice: String = DEFAULT_VOICE_DEVICE,
     val voiceInput: String = "",
+    val usageFiveHourPercent: Int? = null,
+    val usageSevenDayPercent: Int? = null,
+    val usageDailyBudgetUsd: Double? = null,
     val window: WindowBounds = WindowBounds(DEFAULT_WIDTH, DEFAULT_HEIGHT),
     val git: GitPrefs = GitPrefs(),
 ) {
@@ -62,7 +65,10 @@ private const val KEY_VOICE_ENABLED = "voice.enabled"
 private const val KEY_VOICE_MODEL = "voice.model"
 private const val KEY_VOICE_DEVICE = "voice.device"
 private const val KEY_VOICE_INPUT = "voice.input"
-private const val KEY_WIDTH = "window.width"
+private const val KEY_USAGE_FIVE_HOUR = "usage.fivehour.percent"
+private const val KEY_USAGE_SEVEN_DAY = "usage.sevenday.percent"
+private const val KEY_USAGE_DAILY_BUDGET = "usage.daily.budget"
+private const val KEY_WIDTH ="window.width"
 private const val KEY_HEIGHT = "window.height"
 private const val KEY_X = "window.x"
 private const val KEY_Y = "window.y"
@@ -105,6 +111,9 @@ class UiSettingsStore(private val file: Path?) {
             setProperty(KEY_VOICE_MODEL, settings.voiceModel)
             setProperty(KEY_VOICE_DEVICE, settings.voiceDevice)
             setProperty(KEY_VOICE_INPUT, settings.voiceInput)
+            settings.usageFiveHourPercent?.let { setProperty(KEY_USAGE_FIVE_HOUR, it.toString()) }
+            settings.usageSevenDayPercent?.let { setProperty(KEY_USAGE_SEVEN_DAY, it.toString()) }
+            settings.usageDailyBudgetUsd?.let { setProperty(KEY_USAGE_DAILY_BUDGET, it.toString()) }
             setProperty(KEY_WIDTH, settings.window.width.toString())
             setProperty(KEY_HEIGHT, settings.window.height.toString())
             settings.window.x?.let { setProperty(KEY_X, it.toString()) }
@@ -142,6 +151,9 @@ class UiSettingsStore(private val file: Path?) {
             voiceModel = props.getProperty(KEY_VOICE_MODEL) ?: defaults.voiceModel,
             voiceDevice = props.getProperty(KEY_VOICE_DEVICE) ?: defaults.voiceDevice,
             voiceInput = props.getProperty(KEY_VOICE_INPUT) ?: defaults.voiceInput,
+            usageFiveHourPercent = props.getProperty(KEY_USAGE_FIVE_HOUR)?.toIntOrNull(),
+            usageSevenDayPercent = props.getProperty(KEY_USAGE_SEVEN_DAY)?.toIntOrNull(),
+            usageDailyBudgetUsd = props.getProperty(KEY_USAGE_DAILY_BUDGET)?.toDoubleOrNull(),
             window = WindowBounds(
                 width = props.getProperty(KEY_WIDTH)?.toIntOrNull() ?: defaults.window.width,
                 height = props.getProperty(KEY_HEIGHT)?.toIntOrNull() ?: defaults.window.height,

@@ -30,6 +30,7 @@ import com.github.krpkbhdn.ccmanager.ui.queue.QueuedPrompt
 import com.github.krpkbhdn.ccmanager.ui.run.RunState
 import com.github.krpkbhdn.ccmanager.ui.settings.SettingsState
 import com.github.krpkbhdn.ccmanager.ui.teams.TeamsState
+import com.github.krpkbhdn.ccmanager.ui.usage.UsageState
 import com.github.krpkbhdn.ccmanager.ui.voice.VoiceSettingsState
 import com.github.krpkbhdn.ccmanager.ui.voice.voiceSettingsOf
 import java.nio.file.Path
@@ -77,7 +78,7 @@ class AppState(
     val views = mutableStateMapOf<Long, ProjectView>()
     val backgroundAgents = mutableStateMapOf<Long, List<BackgroundAgent>>()
 
-    val prefs = UiPreferences(settingsStore, scope, backend.sound) { notifications.reportError(it) }
+    val prefs = UiPreferences(settingsStore, scope, backend.sound, backend.usageAlerts, backend.usageDefaults) { notifications.reportError(it) }
     val environment = ClaudeEnvironment(backend, scope) { notifications.reportError(it) }
     val projects: ProjectsState = ProjectsState(
         backend, scope,
@@ -111,6 +112,7 @@ class AppState(
         startInBackground = assistant::startInBackground, start = assistant::start,
     )
     val queue = QueueState(backend.sessions, backend.terminal, scope, sessions::isAttached, sessions::sendQueued)
+    val usage = UsageState(backend.usageHistory, backend.sessionUsage, scope, visible = { route == Route.Usage }, reportError = notifications::reportError)
     val runs = RunState(
         backend.runConfigurations, backend.runs, backend.terminal, scope,
         projectPath = { projects.find(it)?.path },
@@ -192,6 +194,7 @@ class AppState(
         queue.start()
         author.offerAtStart()
         runs.start()
+        usage.start()
         shells.detect()
         proposals.start()
         update.start()
@@ -220,6 +223,7 @@ class AppState(
         queue.dispose()
         voice?.let { Thread(it::close, "voice-close").apply { isDaemon = false }.start() }
         runs.dispose()
+        usage.dispose()
         proposals.dispose()
         unsubscribers.forEach { it.run() }
         unsubscribers.clear()
@@ -260,7 +264,11 @@ class AppState(
 
     fun openNotification(target: AppNotification) {
         val session = target.ccmSessionId?.let { live.find(it) }
-        if (session != null) openSession(session.ccmSessionId) else navigate(routeOf(target.projectId))
+        when {
+            target.kind == NotificationKind.USAGE_ALERT -> navigate(Route.Usage)
+            session != null -> openSession(session.ccmSessionId)
+            else -> navigate(routeOf(target.projectId))
+        }
     }
 
     fun openToast(toast: ToastItem) {
@@ -268,6 +276,7 @@ class AppState(
         val session = toast.ccmSessionId?.let { live.find(it) }
         when {
             session != null && toast.kind == NotificationKind.NEEDS_ACTION -> answers.answer(session.ccmSessionId)
+            toast.kind == NotificationKind.USAGE_ALERT -> navigate(Route.Usage)
             session != null -> openSession(session.ccmSessionId)
             toast.projectId != null -> navigate(routeOf(toast.projectId))
             toast.summary && toast.kind == NotificationKind.NEEDS_ACTION -> answers.answerNextWaiting()

@@ -7,6 +7,7 @@ import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot;
 import com.github.krpkbhdn.ccmanager.claude.session.SubagentSnapshot;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -49,6 +50,17 @@ public class NotificationService {
     public Runnable subscribe(Consumer<AppNotification> listener) {
         listeners.add(listener);
         return () -> listeners.remove(listener);
+    }
+
+    /** For alerts not tied to a status transition; account-wide ones use projectId 0 and no session. */
+    public AppNotification post(NotificationKind kind, long projectId, String ccmSessionId, String title, String body) {
+        AppNotification notification;
+        synchronized (this) {
+            notification = new AppNotification(nextId.getAndIncrement(), Instant.now(), kind, projectId, ccmSessionId, title, body == null ? "" : body);
+            remember(notification);
+        }
+        deliver(notification);
+        return notification;
     }
 
     private void onSessionsChanged(SessionRegistry registry) {

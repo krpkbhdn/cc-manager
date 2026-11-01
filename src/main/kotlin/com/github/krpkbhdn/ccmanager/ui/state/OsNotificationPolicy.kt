@@ -13,7 +13,7 @@ data class OsNotice(val kind: NotificationKind, val title: String, val body: Str
 }
 
 fun isEnabled(settings: UiSettings, kind: NotificationKind): Boolean = when (kind) {
-    NotificationKind.NEEDS_ACTION -> settings.osNotifyNeedsAction
+    NotificationKind.NEEDS_ACTION, NotificationKind.USAGE_ALERT -> settings.osNotifyNeedsAction
     NotificationKind.FINISHED -> settings.osNotifyFinished
     NotificationKind.ERROR -> settings.osNotifyError
     NotificationKind.INFO -> false

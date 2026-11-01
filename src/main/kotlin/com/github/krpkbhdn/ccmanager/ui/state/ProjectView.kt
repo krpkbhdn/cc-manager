@@ -12,6 +12,7 @@ sealed interface Route {
     data object Skills : Route
     data object Sessions : Route
     data object SessionSearch : Route
+    data object Usage : Route
     data object Assistant : Route
     data class Project(val id: Long) : Route
 }

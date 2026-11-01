@@ -20,7 +20,7 @@ public enum NotificationSound {
     /** INFO is pure noise and stays silent. */
     public static Optional<NotificationSound> forKind(NotificationKind kind) {
         return switch (kind) {
-            case NEEDS_ACTION, ERROR -> Optional.of(ATTENTION);
+            case NEEDS_ACTION, ERROR, USAGE_ALERT -> Optional.of(ATTENTION);
             case FINISHED -> Optional.of(SOFT);
             case INFO -> Optional.empty();
         };

@@ -48,6 +48,7 @@ class NotificationSoundServiceTest {
     void kindsMapToSounds() {
         assertThat(NotificationSound.forKind(NotificationKind.NEEDS_ACTION)).contains(NotificationSound.ATTENTION);
         assertThat(NotificationSound.forKind(NotificationKind.ERROR)).contains(NotificationSound.ATTENTION);
+        assertThat(NotificationSound.forKind(NotificationKind.USAGE_ALERT)).contains(NotificationSound.ATTENTION);
         assertThat(NotificationSound.forKind(NotificationKind.FINISHED)).contains(NotificationSound.SOFT);
         assertThat(NotificationSound.forKind(NotificationKind.INFO)).isEmpty();
     }

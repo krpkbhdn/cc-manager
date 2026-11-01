@@ -60,6 +60,7 @@ private fun Breadcrumb(state: AppState, modifier: Modifier) {
         Route.Skills -> listOf("Skills")
         Route.Sessions -> listOf("All sessions")
         Route.SessionSearch -> listOf("Search sessions")
+        Route.Usage -> listOf("Usage")
         Route.Assistant -> listOf("Assistant")
         is Route.Project -> listOf(state.projects.nameOf(route.id)) + listOfNotNull(state.viewOf(route.id).focusedSession?.let { state.live.find(it) }?.let(::sessionTitle))
     }

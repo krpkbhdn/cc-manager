@@ -19,6 +19,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.ui.components.AnchoredPopup
+import com.github.krpkbhdn.ccmanager.ui.components.AppButton
+import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant
+import com.github.krpkbhdn.ccmanager.ui.icons.Icons
+import com.github.krpkbhdn.ccmanager.ui.state.Route
 import com.github.krpkbhdn.ccmanager.ui.components.HorizontalRule
 import com.github.krpkbhdn.ccmanager.ui.components.Label
 import com.github.krpkbhdn.ccmanager.ui.components.StatusDot
@@ -52,6 +56,7 @@ internal fun UsagePanel(state: AppState, onDismiss: () -> Unit) {
             }
             if (windows.isEmpty()) Label(if (state.environment.rateLimits == null) NO_LIMITS_NOTE else NO_REPLY_NOTE, color = colors.textSecondary, style = Type.small, maxLines = 4)
             windows.forEach { WindowDetail(it) }
+            AppButton("Open usage history", { state.navigate(Route.Usage); onDismiss() }, variant = ButtonVariant.GHOST, icon = Icons.Gauge, compact = true)
             HorizontalRule()
             Label("Sessions", color = colors.textSecondary, style = Type.smallMedium)
             if (rows.isEmpty()) Label("No running sessions", color = colors.textTertiary, style = Type.small)

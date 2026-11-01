@@ -28,8 +28,11 @@ class OsNotifications(
         val proposal = sessionId?.takeIf { notification.kind == NotificationKind.NEEDS_ACTION }?.let(proposalOf)
         val title = proposal?.let { "${proposalKindLabel(it)} needs your answer" } ?: notification.title
         val body = proposal?.let { proposalHeadline(it).truncated() } ?: notification.body
-        return OsAlert(notification.kind, notification.projectId, projectName(notification.projectId), sessionId, title, body)
+        return OsAlert(notification.kind, notification.projectId, ownerName(notification), sessionId, title, body)
     }
+
+    private fun ownerName(notification: AppNotification) =
+        if (notification.kind == NotificationKind.USAGE_ALERT) "Usage" else projectName(notification.projectId)
 
     private fun String.truncated(): String = if (length > BODY_LIMIT) take(BODY_LIMIT - 1) + "…" else this
 }
