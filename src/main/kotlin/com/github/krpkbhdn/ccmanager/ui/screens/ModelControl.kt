@@ -65,7 +65,7 @@ private const val CLAUDE_PICKER = "Open Claude's model picker (Alt+P)"
 internal fun ModelControl(state: AppState, project: Project, session: SessionSnapshot?) {
     val target = modelTarget(session, state.sessions.modelApplying, session != null && state.sessions.isAttached(session.ccmSessionId))
     val blocked = (target as? ModelTarget.Running)?.blockedReason
-    val usage = session?.let { state.sessionUsage[it.ccmSessionId] }
+    val usage = session?.let { state.environment.sessionUsage[it.ccmSessionId] }
     val label = when {
         state.sessions.modelApplying -> APPLYING
         target is ModelTarget.Running -> effectiveModelLabel(usage?.modelName(), usage?.effort()) ?: NO_MODEL_YET

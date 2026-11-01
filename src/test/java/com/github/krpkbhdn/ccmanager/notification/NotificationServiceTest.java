@@ -4,7 +4,7 @@ import static com.github.krpkbhdn.ccmanager.claude.HookEvents.of;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import com.github.krpkbhdn.ccmanager.claude.hook.HookEvent;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionProperties;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
 import com.github.krpkbhdn.ccmanager.claude.session.TranscriptService;

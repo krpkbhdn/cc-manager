@@ -2,11 +2,10 @@ package com.github.krpkbhdn.ccmanager.usage;
 
 import com.github.krpkbhdn.ccmanager.claude.hook.StatusLineReport;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
-import java.util.List;
+import com.github.krpkbhdn.ccmanager.workspace.ChangeListeners;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
@@ -15,7 +14,7 @@ import org.springframework.stereotype.Component;
 public class SessionUsageService {
 
     private final Map<String, SessionUsage> bySession = new ConcurrentHashMap<>();
-    private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
+    private final ChangeListeners listeners = new ChangeListeners("Session usage");
     private final SessionRegistry sessions;
 
     public SessionUsageService(SessionRegistry sessions) {
@@ -25,8 +24,12 @@ public class SessionUsageService {
 
     @EventListener
     public void on(StatusLineReport report) {
-        bySession.put(report.ccmSessionId(), SessionUsageParser.parse(report.ccmSessionId(), report.payload(), report.receivedAt()));
-        listeners.forEach(Runnable::run);
+        if (sessions.find(report.ccmSessionId()).isEmpty()) {
+            return;
+        }
+        var usage = SessionUsageParser.parse(report.ccmSessionId(), report.payload(), report.receivedAt());
+        bySession.merge(report.ccmSessionId(), usage, (current, incoming) -> incoming.receivedAt().isBefore(current.receivedAt()) ? current : incoming);
+        listeners.fire();
     }
 
     public Optional<SessionUsage> of(String ccmSessionId) {
@@ -39,8 +42,7 @@ public class SessionUsageService {
 
     /** @return unsubscribe handle; callback fires (any thread) after every report */
     public Runnable subscribe(Runnable onChange) {
-        listeners.add(onChange);
-        return () -> listeners.remove(onChange);
+        return listeners.add(onChange);
     }
 
     private void dropEndedSessions() {

@@ -42,15 +42,15 @@ private const val NO_REPLY_NOTE = "Limits appear after a session of a Pro or Max
 /** Detail panel of the usage chip: limit windows with exact numbers, or an explanation when Claude reports none, and the per-session figures. */
 @Composable
 internal fun UsagePanel(state: AppState, onDismiss: () -> Unit) {
-    val windows = usageWindowDetails(state.rateLimits, state.now)
-    val rows = sessionUsageRows(state.live.sessions, state.sessionUsage, state.projects::nameOf)
+    val windows = usageWindowDetails(state.environment.rateLimits, state.now)
+    val rows = sessionUsageRows(state.live.sessions, state.environment.sessionUsage, state.projects::nameOf)
     AnchoredPopup(onDismiss, alignEnd = true, modifier = Modifier.width(panelWidth)) {
         Column(Modifier.padding(Spacing.lg), verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Label("Usage", Modifier.weight(1f), style = Type.heading)
-                state.rateLimits?.takeIf { windows.isNotEmpty() }?.let { Label(usageFreshness(it, state.now), color = colors.textTertiary, style = Type.caption) }
+                state.environment.rateLimits?.takeIf { windows.isNotEmpty() }?.let { Label(usageFreshness(it, state.now), color = colors.textTertiary, style = Type.caption) }
             }
-            if (windows.isEmpty()) Label(if (state.rateLimits == null) NO_LIMITS_NOTE else NO_REPLY_NOTE, color = colors.textSecondary, style = Type.small, maxLines = 4)
+            if (windows.isEmpty()) Label(if (state.environment.rateLimits == null) NO_LIMITS_NOTE else NO_REPLY_NOTE, color = colors.textSecondary, style = Type.small, maxLines = 4)
             windows.forEach { WindowDetail(it) }
             HorizontalRule()
             Label("Sessions", color = colors.textSecondary, style = Type.smallMedium)

@@ -145,6 +145,18 @@ class GitLogServiceTest {
     }
 
     @Test
+    void historyOfADeletedFileWithBracketsStaysLiteral() {
+        repo.commit("[gone].txt", "route\n", "add gone");
+        repo.commit("g.txt", "other\n", "unrelated g");
+        repo.git("rm", "-q", "[gone].txt");
+        repo.git("commit", "-q", "-m", "remove gone");
+
+        var rows = service.log(repo.root(), new Query(null, null, null, "[gone].txt", 0, 50)).rows();
+
+        assertThat(rows).extracting(row -> row.commit().subject()).containsExactly("remove gone", "add gone");
+    }
+
+    @Test
     void multilineBodiesAreKeptAndHugeBodiesAreCapped() {
         repo.write("a.txt", "1");
         repo.git("add", "a.txt");

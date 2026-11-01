@@ -5,52 +5,34 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.github.krpkbhdn.ccmanager.claude.hook.ActivityEntry
-import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation
-import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
-import com.github.krpkbhdn.ccmanager.claude.proposal.Proposal
-import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgent
-import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
-import com.github.krpkbhdn.ccmanager.notification.AppNotification
-import com.github.krpkbhdn.ccmanager.notification.NotificationKind
-import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
-import com.github.krpkbhdn.ccmanager.project.Project
-import com.github.krpkbhdn.ccmanager.prompt.PlaceholderSubstitution
-import com.github.krpkbhdn.ccmanager.prompt.PlaceholderValues
-import com.github.krpkbhdn.ccmanager.prompt.PromptTemplate
-import com.github.krpkbhdn.ccmanager.team.Team
 import com.github.krpkbhdn.ccmanager.claude.install.LoginState
-import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartup
+import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgent
+import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
+import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
+import com.github.krpkbhdn.ccmanager.notification.AppNotification
+import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartupState
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantState
 import com.github.krpkbhdn.ccmanager.ui.assistant.ToolSummary
 import com.github.krpkbhdn.ccmanager.ui.author.AuthorProfileState
-import com.github.krpkbhdn.ccmanager.ui.extensions.ExtensionContext
-import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.PluginsState
-import com.github.krpkbhdn.ccmanager.ui.projectsettings.ProjectSettingsSection
-import com.github.krpkbhdn.ccmanager.ui.projectsettings.ProjectSettingsState
-import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.HealthCheck
 import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.McpState
-import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillHost
-import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillsState
-import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalState
-import com.github.krpkbhdn.ccmanager.ui.prompts.PromptsState
-import com.github.krpkbhdn.ccmanager.ui.prompts.teamForTemplate
-import com.github.krpkbhdn.ccmanager.ui.queue.QueueState
-import com.github.krpkbhdn.ccmanager.ui.run.RunState
-import com.github.krpkbhdn.ccmanager.ui.sessions.nextWaiting
-import com.github.krpkbhdn.ccmanager.ui.teams.TeamsState
-import com.github.krpkbhdn.ccmanager.usage.RateLimitSnapshot
-import com.github.krpkbhdn.ccmanager.usage.SessionUsage
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitHost
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitState
-import com.github.krpkbhdn.ccmanager.ui.git.model.GitSummary
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
+import com.github.krpkbhdn.ccmanager.ui.prompts.PromptsState
+import com.github.krpkbhdn.ccmanager.claude.proposal.Proposal
+import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalState
+import com.github.krpkbhdn.ccmanager.ui.proposal.proposalHeadline
+import com.github.krpkbhdn.ccmanager.ui.queue.QueueState
+import com.github.krpkbhdn.ccmanager.ui.run.RunState
+import com.github.krpkbhdn.ccmanager.ui.settings.SettingsState
+import com.github.krpkbhdn.ccmanager.ui.teams.TeamsState
+import com.github.krpkbhdn.ccmanager.ui.voice.VoiceSettingsState
+import com.github.krpkbhdn.ccmanager.ui.voice.voiceSettingsOf
 import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -66,21 +48,12 @@ private const val ACTIVITY_LIMIT = 300
 class AppState(
     private val backend: Backend,
     private val scope: CoroutineScope,
-    private val settingsStore: UiSettingsStore = UiSettingsStore.inDataDir(backend.dataDir),
+    settingsStore: UiSettingsStore = UiSettingsStore.inDataDir(backend.dataDir),
 ) {
-    var settings by mutableStateOf(settingsStore.load())
-        private set
+    val settings: UiSettings get() = prefs.settings
     var paletteOpen by mutableStateOf(false)
     var shortcutsOpen by mutableStateOf(false)
 
-    var installation by mutableStateOf<ClaudeInstallation?>(null)
-        private set
-    var checkingInstallation by mutableStateOf(false)
-        private set
-    var ideAvailable by mutableStateOf(false)
-        private set
-    var rateLimits by mutableStateOf<RateLimitSnapshot?>(null)
-        private set
     var live by mutableStateOf(LiveSessions())
         private set
     val workingStaleAfter: Duration = backend.sessionProperties.workingStaleAfter()
@@ -90,8 +63,6 @@ class AppState(
         private set
     var windowActive by mutableStateOf(true)
     var confirm by mutableStateOf<ConfirmRequest?>(null)
-    var sessionUsage by mutableStateOf<Map<String, SessionUsage>>(emptyMap())
-        private set
     var notificationsOpen by mutableStateOf(false)
     var usageOpen by mutableStateOf(false)
     var modelPickerOpen by mutableStateOf(false)
@@ -99,17 +70,12 @@ class AppState(
     var assistantHelpOpen by mutableStateOf(false)
     val assistantTools: List<ToolSummary> = backend.assistantTools.map { ToolSummary(it.name(), it.description()) }
     var loginBannerDismissed by mutableStateOf(false)
-    var taskDialogProjectId by mutableStateOf<Long?>(null)
-    var taskDialogTemplateId by mutableStateOf<Long?>(null)
-    var quickStartProjectId by mutableStateOf<Long?>(null)
-    /** Project and live session whose queue receives the card chosen in the picker. */
-    var queuePickTarget by mutableStateOf<Pair<Long, String>?>(null)
-    var projectSettings by mutableStateOf<ProjectSettingsState?>(null)
-        private set
 
     val views = mutableStateMapOf<Long, ProjectView>()
     val backgroundAgents = mutableStateMapOf<Long, List<BackgroundAgent>>()
 
+    val prefs = UiPreferences(settingsStore, scope, backend.sound) { notifications.reportError(it) }
+    val environment = ClaudeEnvironment(backend, scope) { notifications.reportError(it) }
     val projects: ProjectsState = ProjectsState(
         backend, scope,
         hasRunningSessions = { live.of(it).isNotEmpty() },
@@ -118,13 +84,13 @@ class AppState(
         requestConfirm = { confirm = it },
         showProject = { navigate(Route.Project(it)) },
         onRemoved = { if (route == Route.Project(it)) route = Route.Overview },
-        onLoaded = { forgetRemovedProjects(it); loadGitOfNewProjects(it) },
+        onLoaded = { forgetRemovedProjects(it); gits.loadNew(it) },
         reportError = { title, message -> notifications.reportError(title, message) },
         reportActionError = { notifications.reportError(it) },
     )
     val notifications: NotificationsState = NotificationsState({ projects.nameOf(it) }) { windowActive }
     val sessions = SessionsState(
-        backend, scope, { live }, { sessionUsage[it] }, { teams.defaultTeamOf(it) },
+        backend, scope, { live }, { environment.sessionUsage[it] }, { teams.defaultTeamOf(it) },
         onOpened = { projectId, id -> views[projectId] = viewOf(projectId).openSession(id) },
         onClosed = { projectId, id -> views[projectId] = viewOf(projectId).closeSession(id) },
         showProject = { navigate(routeOf(it)) },
@@ -134,9 +100,10 @@ class AppState(
     val assistant = AssistantState(
         scope, backend.terminal, { live }, backend.dataDir.resolve("assistant"),
         launch = { sessions.launchAssistant(it) }, show = { navigate(Route.Assistant) }, enqueue = { id, text -> queue.add(id, text) }, requestConfirm = { confirm = it },
+        reportError = notifications::reportError,
     )
     val assistantStartup = AssistantStartupState(
-        scope, { settings.assistantStartup }, { mode -> updateSettings { it.copy(assistantStartup = mode) } },
+        scope, { settings.assistantStartup }, { mode -> prefs.update { it.copy(assistantStartup = mode) } },
         blocked = { author.dialogOpen || author.startOfferPending || confirm != null },
         startInBackground = assistant::startInBackground, start = assistant::start,
     )
@@ -152,72 +119,52 @@ class AppState(
         backend, scope,
         openShellsOf = { viewOf(it).openShells },
         lastChosen = { settings.lastShell },
-        onChosen = { name -> updateSettings { it.copy(lastShell = name) } },
+        onChosen = { name -> prefs.update { it.copy(lastShell = name) } },
         onOpened = { projectId, id -> views[projectId] = viewOf(projectId).openShell(id); navigate(Route.Project(projectId)) },
         onClosed = { projectId, id -> views[projectId]?.let { views[projectId] = it.closeShell(id) } },
         reportError = notifications::reportError,
     )
-    val proposals = ProposalState(backend.proposals, scope, notifications::reportError) { terminal.focus(it) }
+    val proposals = ProposalState(backend.proposals, scope, notifications::reportError, focusTerminal = { terminal.focus(it) }, onArrived = ::announceAssistantProposal)
+    val answers = ProposalAnswers(proposals, assistant, { route }, ::viewOf, { live }, notifications::toast, ::openSession)
     val teams = TeamsState(backend.teams, scope, { confirm = it }, notifications::reportError)
     val prompts = PromptsState(backend.promptTemplates, scope, { confirm = it }, notifications::reportError, listOf(backend.projects::subscribe, backend.teams::subscribe))
-    val plugins = PluginsState(backend.plugins, scope, { confirm = it }, notifications::toast)
-    val mcp = McpState(backend.mcp, null, scope, { confirm = it }, notifications::toast)
-    private val skillHost = SkillHost(::openDirectory, ::openInIde) { ideAvailable }
-    val skills = SkillsState(backend.skills, null, scope, { confirm = it }, notifications::toast, skillHost)
+    val extensions = ExtensionStates(backend, scope, { confirm = it }, notifications, environment)
     val author = AuthorProfileState(
         backend.author, scope,
         sessionProject = { (route as? Route.Project)?.let { projects.find(it.id) }?.takeIf { !it.group } ?: projects.projects.firstOrNull() },
         projectOf = projects::find,
         launchSetup = sessions::launchSetup,
-        mcpOf = { path -> if (path == null) mcp else McpState(backend.mcp, path, scope, { confirm = it }, notifications::toast) },
+        mcpOf = { path -> if (path == null) extensions.mcp else McpState(backend.mcp, path, scope, { confirm = it }, notifications::toast) },
         reportError = notifications::reportError,
         toast = notifications::toast,
     )
+    val settingsDialog = SettingsState()
+    val voice: VoiceSettingsState? = voiceSettingsOf(backend.voice, scope, { settings }, prefs::update, notifications::reportError)
     val update = UpdateState(backend.updates, scope, notifications::reportError, ::requestQuit) { exitApp() }
     var exitApp: () -> Unit = {}
     val agents = AgentsState(backend.transcripts, scope, { live }, ::showSessionTerminal)
     private val unsubscribers = mutableListOf<Runnable>()
-    private val gitStates = mutableStateMapOf<Long, GitState>()
-    private val gitHost = GitHost({ settings.git }, { change -> updateSettings { it.copy(git = change(it.git)) } }, notifications::toast, ::openWorktree, ::forgetWorktree, ::registerWorktree, ::stopWorktreeWork, ::hasRunningWork, ::openDirectory)
+    val worktrees = WorktreeActions(projects, sessions, { runs.stopRunning(it) }, { live.of(it).isNotEmpty() }, ::navigate)
+    val gits = ProjectGits(
+        backend.git, scope,
+        GitHost(
+            { settings.git }, { change -> prefs.update { it.copy(git = change(it.git)) } }, notifications::toast,
+            worktrees::open, worktrees::forget, worktrees::register, worktrees::stopWork, worktrees::hasRunningWork, environment::openDirectory,
+        ),
+        projects::find,
+    )
+    val tasks = TaskDialogState(sessions, teams, queue, gits::branchOf)
     private val projectReload = Refresher(scope) { guarded { projects.load() } }
     private val sessionReload = Refresher(scope) { guarded { loadSessions() } }
 
+    fun updateSettings(transform: (UiSettings) -> UiSettings) = prefs.update(transform)
+
     fun viewOf(projectId: Long): ProjectView = views[projectId] ?: ProjectView()
-
-    /** The proposal dialog to show: the oldest unhidden proposal of the session whose terminal tab is open. */
-    val proposalDialog: Proposal?
-        get() {
-            if (route == Route.Assistant) return assistant.liveSessionId?.let { proposals.dialogFor(it) }
-            val project = route as? Route.Project ?: return null
-            val session = viewOf(project.id).selected as? ProjectTab.Session ?: return null
-            return proposals.dialogFor(session.ccmSessionId)
-        }
-
-    /** Answers the next session waiting for the user after the focused one; false when none waits. */
-    fun answerNextWaiting(): Boolean {
-        val focused = (route as? Route.Project)?.let { viewOf(it.id).focusedSession }
-        val next = nextWaiting(live.sessions, focused)
-        if (next == null) {
-            notifications.toast(NotificationKind.INFO, "No session is waiting", "Nothing needs your answer right now.")
-            return false
-        }
-        answerProposals(next.ccmSessionId)
-        return true
-    }
-
-    /** Opens the session and shows its proposals again, also those the user hid before. */
-    fun answerProposals(ccmSessionId: String) {
-        proposals.reopen(ccmSessionId)
-        openSession(ccmSessionId)
-    }
 
     fun start() {
         unsubscribers += backend.projects.subscribe { projectReload.request() }
         unsubscribers += backend.sessions.subscribe { sessionReload.request() }
-        unsubscribers += backend.rateLimits.subscribe { scope.launch { rateLimits = backend.rateLimits.current().orElse(null) } }
-        unsubscribers += backend.sessionUsage.subscribe { scope.launch { sessionUsage = backend.sessionUsage.all() } }
         unsubscribers += backend.notifications.subscribe { notification -> scope.launch { notifications.receive(notification) } }
-        backend.sound?.setEnabled(settings.notificationSound)
         backend.appControl?.let { unsubscribers += it.connect(AppControlAdapter(this, scope, backend.appControlProperties.uiTimeout())) }
         teams.start()
         prompts.start()
@@ -229,78 +176,37 @@ class AppState(
         update.start()
         projectReload.request()
         sessionReload.request()
-        scope.launch { rateLimits = backend.rateLimits.current().orElse(null) }
-        scope.launch { sessionUsage = backend.sessionUsage.all() }
-        scope.launch { guarded { notifications.restore(io { backend.notifications.history() }) } }
-        scope.launch {
-            guarded {
-                installation = io { backend.installation.current() }
-                assistantStartup.atStart(installation?.let { it.installed && it.login != LoginState.LOGGED_OUT } == true)
-            }
+        unsubscribers += environment.start { installation ->
+            assistantStartup.atStart(installation?.let { it.installed && it.login != LoginState.LOGGED_OUT } == true)
         }
-        scope.launch { guarded { ideAvailable = io { backend.ide.available() } } }
+        scope.launch { guarded { notifications.restore(io { backend.notifications.history() }) } }
         scope.launch {
             var ticks = 0
             while (true) {
                 delay(TICK_MILLIS)
                 now = Instant.now()
                 if (++ticks % STALE_REFRESH_TICKS == 0) sessionReload.request()
-                if (ticks % UNOPENED_GIT_REFRESH_TICKS == 0) reloadGitOfUnopenedProjects()
+                if (ticks % UNOPENED_GIT_REFRESH_TICKS == 0) gits.reloadUnopened((route as? Route.Project)?.id)
             }
         }
     }
 
     fun dispose() {
-        cancelProjectSettings()
+        extensions.dispose()
         teams.dispose()
         prompts.dispose()
         queue.dispose()
+        voice?.let { Thread(it::close, "voice-close").apply { isDaemon = false }.start() }
         runs.dispose()
         proposals.dispose()
         unsubscribers.forEach { it.run() }
         unsubscribers.clear()
     }
 
-    fun recheckInstallation() = scope.launch {
-        checkingInstallation = true
-        guarded { installation = io { backend.installation.recheck() } }
-        checkingInstallation = false
-    }
-
-    /** Opens the settings dialog of [project] with its own extension states, so the global pages stay untouched. */
-    fun openProjectSettings(project: Project, section: ProjectSettingsSection = ProjectSettingsSection.PLUGINS) {
-        cancelProjectSettings()
-        val dialogScope = CoroutineScope(scope.coroutineContext + SupervisorJob(scope.coroutineContext[Job]))
-        projectSettings = ProjectSettingsState(
-            ExtensionContext.ForProject(project.id, project.name, project.path),
-            section,
-            dialogScope,
-            PluginsState(backend.plugins, dialogScope, { confirm = it }, notifications::toast),
-            McpState(backend.mcp, project.path, dialogScope, { confirm = it }, notifications::toast),
-            SkillsState(backend.skills, project.path, dialogScope, { confirm = it }, notifications::toast, skillHost),
-        )
-    }
-
-    private fun cancelProjectSettings() {
-        projectSettings?.dispose()
-        projectSettings = null
-    }
-
-    fun closeProjectSettings() {
-        val dialog = projectSettings ?: return
-        if (dialog.busy) {
-            notifications.toast(NotificationKind.INFO, "Wait for the running action to finish", "Project settings can be closed afterwards.")
-            return
+    private fun announceAssistantProposal(proposal: Proposal) {
+        if (route != Route.Assistant && proposal.ccmSessionId() == assistant.liveSessionId) {
+            notifications.needsAnswer(ClaudeLauncher.ASSISTANT_PROJECT_ID, proposal.ccmSessionId(), "Assistant: needs your answer", proposalHeadline(proposal))
         }
-        cancelProjectSettings()
-        reloadGlobalExtensions()
-    }
-
-    /** The dialog may have changed what the global pages list; reload only pages already shown, without the catalogue or a health check. */
-    private fun reloadGlobalExtensions() {
-        if (plugins.loaded) plugins.refresh(reloadCatalog = false)
-        if (mcp.loaded) mcp.refresh(withHealth = mcp.healthCheck == HealthCheck.DONE)
-        if (skills.loaded) skills.refresh()
     }
 
     fun navigate(target: Route) {
@@ -327,7 +233,7 @@ class AppState(
     /** Opens the project's Git tab, on [view] when given, and returns its state. */
     fun openGit(projectId: Long, view: GitSubView? = null): GitState? {
         select(projectId, ProjectTab.Git)
-        return gitOf(projectId)?.also { git -> view?.let(git::show) }
+        return gits.of(projectId)?.also { git -> view?.let(git::show) }
     }
 
     fun openNotification(target: AppNotification) {
@@ -350,118 +256,10 @@ class AppState(
         projects.pickerOpen = true
     }
 
-    fun updateSettings(transform: (UiSettings) -> UiSettings) {
-        settings = transform(settings)
-        settingsStore.save(settings)
-        backend.sound?.setEnabled(settings.notificationSound)
-    }
-
-    fun toggleSidebar() = updateSettings { it.copy(sidebarCollapsed = !it.sidebarCollapsed) }
-    fun setGroupSessionsByProject(group: Boolean) = updateSettings { it.copy(groupSessionsByProject = group) }
-
-    fun toggleNotificationSound() = updateSettings { it.copy(notificationSound = !it.notificationSound) }
-
-    fun cycleAssistantStartup() = updateSettings { it.copy(assistantStartup = it.assistantStartup.next()) }
-
-    fun toggleAgents() = updateSettings { it.copy(agentsOpen = !it.agentsOpen) }
-
-    fun toggleQuickBar() = updateSettings { it.copy(quickBarOpen = !it.quickBarOpen) }
-
-    fun setThemeMode(mode: ThemeMode) = updateSettings { it.copy(themeMode = mode) }
-
-    /** Flips between light and dark, starting from whatever [systemDark] says when following the system. */
-    fun toggleTheme(systemDark: Boolean) {
-        val dark = when (settings.themeMode) {
-            ThemeMode.SYSTEM -> systemDark
-            ThemeMode.DARK -> true
-            ThemeMode.LIGHT -> false
-        }
-        setThemeMode(if (dark) ThemeMode.LIGHT else ThemeMode.DARK)
-    }
-
-    fun openFolder(project: Project) = openDirectory(project.path)
-
-    /** Opens the project registered for a worktree folder, registering it first when needed, and optionally starts a session there. */
-    fun openWorktree(directory: Path, launchSession: Boolean) {
-        val open = { id: Long ->
-            navigate(Route.Project(id))
-            if (launchSession) sessions.launch(id, LaunchMode.NEW)
-        }
-        projects.projectAt(directory)?.let { return open(it.id) }
-        projects.register(directory, open)
-    }
-
-    /** The worktree becomes its own project, without navigating or starting a session. */
-    fun registerWorktree(directory: Path) {
-        if (projects.projectAt(directory) == null) projects.register(directory) {}
-    }
-
-    fun hasRunningWork(directory: Path): Boolean = projects.projectAt(directory)?.let { live.of(it.id).isNotEmpty() } == true
-
-    /** Closes the sessions, shells and runs of the project at [directory] so nothing holds the folder while git removes it. */
-    fun stopWorktreeWork(directory: Path) {
-        projects.projectAt(directory)?.let { projects.closeSessions(it); runs.stopRunning(it.id) }
-    }
-
-    /** A removed worktree is no longer a place to work, so its project goes too; files and branches are not touched. */
-    fun forgetWorktree(directory: Path) {
-        projects.projectAt(directory)?.let(projects::remove)
-    }
-
-    fun openDirectory(directory: Path) = scope.launch { guarded { io { backend.directories.open(directory) } } }
-
-    fun openIde(project: Project) = openInIde(project.path)
-
-    fun openInIde(target: Path) = scope.launch { guarded { io { backend.ide.open(target) } } }
-
-    fun openTaskDialog(projectId: Long, templateId: Long? = null) {
-        taskDialogTemplateId = templateId
-        taskDialogProjectId = projectId
-    }
-
-    fun closeTaskDialog() {
-        taskDialogProjectId = null
-        taskDialogTemplateId = null
-    }
-
-    /** Branch of the project's repository when its git state is already loaded. */
-    fun branchOf(projectId: Long): String? = gitOf(projectId)?.status?.branch?.takeIf { it.isNotBlank() }
-
-    fun placeholderValuesOf(project: Project) = PlaceholderValues(project.name, branchOf(project.id), null)
-
-    fun queueFromTemplate(project: Project, ccmSessionId: String, template: PromptTemplate) {
-        queuePickTarget = null
-        queue.add(ccmSessionId, PlaceholderSubstitution.apply(template.text, placeholderValuesOf(project)))
-    }
-
-    /** Starts [template] at once in [project], led by its default team or else the project's default team. */
-    fun startTaskFromTemplate(project: Project, template: PromptTemplate) {
-        quickStartProjectId = null
-        val team = teamForTemplate(template, teams.teams, teams.defaultTeamOf(project.id))
-        startTask(project, team, PlaceholderSubstitution.apply(template.text, placeholderValuesOf(project)).trim(), false)
-    }
-
-    /** Starts a session with [task] as its first prompt, led by [team] or without a team, and opens its terminal. */
-    fun startTask(project: Project, team: Team?, task: String, makeDefault: Boolean) {
-        sessions.launchTask(project.id, team, task) {
-            closeTaskDialog()
-            if (makeDefault && team != null) teams.setProjectDefault(project.id, team.id)
-        }
-    }
-
     private fun showSessionTerminal(ccmSessionId: String) {
         openSession(ccmSessionId)
         backend.terminal.focus(ccmSessionId)
     }
-
-    /** Git state of a project, created on first use; null for an unknown project or a group (its directory is no repository). */
-    fun gitOf(projectId: Long): GitState? {
-        gitStates[projectId]?.let { return it }
-        val project = projects.find(projectId)?.takeIf { !it.group } ?: return null
-        return GitState(projectId, project.path, backend.git, scope, gitHost).also { gitStates[projectId] = it }
-    }
-
-    fun gitSummaryOf(projectId: Long): GitSummary? = gitStates[projectId]?.summary
 
     fun refreshBackgroundAgents(projectId: Long) {
         val path: Path = projects.find(projectId)?.path ?: return
@@ -491,22 +289,9 @@ class AppState(
         )
     }
 
-    /** Loads git state of projects not seen yet, so the sidebar shows branches before a project is opened. */
-    private fun loadGitOfNewProjects(projectIds: Set<Long>) =
-        loadGitOneByOne(projectIds.filter { it !in gitStates }.mapNotNull(::gitOf))
-
-    /** Local state only (no fetch): the open project has its watcher, the others would otherwise go stale. */
-    private fun reloadGitOfUnopenedProjects() =
-        loadGitOneByOne(gitStates.filterKeys { Route.Project(it) != route }.values.toList())
-
-    /** One project at a time, so many projects do not start dozens of git processes at once. */
-    private fun loadGitOneByOne(states: List<GitState>) {
-        if (states.isNotEmpty()) scope.launch { states.forEach { it.reloadNow() } }
-    }
-
     private fun forgetRemovedProjects(projectIds: Set<Long>) {
         views.keys.retainAll(projectIds)
-        gitStates.keys.filter { it !in projectIds }.forEach { gitStates.remove(it)?.close() }
+        gits.retain(projectIds)
         backgroundAgents.keys.retainAll(projectIds)
         runs.retainProjects(projectIds)
         (route as? Route.Project)?.takeIf { it.id !in projectIds }?.let { route = Route.Overview }
@@ -525,7 +310,7 @@ class AppState(
         live = LiveSessions(sessions, statuses)
         agents.prune(sessions.map { it.ccmSessionId })
         notifications.dismissResolvedAttention(previous, sessions)
-        projectsBecameIdle(previous, sessions).forEach { gitStates[it]?.refresh() }
+        projectsBecameIdle(previous, sessions).forEach { gits.refresh(it) }
     }
 
     private suspend fun guarded(onError: (String) -> Unit = notifications::reportError, block: suspend () -> Unit) = runGuarded(onError, block)

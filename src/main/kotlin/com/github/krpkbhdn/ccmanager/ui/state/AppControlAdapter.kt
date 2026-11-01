@@ -7,6 +7,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -35,21 +36,42 @@ class AppControlAdapter(private val state: AppState, private val scope: Coroutin
         state.views[session.projectId] = state.viewOf(session.projectId).openSession(session.ccmSessionId())
     }
 
-    override fun queuePrompt(ccmSessionId: String, text: String) = onUi { state.queue.add(ccmSessionId, text) }
+    override fun queuePrompt(ccmSessionId: String, text: String) = onUi {
+        state.queue.add(ccmSessionId, text)
+    }
 
-    private fun onUi(action: () -> Unit) {
+    /** The timeout error is reported only when the action did not start; one that already started is awaited so a retry cannot repeat it. */
+    internal fun onUi(action: () -> Unit) {
         val done = CompletableFuture<Unit>()
-        scope.launch { runCatching(action).fold({ done.complete(Unit) }, done::completeExceptionally) }
+        val started = AtomicBoolean()
+        val job = scope.launch {
+            if (started.compareAndSet(false, true)) runCatching(action).fold({ done.complete(Unit) }, done::completeExceptionally)
+        }
         try {
-            done.get(timeout.toMillis(), TimeUnit.MILLISECONDS)
-        } catch (e: TimeoutException) {
-            throw IllegalStateException("The UI did not respond within $timeout", e)
+            try {
+                done.get(timeout.toMillis(), TimeUnit.MILLISECONDS)
+            } catch (e: TimeoutException) {
+                if (!started.compareAndSet(false, true)) return awaitFinish(done)
+                job.cancel()
+                throw IllegalStateException("The UI did not respond within $timeout", e)
+            }
         } catch (e: ExecutionException) {
             throw (e.cause as? RuntimeException) ?: IllegalStateException(e.cause)
         }
     }
 
+    private fun awaitFinish(done: CompletableFuture<Unit>) {
+        val limit = timeout.multipliedBy(FINISH_TIMEOUT_FACTOR)
+        try {
+            done.get(limit.toMillis(), TimeUnit.MILLISECONDS)
+        } catch (e: TimeoutException) {
+            throw IllegalStateException("The UI action started but did not finish within $limit; do not repeat it blindly", e)
+        }
+    }
+
     private companion object {
+        const val FINISH_TIMEOUT_FACTOR = 4L
+
         val ROUTES = mapOf(
             "overview" to Route.Overview,
             "sessions" to Route.Sessions,

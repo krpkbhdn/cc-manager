@@ -74,6 +74,16 @@ class SkillServiceTest {
     }
 
     @Test
+    void secondCreateOfTheSameSkillFailsAndKeepsTheFirstContent() {
+        var service = service();
+        var first = service.create(ExtensionScope.USER, null, "once", "first");
+
+        assertThatThrownBy(() -> service.create(ExtensionScope.USER, null, "once", "second"))
+                .isInstanceOf(ExtensionException.class).hasMessageContaining("already exists");
+        assertThat(service.read(first)).contains("first").doesNotContain("second");
+    }
+
+    @Test
     void createValidatesNameDescriptionScopeAndDuplicates() {
         var service = service();
         service.create(ExtensionScope.USER, null, "taken", "d");

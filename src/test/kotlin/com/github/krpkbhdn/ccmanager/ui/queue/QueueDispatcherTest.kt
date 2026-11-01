@@ -14,7 +14,7 @@ class QueueDispatcherTest {
         queueEmpty: Boolean = false,
         draft: Boolean = false,
         blocked: String? = null,
-    ) = dispatcher.observe("s", QueueObservation(status, interrupted, queueEmpty, draft, blocked))
+    ) = dispatcher.observe("s", QueueObservation(status, interrupted, queueEmpty, draft, blocked, 0))
 
     private fun finishATurn() {
         observe(AgentStatus.IDLE)
@@ -51,13 +51,13 @@ class QueueDispatcherTest {
     fun aPromptAddedWhileTheSessionNeedsActionWaits() {
         observe(AgentStatus.IDLE, queueEmpty = true)
         assertThat(observe(AgentStatus.NEEDS_ACTION)).isEqualTo(QueueDecision.WAIT)
-        assertThat(dispatcher.isWaiting("s")).isFalse()
+        assertThat(dispatcher.needsRecheck("s")).isFalse()
     }
 
     @Test
     fun twoPromptsAddedWhileIdleSendOneNowAndTheNextAfterTheNextTurn() {
         assertThat(observe(AgentStatus.IDLE)).isEqualTo(QueueDecision.SEND)
-        dispatcher.sent("s")
+        dispatcher.sent("s", 0)
         assertThat(observe(AgentStatus.IDLE)).isEqualTo(QueueDecision.WAIT)
         assertThat(observe(AgentStatus.WORKING)).isEqualTo(QueueDecision.WAIT)
         assertThat(observe(AgentStatus.IDLE)).isEqualTo(QueueDecision.SEND)
@@ -100,7 +100,7 @@ class QueueDispatcherTest {
     fun waitsWhileAnUnsentDraftMayExistAndSendsOnceItIsGone() {
         finishATurn()
         assertThat(observe(AgentStatus.IDLE, draft = true)).isEqualTo(QueueDecision.WAIT)
-        assertThat(dispatcher.isWaiting("s")).isTrue()
+        assertThat(dispatcher.needsRecheck("s")).isTrue()
         assertThat(observe(AgentStatus.IDLE)).isEqualTo(QueueDecision.SEND)
     }
 
@@ -115,7 +115,7 @@ class QueueDispatcherTest {
     fun anEmptyQueueSendsNothing() {
         finishATurn()
         assertThat(observe(AgentStatus.IDLE, queueEmpty = true)).isEqualTo(QueueDecision.WAIT)
-        assertThat(dispatcher.isWaiting("s")).isFalse()
+        assertThat(dispatcher.needsRecheck("s")).isFalse()
     }
 
     @Test
@@ -123,9 +123,33 @@ class QueueDispatcherTest {
         finishATurn()
         assertThat(observe(AgentStatus.IDLE)).isEqualTo(QueueDecision.SEND)
         assertThat(observe(AgentStatus.IDLE)).isEqualTo(QueueDecision.SEND)
-        dispatcher.sent("s")
+        dispatcher.sent("s", 0)
         assertThat(observe(AgentStatus.IDLE)).isEqualTo(QueueDecision.WAIT)
-        assertThat(dispatcher.isWaiting("s")).isFalse()
+    }
+
+    private fun observeAt(nowMillis: Long) = dispatcher.observe("s", QueueObservation(AgentStatus.IDLE, false, false, false, null, nowMillis))
+
+    @Test
+    fun aSentPromptThatStartsNoTurnIsClearedAfterTheTimeout() {
+        assertThat(observeAt(0)).isEqualTo(QueueDecision.SEND)
+        dispatcher.sent("s", 0)
+        assertThat(observeAt(AWAIT_TURN_TIMEOUT_MILLIS)).isEqualTo(QueueDecision.SEND)
+    }
+
+    @Test
+    fun aSentPromptStaysHeldBeforeTheTimeout() {
+        observeAt(0)
+        dispatcher.sent("s", 0)
+        assertThat(observeAt(AWAIT_TURN_TIMEOUT_MILLIS - 1)).isEqualTo(QueueDecision.WAIT)
+        assertThat(dispatcher.needsRecheck("s")).isTrue()
+    }
+
+    @Test
+    fun aTurnThatStartsAfterASendStillSendsTheNextOneOnlyAtTurnEnd() {
+        observeAt(0)
+        dispatcher.sent("s", 0)
+        assertThat(observe(AgentStatus.WORKING)).isEqualTo(QueueDecision.WAIT)
+        assertThat(observeAt(1)).isEqualTo(QueueDecision.SEND)
     }
 
     @Test
@@ -133,13 +157,13 @@ class QueueDispatcherTest {
         finishATurn()
         assertThat(observe(null)).isEqualTo(QueueDecision.WAIT)
         assertThat(observe(AgentStatus.OFFLINE)).isEqualTo(QueueDecision.WAIT)
-        assertThat(dispatcher.isWaiting("s")).isFalse()
+        assertThat(dispatcher.needsRecheck("s")).isFalse()
     }
 
     @Test
     fun retainSessionsForgetsEndedSessions() {
         finishATurn()
         dispatcher.retainSessions(emptySet())
-        assertThat(dispatcher.isWaiting("s")).isFalse()
+        assertThat(dispatcher.needsRecheck("s")).isFalse()
     }
 }

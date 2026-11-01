@@ -45,6 +45,8 @@ object Icons {
     val Alert = lucide("triangle-alert")
     val Info = lucide("info")
     val Copy = lucide("copy")
+    val Mic = lucide("mic")
+    val MicOff = lucide("mic-off")
     val Code = lucide("code")
     val Play = lucide("play")
     val Search = lucide("search")

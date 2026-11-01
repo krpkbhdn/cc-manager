@@ -77,7 +77,7 @@ public class ProjectGroupService {
         if (memberIds == null || memberIds.isEmpty()) {
             throw new IllegalArgumentException("A group needs at least one project");
         }
-        for (var id : memberIds) {
+        for (var id : memberIds.stream().distinct().toList()) {
             var member = projects.find(id).orElseThrow(() -> new IllegalArgumentException("Project not found: " + id));
             if (member.group()) {
                 throw new IllegalArgumentException("A group cannot be a member of a group: " + member.name());

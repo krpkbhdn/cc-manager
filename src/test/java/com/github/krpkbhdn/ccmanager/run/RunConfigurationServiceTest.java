@@ -43,6 +43,34 @@ class RunConfigurationServiceTest {
     }
 
     @Test
+    void agentWrittenConfigurationNeedsConfirmationUntilItsCommandChanges() {
+        var written = service.saveByAgent(projectId, "web", "npm start", temp);
+        assertThat(written.confirmed()).isFalse();
+
+        assertThat(service.confirm(written.id(), "npm start", temp)).isTrue();
+        assertThat(service.saveByAgent(projectId, "web", "npm start", temp).confirmed()).isTrue();
+        assertThat(service.saveByAgent(projectId, "web", "rm -rf x", temp).confirmed()).isFalse();
+    }
+
+    @Test
+    void confirmRefusesACommandThatChangedAfterItWasShown() {
+        var shown = service.saveByAgent(projectId, "web", "npm start", temp);
+        service.saveByAgent(projectId, "web", "rm -rf x", temp);
+
+        assertThat(service.confirm(shown.id(), shown.command(), shown.directory())).isFalse();
+        assertThat(service.find(shown.id()).orElseThrow().confirmed()).isFalse();
+    }
+
+    @Test
+    void editsAndSavesFromTheUiConfirmTheConfiguration() {
+        var written = service.saveByAgent(projectId, "web", "npm start", temp);
+
+        assertThat(service.update(written.id(), "web", "npm run dev", temp).confirmed()).isTrue();
+        assertThat(service.saveByAgent(projectId, "web", "x", temp).confirmed()).isFalse();
+        assertThat(service.save(projectId, "web", "y", temp).confirmed()).isTrue();
+    }
+
+    @Test
     void listIsOrderedByNameIgnoringCase() {
         service.save(projectId, "beta", "b", temp);
         service.save(projectId, "Alpha", "a", temp);
@@ -57,6 +85,16 @@ class RunConfigurationServiceTest {
 
         assertThat(service.update(web.id(), "site", "c", temp).name()).isEqualTo("site");
         assertThatThrownBy(() -> service.update(web.id(), "api", "c", temp))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("already exists");
+    }
+
+    @Test
+    void concurrentRenameOntoTheSameNameGivesTheAlreadyExistsMessage() {
+        var web = service.save(projectId, "web", "a", temp);
+        jdbc.sql("CREATE TRIGGER rival BEFORE UPDATE ON run_configuration BEGIN "
+                + "INSERT INTO run_configuration (project_id, name, command, directory) VALUES (OLD.project_id, NEW.name, 'x', 'x'); END").update();
+
+        assertThatThrownBy(() -> service.update(web.id(), "site", "c", temp))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("already exists");
     }
 

@@ -47,6 +47,28 @@ class SessionsStateTest {
     private fun session(id: String) = LaunchedSession(id, 1, "claude", mock(PtyProcess::class.java))
 
     @Test
+    fun `starting a session while another is launching reports an error`() {
+        val release = java.util.concurrent.CountDownLatch(1)
+        val errors = CopyOnWriteArrayList<String>()
+        `when`(backend.launcher.launch(anyLong(), org.mockito.ArgumentMatchers.eq(LaunchMode.NEW), org.mockito.ArgumentMatchers.eq(team))).thenAnswer {
+            release.await()
+            session("ccm-slow")
+        }
+        val state = SessionsState(
+            backend, scope, { error("not used") }, { null }, { team },
+            onOpened = { _, id -> opened += id }, onClosed = { _, _ -> }, showProject = {}, requestConfirm = {}, reportError = { errors += it },
+        )
+
+        state.launch(1, LaunchMode.NEW)
+        await { state.launching }
+        state.launch(1, LaunchMode.NEW)
+        release.countDown()
+
+        assertThat(errors).hasSize(1)
+        await { "ccm-slow" in opened }
+    }
+
+    @Test
     fun `launch with a default team starts every mode with the team and records it for the session`() {
         for (mode in LaunchMode.entries) {
             val id = "ccm-$mode"
@@ -115,5 +137,29 @@ class SessionsStateTest {
 
         assertThat(state.sessionTeams).isEmpty()
         verify(backend.launcher).launch(1, LaunchMode.CONTINUE)
+    }
+
+    @Test
+    fun `quick action send with Enter sends no Ctrl+C and no text while a draft exists`() {
+        val sent = CopyOnWriteArrayList<String>()
+        val errors = CopyOnWriteArrayList<String>()
+        val draftTerminal = object : TerminalPort by terminal {
+            override fun send(ccmSessionId: String, text: String) { sent += text }
+            override fun draftMayExist(ccmSessionId: String) = true
+        }
+        val idle = com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot(
+            "s1", 1, "claude", com.github.krpkbhdn.ccmanager.claude.session.AgentStatus.IDLE, "", "default", null, null,
+            java.time.Instant.EPOCH, java.time.Instant.EPOCH, emptyList(), 0, null,
+        )
+        val state = SessionsState(
+            PreviewWorld().backend(draftTerminal), scope, { LiveSessions(listOf(idle)) }, { null }, { null },
+            onOpened = { _, _ -> }, onClosed = { _, _ -> }, showProject = {}, requestConfirm = {}, reportError = { errors += it },
+        )
+
+        state.send("s1", "/compact" + Keys.ENTER)
+        await { errors.isNotEmpty() }
+
+        assertThat(sent).isEmpty()
+        assertThat(errors).singleElement().asString().contains("unsent text")
     }
 }

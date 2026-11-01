@@ -88,7 +88,7 @@ internal fun ThemeToggle(state: AppState) {
     val dark = colors.dark
     IconButton(
         if (dark) Icons.Sun else Icons.Moon,
-        { state.setThemeMode(if (dark) ThemeMode.LIGHT else ThemeMode.DARK) },
+        { state.prefs.setThemeMode(if (dark) ThemeMode.LIGHT else ThemeMode.DARK) },
         tooltip = if (dark) "Switch to light theme" else "Switch to dark theme",
         hint = AppShortcut.TOGGLE_THEME.hint(),
     )

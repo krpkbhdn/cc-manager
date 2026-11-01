@@ -18,7 +18,7 @@ private val groupRules: List<Pair<String, (String) -> Boolean>> = listOf(
     "Teams" to { it.endsWith("_team") || it.endsWith("_teams") },
     "Prompts" to { it.endsWith("_prompt") || it.endsWith("_prompts") },
     "Skills & plugins" to { "skill" in it || "plugin" in it || it.endsWith("_marketplace") },
-    "MCP servers" to { "mcp_server" in it },
+    "MCP servers" to { "mcp_server" in it || "mcp_health" in it },
     "UI" to { it == "navigate" },
     "Help" to { it == "get_help" },
 )

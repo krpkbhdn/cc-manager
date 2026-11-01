@@ -13,17 +13,19 @@ import com.github.krpkbhdn.ccmanager.extension.plugin.InstalledPlugin;
 import com.github.krpkbhdn.ccmanager.extension.plugin.Marketplace;
 import com.github.krpkbhdn.ccmanager.extension.plugin.PluginService;
 import com.github.krpkbhdn.ccmanager.extension.skill.SkillService;
+import com.github.krpkbhdn.ccmanager.workspace.TreeDeleter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
+import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
@@ -32,6 +34,9 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class ExtensionInstaller {
+
+    private static final Logger log = LoggerFactory.getLogger(ExtensionInstaller.class);
+    private static final String UNREADABLE = "could not read the existing list, nothing was changed";
 
     private final PluginService plugins;
     private final McpService mcp;
@@ -63,7 +68,12 @@ public class ExtensionInstaller {
         if (extensions.marketplaces().isEmpty()) {
             return;
         }
-        var known = attempt(() -> plugins.marketplaces().stream().map(Marketplace::name).collect(Collectors.toSet()), Set.<String>of());
+        var knownRead = read("marketplaces", () -> plugins.marketplaces().stream().map(Marketplace::name).collect(Collectors.toSet()));
+        if (knownRead.isEmpty()) {
+            extensions.marketplaces().forEach(marketplace -> failed.add("marketplace " + marketplace.name() + ": " + UNREADABLE));
+            return;
+        }
+        var known = knownRead.get();
         for (var marketplace : extensions.marketplaces()) {
             var label = "marketplace " + marketplace.name();
             if (known.contains(marketplace.name())) {
@@ -79,7 +89,12 @@ public class ExtensionInstaller {
         if (extensions.plugins().isEmpty()) {
             return;
         }
-        var existing = attempt(plugins::installed, List.<InstalledPlugin>of());
+        var existingRead = read("installed plugins", plugins::installed);
+        if (existingRead.isEmpty()) {
+            extensions.plugins().forEach(id -> failed.add("plugin " + id + ": " + UNREADABLE));
+            return;
+        }
+        var existing = existingRead.get();
         for (var id : extensions.plugins()) {
             var label = "plugin " + id;
             if (existing.stream().anyMatch(plugin -> sameInstallation(plugin, id, scope, directory))) {
@@ -138,13 +153,8 @@ public class ExtensionInstaller {
     }
 
     private static void deleteRecursively(Path directory) throws IOException {
-        if (!Files.exists(directory)) {
-            return;
-        }
-        try (var paths = Files.walk(directory)) {
-            for (var path : paths.sorted(Comparator.reverseOrder()).toList()) {
-                Files.delete(path);
-            }
+        if (Files.exists(directory)) {
+            TreeDeleter.delete(directory);
         }
     }
 
@@ -153,7 +163,12 @@ public class ExtensionInstaller {
         if (extensions.mcpServers().isEmpty()) {
             return;
         }
-        var known = attempt(() -> mcp.servers(directory).stream().map(McpServerConfig::name).collect(Collectors.toSet()), Set.<String>of());
+        var knownRead = read("MCP servers", () -> mcp.servers(directory).stream().map(McpServerConfig::name).collect(Collectors.toSet()));
+        if (knownRead.isEmpty()) {
+            extensions.mcpServers().forEach(server -> failed.add("MCP server " + server.name() + ": " + UNREADABLE));
+            return;
+        }
+        var known = knownRead.get();
         for (var server : extensions.mcpServers()) {
             var label = "MCP server " + server.name();
             if (known.contains(server.name())) {
@@ -169,9 +184,9 @@ public class ExtensionInstaller {
             return List.of();
         }
         var declared = extensions.mcpServers().stream().map(server -> server.name()).collect(Collectors.toSet());
-        return attempt(() -> mcp.health(directory).stream()
+        return read("MCP health", () -> mcp.health(directory).stream()
                 .filter(health -> health.status() == McpStatus.NEEDS_AUTHENTICATION && declared.contains(health.name()))
-                .map(McpHealth::name).toList(), List.<String>of());
+                .map(McpHealth::name).toList()).orElse(List.of());
     }
 
     private static void run(String label, List<String> installed, List<String> failed, Runnable action) {
@@ -183,11 +198,12 @@ public class ExtensionInstaller {
         }
     }
 
-    private static <T> T attempt(Supplier<T> query, T fallback) {
+    private static <T> Optional<T> read(String what, Supplier<T> query) {
         try {
-            return query.get();
+            return Optional.of(query.get());
         } catch (ExtensionException e) {
-            return fallback;
+            log.warn("Could not read {}: {}", what, e.getMessage());
+            return Optional.empty();
         }
     }
 }

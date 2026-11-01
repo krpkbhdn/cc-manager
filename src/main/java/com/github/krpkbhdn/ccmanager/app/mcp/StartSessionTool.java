@@ -23,11 +23,6 @@ class StartSessionTool extends AssistantTool {
     }
 
     @Override
-    public boolean autoApproved() {
-        return true;
-    }
-
-    @Override
     public String name() {
         return "start_session";
     }
@@ -49,7 +44,7 @@ class StartSessionTool extends AssistantTool {
         var project = ToolArguments.requiredId(arguments, "project");
         var prompt = arguments.path("prompt").asString("").strip();
         var launched = launchWithDefaultTeam(launcher.getObject(), teams, project, LaunchMode.NEW, prompt);
-        control.attachSession(launched);
+        attachOrDestroy(control, launched);
         return "Session %s started in project %s.".formatted(launched.ccmSessionId(), project);
     }
 }

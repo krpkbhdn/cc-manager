@@ -26,6 +26,7 @@ final class ReleaseParser {
         return Optional.of(new AvailableUpdate(
                 version.get().toString(),
                 installer.path("name").asString(),
+                installer.path("size").asLong(Long.MAX_VALUE),
                 URI.create(installer.path("browser_download_url").asString()),
                 URI.create(checksum.path("browser_download_url").asString()),
                 URI.create(release.path("html_url").asString())));

@@ -33,7 +33,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.claude.proposal.QuestionsProposal
 import com.github.krpkbhdn.ccmanager.ui.components.AppCheckbox
-import com.github.krpkbhdn.ccmanager.ui.components.AppTextField
+import com.github.krpkbhdn.ccmanager.ui.voice.VoiceTextField
 import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant
 import com.github.krpkbhdn.ccmanager.ui.components.Kbd
 import com.github.krpkbhdn.ccmanager.ui.components.Label
@@ -164,7 +164,7 @@ private fun OtherField(draft: QuestionsDraft, lastOption: FocusRequester, perfor
     val index = draft.step
     val focus = remember(index) { FocusRequester() }
     LaunchedEffect(index) { runCatching { focus.requestFocus() } }
-    AppTextField(
+    VoiceTextField(
         draft.other[index],
         Modifier.fillMaxWidth().padding(start = Spacing.xl + Spacing.xs).onPreviewKeyEvent { event ->
             (event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp).also { up ->

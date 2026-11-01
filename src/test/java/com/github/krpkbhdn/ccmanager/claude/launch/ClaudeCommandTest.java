@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.claude.launch;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.github.krpkbhdn.ccmanager.claude.hook.SessionFiles;
 import com.github.krpkbhdn.ccmanager.project.ModelSelection;
@@ -9,6 +10,7 @@ import com.github.krpkbhdn.ccmanager.team.Team;
 import com.github.krpkbhdn.ccmanager.team.TeamAgentsJson;
 import com.github.krpkbhdn.ccmanager.team.TeamRole;
 import com.github.krpkbhdn.ccmanager.team.TeamService;
+import com.github.krpkbhdn.ccmanager.workspace.WindowsArgument;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -110,6 +112,12 @@ class ClaudeCommandTest {
     @Test
     void attachAppendsSubcommandAndId() {
         assertThat(ClaudeCommand.attachArguments(EXE, FILES, "ab12")).endsWith("attach", "ab12");
+    }
+
+    @Test
+    void attachRejectsAnIdThatCouldBeReadAsAFlag() {
+        assertThatThrownBy(() -> ClaudeCommand.attachArguments(EXE, FILES, "--dangerous")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ClaudeCommand.attachArguments(EXE, FILES, "a b")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

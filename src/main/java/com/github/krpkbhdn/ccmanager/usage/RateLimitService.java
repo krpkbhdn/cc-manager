@@ -1,9 +1,8 @@
 package com.github.krpkbhdn.ccmanager.usage;
 
 import com.github.krpkbhdn.ccmanager.claude.hook.StatusLineReport;
-import java.util.List;
+import com.github.krpkbhdn.ccmanager.workspace.ChangeListeners;
 import java.util.Optional;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -13,7 +12,7 @@ import org.springframework.stereotype.Component;
 public class RateLimitService {
 
     private final AtomicReference<RateLimitSnapshot> latest = new AtomicReference<>();
-    private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
+    private final ChangeListeners listeners = new ChangeListeners("Rate limit");
 
     @EventListener
     public void on(StatusLineReport report) {
@@ -26,15 +25,14 @@ public class RateLimitService {
 
     /** @return unsubscribe handle; callback fires (any thread) when a newer snapshot arrived */
     public Runnable subscribe(Runnable onChange) {
-        listeners.add(onChange);
-        return () -> listeners.remove(onChange);
+        return listeners.add(onChange);
     }
 
     private void offer(RateLimitSnapshot snapshot) {
         var kept = latest.accumulateAndGet(snapshot, (old, candidate) ->
                 old == null || !candidate.receivedAt().isBefore(old.receivedAt()) ? candidate : old);
         if (kept == snapshot) {
-            listeners.forEach(Runnable::run);
+            listeners.fire();
         }
     }
 }

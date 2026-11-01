@@ -66,13 +66,17 @@ internal fun FolderPicker(initial: Path?, recents: RecentFolders, windowStore: P
     val listFocus = remember { FocusRequester() }
     val listState = rememberLazyListState()
     val icon = remember { BitmapPainter(drawAppIcon(DIALOG_ICON_SIZE).toComposeImageBitmap()) }
-    val dialogState = rememberDialogState(position = WindowPosition.PlatformDefault, size = DpSize.Unspecified)
-    remember {
-        val bounds = windowStore.load().let { it ?: PickerBounds(null, null, PickerWindowStore.DEFAULT_WIDTH, PickerWindowStore.DEFAULT_HEIGHT) }
-            .let { PickerWindowStore.clamp(it, screenBounds()) }
-        dialogState.size = DpSize(bounds.width.dp, bounds.height.dp)
-        dialogState.position = if (bounds.x != null && bounds.y != null) WindowPosition(bounds.x.dp, bounds.y.dp) else WindowPosition(Alignment.Center)
+    val bounds by produceState<PickerBounds?>(null) {
+        value = withContext(Dispatchers.IO) {
+            windowStore.load().let { it ?: PickerBounds(null, null, PickerWindowStore.DEFAULT_WIDTH, PickerWindowStore.DEFAULT_HEIGHT) }
+                .let { PickerWindowStore.clamp(it, screenBounds()) }
+        }
     }
+    val savedBounds = bounds ?: return
+    val dialogState = rememberDialogState(
+        position = if (savedBounds.x != null && savedBounds.y != null) WindowPosition(savedBounds.x.dp, savedBounds.y.dp) else WindowPosition(Alignment.Center),
+        size = DpSize(savedBounds.width.dp, savedBounds.height.dp),
+    )
     LaunchedEffect(dialogState) {
         snapshotFlow { dialogState.size to dialogState.position }.debounce(BOUNDS_SAVE_DELAY_MILLIS).collect { (size, position) ->
             if (position.isSpecified) windowStore.save(PickerBounds(position.x.value.toInt(), position.y.value.toInt(), size.width.value.toInt(), size.height.value.toInt()))

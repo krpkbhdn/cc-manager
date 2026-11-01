@@ -60,7 +60,7 @@ private const val ENDED_SESSION_LABEL = "Ended session"
 @Composable
 fun ProjectScreen(state: AppState, project: Project, modifier: Modifier = Modifier) {
     val view = state.viewOf(project.id)
-    val gitState = state.gitOf(project.id)
+    val gitState = state.gits.of(project.id)
     LaunchedEffect(project.id) { state.refreshBackgroundAgents(project.id) }
     DisposableEffect(project.id) {
         val unsubscribe = gitState?.attach()
@@ -75,18 +75,18 @@ fun ProjectScreen(state: AppState, project: Project, modifier: Modifier = Modifi
         ProjectHeader(
             project = project,
             status = state.live.statusOf(project.id),
-            ideAvailable = state.ideAvailable,
+            ideAvailable = state.environment.ideAvailable,
             launching = state.sessions.launching,
             gitSummary = gitState?.summary,
             actions = ProjectHeaderActions(
                 onLaunch = { state.sessions.launch(project.id, it) },
-                onStartTask = { state.openTaskDialog(project.id) },
-                onStartTaskFromTemplate = { state.quickStartProjectId = project.id },
-                onOpenFolder = { state.openFolder(project) },
-                onOpenIde = { state.openIde(project) },
+                onStartTask = { state.tasks.open(project.id) },
+                onStartTaskFromTemplate = { state.tasks.quickStartProjectId = project.id },
+                onOpenFolder = { state.environment.openFolder(project) },
+                onOpenIde = { state.environment.openIde(project) },
                 onShowGit = { state.openGit(project.id) },
                 onShowChanges = { state.openGit(project.id, GitSubView.CHANGES) },
-                onOpenSettings = { state.openProjectSettings(project) },
+                onOpenSettings = { state.extensions.openProjectSettings(project) },
             ),
             runEntries = state.runs.entriesOf(project.id),
             runSelected = state.runs.selectedOf(project.id),
@@ -145,11 +145,11 @@ private fun ProjectMainArea(state: AppState, project: Project, view: ProjectView
             ModelControl(state, project, shown?.let { state.live.find(it) })
             Spacer(Modifier.width(Spacing.sm))
             if (onSession) {
-                IconButton(Icons.Zap, state::toggleQuickBar, tooltip = "Quick actions", hint = AppShortcut.TOGGLE_QUICK_ACTIONS.hint(), active = state.settings.quickBarOpen)
+                IconButton(Icons.Zap, state.prefs::toggleQuickBar, tooltip = "Quick actions", hint = AppShortcut.TOGGLE_QUICK_ACTIONS.hint(), active = state.settings.quickBarOpen)
             }
             IconButton(
                 if (state.settings.agentsOpen) Icons.PanelRightClose else Icons.PanelRightOpen,
-                state::toggleAgents,
+                state.prefs::toggleAgents,
                 Modifier.padding(start = Spacing.xs),
                 tooltip = if (state.settings.agentsOpen) "Hide agents" else "Show agents",
                 hint = AppShortcut.TOGGLE_AGENTS.hint(),
@@ -240,12 +240,12 @@ internal val TERMINAL_INSET = 10.dp
 
 @Composable
 private fun GitTabHost(state: AppState, project: Project) {
-    val git = state.gitOf(project.id) ?: return
-    val ideAvailable = state.ideAvailable
+    val git = state.gits.of(project.id) ?: return
+    val ideAvailable = state.environment.ideAvailable
     val system = remember(project, ideAvailable) {
         GitSystemActions(
-            openFolder = { path -> state.openDirectory(git.repo.resolve(path).parent ?: git.repo) },
-            openInIde = { path -> state.openInIde(git.repo.resolve(path)) },
+            openFolder = { path -> state.environment.openDirectory(git.repo.resolve(path).parent ?: git.repo) },
+            openInIde = { path -> state.environment.openInIde(git.repo.resolve(path)) },
             ideAvailable = ideAvailable,
         )
     }

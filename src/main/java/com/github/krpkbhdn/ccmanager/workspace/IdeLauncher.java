@@ -1,6 +1,5 @@
 package com.github.krpkbhdn.ccmanager.workspace;
 
-import com.github.krpkbhdn.ccmanager.claude.launch.WindowsArgument;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;

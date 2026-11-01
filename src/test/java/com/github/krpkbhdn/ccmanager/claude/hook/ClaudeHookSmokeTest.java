@@ -1,5 +1,7 @@
 package com.github.krpkbhdn.ccmanager.claude.hook;
 
+import com.github.krpkbhdn.ccmanager.claude.event.HookEventType;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.mock;
@@ -35,8 +37,9 @@ class ClaudeHookSmokeTest {
         assumeTrue(claudeVersion() != null, "claude is not on PATH");
         var mapper = JsonMapper.builder().build();
         var events = new CopyOnWriteArrayList<HookEvent>();
+        var hookProperties = new HookProperties(100, 1_048_576, 500, java.time.Duration.ofSeconds(1), 10, 1000);
         var server = new HookServer(mock(HookEventStore.class), event -> events.add((HookEvent) event), mapper,
-                new HookProperties(100, 1_048_576, 500, java.time.Duration.ofSeconds(1)),
+                hookProperties,
                 mock(com.github.krpkbhdn.ccmanager.claude.mcp.McpEndpoint.class), mock(com.github.krpkbhdn.ccmanager.app.mcp.AssistantMcpEndpoint.class),
                 mock(com.github.krpkbhdn.ccmanager.claude.proposal.ProposalService.class));
         server.start();

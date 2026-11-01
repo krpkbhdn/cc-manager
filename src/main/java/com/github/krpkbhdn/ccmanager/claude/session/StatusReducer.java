@@ -1,8 +1,8 @@
 package com.github.krpkbhdn.ccmanager.claude.session;
 
-import com.github.krpkbhdn.ccmanager.claude.hook.ActivityFormatter;
-import com.github.krpkbhdn.ccmanager.claude.hook.HookEvent;
-import com.github.krpkbhdn.ccmanager.claude.hook.HookEventType;
+import com.github.krpkbhdn.ccmanager.claude.event.ActivityFormatter;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEventType;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;

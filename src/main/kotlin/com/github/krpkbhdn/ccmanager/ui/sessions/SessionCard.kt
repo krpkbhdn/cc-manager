@@ -45,8 +45,8 @@ fun SessionCard(
     session: SessionSnapshot,
     projectName: String,
     usage: SessionUsage?,
-    now: Instant,
-    stale: Boolean,
+    now: () -> Instant,
+    stale: () -> Boolean,
     proposalHeadline: String?,
     onOpen: () -> Unit,
     onAnswer: () -> Unit,
@@ -81,9 +81,9 @@ fun SessionCard(
 }
 
 @Composable
-private fun silence(session: SessionSnapshot, now: Instant, stale: Boolean) {
-    val elapsed = session.lastEventAt?.let { formatElapsed(Duration.between(it, now)) } ?: return
-    if (stale) StaleMarker("No activity for $elapsed") else Label("$elapsed ago", color = colors.textTertiary, style = Type.numeric)
+private fun silence(session: SessionSnapshot, now: () -> Instant, stale: () -> Boolean) {
+    val elapsed = session.lastEventAt?.let { formatElapsed(Duration.between(it, now())) } ?: return
+    if (stale()) StaleMarker("No activity for $elapsed") else Label("$elapsed ago", color = colors.textTertiary, style = Type.numeric)
 }
 
 private fun figures(usage: SessionUsage?): List<String> = listOfNotNull(

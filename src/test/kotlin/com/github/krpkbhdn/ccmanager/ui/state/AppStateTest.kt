@@ -58,6 +58,11 @@ class AppStateTest {
     }
 
     @Test
+    fun `voice settings exist when the backend has voice services`() {
+        assertThat(state.voice).isNotNull()
+    }
+
+    @Test
     fun `removing a project closes its live sessions and forgets the project`() {
         val project = state.projects.all.first { it.id == PROJECT_ID }
         val liveIds = state.live.of(PROJECT_ID).map { it.ccmSessionId }
@@ -99,7 +104,7 @@ class AppStateTest {
             "ccm-assistant", ClaudeLauncher.ASSISTANT_PROJECT_ID, "c0", AgentStatus.IDLE, null, null, null, null,
             Instant.now(), Instant.now(), emptyList(), 0, null,
         )
-        `when`(backend.sessions.sessions()).thenReturn(world.sessions + assistant)
+        org.mockito.Mockito.doReturn(world.sessions + assistant).`when`(backend.sessions).sessions()
         world.fire()
         await { state.live.find("ccm-assistant") != null }
 

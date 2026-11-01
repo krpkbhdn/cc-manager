@@ -37,8 +37,9 @@ object TerminalHost {
     fun open(shell: LaunchedShell) = open(shell.terminalId(), shell.shell().name(), shell.process(), isClaude = false)
 
     private fun open(id: String, label: String, process: PtyProcess, isClaude: Boolean) {
-        terminals.computeIfAbsent(id) { createTerminal(id, label, process, isClaude) }
-        openedCount++
+        var created = false
+        terminals.computeIfAbsent(id) { created = true; createTerminal(id, label, process, isClaude) }
+        if (created) openedCount++ else if (terminals[id]?.process !== process) process.destroyForcibly()
     }
 
     /** Types text into the session console exactly as if the user typed it (CR = Enter, ESC = Esc). */
@@ -46,6 +47,8 @@ object TerminalHost {
         val terminal = terminals[ccmSessionId] ?: return
         terminal.session.send(text)
     }
+
+    fun hasTerminal(ccmSessionId: String): Boolean = terminals.containsKey(ccmSessionId)
 
     fun ctrlCWithin(ccmSessionId: String, windowMillis: Long): Boolean =
         terminals[ccmSessionId]?.connector?.ctrlCWithin(windowMillis) == true

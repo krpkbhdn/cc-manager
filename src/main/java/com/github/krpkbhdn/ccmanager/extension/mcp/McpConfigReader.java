@@ -20,6 +20,7 @@ import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Reads the MCP server declarations from ~/.claude.json (user and local scope) and the project's .mcp.json.
@@ -70,8 +71,8 @@ class McpConfigReader {
 
     /**
      * Names of the directory's .mcp.json servers that the user approved outside the repository. Needs the accepted trust dialog
-     * in ~/.claude.json and an approval in the directory's untracked .claude/settings.local.json or the user settings; a
-     * disabled entry in either wins. A settings.local.json committed to git is ignored, as a hostile repo could approve itself.
+     * in ~/.claude.json and an approval in the directory's untracked .claude/settings.local.json; a disabled entry in
+     * that file or the user settings wins, but user-level approvals are name-only and never count. A settings.local.json committed to git is ignored, as a hostile repo could approve itself.
      */
     Set<String> approvedOutsideRepository(Path projectDirectory) {
         if (!projectEntry(readFile(userConfigFile()), projectDirectory).path(TRUST_ACCEPTED).asBoolean(false)) {
@@ -79,9 +80,18 @@ class McpConfigReader {
         }
         var local = projectDirectory.resolve(SETTINGS_LOCAL_FILE);
         var sources = List.of(isTracked(projectDirectory, local) ? Json.parse("{}") : readFile(local),
-                readFile(host.claudeConfigDirectory().resolve(USER_SETTINGS_FILE)));
+                disabledOnly(readFile(host.claudeConfigDirectory().resolve(USER_SETTINGS_FILE))));
         return servers(readFile(projectDirectory.resolve(PROJECT_CONFIG_FILE)), ExtensionScope.PROJECT, sources).stream()
                 .filter(server -> server.approval() == McpApproval.APPROVED).map(McpServerConfig::name).collect(Collectors.toSet());
+    }
+
+    /** User settings name servers without a project, so a name approved for one repository must not approve another's; only a veto carries over. */
+    private static JsonNode disabledOnly(JsonNode userSettings) {
+        var copy = userSettings.deepCopy();
+        if (copy instanceof ObjectNode object) {
+            object.remove(List.of("enabledMcpjsonServers", "enableAllProjectMcpServers"));
+        }
+        return copy;
     }
 
     /** Without a .git the file cannot be committed; with one, only git's own "not tracked" answer (exit 1) clears it, any other outcome counts as tracked. */

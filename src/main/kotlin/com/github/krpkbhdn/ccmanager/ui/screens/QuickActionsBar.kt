@@ -38,7 +38,7 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
 private val chipHeight = 28.dp
-private const val DRAFT_NOTE = ". A half-typed prompt is cleared first."
+private const val DRAFT_NOTE = ". Not sent while a half-typed prompt is waiting."
 private val COMPACT_BELOW = 800.dp
 
 private fun iconOf(action: QuickAction): ImageVector = when (action.label) {

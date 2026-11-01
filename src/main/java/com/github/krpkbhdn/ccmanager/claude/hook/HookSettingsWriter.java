@@ -1,6 +1,8 @@
 package com.github.krpkbhdn.ccmanager.claude.hook;
 
-import com.github.krpkbhdn.ccmanager.app.mcp.AssistantMcpEndpoint;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEventType;
+import com.github.krpkbhdn.ccmanager.claude.mcp.AssistantMcpServer;
+import com.github.krpkbhdn.ccmanager.claude.mcp.McpEndpoint;
 import com.github.krpkbhdn.ccmanager.config.AppProperties;
 import com.github.krpkbhdn.ccmanager.workspace.TreeDeleter;
 import jakarta.annotation.PostConstruct;
@@ -8,6 +10,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
@@ -28,7 +31,6 @@ public class HookSettingsWriter {
     private static final String HOOKS_DIR = "hooks";
     private static final String FILE_SUFFIX = ".json";
     private static final String MCP_SUFFIX = ".mcp.json";
-    private static final String MCP_SERVER = "cc-manager";
     private static final String LIST_RUN_CONFIGURATIONS_TOOL = "list_run_configurations";
     private static final String HOOK_CURL = "hook";
     private static final String STATUS_LINE_CURL = "status";
@@ -61,7 +63,7 @@ public class HookSettingsWriter {
         this.windows = windows;
     }
 
-    /** Removes the files of app processes that no longer run, and loose files from before the per-process directories. */
+    /** Removes the files of app processes that no longer run (a live process's directory stays however quiet its sessions are), and loose files from before the per-process directories. */
     @PostConstruct
     void deleteStaleFiles() throws IOException {
         if (!Files.isDirectory(hooksRoot)) {
@@ -71,7 +73,7 @@ public class HookSettingsWriter {
             for (var entry : entries) {
                 if (!Files.isDirectory(entry)) {
                     Files.deleteIfExists(entry);
-                } else if (!isLiveProcess(entry.getFileName().toString())) {
+                } else if (!entry.equals(hooksDir) && !isLiveProcess(entry.getFileName().toString())) {
                     TreeDeleter.delete(entry);
                 }
             }
@@ -92,12 +94,15 @@ public class HookSettingsWriter {
 
     /** [extraServers] join the MCP config; the app's own server name stays reserved. */
     public SessionFiles write(String ccmSessionId, Map<String, JsonNode> extraServers) {
-        return write(ccmSessionId, mcpConfig(MCP_SERVER, server.mcpUrl(ccmSessionId), extraServers));
+        return write(ccmSessionId, mcpConfig(McpEndpoint.SERVER_NAME, server.mcpUrl(ccmSessionId), extraServers));
     }
 
-    /** The Assistant session gets only the app server in its mcp file; the project server and the project-session secret stay out of it. */
+    /**
+     * The Assistant session gets only the app server in its mcp file; the project server and the project-session secret stay out of it.
+     * The secret alone reaches only auto-approved tools, every other tool needs the user's Allow in the app.
+     */
     public SessionFiles writeAssistant(String ccmSessionId) {
-        return write(ccmSessionId, mcpConfig(AssistantMcpEndpoint.SERVER_NAME, server.assistantMcpUrl(), Map.of()));
+        return write(ccmSessionId, mcpConfig(AssistantMcpServer.SERVER_NAME, server.assistantMcpUrl(), Map.of()));
     }
 
     private SessionFiles write(String ccmSessionId, ObjectNode mcpConfig) {
@@ -109,10 +114,8 @@ public class HookSettingsWriter {
                 writeCurlConfig(ccmSessionId, HOOK_CURL, server.hookUrl(ccmSessionId));
                 writeCurlConfig(ccmSessionId, STATUS_LINE_CURL, server.statusLineUrl(ccmSessionId));
             }
-            Files.writeString(file, mapper.writeValueAsString(settings(ccmSessionId)));
-            restrictToOwner(file, "rw-------");
-            Files.writeString(mcpFile, mapper.writeValueAsString(mcpConfig));
-            restrictToOwner(mcpFile, "rw-------");
+            writeOwnerOnly(file, mapper.writeValueAsString(settings(ccmSessionId)));
+            writeOwnerOnly(mcpFile, mapper.writeValueAsString(mcpConfig));
         } catch (IOException e) {
             throw new UncheckedIOException("Cannot write hook settings " + file, e);
         }
@@ -121,15 +124,21 @@ public class HookSettingsWriter {
 
     /** curl reads the secret URL from this file, so it never shows in a process list. Not used on Windows, see curlArgs. */
     private void writeCurlConfig(String ccmSessionId, String kind, String url) throws IOException {
-        var file = curlConfigOf(ccmSessionId, kind);
-        Files.writeString(file, "url = \"" + url + "\"\n");
-        restrictToOwner(file, "rw-------");
+        writeOwnerOnly(curlConfigOf(ccmSessionId, kind), "url = \"" + url + "\"\n");
     }
 
-    /** The hook secret sits in the URLs of these files; the group and others must not read it. No-op where there are no POSIX permissions. */
+    /** The hook credentials sit in these files; the group and others must not read them, not even for an instant. Created with the permissions where POSIX exists. */
+    private static void writeOwnerOnly(Path file, String content) throws IOException {
+        if (file.getFileSystem().supportedFileAttributeViews().contains("posix")) {
+            Files.deleteIfExists(file);
+            Files.createFile(file, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
+        }
+        Files.writeString(file, content);
+    }
+
     private static void restrictToOwner(Path path, String permissions) throws IOException {
         if (path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
-            Files.setPosixFilePermissions(path, java.nio.file.attribute.PosixFilePermissions.fromString(permissions));
+            Files.setPosixFilePermissions(path, PosixFilePermissions.fromString(permissions));
         }
     }
 
@@ -152,8 +161,19 @@ public class HookSettingsWriter {
         var settings = mapper.createObjectNode();
         settings.set("hooks", hooks);
         settings.set("statusLine", statusLine(ccmSessionId));
-        settings.putObject("permissions").putArray("allow").add("mcp__" + MCP_SERVER + "__" + LIST_RUN_CONFIGURATIONS_TOOL);
+        var permissions = settings.putObject("permissions");
+        permissions.putArray("allow").add("mcp__" + McpEndpoint.SERVER_NAME + "__" + LIST_RUN_CONFIGURATIONS_TOOL);
+        permissions.putArray("deny").add("Read(" + absoluteRule(hooksRoot) + "/**)");
         return settings;
+    }
+
+    /** Claude Code rules take an absolute path as {@code //path}; Windows drives are written Git Bash style ({@code //c/Users/...}). shortcut: Bash cat is not covered by Read rules. */
+    private String absoluteRule(Path path) {
+        var text = path.toAbsolutePath().toString().replace('\\', '/');
+        if (windows && text.length() > 1 && text.charAt(1) == ':') {
+            return "//" + Character.toLowerCase(text.charAt(0)) + text.substring(2);
+        }
+        return "/" + text;
     }
 
     /** Only the read-only list tool is pre-approved; set and delete change a command the user later runs, so Claude asks first. */

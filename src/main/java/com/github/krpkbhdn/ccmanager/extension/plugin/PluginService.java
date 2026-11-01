@@ -7,6 +7,7 @@ import com.github.krpkbhdn.ccmanager.workspace.CommandRunner;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 
 /**
@@ -15,6 +16,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class PluginService {
+
+    private static final Pattern PLUGIN_ID = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_.@-]*");
 
     private static final String JSON_FLAG = "--json";
     private static final String UNKNOWN_JSON_OPTION = "unknown option '--json'";
@@ -52,7 +55,7 @@ public class PluginService {
 
     /** Project and local plugins are only known inside their project, so the CLI runs in projectDirectory (null for user scope). */
     public PluginDetails details(String pluginId, Path projectDirectory) {
-        return PluginParser.details(cli.executeChecked(projectDirectory, properties.queryTimeout(), List.of("plugin", "details", pluginId)));
+        return PluginParser.details(cli.executeChecked(projectDirectory, properties.queryTimeout(), List.of("plugin", "details", requireValidId(pluginId))));
     }
 
     /** First step of an install; never accepts a marketplace command on its own, see {@link PluginInstallResult}. */
@@ -99,12 +102,12 @@ public class PluginService {
     }
 
     public void addMarketplace(String source, ExtensionScope scope, Path projectDirectory) {
-        run(List.of("plugin", "marketplace", "add", source, "--scope", scope.cliValue(), "--json"), scope, projectDirectory);
+        run(List.of("plugin", "marketplace", "add", requireNotOption(source), "--scope", scope.cliValue(), "--json"), scope, projectDirectory);
         availableCache = null;
     }
 
     public void removeMarketplace(String name) {
-        run(List.of("plugin", "marketplace", "remove", name), ExtensionScope.USER, null);
+        run(List.of("plugin", "marketplace", "remove", requireNotOption(name)), ExtensionScope.USER, null);
         availableCache = null;
     }
 
@@ -112,7 +115,7 @@ public class PluginService {
     public void updateMarketplace(String name) {
         var arguments = new ArrayList<>(List.of("plugin", "marketplace", "update"));
         if (name != null) {
-            arguments.add(name);
+            arguments.add(requireNotOption(name));
         }
         run(arguments, ExtensionScope.USER, null);
         availableCache = null;
@@ -137,7 +140,21 @@ public class PluginService {
     }
 
     private static List<String> scoped(String action, String pluginId, ExtensionScope scope) {
-        return new ArrayList<>(List.of("plugin", action, pluginId, "--scope", scope.cliValue(), "--json"));
+        return new ArrayList<>(List.of("plugin", action, requireValidId(pluginId), "--scope", scope.cliValue(), "--json"));
+    }
+
+    private static String requireNotOption(String argument) {
+        if (argument.startsWith("-")) {
+            throw new IllegalArgumentException("Must not start with '-': " + argument);
+        }
+        return argument;
+    }
+
+    private static String requireValidId(String argument) {
+        if (!PLUGIN_ID.matcher(argument).matches()) {
+            throw new IllegalArgumentException("Invalid plugin id (letters, digits, '_', '.', '@' and '-' only, starting with a letter or digit): " + argument);
+        }
+        return argument;
     }
 
 }

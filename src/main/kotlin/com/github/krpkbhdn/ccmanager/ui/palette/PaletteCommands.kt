@@ -66,8 +66,8 @@ private fun globalActions(state: AppState, systemDark: Boolean): List<PaletteIte
     PaletteItem("ask-assistant", "Ask assistant", PaletteGroup.ACTIONS, "Send a request to the Assistant", Icons.Sparkles, shortcut = AppShortcut.QUICK_REQUEST) { state.quickRequestOpen = true },
     PaletteItem("assistant", "Assistant", PaletteGroup.ACTIONS, "Ask Claude something unrelated to your projects", Icons.Sparkles, shortcut = AppShortcut.ASSISTANT) { state.navigate(Route.Assistant) },
     PaletteItem("assistant-help", "Assistant help", PaletteGroup.ACTIONS, "Hotkeys and what the Assistant can do", Icons.Book) { state.assistantHelpOpen = true },
-    PaletteItem("assistant-startup", "Assistant at startup: ${state.settings.assistantStartup.label}", PaletteGroup.ACTIONS, "Choose to cycle: ask, start automatically, never", Icons.Sparkles) { state.cycleAssistantStartup() },
-    PaletteItem("next-waiting", "Answer next waiting session", PaletteGroup.ACTIONS, "Jump to the session that needs you", Icons.Message, shortcut = AppShortcut.NEXT_WAITING) { state.answerNextWaiting() },
+    PaletteItem("assistant-startup", "Assistant at startup: ${state.settings.assistantStartup.label}", PaletteGroup.ACTIONS, "Choose to cycle: ask, start automatically, never", Icons.Sparkles) { state.prefs.cycleAssistantStartup() },
+    PaletteItem("next-waiting", "Answer next waiting session", PaletteGroup.ACTIONS, "Jump to the session that needs you", Icons.Message, shortcut = AppShortcut.NEXT_WAITING) { state.answers.answerNextWaiting() },
     PaletteItem("teams", "Manage teams", PaletteGroup.ACTIONS, "Roles and models of your agent teams", Icons.Users) { state.navigate(Route.Teams) },
     PaletteItem("prompts", "Prompt Library", PaletteGroup.ACTIONS, "Reusable task texts", Icons.Message) { state.navigate(Route.Prompts) },
     PaletteItem("author-config", "Author configuration", PaletteGroup.ACTIONS, "Install or update the author's Claude setup", Icons.Sparkles) { state.author.openManage((state.route as? Route.Project)?.id) },
@@ -76,11 +76,12 @@ private fun globalActions(state: AppState, systemDark: Boolean): List<PaletteIte
     PaletteItem("skills", "Open skills", PaletteGroup.ACTIONS, "Instructions Claude loads on demand", Icons.Book) { state.navigate(Route.Skills) },
     PaletteItem("notifications", "Show notifications", PaletteGroup.ACTIONS, icon = Icons.Bell, shortcut = AppShortcut.NOTIFICATIONS) { state.notificationsOpen = true },
     PaletteItem("usage", "Show usage", PaletteGroup.ACTIONS, "Limits, context and cost", Icons.Gauge, shortcut = AppShortcut.USAGE) { state.usageOpen = true },
-    PaletteItem("toggle-sound", "Toggle notification sound", PaletteGroup.ACTIONS, if (state.settings.notificationSound) "Currently on" else "Currently off", Icons.Bell) { state.toggleNotificationSound() },
-    PaletteItem("toggle-theme", "Toggle light and dark theme", PaletteGroup.ACTIONS, icon = Icons.Sun, shortcut = AppShortcut.TOGGLE_THEME) { state.toggleTheme(systemDark) },
-    PaletteItem("system-theme", "Use the system theme", PaletteGroup.ACTIONS, icon = Icons.Monitor) { state.setThemeMode(ThemeMode.SYSTEM) },
+    PaletteItem("toggle-sound", "Toggle notification sound", PaletteGroup.ACTIONS, if (state.settings.notificationSound) "Currently on" else "Currently off", Icons.Bell) { state.prefs.toggleNotificationSound() },
+    PaletteItem("toggle-theme", "Toggle light and dark theme", PaletteGroup.ACTIONS, icon = Icons.Sun, shortcut = AppShortcut.TOGGLE_THEME) { state.prefs.toggleTheme(systemDark) },
+    PaletteItem("system-theme", "Use the system theme", PaletteGroup.ACTIONS, icon = Icons.Monitor) { state.prefs.setThemeMode(ThemeMode.SYSTEM) },
+    PaletteItem("settings", "Settings", PaletteGroup.ACTIONS, "Theme, notifications, Assistant, updates and more", Icons.Settings, shortcut = AppShortcut.APP_SETTINGS) { state.settingsDialog.show() },
     PaletteItem("shortcuts", "Keyboard shortcuts", PaletteGroup.ACTIONS, icon = Icons.Command, shortcut = AppShortcut.SHORTCUT_SHEET) { state.shortcutsOpen = true },
-    PaletteItem("toggle-sidebar", "Toggle sidebar", PaletteGroup.ACTIONS, icon = Icons.PanelLeftClose, shortcut = AppShortcut.TOGGLE_SIDEBAR, run = state::toggleSidebar),
+    PaletteItem("toggle-sidebar", "Toggle sidebar", PaletteGroup.ACTIONS, icon = Icons.PanelLeftClose, shortcut = AppShortcut.TOGGLE_SIDEBAR, run = state.prefs::toggleSidebar),
 )
 
 private fun shellActions(state: AppState, projectId: Long, here: String): List<PaletteItem> {
@@ -101,21 +102,21 @@ private fun projectActions(state: AppState): List<PaletteItem> {
 
 private fun launchActions(state: AppState, project: Project, here: String) = listOf(
     PaletteItem("launch", "Launch Claude", PaletteGroup.ACTIONS, here, Icons.Play, shortcut = AppShortcut.NEW_SESSION) { state.sessions.launch(project.id, LaunchMode.NEW) },
-    PaletteItem("start-task", if (project.group) "Start task on group" else "Start task with team", PaletteGroup.ACTIONS, here, Icons.Users) { state.openTaskDialog(project.id) },
+    PaletteItem("start-task", if (project.group) "Start task on group" else "Start task with team", PaletteGroup.ACTIONS, here, Icons.Users) { state.tasks.open(project.id) },
     PaletteItem("continue", "Continue last session", PaletteGroup.ACTIONS, here, Icons.ArrowRight) { state.sessions.launch(project.id, LaunchMode.CONTINUE) },
     PaletteItem("resume", "Resume a session", PaletteGroup.ACTIONS, here, Icons.Rewind) { state.sessions.launch(project.id, LaunchMode.RESUME_PICKER) },
 )
 
 private fun projectOnlyActions(state: AppState, project: Project, here: String): List<PaletteItem> {
     return shellActions(state, project.id, here) + listOfNotNull(
-        PaletteItem("open-folder", "Open folder", PaletteGroup.ACTIONS, here, Icons.FolderOpen) { state.openFolder(project) },
-        PaletteItem("open-ide", "Open in IntelliJ IDEA", PaletteGroup.ACTIONS, here, Icons.Code) { state.openIde(project) },
-        PaletteItem("project-settings", "Project settings", PaletteGroup.ACTIONS, "$here: plugins, MCP servers, skills", Icons.Settings, shortcut = AppShortcut.PROJECT_SETTINGS) { state.openProjectSettings(project) },
+        PaletteItem("open-folder", "Open folder", PaletteGroup.ACTIONS, here, Icons.FolderOpen) { state.environment.openFolder(project) },
+        PaletteItem("open-ide", "Open in IntelliJ IDEA", PaletteGroup.ACTIONS, here, Icons.Code) { state.environment.openIde(project) },
+        PaletteItem("project-settings", "Project settings", PaletteGroup.ACTIONS, "$here: plugins, MCP servers, skills", Icons.Settings, shortcut = AppShortcut.PROJECT_SETTINGS) { state.extensions.openProjectSettings(project) },
         state.runs.selectedOf(project.id)?.let { runItem(state, it, here) },
         state.runs.selectedOf(project.id)?.takeIf { it.running }?.let { entry -> PaletteItem("stop-run", "Stop ${entry.name}", PaletteGroup.ACTIONS, here, Icons.Stop) { state.runs.stop(entry.id) } },
         PaletteItem("show-run", "Show run console", PaletteGroup.ACTIONS, here, Icons.SquareTerminal) { state.select(project.id, ProjectTab.Run) },
         PaletteItem("show-activity", "Show activity", PaletteGroup.ACTIONS, here, Icons.Activity, shortcut = AppShortcut.ACTIVITY_TAB) { state.select(project.id, ProjectTab.Activity) },
-        PaletteItem("toggle-agents", "Toggle agents panel", PaletteGroup.ACTIONS, here, Icons.PanelRightClose, shortcut = AppShortcut.TOGGLE_AGENTS, run = state::toggleAgents),
+        PaletteItem("toggle-agents", "Toggle agents panel", PaletteGroup.ACTIONS, here, Icons.PanelRightClose, shortcut = AppShortcut.TOGGLE_AGENTS, run = state.prefs::toggleAgents),
         state.viewOf(project.id).focusedSession?.let { state.live.find(it) }?.let { session ->
             PaletteItem("switch-model", "Switch model", PaletteGroup.ACTIONS, "$here, opens Claude's picker (Alt+P)", Icons.Cpu) { state.sessions.openClaudeModelPicker(session) }
         },

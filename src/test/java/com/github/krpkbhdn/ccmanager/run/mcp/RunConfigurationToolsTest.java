@@ -48,7 +48,7 @@ class RunConfigurationToolsTest {
 
     @Test
     void setSavesInTheProjectOfTheSession() {
-        when(configurations.save(PROJECT, "app", "./gradlew run", DIRECTORY))
+        when(configurations.saveByAgent(PROJECT, "app", "./gradlew run", DIRECTORY))
                 .thenReturn(new RunConfiguration(1, PROJECT, "app", "./gradlew run", DIRECTORY));
         var arguments = mapper.createObjectNode().put("name", "app").put("command", "./gradlew run").put("directory", DIRECTORY.toString());
 

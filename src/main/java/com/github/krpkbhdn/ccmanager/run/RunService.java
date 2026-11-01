@@ -3,7 +3,7 @@ package com.github.krpkbhdn.ccmanager.run;
 import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeCommand;
 import com.github.krpkbhdn.ccmanager.claude.launch.PtySpawner;
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession;
-import com.github.krpkbhdn.ccmanager.claude.launch.WindowsArgument;
+import com.github.krpkbhdn.ccmanager.workspace.WindowsArgument;
 import com.github.krpkbhdn.ccmanager.project.ProjectService;
 import com.github.krpkbhdn.ccmanager.workspace.HostEnvironment;
 import com.github.krpkbhdn.ccmanager.workspace.ProcessTree;
@@ -54,14 +54,9 @@ public class RunService {
     /** Restarts the configuration when it is already running.
      * @throws IllegalStateException with a user-readable message (configuration or directory gone, spawn failed) */
     public synchronized LaunchedSession start(long configurationId) {
-        var configuration = configurations.find(configurationId)
-                .orElseThrow(() -> new IllegalStateException("The run configuration no longer exists."));
-        if (!Files.isDirectory(configuration.directory())) {
-            throw new IllegalStateException("The run directory is missing: " + configuration.directory());
-        }
+        findRunnable(configurationId);
         stopAndAwaitExit(configurationId);
-        configuration = configurations.find(configurationId)
-                .orElseThrow(() -> new IllegalStateException("The run configuration no longer exists."));
+        var configuration = findRunnable(configurationId);
         var runId = "run-" + configurationId + "-" + counter.incrementAndGet();
         PtyProcess process;
         try {
@@ -74,6 +69,18 @@ public class RunService {
         watchExit(configurationId, runId, process);
         fireChanged();
         return new LaunchedSession(runId, configuration.projectId(), configuration.name(), process);
+    }
+
+    private RunConfiguration findRunnable(long configurationId) {
+        var configuration = configurations.find(configurationId)
+                .orElseThrow(() -> new IllegalStateException("The run configuration no longer exists."));
+        if (!configuration.confirmed()) {
+            throw new IllegalStateException("The command of \"" + configuration.name() + "\" was written by an agent and needs the user's confirmation first.");
+        }
+        if (!Files.isDirectory(configuration.directory())) {
+            throw new IllegalStateException("The run directory is missing: " + configuration.directory());
+        }
+        return configuration;
     }
 
     /** Kills the process tree of a running configuration; the exit is reported by the watcher. */

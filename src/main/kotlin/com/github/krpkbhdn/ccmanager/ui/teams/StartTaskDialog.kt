@@ -26,7 +26,6 @@ import com.github.krpkbhdn.ccmanager.team.Team
 import com.github.krpkbhdn.ccmanager.ui.components.AppButton
 import com.github.krpkbhdn.ccmanager.ui.components.AppCheckbox
 import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant
-import com.github.krpkbhdn.ccmanager.ui.components.AppTextArea
 import com.github.krpkbhdn.ccmanager.ui.components.DialogActions
 import com.github.krpkbhdn.ccmanager.ui.components.DialogBody
 import com.github.krpkbhdn.ccmanager.ui.components.Label
@@ -39,6 +38,7 @@ import com.github.krpkbhdn.ccmanager.ui.prompts.teamForTemplate
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
+import com.github.krpkbhdn.ccmanager.ui.voice.VoiceTextArea
 
 private val dialogWidth = 560.dp
 private const val NO_TEAM = "No team"
@@ -78,7 +78,7 @@ fun StartTaskDialog(project: Project, teams: TeamsState, templates: TaskTemplate
                 Label("Task", Modifier.weight(1f), color = colors.textSecondary, style = Type.smallMedium)
                 AppButton("From library", { picking = true }, icon = Icons.Message, compact = true, tooltip = "Fill the task from a saved prompt in the library")
             }
-            AppTextArea(task, Modifier.fillMaxWidth(), placeholder = "Describe what to do", focusRequester = focus, onSubmit = start)
+            VoiceTextArea(task, Modifier.fillMaxWidth(), placeholder = "Describe what to do", focusRequester = focus, onSubmit = start)
             Label(if (team != null) TASK_HINT else NO_TEAM_TASK_HINT, color = colors.textTertiary, style = Type.caption, maxLines = 2)
             if (team != null) DefaultTeamToggle(makeDefault) { makeDefault = it }
             DialogActions("Start task", task.text.isNotBlank(), false, start, actions.onDismiss)

@@ -1,19 +1,26 @@
 package com.github.krpkbhdn.ccmanager.claude.hook;
 
+import com.github.krpkbhdn.ccmanager.claude.event.HookEventType;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.github.krpkbhdn.ccmanager.app.mcp.AssistantMcpEndpoint;
+import com.github.krpkbhdn.ccmanager.app.mcp.AssistantMcpTool;
+import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
 import com.github.krpkbhdn.ccmanager.claude.mcp.McpEndpoint;
 import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalService;
 import java.net.URI;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Optional;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -41,7 +48,7 @@ class HookServerTest {
     @BeforeEach
     void setUp() {
         server = new HookServer(store, publisher, JsonMapper.builder().build(),
-                new HookProperties(10, MAX_BODY, 500, Duration.ofSeconds(5)), mcp, assistantMcp, proposals);
+                new HookProperties(10, MAX_BODY, 500, Duration.ofSeconds(5), 10, 1000), mcp, assistantMcp, proposals);
         server.start();
     }
 
@@ -84,7 +91,7 @@ class HookServerTest {
         assertThat(response).isNotDone();
         decision.complete(Optional.of("{\"decided\":true}"));
 
-        var answered = response.get();
+        var answered = response.get(VERIFY_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
         assertThat(answered.statusCode()).isEqualTo(200);
         assertThat(answered.headers().firstValue("Content-Type")).contains("application/json");
         assertThat(answered.body()).isEqualTo("{\"decided\":true}");
@@ -111,6 +118,17 @@ class HookServerTest {
     @Test
     void listensOnLoopbackOnly() {
         assertThat(server.hookUrl("x")).startsWith("http://127.0.0.1:" + server.port() + "/hook/");
+    }
+
+    @Test
+    void credentialOfOneSessionDoesNotAuthorizeAnother() throws Exception {
+        var otherSessionUrl = server.hookUrl("sess-2");
+        var stolen = server.hookUrl("sess-1").replace("sess-1", "sess-2");
+
+        assertThat(server.hookUrl("sess-1")).isNotEqualTo(otherSessionUrl.replace("sess-2", "sess-1"));
+        assertThat(post(stolen, "{\"hook_event_name\":\"Stop\"}").statusCode()).isEqualTo(404);
+        assertThat(post(server.mcpUrl("sess-1").replace("sess-1", "sess-2"), "{}").statusCode()).isEqualTo(404);
+        assertThat(post(otherSessionUrl, "{\"hook_event_name\":\"Stop\"}").statusCode()).isEqualTo(200);
     }
 
     @Test
@@ -195,6 +213,26 @@ class HookServerTest {
     }
 
     @Test
+    void assistantMcpSecretAloneDoesNotRunAToolThatNeedsApproval() throws Exception {
+        var tool = mock(AssistantMcpTool.class);
+        when(tool.name()).thenReturn("git_push");
+        var real = new AssistantMcpEndpoint(List.of(tool), JsonMapper.builder().build(), proposals, mock(SessionRegistry.class));
+        var secured = new HookServer(store, publisher, JsonMapper.builder().build(),
+                new HookProperties(10, MAX_BODY, 500, Duration.ofSeconds(5), 10, 1000), mcp, real, proposals);
+        secured.start();
+        try {
+            var call = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"git_push\",\"arguments\":{}}}";
+
+            var response = post(secured.assistantMcpUrl(), call);
+
+            assertThat(response.body()).contains("\"isError\":true");
+            verify(tool, never()).call(any());
+        } finally {
+            secured.stop();
+        }
+    }
+
+    @Test
     void statusLinePostIsPublishedAsReportWithEmptyOk() throws Exception {
         var response = post(server.statusLineUrl("sess-1"), "{\"rate_limits\":{}}");
 
@@ -212,5 +250,17 @@ class HookServerTest {
 
         assertThat(post(url, "{}").statusCode()).isEqualTo(404);
         verifyNoInteractions(publisher);
+    }
+
+    @Test
+    void startAndStopLeaveNoLiveWorkerThread() {
+        server.stop();
+        for (var i = 0; i < 3; i++) {
+            server.start();
+            server.stop();
+        }
+        server.start();
+        server.stop();
+        assertThat(Thread.getAllStackTraces().keySet()).noneMatch(t -> t.getName().equals("hook-worker") && t.isAlive());
     }
 }

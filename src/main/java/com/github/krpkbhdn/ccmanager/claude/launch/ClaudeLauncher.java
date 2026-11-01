@@ -4,6 +4,7 @@ import com.github.krpkbhdn.ccmanager.claude.hook.HookSettingsWriter;
 import com.github.krpkbhdn.ccmanager.claude.hook.SessionFiles;
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation;
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService;
+import com.github.krpkbhdn.ccmanager.claude.mcp.AssistantMcpServer;
 import com.github.krpkbhdn.ccmanager.claude.plugin.ClaudePluginWriter;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
 import com.github.krpkbhdn.ccmanager.config.AppProperties;
@@ -23,7 +24,6 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 /**
@@ -48,13 +48,13 @@ public class ClaudeLauncher {
     private final ProjectGroupService groups;
     private final GroupWorkspace groupWorkspace;
     private final ProjectMcpServers projectMcpServers;
-    private final ObjectProvider<AssistantToolPolicy> assistantToolPolicy;
+    private final AssistantMcpServer assistantMcp;
 
     public ClaudeLauncher(ProjectService projects, ClaudeInstallationService installation,
             HookSettingsWriter hookSettings, ClaudePluginWriter plugin, SessionRegistry sessions, AppProperties properties,
             ProjectGroupService groups, GroupWorkspace groupWorkspace, ProjectMcpServers projectMcpServers,
-            ObjectProvider<AssistantToolPolicy> assistantToolPolicy) {
-        this.assistantToolPolicy = assistantToolPolicy;
+            AssistantMcpServer assistantMcp) {
+        this.assistantMcp = assistantMcp;
         this.dataDir = properties.dataDir();
         this.groups = groups;
         this.groupWorkspace = groupWorkspace;
@@ -114,7 +114,7 @@ public class ClaudeLauncher {
             throw new IllegalStateException("Could not create the assistant folder: " + e.getMessage(), e);
         }
         return start(ASSISTANT_PROJECT_ID, directory, ModelSelection.DEFAULT, ClaudeCommand.label(LaunchMode.NEW),
-                (files, exe, selection) -> ClaudeCommand.assistantArguments(exe, files, selection, assistantToolPolicy.getObject().autoApprovedToolNames()), List.of());
+                (files, exe, selection) -> ClaudeCommand.assistantArguments(exe, files, selection, assistantMcp.toolNames()), List.of());
     }
 
     private LaunchedSession start(long projectId, String label, CommandFactory commandFactory) {

@@ -67,6 +67,13 @@ class RunServiceTest {
     }
 
     @Test
+    void refusesToStartAnUnconfirmedAgentConfiguration() {
+        var configuration = configurations.saveByAgent(projectId, "agent", "exit 0", temp);
+
+        assertThatThrownBy(() -> runs.start(configuration.id())).isInstanceOf(IllegalStateException.class).hasMessageContaining("confirmation");
+    }
+
+    @Test
     void restartingUsesANewRunId() {
         var configuration = configurations.save(projectId, "again", "exit 0", temp);
 
@@ -128,6 +135,23 @@ class RunServiceTest {
         var service = new RunService(spied, projects, new RunShell(host), host);
 
         assertThatThrownBy(() -> service.start(configuration.id())).isInstanceOf(IllegalStateException.class).hasMessageContaining("no longer exists");
+        assertThat(service.current(configuration.id())).isEmpty();
+    }
+
+    @Test
+    void restartDoesNotSpawnACommandAnAgentRewroteDuringTheWait() {
+        var configuration = configurations.save(projectId, "rewritten", "exit 0", temp);
+        var spied = org.mockito.Mockito.spy(configurations);
+        org.mockito.Mockito.doCallRealMethod()
+                .doAnswer(invocation -> {
+                    configurations.saveByAgent(projectId, "rewritten", "exit 1", temp);
+                    return invocation.callRealMethod();
+                })
+                .when(spied).find(configuration.id());
+        var host = new SystemHostEnvironment();
+        var service = new RunService(spied, projects, new RunShell(host), host);
+
+        assertThatThrownBy(() -> service.start(configuration.id())).isInstanceOf(IllegalStateException.class).hasMessageContaining("confirmation");
         assertThat(service.current(configuration.id())).isEmpty();
     }
 

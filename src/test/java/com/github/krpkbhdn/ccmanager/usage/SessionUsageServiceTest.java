@@ -26,4 +26,43 @@ class SessionUsageServiceTest {
 
         assertThat(service.of(id)).isEmpty();
     }
+
+    @Test
+    void anOlderReportHandledLaterDoesNotReplaceTheNewerOne() {
+        var registry = new SessionRegistry(new SessionProperties(Duration.ofMinutes(1), Duration.ofMinutes(10)), mock(TranscriptService.class));
+        var service = new SessionUsageService(registry);
+        var id = registry.register(1L);
+        var newer = Instant.now();
+        service.on(new StatusLineReport(id, JsonMapper.builder().build().createObjectNode(), newer));
+
+        service.on(new StatusLineReport(id, JsonMapper.builder().build().createObjectNode(), newer.minusSeconds(5)));
+
+        assertThat(service.of(id).orElseThrow().receivedAt()).isEqualTo(newer);
+    }
+
+    @Test
+    void ignoresReportsOfSessionsThatAreGone() {
+        var registry = new SessionRegistry(new SessionProperties(Duration.ofMinutes(1), Duration.ofMinutes(10)), mock(TranscriptService.class));
+        var service = new SessionUsageService(registry);
+        var id = registry.register(1L);
+        registry.markEnded(id, 0);
+
+        service.on(new StatusLineReport(id, JsonMapper.builder().build().createObjectNode(), Instant.now()));
+
+        assertThat(service.of(id)).isEmpty();
+    }
+
+    @Test
+    void aThrowingListenerDoesNotStopTheOthers() {
+        var registry = new SessionRegistry(new SessionProperties(Duration.ofMinutes(1), Duration.ofMinutes(10)), mock(TranscriptService.class));
+        var service = new SessionUsageService(registry);
+        var id = registry.register(1L);
+        var notified = new java.util.concurrent.atomic.AtomicInteger();
+        service.subscribe(() -> { throw new IllegalStateException("boom"); });
+        service.subscribe(notified::incrementAndGet);
+
+        service.on(new StatusLineReport(id, JsonMapper.builder().build().createObjectNode(), Instant.now()));
+
+        assertThat(notified).hasValue(1);
+    }
 }

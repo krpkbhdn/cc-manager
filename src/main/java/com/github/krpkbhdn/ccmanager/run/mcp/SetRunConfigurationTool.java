@@ -25,7 +25,7 @@ class SetRunConfigurationTool implements McpTool {
     public String description() {
         return "Creates or replaces (by name) a run configuration in cc-manager so the user can start the app from its Run button. "
                 + "The command runs in bash (Git Bash on Windows) in the given directory; long-running servers are fine. "
-                + "Only register it: the user starts it, do not start the app yourself.";
+                + "Only register it: the user reviews the command and starts it, do not start the app yourself.";
     }
 
     @Override
@@ -40,8 +40,8 @@ class SetRunConfigurationTool implements McpTool {
 
     @Override
     public String call(long projectId, JsonNode arguments) {
-        var saved = configurations.save(projectId, McpToolDescriptor.requiredText(arguments, "name"), McpToolDescriptor.requiredText(arguments, "command"),
+        var saved = configurations.saveByAgent(projectId, McpToolDescriptor.requiredText(arguments, "name"), McpToolDescriptor.requiredText(arguments, "command"),
                 Path.of(McpToolDescriptor.requiredText(arguments, "directory")));
-        return "Run configuration '%s' saved: `%s` in %s. The user can start it from cc-manager.".formatted(saved.name(), saved.command(), saved.directory());
+        return "Run configuration '%s' saved: `%s` in %s. The user must confirm the command in cc-manager before its first run.".formatted(saved.name(), saved.command(), saved.directory());
     }
 }

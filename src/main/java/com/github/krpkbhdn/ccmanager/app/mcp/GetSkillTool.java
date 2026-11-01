@@ -1,6 +1,6 @@
 package com.github.krpkbhdn.ccmanager.app.mcp;
 
-import com.github.krpkbhdn.ccmanager.app.AssistantTextLimitProperties;
+import com.github.krpkbhdn.ccmanager.app.AppControlProperties;
 import com.github.krpkbhdn.ccmanager.claude.mcp.McpToolDescriptor;
 import com.github.krpkbhdn.ccmanager.extension.skill.SkillService;
 import com.github.krpkbhdn.ccmanager.project.ProjectService;
@@ -11,9 +11,9 @@ import tools.jackson.databind.JsonNode;
 class GetSkillTool extends ExtensionScopeTool {
 
     private final SkillService skills;
-    private final AssistantTextLimitProperties limits;
+    private final AppControlProperties limits;
 
-    GetSkillTool(ProjectService projects, SkillService skills, AssistantTextLimitProperties limits) {
+    GetSkillTool(ProjectService projects, SkillService skills, AppControlProperties limits) {
         super(projects);
         this.skills = skills;
         this.limits = limits;

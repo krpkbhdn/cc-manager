@@ -93,6 +93,15 @@ class ProjectGroupServiceTest {
     }
 
     @Test
+    void duplicateMemberIdsAreAssignedOnce() throws IOException {
+        var a = project("a");
+
+        var group = groups.create("g", List.of(a.id(), a.id()));
+
+        assertThat(groups.members(group.id())).extracting(Project::id).containsExactly(a.id());
+    }
+
+    @Test
     void setMembersKeepsCurrentMembersWhenValidationFails() throws IOException {
         var a = project("a");
         var group = groups.create("g", List.of(a.id()));

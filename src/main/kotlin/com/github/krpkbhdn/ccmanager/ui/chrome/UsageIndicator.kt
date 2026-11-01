@@ -39,22 +39,23 @@ private val chipHeight = 28.dp
 @Composable
 internal fun UsageIndicator(state: AppState) {
     Box {
-        UsageChip(usageMeters(state.rateLimits, state.now), state.usageOpen) { state.usageOpen = !state.usageOpen }
+        UsageChip({ usageMeters(state.environment.rateLimits, state.now) }, state.usageOpen) { state.usageOpen = !state.usageOpen }
         if (state.usageOpen) UsagePanel(state) { state.usageOpen = false }
     }
 }
 
 /** One small bar per limit window, muted text while no session reported limits; clicking it opens the panel. */
 @Composable
-private fun UsageChip(meters: List<UsageMeter>, active: Boolean, onClick: () -> Unit) {
+private fun UsageChip(meters: () -> List<UsageMeter>, active: Boolean, onClick: () -> Unit) {
     WithTooltip("Usage", hint = AppShortcut.USAGE.hint()) {
         Pressable(onClick, Modifier.height(chipHeight), shape = RoundedCornerShape(Radius.sm + 1.dp), base = if (active) colors.accentSoft else Color.Transparent) {
             Row(Modifier.fillMaxHeight().padding(horizontal = Spacing.md), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                if (meters.isEmpty()) {
+                val shown = meters()
+                if (shown.isEmpty()) {
                     Glyph(Icons.Gauge, colors.textTertiary, size = IconSize.medium)
                     Label("No usage data", color = colors.textTertiary, style = Type.caption)
                 }
-                meters.forEach { UsageBar(it) }
+                shown.forEach { UsageBar(it) }
             }
         }
     }

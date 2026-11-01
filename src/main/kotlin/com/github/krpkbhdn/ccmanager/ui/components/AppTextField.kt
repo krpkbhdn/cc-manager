@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.input.InputTransformation
@@ -35,11 +36,12 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Radius
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
+import com.github.krpkbhdn.ccmanager.ui.voice.VoiceDictation
 
 private val fieldHeight = 36.dp
 private const val MASK_CHAR = '•'
 
-/** Single-line text field with an optional leading icon and placeholder, a focus ring and Enter-to-submit. */
+/** Single-line text field with an optional leading icon and placeholder, a focus ring and Enter-to-submit; with [voice], holding Space dictates. */
 @Composable
 fun AppTextField(
     state: TextFieldState,
@@ -50,6 +52,7 @@ fun AppTextField(
     mono: Boolean = false,
     masked: Boolean = false,
     onSubmit: () -> Unit = {},
+    voice: VoiceDictation? = null,
     trailing: @Composable () -> Unit = {},
 ) {
     val source = remember { MutableInteractionSource() }
@@ -57,14 +60,18 @@ fun AppTextField(
     val borderColor by animateColorAsState(if (focused) colors.accent else colors.borderStrong, Motion.fast(), label = "fieldBorder")
     val shape = RoundedCornerShape(Radius.md)
     val style = (if (mono) Type.monoBody else Type.body).copy(color = colors.textPrimary)
+    val scroll = rememberScrollState()
+    val dictation = rememberDictationChrome(voice, style, focused)
     BasicTextField(
         state = state,
-        modifier = modifier.then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
+        modifier = modifier.then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier).then(dictation.keys()),
         textStyle = style,
-        cursorBrush = SolidColor(colors.accent),
+        cursorBrush = SolidColor(dictation.cursorColor),
+        scrollState = scroll,
+        onTextLayout = dictation.onTextLayout,
         lineLimits = TextFieldLineLimits.SingleLine,
         inputTransformation = InputTransformation { },
-        outputTransformation = if (masked) OutputTransformation { replace(0, length, MASK_CHAR.toString().repeat(length)) } else null,
+        outputTransformation = voice?.outputTransformation(colors.textSecondary) ?: if (masked) OutputTransformation { replace(0, length, MASK_CHAR.toString().repeat(length)) } else null,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         onKeyboardAction = KeyboardActionHandler { onSubmit() },
         interactionSource = source,
@@ -76,8 +83,8 @@ fun AppTextField(
             ) {
                 icon?.let { Glyph(it, if (focused) colors.accent else colors.textTertiary) }
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    if (state.text.isEmpty()) Label(placeholder, color = colors.textTertiary, style = style)
-                    inner()
+                    if (dictation.showPlaceholder(state)) Label(placeholder, color = colors.textTertiary, style = style)
+                    Box(dictation.caret(state, scroll, horizontal = true)) { inner() }
                 }
                 trailing()
             }

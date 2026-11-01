@@ -21,15 +21,20 @@ class ProposalState(
     private val scope: CoroutineScope,
     private val reportError: (String) -> Unit,
     private val focusTerminal: (String) -> Unit = {},
+    private val onArrived: (Proposal) -> Unit = {},
 ) {
     private var bySession by mutableStateOf<Map<String, List<Proposal>>>(emptyMap())
     private var hidden by mutableStateOf<Set<String>>(emptySet())
     private val drafts = mutableMapOf<String, Any>()
+    private val announced = mutableSetOf<String>()
     private var unsubscribe: Runnable? = null
     private val reload = Refresher(scope) {
         runGuarded(reportError) {
-            bySession = io { service.pending() }.groupBy { it.ccmSessionId() }
-            val alive = bySession.values.flatten().map { it.id() }.toSet()
+            val pending = io { service.pending() }
+            bySession = pending.groupBy { it.ccmSessionId() }
+            val alive = pending.map { it.id() }.toSet()
+            pending.filter { announced.add(it.id()) }.forEach(onArrived)
+            announced.retainAll(alive)
             hidden = hidden intersect alive
             drafts.keys.retainAll(alive)
         }

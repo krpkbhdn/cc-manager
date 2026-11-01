@@ -46,6 +46,15 @@ class ProjectServiceTest {
     }
 
     @Test
+    void concurrentAddOfTheSameDirectoryGivesTheAlreadyAddedMessage() throws IOException {
+        jdbc.sql("CREATE TRIGGER rival BEFORE INSERT ON project BEGIN "
+                + "INSERT INTO project (name, path, created_at) VALUES ('rival', NEW.path, 'now'); END").update();
+
+        assertThatThrownBy(() -> service.add(directory("alpha")))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("already added");
+    }
+
+    @Test
     void storedEffortThatFailsCurrentRulesFallsBackToDefault() throws IOException {
         var project = service.add(directory("alpha"));
         jdbc.sql("UPDATE project SET effort = 'retired' WHERE id = ?").param(project.id()).update();

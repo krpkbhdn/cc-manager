@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.claude.launch;
 
 import com.github.krpkbhdn.ccmanager.claude.hook.SessionFiles;
+import com.github.krpkbhdn.ccmanager.claude.mcp.AssistantMcpServer;
 import com.github.krpkbhdn.ccmanager.project.ModelSelection;
 import com.github.krpkbhdn.ccmanager.team.Team;
 import com.github.krpkbhdn.ccmanager.team.TeamAgentsJson;
@@ -10,6 +11,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /** Pure builders for the claude command line and the child environment. */
@@ -21,13 +23,13 @@ public final class ClaudeCommand {
     static final String ENV_ADDITIONAL_DIRECTORIES_CLAUDE_MD = "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD";
     private static final String SETTINGS_FLAG = "--settings";
     private static final String ENABLED = "1";
+    private static final Pattern SAFE_ID = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_-]{0,63}");
     static final String TERM_VALUE = "xterm-256color";
     static final String COLORTERM_VALUE = "truecolor";
     static final String ASSISTANT_SYSTEM_PROMPT = "You control Claude Code Manager through the cc-manager-app MCP tools. "
             + "Resolve project names with list_projects, act directly and report briefly. "
             + "Destructive actions are confirmed by the user. "
             + "For questions about Claude Code Manager itself, call get_help and answer from it.";
-    private static final String ASSISTANT_TOOL_PREFIX = "mcp__cc-manager-app__";
     /** Would turn off Claude colors or make it think it runs inside another agent (which also switches off transcripts, so no --resume) or terminal host. */
     private static final List<String> INHERITED_ENV_TO_DROP = List.of(
             "NO_COLOR", "FORCE_COLOR", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_CHILD_SESSION",
@@ -92,10 +94,13 @@ public final class ClaudeCommand {
     }
 
     private static String allowedToolsArgument(List<String> toolNames) {
-        return toolNames.stream().map(name -> ASSISTANT_TOOL_PREFIX + name).collect(Collectors.joining(","));
+        return toolNames.stream().map(name -> AssistantMcpServer.TOOL_NAME_PREFIX + name).collect(Collectors.joining(","));
     }
 
     static List<String> attachArguments(Path executable, SessionFiles files, String backgroundSessionId) {
+        if (!SAFE_ID.matcher(backgroundSessionId).matches()) {
+            throw new IllegalArgumentException("Invalid background session id");
+        }
         List<String> command = base(executable, files);
         command.add("attach");
         command.add(backgroundSessionId);

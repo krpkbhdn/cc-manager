@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.ui.sessions
 
+import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import com.github.krpkbhdn.ccmanager.project.ModelSelection
@@ -72,6 +73,15 @@ class SessionBoardTest {
         val one = listOf(session("only", AgentStatus.NEEDS_ACTION, 5))
 
         assertThat(nextWaiting(one, "only")?.ccmSessionId).isEqualTo("only")
+    }
+
+    @Test
+    fun `assistant sessions are never on the board nor next waiting`() {
+        val withAssistant = all + session("assistant", AgentStatus.NEEDS_ACTION, 1, projectId = ClaudeLauncher.ASSISTANT_PROJECT_ID)
+
+        assertThat(ids(board(withAssistant))).doesNotContain("assistant")
+        assertThat(nextWaiting(withAssistant, null)?.ccmSessionId).isEqualTo("wait-early")
+        assertThat(groupByProject(withAssistant, SessionFilter(), listOf(project(1, "p1")), now, staleAfter).map { it.projectId }).doesNotContain(ClaudeLauncher.ASSISTANT_PROJECT_ID)
     }
 
     @Test

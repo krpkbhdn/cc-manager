@@ -32,6 +32,28 @@ class UiSettingsStoreTest {
     }
 
     @Test
+    fun `voice settings default to off and round trip`(@TempDir dir: Path) {
+        val store = UiSettingsStore(dir.resolve("ui.properties"))
+        assertThat(store.load()).extracting({ it.voiceEnabled }, { it.voiceModel }, { it.voiceDevice }, { it.voiceInput }).containsExactly(false, "base-q5_1", "best", "")
+        val settings = UiSettings(voiceEnabled = true, voiceModel = "large-v3-turbo-q5_0", voiceDevice = "NVIDIA GeForce RTX 5080", voiceInput = "USB mic")
+        store.save(settings)
+        assertThat(store.load()).isEqualTo(settings)
+    }
+
+    @Test
+    fun `blank or garbage voice values do not break loading`(@TempDir dir: Path) {
+        val file = dir.resolve("ui.properties")
+        Files.writeString(file, "voice.enabled=yes\nvoice.model=\nvoice.device=\nvoice.input=\n")
+        val loaded = UiSettingsStore(file).load()
+        assertThat(loaded.voiceEnabled).isFalse()
+        assertThat(loaded.voiceModel).isEmpty()
+        assertThat(loaded.voiceDevice).isEmpty()
+        assertThat(loaded.voiceInput).isEmpty()
+        Files.writeString(file, "voice.model=gigantic\nvoice.device=Gone GPU\n")
+        assertThat(UiSettingsStore(file).load()).extracting({ it.voiceModel }, { it.voiceDevice }).containsExactly("gigantic", "Gone GPU")
+    }
+
+    @Test
     fun `window position is optional`(@TempDir dir: Path) {
         val store = UiSettingsStore(dir.resolve("ui.properties"))
         store.save(UiSettings(window = WindowBounds(1000, 700)))

@@ -71,6 +71,16 @@ class McpEndpointTest {
     }
 
     @Test
+    void toolsListWithMalformedSchemaAnswersInternalError() {
+        when(tool.inputSchema()).thenReturn("{not json");
+
+        var response = call("{\"jsonrpc\":\"2.0\",\"id\":\"a\",\"method\":\"tools/list\"}");
+
+        assertThat(response.path("error").path("code").asInt()).isEqualTo(-32603);
+        assertThat(response.path("error").path("message").asString()).isEqualTo("Internal error");
+    }
+
+    @Test
     void toolCallRunsTheToolForTheProjectOfTheSession() {
         when(tool.call(PROJECT_ID, mapper.readTree("{\"x\":1}"))).thenReturn("done");
 

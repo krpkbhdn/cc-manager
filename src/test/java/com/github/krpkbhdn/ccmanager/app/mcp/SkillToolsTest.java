@@ -7,7 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.github.krpkbhdn.ccmanager.app.AssistantTextLimitProperties;
+import com.github.krpkbhdn.ccmanager.app.AppControlProperties;
 import com.github.krpkbhdn.ccmanager.extension.ExtensionException;
 import com.github.krpkbhdn.ccmanager.extension.ExtensionScope;
 import com.github.krpkbhdn.ccmanager.extension.skill.Skill;
@@ -24,7 +24,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 class SkillToolsTest {
 
-    private static final AssistantTextLimitProperties LIMITS = new AssistantTextLimitProperties(10);
+    private static final AppControlProperties LIMITS = new AppControlProperties(java.time.Duration.ofSeconds(10), 10);
     private static final Path DIRECTORY = Path.of("demo");
     private static final Skill OWN = new Skill("review", "Reviews", ExtensionScope.PROJECT, "", DIRECTORY.resolve("review/SKILL.md"));
     private static final Skill PLUGIN = new Skill("review", "Plugin", ExtensionScope.USER, "p@m", Path.of("p/review/SKILL.md"));

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.github.krpkbhdn.ccmanager.git.GitException.Kind;
+import com.github.krpkbhdn.ccmanager.workspace.CommandRunner;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -62,6 +63,7 @@ class GitRunnerTest {
 
         assertThat(runner.timeoutFor(List.of("-c", "core.editor=true", "rebase", "--continue"))).isEqualTo(properties.syncTimeout());
         assertThat(runner.timeoutFor(List.of("checkout", "x"))).isEqualTo(properties.syncTimeout());
+        assertThat(runner.timeoutFor(List.of("worktree", "add", "x"))).isEqualTo(properties.syncTimeout());
         assertThat(runner.timeoutFor(List.of("status"))).isEqualTo(properties.commandTimeout());
     }
 
@@ -114,5 +116,37 @@ class GitRunnerTest {
         sandbox.write("a.txt", "1\n2\n3\nX\n5\n6\n7\n");
 
         assertThat(sandbox.runner.out(sandbox.repo, "diff")).contains(" 3\n", " 5\n");
+    }
+
+    @Test
+    void stdoutOverTheCapIsAnErrorNotACutRecord() {
+        var sandbox = GitCliSandbox.create(root);
+        var big = "x".repeat(CommandRunner.MAX_OUTPUT_BYTES + 1024).getBytes(StandardCharsets.UTF_8);
+        var hash = sandbox.runner.outWithInput(sandbox.repo, big, "hash-object", "--stdin", "-w").strip();
+
+        assertThatThrownBy(() -> sandbox.runner.out(sandbox.repo, "cat-file", "-p", hash)).isInstanceOf(GitException.class).hasMessageContaining("too large");
+        assertThat(sandbox.runner.tryRun(sandbox.repo, "cat-file", "-p", hash).truncated()).isTrue();
+    }
+
+    @Test
+    void aStderrStreamWithoutNewlinesDoesNotGrowTheLineBuffer() {
+        var progress = new ArrayList<String>();
+        var stream = new java.io.ByteArrayInputStream("abcdefghij".getBytes(StandardCharsets.UTF_8));
+
+        GitRunner.readLines(stream, progress::add, new StringBuffer(), 4);
+
+        assertThat(progress).containsExactly("abcd");
+    }
+
+    @Test
+    void stderrIsCappedButEveryLineStillReportsProgress() {
+        var text = new StringBuffer();
+        var progress = new ArrayList<String>();
+        var stream = new java.io.ByteArrayInputStream("one\ntwo\nthree\n".getBytes(StandardCharsets.UTF_8));
+
+        GitRunner.readLines(stream, progress::add, text, 6);
+
+        assertThat(text.toString()).isEqualTo("one\ntw");
+        assertThat(progress).containsExactly("one", "two", "three");
     }
 }

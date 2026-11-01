@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.team;
 
 import com.github.krpkbhdn.ccmanager.project.ModelSelection;
+import com.github.krpkbhdn.ccmanager.workspace.ChangeListeners;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -9,7 +10,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,13 +27,14 @@ public class TeamService {
     public static final int MAX_ROLES = 12;
     /** Role prompts and descriptions together; keeps the claude command line under the Windows limit of 32,767 characters. */
     public static final int MAX_TOTAL_TEXT = 24_000;
+    private static final String COPY_SUFFIX = " copy";
     private static final Logger log = LoggerFactory.getLogger(TeamService.class);
     private static final String READ_ONLY_TOOL = "Read";
-    private static final String SELECT_ROLES = "SELECT id, name, description, prompt, model, effort, tools, is_lead, position FROM team_role";
+    private static final String SELECT_ROLES = "SELECT id, team_id, name, description, prompt, model, effort, tools, is_lead, position FROM team_role";
 
     private final JdbcClient jdbc;
     private final TransactionTemplate transaction;
-    private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
+    private final ChangeListeners listeners = new ChangeListeners("Team");
 
     @Autowired
     public TeamService(JdbcClient jdbc, TransactionTemplate transaction) {
@@ -42,8 +43,10 @@ public class TeamService {
     }
 
     public List<Team> list() {
+        var rolesByTeam = jdbc.sql(SELECT_ROLES + " ORDER BY position").query(TeamService::teamRole).list().stream()
+                .flatMap(Optional::stream).collect(Collectors.groupingBy(Map.Entry::getKey, Collectors.mapping(Map.Entry::getValue, Collectors.toList())));
         return jdbc.sql("SELECT id, name FROM team ORDER BY name COLLATE NOCASE, id")
-                .query((rs, row) -> team(rs)).list();
+                .query((rs, row) -> new Team(rs.getLong("id"), rs.getString("name"), rolesByTeam.getOrDefault(rs.getLong("id"), List.of()))).list();
     }
 
     public Optional<Team> find(long id) {
@@ -67,7 +70,11 @@ public class TeamService {
     /** Replaces the name and all roles; role ids change, the team id does not. */
     public Team update(long id, String name, List<RoleDraft> roles) {
         var cleanName = validate(name, roles);
-        find(id).orElseThrow(() -> new IllegalArgumentException("Team not found: " + id));
+        var current = find(id).orElseThrow(() -> new IllegalArgumentException("Team not found: " + id));
+        long stored = jdbc.sql("SELECT COUNT(*) FROM team_role WHERE team_id = ?").param(id).query(Long.class).single();
+        if (stored != current.roles().size()) {
+            throw new IllegalArgumentException("This team has unreadable roles; saving would delete them. Fix the broken role, or delete and recreate the team");
+        }
         transaction.executeWithoutResult(status -> {
             jdbc.sql("UPDATE team SET name = ? WHERE id = ?").param(cleanName).param(id).update();
             jdbc.sql("DELETE FROM team_role WHERE team_id = ?").param(id).update();
@@ -79,8 +86,18 @@ public class TeamService {
 
     public Team duplicate(long id) {
         var source = find(id).orElseThrow(() -> new IllegalArgumentException("Team not found: " + id));
-        var copyName = source.name() + " copy";
-        return create(copyName.length() > MAX_NAME ? source.name() : copyName, source.roles().stream().map(TeamRole::draft).toList());
+        return create(uniqueCopyName(source.name()), source.roles().stream().map(TeamRole::draft).toList());
+    }
+
+    private String uniqueCopyName(String sourceName) {
+        for (int attempt = 1; ; attempt++) {
+            var suffix = attempt == 1 ? COPY_SUFFIX : COPY_SUFFIX + " " + attempt;
+            var candidate = sourceName.substring(0, Math.min(sourceName.length(), MAX_NAME - suffix.length())).stripTrailing() + suffix;
+            long taken = jdbc.sql("SELECT COUNT(*) FROM team WHERE name = ?").param(candidate).query(Long.class).single();
+            if (taken == 0) {
+                return candidate;
+            }
+        }
     }
 
     public void delete(long id) {
@@ -107,8 +124,7 @@ public class TeamService {
 
     /** @return unsubscribe handle; callback fires after any change to teams or a project's default team */
     public Runnable subscribe(Runnable onChange) {
-        listeners.add(onChange);
-        return () -> listeners.remove(onChange);
+        return listeners.add(onChange);
     }
 
     /** @return the stripped team name; @throws IllegalArgumentException with a user-readable message */
@@ -153,6 +169,11 @@ public class TeamService {
         return new Team(id, rs.getString("name"), roles);
     }
 
+    private static Optional<Map.Entry<Long, TeamRole>> teamRole(ResultSet rs, int row) throws SQLException {
+        long teamId = rs.getLong("team_id");
+        return role(rs, row).map(role -> Map.entry(teamId, role));
+    }
+
     /** Stale model, effort or tools are repaired field by field; a role that still fails today's rules is skipped, not fatal. */
     private static Optional<TeamRole> role(ResultSet rs, int row) throws SQLException {
         var selection = ModelSelection.stored(rs.getString("model"), rs.getString("effort"));
@@ -176,6 +197,6 @@ public class TeamService {
     }
 
     private void fireChanged() {
-        listeners.forEach(Runnable::run);
+        listeners.fire();
     }
 }

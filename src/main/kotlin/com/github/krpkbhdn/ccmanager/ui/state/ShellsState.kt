@@ -44,7 +44,13 @@ class ShellsState(
                 val launched = io { backend.shellLauncher.launch(projectId, shell) }
                 onChosen(shell.name)
                 labels[launched.terminalId()] = uniqueLabel(shell.name, openShellsOf(projectId).map(::labelOf))
-                backend.terminal.openShell(launched)
+                try {
+                    backend.terminal.openShell(launched)
+                } catch (e: Exception) {
+                    labels.remove(launched.terminalId())
+                    launched.process().destroyForcibly()
+                    throw e
+                }
                 onOpened(projectId, launched.terminalId())
                 closeWhenExited(launched)
             }

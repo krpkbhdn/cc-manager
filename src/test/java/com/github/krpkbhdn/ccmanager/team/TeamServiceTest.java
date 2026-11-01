@@ -72,6 +72,29 @@ class TeamServiceTest {
     }
 
     @Test
+    void updateRefusesATeamWithAnUnreadableRoleSoItIsNotDeleted() {
+        var team = service.create("Squad", List.of(role("boss", true), role("dev", false)));
+        jdbc.sql("UPDATE team_role SET name = '' WHERE team_id = ? AND name = 'dev'").param(team.id()).update();
+
+        assertThatThrownBy(() -> service.update(team.id(), "Squad", List.of(role("boss", true))))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("unreadable");
+        assertThat(jdbc.sql("SELECT COUNT(*) FROM team_role WHERE team_id = ?").param(team.id()).query(Long.class).single()).isEqualTo(2L);
+    }
+
+    @Test
+    void aThrowingListenerDoesNotStopTheOthers() {
+        var calls = new AtomicInteger();
+        service.subscribe(() -> {
+            throw new IllegalStateException("boom");
+        });
+        service.subscribe(calls::incrementAndGet);
+
+        service.create("Squad", List.of(role("boss", true)));
+
+        assertThat(calls).hasValue(1);
+    }
+
+    @Test
     void storedRoleWithRetiredEffortStillLoadsWithoutIt() {
         var team = service.create("Squad", List.of(role("boss", true)));
         jdbc.sql("UPDATE team_role SET effort = 'retired' WHERE team_id = ?").param(team.id()).update();
@@ -129,6 +152,18 @@ class TeamServiceTest {
         assertThat(copy.id()).isNotEqualTo(original.id());
         assertThat(copy.name()).isEqualTo("Dev team copy");
         assertThat(copy.roles()).extracting(TeamRole::name).containsExactly("architect", "developer", "tester");
+    }
+
+    @Test
+    void duplicateOfALongNameFitsTheLimitAndStaysUnique() {
+        var longName = "x".repeat(58);
+        var original = service.create(longName, List.of(role("boss", true)));
+
+        var first = service.duplicate(original.id());
+        var second = service.duplicate(original.id());
+
+        assertThat(first.name()).hasSizeLessThanOrEqualTo(TeamService.MAX_NAME).endsWith(" copy").isNotEqualTo(longName);
+        assertThat(second.name()).hasSizeLessThanOrEqualTo(TeamService.MAX_NAME).isNotIn(longName, first.name());
     }
 
     @Test

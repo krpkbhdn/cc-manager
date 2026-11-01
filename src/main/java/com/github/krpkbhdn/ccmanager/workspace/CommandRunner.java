@@ -13,16 +13,21 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-/** Runs a short-lived command with a hard timeout; stdout and stderr are drained concurrently. */
+/** Runs a short-lived command with a hard timeout; stdout and stderr are drained concurrently, each kept up to {@link #MAX_OUTPUT_BYTES}. */
 public final class CommandRunner {
 
-    public record Result(int exitCode, String stdout, String stderr, boolean timedOut) {
+    public record Result(int exitCode, String stdout, String stderr, boolean timedOut, boolean truncated) {
+
+        public Result(int exitCode, String stdout, String stderr, boolean timedOut) {
+            this(exitCode, stdout, stderr, timedOut, false);
+        }
 
         public boolean succeeded() {
-            return !timedOut && exitCode == 0;
+            return !timedOut && !truncated && exitCode == 0;
         }
     }
 
+    public static final int MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
     private static final Duration READER_GRACE = Duration.ofSeconds(2);
     private static final ExecutorService PIPES = Executors.newVirtualThreadPerTaskExecutor();
 
@@ -30,6 +35,11 @@ public final class CommandRunner {
 
     /** @throws IOException when the process cannot be started */
     public static Result run(List<String> command, Path workingDirectory, Duration timeout) throws IOException {
+        return run(command, workingDirectory, timeout, MAX_OUTPUT_BYTES);
+    }
+
+    /** @param maxOutputBytes per stream; the rest is read and dropped so the process never blocks on a full pipe */
+    static Result run(List<String> command, Path workingDirectory, Duration timeout, int maxOutputBytes) throws IOException {
         var builder = new ProcessBuilder(command);
         if (workingDirectory != null) {
             builder.directory(workingDirectory.toFile());
@@ -38,14 +48,16 @@ public final class CommandRunner {
         process.getOutputStream().close();
         var stdout = new ByteArrayOutputStream();
         var stderr = new ByteArrayOutputStream();
-        var readers = CompletableFuture.allOf(drain(process.getInputStream(), stdout), drain(process.getErrorStream(), stderr));
+        var stdoutTruncated = drain(process.getInputStream(), stdout, maxOutputBytes);
+        var stderrTruncated = drain(process.getErrorStream(), stderr, maxOutputBytes);
         try {
             var finished = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
             if (!finished) {
                 ProcessTree.kill(process);
             }
-            awaitReaders(process, readers);
-            return new Result(finished ? process.exitValue() : -1, stdout.toString(StandardCharsets.UTF_8), stderr.toString(StandardCharsets.UTF_8), !finished);
+            awaitReaders(process, CompletableFuture.allOf(stdoutTruncated, stderrTruncated));
+            return new Result(finished ? process.exitValue() : -1, stdout.toString(StandardCharsets.UTF_8), stderr.toString(StandardCharsets.UTF_8), !finished,
+                    stdoutTruncated.getNow(false) || stderrTruncated.getNow(false));
         } catch (InterruptedException e) {
             ProcessTree.kill(process);
             Thread.currentThread().interrupt();
@@ -78,17 +90,26 @@ public final class CommandRunner {
         }
     }
 
-    public static CompletableFuture<Void> drain(InputStream stream, ByteArrayOutputStream into) {
-        return CompletableFuture.runAsync(() -> {
+    /** Completes with true when the stream held more than the cap and the rest was dropped. */
+    public static CompletableFuture<Boolean> drain(InputStream stream, ByteArrayOutputStream into) {
+        return drain(stream, into, MAX_OUTPUT_BYTES);
+    }
+
+    private static CompletableFuture<Boolean> drain(InputStream stream, ByteArrayOutputStream into, int maxBytes) {
+        return CompletableFuture.supplyAsync(() -> {
+            var truncated = false;
             try (stream) {
                 var chunk = new byte[8192];
                 int count;
                 while ((count = stream.read(chunk)) != -1) {
-                    into.write(chunk, 0, count);
+                    var kept = Math.min(count, Math.max(0, maxBytes - into.size()));
+                    into.write(chunk, 0, kept);
+                    truncated |= kept < count;
                 }
             } catch (IOException e) {
                 // closed after the grace period; the buffer holds what arrived
             }
+            return truncated;
         }, PIPES);
     }
 

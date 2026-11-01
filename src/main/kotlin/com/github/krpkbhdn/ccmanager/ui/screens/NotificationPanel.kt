@@ -82,7 +82,7 @@ private fun Drawer(state: AppState) {
     ) {
         VerticalRule()
         Column(Modifier.weight(1f)) {
-            DrawerHeader(state.notifications.unreadCount, state.notifications::markAllRead, state.settings.notificationSound, state::toggleNotificationSound) { state.notificationsOpen = false }
+            DrawerHeader(state.notifications.unreadCount, state.notifications::markAllRead, state.settings.notificationSound, state.prefs::toggleNotificationSound) { state.notificationsOpen = false }
             HorizontalRule()
             if (state.notifications.items.isEmpty()) {
                 EmptyState(Icons.CircleCheck, "You are all caught up", "Finished work and requests for your decision will be listed here.", tint = colors.success)

@@ -24,6 +24,7 @@ import com.github.krpkbhdn.ccmanager.ui.components.Chip
 import com.github.krpkbhdn.ccmanager.ui.components.EmptyState
 import com.github.krpkbhdn.ccmanager.ui.components.IconButton
 import com.github.krpkbhdn.ccmanager.ui.components.Label
+import com.github.krpkbhdn.ccmanager.ui.extensions.AddAndRefreshActions
 import com.github.krpkbhdn.ccmanager.ui.extensions.BusyLabel
 import com.github.krpkbhdn.ccmanager.ui.extensions.ExtensionAvatar
 import com.github.krpkbhdn.ccmanager.ui.extensions.ExtensionContext
@@ -77,8 +78,7 @@ private fun SkillsToolbar(state: SkillsState, search: TextFieldState, count: Int
         Label(if (count == 1) "1 skill" else "$count skills", color = colors.textSecondary, style = Type.small)
         Box(Modifier.weight(1f))
         state.job?.let { BusyLabel(it.label) }
-        AppButton("New skill", { state.creating = true }, variant = ButtonVariant.PRIMARY, icon = Icons.Plus, enabled = state.job == null, compact = true)
-        IconButton(Icons.Refresh, { state.refresh() }, tooltip = "Refresh", enabled = !state.loading && state.job == null)
+        AddAndRefreshActions("New skill", { state.creating = true }, state.job != null, state.loading, state::refresh)
     }
 }
 

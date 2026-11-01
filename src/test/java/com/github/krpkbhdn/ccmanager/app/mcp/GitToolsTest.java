@@ -3,7 +3,9 @@ package com.github.krpkbhdn.ccmanager.app.mcp;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -167,6 +169,74 @@ class GitToolsTest {
         var result = call(new GitDiffTool(projects, status, mapper), "{\"project\":7,\"path\":\"a.txt\"}");
 
         assertThat(result).startsWith("--- a.txt").endsWith("... truncated").hasSizeLessThan(GitDiffTool.MAX_CHARS + 50);
+    }
+
+    @Test
+    void diffStopsAfterTheFileLimitAndSaysSo() {
+        var changes = java.util.stream.IntStream.range(0, GitDiffTool.MAX_FILES + 50)
+                .mapToObj(i -> new Change("f" + i, null, GitStatus.Kind.NONE, GitStatus.Kind.MODIFIED)).toList();
+        when(status.status(REPO)).thenReturn(new GitStatus(true, "main", "abc", false, null, 0, 0, GitStatus.Operation.NONE, 0, null, changes));
+        when(status.diff(any(), any(), anyBoolean())).thenReturn(new GitDiff.FileDiff("f", null, GitDiff.ChangeType.MODIFIED, 0, 0, false, List.of()));
+
+        var result = call(new GitDiffTool(projects, status, mapper), "{\"project\":7}");
+
+        assertThat(result).contains("truncated", "first " + GitDiffTool.MAX_FILES + " of " + (GitDiffTool.MAX_FILES + 50));
+        verify(status, times(GitDiffTool.MAX_FILES * 2)).diff(any(), any(), anyBoolean());
+    }
+
+    @Test
+    void diffRejectsAPathOutsideTheRepository() {
+        var tool = new GitDiffTool(projects, status, mapper);
+
+        assertThatThrownBy(() -> call(tool, "{\"project\":7,\"path\":\"../../.ssh/id_rsa\"}")).hasMessageContaining("outside the repository");
+        assertThatThrownBy(() -> call(tool, "{\"project\":7,\"path\":" + mapper.writeValueAsString(REPO.getRoot().resolve("etc").toString()) + "}"))
+                .hasMessageContaining("outside the repository");
+        verify(status, never()).diff(any(), any(), eq(false));
+    }
+
+    @Test
+    void diffRejectsAPathInsideTheGitDirectory() {
+        var tool = new GitDiffTool(projects, status, mapper);
+
+        assertThatThrownBy(() -> call(tool, "{\"project\":7,\"path\":\".git/config\"}")).hasMessageContaining("inside .git");
+        verify(status, never()).diff(any(), any(), eq(false));
+    }
+
+    @Test
+    void diffRejectsANestedGitDirectoryInAnyCase() {
+        var tool = new GitDiffTool(projects, status, mapper);
+
+        assertThatThrownBy(() -> call(tool, "{\"project\":7,\"path\":\"vendor/lib/.git/config\"}")).hasMessageContaining("inside .git");
+        assertThatThrownBy(() -> call(tool, "{\"project\":7,\"path\":\".GIT/config\"}")).hasMessageContaining("inside .git");
+        verify(status, never()).diff(any(), any(), eq(false));
+    }
+
+    @Test
+    void diffRejectsWindowsSpellingsOfTheGitDirectory() {
+        for (var name : List.of(".git.", ".git ", ".GIT...", "GIT~1", "git~1")) {
+            assertThatThrownBy(() -> GitDiffTool.requireInside(REPO, name + "/config")).as(name).hasMessageContaining("inside .git");
+        }
+    }
+
+    @Test
+    void diffRejectsASymlinkIntoTheGitDirectory(@org.junit.jupiter.api.io.TempDir Path repo) throws java.io.IOException {
+        java.nio.file.Files.createDirectory(repo.resolve(".git"));
+        java.nio.file.Files.writeString(repo.resolve(".git").resolve("config"), "[remote]");
+        try {
+            java.nio.file.Files.createSymbolicLink(repo.resolve("link"), repo.resolve(".git"));
+        } catch (UnsupportedOperationException | java.io.IOException | SecurityException e) {
+            org.junit.jupiter.api.Assumptions.abort("symlinks are not available: " + e);
+        }
+
+        assertThatThrownBy(() -> GitDiffTool.requireInside(repo, "link/config")).hasMessageContaining("inside .git");
+    }
+
+    @Test
+    void diffAllowsAPathThatOnlyLooksLikeGit() {
+        when(status.diff(any(), any(), eq(false))).thenReturn(new GitDiff.FileDiff(".gitignore", null, GitDiff.ChangeType.MODIFIED, 0, 0, false, List.of()));
+        when(status.diff(any(), any(), eq(true))).thenReturn(new GitDiff.FileDiff(".gitignore", null, GitDiff.ChangeType.MODIFIED, 0, 0, false, List.of()));
+
+        assertThat(call(new GitDiffTool(projects, status, mapper), "{\"project\":7,\"path\":\".gitignore\"}")).isEqualTo("No changes");
     }
 
     @Test

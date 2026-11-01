@@ -19,7 +19,7 @@ private const val SUBAGENT_LABEL = "subagent"
 /** The dialog of the proposal the open session waits on, if any; sessions that are not on screen never pop up. */
 @Composable
 fun ProposalDialogHost(state: AppState) {
-    val proposal = state.proposalDialog ?: return
+    val proposal = state.answers.dialog ?: return
     val context = remember(proposal.id()) { ProposalContext(state.proposals, proposal) }
     val title = titleOf(proposal, agentLabel(state, proposal), state.proposals.positionOf(proposal))
     key(proposal.id()) {

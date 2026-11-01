@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 import com.github.krpkbhdn.ccmanager.config.AppProperties;
+import com.github.krpkbhdn.ccmanager.download.VerifiedDownload;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -38,7 +39,7 @@ class UpdateServiceTest {
         server.createContext("/app.msi.sha256", exchange -> respond(exchange, (checksum + "  app.msi\n").getBytes(StandardCharsets.UTF_8)));
         server.start();
         var properties = new UpdateProperties("1.0.0", "o/r", "http://unused", 6, 5);
-        service = new UpdateService(properties, new AppProperties(dataDir), JsonMapper.builder().build(), mock(UpdateInstaller.class));
+        service = new UpdateService(properties, new AppProperties(dataDir), JsonMapper.builder().build(), mock(UpdateInstaller.class), new VerifiedDownload());
     }
 
     @AfterEach
@@ -66,9 +67,22 @@ class UpdateServiceTest {
         assertThat(updates).isDirectoryContaining(path -> path.equals(installer)).isDirectoryNotContaining(path -> path.getFileName().toString().startsWith("old"));
     }
 
+    @Test
+    void installerLargerThanTheAdvertisedSizeIsRejected() {
+        checksum = "0".repeat(64);
+
+        assertThatThrownBy(() -> service.download(update(INSTALLER.length - 1), progress -> { })).isInstanceOf(java.io.UncheckedIOException.class)
+                .hasMessageContaining("larger than the expected");
+        assertThat(dataDir.resolve("updates")).isEmptyDirectory();
+    }
+
     private AvailableUpdate update() {
+        return update(INSTALLER.length);
+    }
+
+    private AvailableUpdate update(long sizeBytes) {
         var base = "http://127.0.0.1:" + server.getAddress().getPort();
-        return new AvailableUpdate("1.0.1", "app.msi", URI.create(base + "/app.msi"), URI.create(base + "/app.msi.sha256"), URI.create(base));
+        return new AvailableUpdate("1.0.1", "app.msi", sizeBytes, URI.create(base + "/app.msi"), URI.create(base + "/app.msi.sha256"), URI.create(base));
     }
 
     private static void respond(com.sun.net.httpserver.HttpExchange exchange, byte[] body) throws java.io.IOException {

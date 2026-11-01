@@ -35,13 +35,12 @@ internal class TerminalPainter(val fonts: TerminalFonts, private val paddingX: I
         val scroll = session.scrollShown
         val firstLine = -ceil(scroll).toInt()
         val lastLine = session.rows - 1 - floor(scroll).toInt()
-        val lines = (firstLine..lastLine).toList()
-        val rows = session.buffer.withLock { lines.map { rowOf(session, it, cursorFilled) } }
+        val rows = session.buffer.withLock { Array(lastLine - firstLine + 1) { rowOf(session, firstLine + it, cursorFilled) } }
         canvas.save()
         canvas.clipRect(Rect.makeXYWH(0f, paddingY.toFloat(), width.toFloat(), (height - 2 * paddingY).toFloat()), ClipMode.INTERSECT)
-        val tops = lines.map { paddingY + ((it + scroll) * cellHeight).roundToInt() }
-        rows.forEachIndexed { index, runs -> drawBackgrounds(canvas, runs, tops[index], theme.background) }
-        rows.forEachIndexed { index, runs -> drawText(canvas, runs, tops[index]) }
+        fun topOf(index: Int) = paddingY + ((firstLine + index + scroll) * cellHeight).roundToInt()
+        rows.forEachIndexed { index, runs -> drawBackgrounds(canvas, runs, topOf(index), theme.background) }
+        rows.forEachIndexed { index, runs -> drawText(canvas, runs, topOf(index)) }
         drawCursorShape(canvas, session, cursorFilled, scroll)
         canvas.restore()
     }
@@ -113,7 +112,7 @@ internal class TerminalPainter(val fonts: TerminalFonts, private val paddingX: I
 
     private fun drawSegment(canvas: Canvas, run: Run, from: Int, to: Int, baseline: Float) {
         if (from >= to) return
-        val segment = run.text.substring(from, to)
+        val segment = if (from == 0 && to == run.text.length) run.text else run.text.substring(from, to)
         if (segment.isBlank()) return
         val x = (paddingX + (run.column + from) * cellWidth).toFloat()
         canvas.drawString(segment, x, baseline, fonts.face(run.paint.styleBits), text)

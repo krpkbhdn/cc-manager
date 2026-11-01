@@ -2,8 +2,8 @@ package com.github.krpkbhdn.ccmanager.claude.proposal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.github.krpkbhdn.ccmanager.claude.hook.HookEvent;
-import com.github.krpkbhdn.ccmanager.claude.hook.HookEventType;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEventType;
 import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalAnswer.Denial;
 import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalAnswer.FormAnswer;
 import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalAnswer.PermissionAllow;

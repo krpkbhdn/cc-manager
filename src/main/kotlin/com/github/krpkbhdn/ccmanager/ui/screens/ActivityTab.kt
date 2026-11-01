@@ -27,7 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.claude.hook.ActivityEntry
-import com.github.krpkbhdn.ccmanager.claude.hook.HookEventType
+import com.github.krpkbhdn.ccmanager.claude.event.HookEventType
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
 import com.github.krpkbhdn.ccmanager.ui.components.AppButton
 import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant

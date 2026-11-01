@@ -30,6 +30,9 @@ private const val MIN_CELL_DP = 6
 private const val MAX_CELL_DP = 20
 private const val ENTER_BYTE: Byte = 0x0D
 private const val CTRL_C_BYTE: Byte = 0x03
+private const val SPACE_BYTE: Byte = 0x20
+private const val DELETE_BYTE: Byte = 0x7F
+private const val CTRL_C_CHAR = '\u0003'
 private const val NANOS_PER_MILLI = 1_000_000L
 
 private fun Color.toJediColor() = com.jediterm.core.Color(toArgb() and 0xFFFFFF)
@@ -112,7 +115,10 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
         scrollShown += lines
     }
 
-    fun send(text: String) = emulator.write(text.toByteArray(Charsets.UTF_8))
+    fun send(text: String) {
+        if (CTRL_C_CHAR in text) clearDraftCount()
+        emulator.write(text.toByteArray(Charsets.UTF_8))
+    }
 
     @Volatile
     private var lastEnterNanos = 0L
@@ -121,13 +127,27 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
     fun enterWithin(windowMillis: Long): Boolean =
         lastEnterNanos != 0L && System.nanoTime() - lastEnterNanos < windowMillis * NANOS_PER_MILLI
 
-    /** True after user input that can leave an unsent draft, until the user presses Enter, Ctrl+C or a lone Esc (programmatic sends never set it). */
+    /** True after user input that can leave an unsent draft, until the user presses Enter or Ctrl+C (only typed text sets it; Esc, arrows and function keys leave it as is); programmatic sends never set it, a programmatic Ctrl+C clears it. */
     @Volatile
     var draftMayExist = false
         private set
 
+    // shortcut: counts typed characters and Backspaces only, word/line deletes keep the draft flagged, until Enter or Ctrl+C
+    private val draftLength = AtomicInteger()
+
+    private fun addToDraft(delta: Int) {
+        draftMayExist = draftLength.updateAndGet { (it + delta).coerceAtLeast(0) } > 0
+    }
+
+    private fun clearDraftCount() {
+        draftLength.set(0)
+        draftMayExist = false
+    }
+
     private fun trackDraft(bytes: ByteArray) {
-        draftMayExist = !(bytes.size == 1 && (bytes[0] == ENTER_BYTE || bytes[0] == CTRL_C_BYTE)) && !isLoneEscape(bytes)
+        if (bytes.size == 1 && (bytes[0] == ENTER_BYTE || bytes[0] == CTRL_C_BYTE)) clearDraftCount()
+        else if (bytes.size == 1 && bytes[0] == DELETE_BYTE) addToDraft(-1)
+        else if (bytes.isNotEmpty() && (bytes[0] >= SPACE_BYTE || bytes[0] < 0)) addToDraft(1)
     }
 
     /** Handles a key event; returns true when it was consumed here. */
@@ -189,7 +209,7 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
         val text = runCatching { clipboard.getData(DataFlavor.stringFlavor) as? String }.getOrNull().orEmpty()
         if (text.isEmpty()) return false
         scrollToBottom()
-        draftMayExist = true
+        addToDraft(text.codePointCount(0, text.length))
         emulator.write(pasteBytes(text, modes.bracketedPaste))
         return true
     }

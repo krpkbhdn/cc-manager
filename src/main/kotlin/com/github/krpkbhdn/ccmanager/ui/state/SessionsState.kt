@@ -19,7 +19,11 @@ import kotlinx.coroutines.launch
 private const val APPLY_TIMEOUT_MILLIS = 6_000L
 private const val APPLY_POLL_MILLIS = 200L
 private const val SWITCH_MODEL_HINT = "If claude asks \"Switch model?\", answer in the terminal."
+private const val DRAFT_MESSAGE = "You have unsent text in the terminal. Send or clear it, then change the model."
+private const val DRAFT_MESSAGE_SEND = "You have unsent text in the terminal. Send or clear it first."
 private const val BUSY_MESSAGE = "The session is not ready for a command yet. Try again in a moment."
+
+private const val LAUNCH_IN_PROGRESS_MESSAGE = "Another session is starting. Try again in a moment."
 
 /** Starting, attaching, closing and commanding the Claude sessions of the projects. */
 class SessionsState(
@@ -43,6 +47,8 @@ class SessionsState(
     /** The team each project's latest session started with: claude does not persist --agents, so Continue/Resume must pass it again. */
     private val lastTeams = mutableMapOf<Long, Team?>()
     private val attachedSessions = mutableStateSetOf<String>()
+    private val attachedBackgrounds = mutableMapOf<String, String>()
+    private val attachingBackgrounds = mutableSetOf<String>()
     private val commandWriter = SessionCommandWriter(backend.terminal)
 
     fun isAttached(ccmSessionId: String) = ccmSessionId in attachedSessions
@@ -72,7 +78,7 @@ class SessionsState(
         launchSession(projectId, onStarted = onStarted) { backend.launcher.launchSetup(projectId, handoff.firstMessage(), handoff.profileDirectory()) }
 
     private fun launchSession(projectId: Long, team: Team? = null, onStarted: () -> Unit = {}, rememberTeam: Boolean = team != null, show: Boolean = true, start: () -> LaunchedSession) {
-        if (launching) return
+        if (launching) return reportError(LAUNCH_IN_PROGRESS_MESSAGE)
         launching = true
         scope.launch {
             guarded {
@@ -95,22 +101,27 @@ class SessionsState(
     fun applyToSession(session: SessionSnapshot, command: String, reached: (SessionUsage?) -> Boolean) {
         if ((modelTarget(session, modelApplying, isAttached(session.ccmSessionId)) as? ModelTarget.Running)?.blockedReason != null) return
         if (unconfirmed.remove(session.ccmSessionId)) return reportError(SWITCH_MODEL_HINT)
+        if (backend.terminal.draftMayExist(session.ccmSessionId)) return reportError(DRAFT_MESSAGE)
         modelApplying = true
         scope.launch {
-            guarded {
-                if (!commandWriter.run(session.ccmSessionId, command)) return@guarded reportError(BUSY_MESSAGE)
-                backend.terminal.focus(session.ccmSessionId)
-                var waited = 0L
-                while (!reached(usageOf(session.ccmSessionId)) && waited < APPLY_TIMEOUT_MILLIS) {
-                    delay(APPLY_POLL_MILLIS)
-                    waited += APPLY_POLL_MILLIS
+            try {
+                guarded {
+                    val typed = commandWriter.run(session.ccmSessionId, command, clearDraft = false) { backend.terminal.draftMayExist(session.ccmSessionId) }
+                    if (!typed) return@guarded reportError(BUSY_MESSAGE)
+                    backend.terminal.focus(session.ccmSessionId)
+                    var waited = 0L
+                    while (!reached(usageOf(session.ccmSessionId)) && waited < APPLY_TIMEOUT_MILLIS) {
+                        delay(APPLY_POLL_MILLIS)
+                        waited += APPLY_POLL_MILLIS
+                    }
+                    if (!reached(usageOf(session.ccmSessionId))) {
+                        unconfirmed.add(session.ccmSessionId)
+                        reportError(SWITCH_MODEL_HINT)
+                    }
                 }
-                if (!reached(usageOf(session.ccmSessionId))) {
-                    unconfirmed.add(session.ccmSessionId)
-                    reportError(SWITCH_MODEL_HINT)
-                }
+            } finally {
+                modelApplying = false
             }
-            modelApplying = false
         }
     }
 
@@ -122,13 +133,17 @@ class SessionsState(
     }
 
     fun attach(projectId: Long, backgroundId: String) {
+        if (backgroundId in attachingBackgrounds || backgroundId in attachedBackgrounds.values) return
+        attachingBackgrounds.add(backgroundId)
         scope.launch {
             guarded {
                 val session = io { backend.launcher.attach(projectId, backgroundId) }
                 attachedSessions.add(session.ccmSessionId())
+                attachedBackgrounds[session.ccmSessionId()] = backgroundId
                 backend.terminal.open(session)
                 onOpened(projectId, session.ccmSessionId())
             }
+            attachingBackgrounds.remove(backgroundId)
         }
     }
 
@@ -145,6 +160,7 @@ class SessionsState(
 
     fun close(projectId: Long, ccmSessionId: String) {
         attachedSessions.remove(ccmSessionId)
+        attachedBackgrounds.remove(ccmSessionId)
         sessionTeams.remove(ccmSessionId)
         unconfirmed.remove(ccmSessionId)
         onClosed(projectId, ccmSessionId)
@@ -153,9 +169,10 @@ class SessionsState(
 
     fun send(ccmSessionId: String, keys: String) {
         if (keys.endsWith(Keys.ENTER)) commandBlockedReason(live().find(ccmSessionId), isAttached(ccmSessionId))?.let { return reportError(it) }
+        if (keys.endsWith(Keys.ENTER) && backend.terminal.draftMayExist(ccmSessionId)) return reportError(DRAFT_MESSAGE_SEND)
         scope.launch {
             guarded {
-                val sent = if (keys.endsWith(Keys.ENTER)) commandWriter.run(ccmSessionId, keys.removeSuffix(Keys.ENTER)) else { backend.terminal.send(ccmSessionId, keys); true }
+                val sent = if (keys.endsWith(Keys.ENTER)) commandWriter.run(ccmSessionId, keys.removeSuffix(Keys.ENTER), clearDraft = false) { backend.terminal.draftMayExist(ccmSessionId) } else { backend.terminal.send(ccmSessionId, keys); true }
                 if (!sent) reportError(BUSY_MESSAGE)
             }
         }

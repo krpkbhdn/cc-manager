@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -76,7 +77,9 @@ import com.github.krpkbhdn.ccmanager.ui.teams.TaskTemplates
 import com.github.krpkbhdn.ccmanager.ui.teams.TeamsScreen
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
+import com.github.krpkbhdn.ccmanager.ui.voice.LocalVoice
 import java.net.URI
+import com.github.krpkbhdn.ccmanager.ui.settings.SettingsDialog
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -89,44 +92,47 @@ private val NARROW_WIDTH = 1040.dp
 @Composable
 fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), modifier: Modifier = Modifier) {
     val dropTarget = remember { FolderDropTarget(state) }
-    Box(
-        modifier.fillMaxSize().background(colors.background).trackInputModality()
-            .dragAndDropTarget(shouldStartDragAndDrop = { it.dragData() is DragData.FilesList }, target = dropTarget),
-    ) {
-        val installation = state.installation
-        Crossfade(installation?.installed, label = "appGate") { installed ->
-            when (installed) {
-                null -> AppSkeleton()
-                false -> InstallGate(installation?.problem, state.checkingInstallation, { state.recheckInstallation() }, osName)
-                true -> if (installation != null) MainLayout(state, installation)
+    CompositionLocalProvider(LocalVoice provides state.voice) {
+        Box(
+            modifier.fillMaxSize().background(colors.background).trackInputModality()
+                .dragAndDropTarget(shouldStartDragAndDrop = { it.dragData() is DragData.FilesList }, target = dropTarget),
+        ) {
+            val installation = state.environment.installation
+            Crossfade(installation?.installed, label = "appGate") { installed ->
+                when (installed) {
+                    null -> AppSkeleton()
+                    false -> InstallGate(installation?.problem, state.environment.checkingInstallation, { state.environment.recheckInstallation() }, osName)
+                    true -> if (installation != null) MainLayout(state, installation)
+                }
             }
+            NotificationPanel(state)
+            ToastHost(state.notifications.toasts, state::openToast, state.notifications::dismissToast, Modifier.align(Alignment.BottomEnd).padding(bottom = 26.dp))
+            if (state.paletteOpen) CommandPalette(paletteItems(state, colors.dark)) { state.paletteOpen = false }
+            if (state.shortcutsOpen) ShortcutSheet { state.shortcutsOpen = false }
+            (state.route as? Route.Project)?.let { state.gits.of(it.id) }?.let { GitDialogHost(it) }
+            state.tasks.projectId?.let { id -> state.projects.all.firstOrNull { it.id == id } }?.let { StartTaskDialog(it, state.teams, startTaskTemplates(state, it), startTaskActions(state, it)) }
+            state.tasks.quickStartProjectId?.let { id -> state.projects.all.firstOrNull { it.id == id } }?.let { QuickStartPicker(state, it) }
+            state.tasks.queuePickTarget?.let { (id, sessionId) -> state.projects.all.firstOrNull { it.id == id }?.let { QueuePicker(state, it, sessionId) } }
+            state.prompts.dialog?.let { PromptDialog(it, state.prompts, state.projects.all, state.teams.teams) }
+            state.runs.dialog?.let { RunConfigurationDialog(it, state.runs, state.dataDir) }
+            state.teams.dialog?.let { open -> state.teams.find(open.teamId)?.let { RoleDialog(it, open, state.teams) } }
+            state.extensions.projectSettings?.let { ProjectSettingsDialog(it, state.extensions::closeProjectSettings) }
+            if (state.settingsDialog.open) SettingsDialog(state)
+            state.extensions.plugins.pending?.let { PluginCommandDialog(it, state.extensions.plugins.job == null, state.extensions.plugins::confirmPending, state.extensions.plugins::dismissPending) }
+            state.agents.log?.let { SubagentLogHost(state.agents, { state.now }, it) }
+            state.author.offer?.let { AuthorOfferDialog(it, state.author) }
+            state.author.manage?.let { open -> AuthorConfigurationDialog(open, open.projectId?.let { state.projects.find(it)?.name }, state.author) }
+            state.author.report?.let { AuthorReportPanel(it, state.author::closeReport) }
+            ProposalDialogHost(state)
+            if (state.quickRequestOpen) QuickRequestDialog({ state.assistant.request(it); state.quickRequestOpen = false }, { state.quickRequestOpen = false })
+            if (state.assistantStartup.asking) AssistantStartupDialog(state.assistantStartup)
+            if (state.assistantHelpOpen) AssistantHelpDialog(state.assistantTools) { state.assistantHelpOpen = false }
+            state.confirm?.let { ConfirmDialog(it) { state.confirm = null } }
+            state.projects.groupDialog?.let { key(it) { GroupDialog(it, state.projects) } }
+            state.projects.renaming?.let { RenameDialog(it, { name -> state.projects.rename(it.project, name) }, { state.projects.renaming = null }) }
+            if (state.projects.pickerOpen) FolderPickerDialog(initial = null, dataDir = state.dataDir, onDismiss = { state.projects.pickerOpen = false }, onPicked = state.projects::addAt)
+            if (dropTarget.hovering) DropOverlay()
         }
-        NotificationPanel(state)
-        ToastHost(state.notifications.toasts, state::openToast, state.notifications::dismissToast, Modifier.align(Alignment.BottomEnd).padding(bottom = 26.dp))
-        if (state.paletteOpen) CommandPalette(paletteItems(state, colors.dark)) { state.paletteOpen = false }
-        if (state.shortcutsOpen) ShortcutSheet { state.shortcutsOpen = false }
-        (state.route as? Route.Project)?.let { state.gitOf(it.id) }?.let { GitDialogHost(it) }
-        state.taskDialogProjectId?.let { id -> state.projects.all.firstOrNull { it.id == id } }?.let { StartTaskDialog(it, state.teams, startTaskTemplates(state, it), startTaskActions(state, it)) }
-        state.quickStartProjectId?.let { id -> state.projects.all.firstOrNull { it.id == id } }?.let { QuickStartPicker(state, it) }
-        state.queuePickTarget?.let { (id, sessionId) -> state.projects.all.firstOrNull { it.id == id }?.let { QueuePicker(state, it, sessionId) } }
-        state.prompts.dialog?.let { PromptDialog(it, state.prompts, state.projects.all, state.teams.teams) }
-        state.runs.dialog?.let { RunConfigurationDialog(it, state.runs, state.dataDir) }
-        state.teams.dialog?.let { open -> state.teams.find(open.teamId)?.let { RoleDialog(it, open, state.teams) } }
-        state.projectSettings?.let { ProjectSettingsDialog(it, state::closeProjectSettings) }
-        state.plugins.pending?.let { PluginCommandDialog(it, state.plugins.job == null, state.plugins::confirmPending, state.plugins::dismissPending) }
-        state.agents.log?.let { SubagentLogHost(state.agents, { state.now }, it) }
-        state.author.offer?.let { AuthorOfferDialog(it, state.author) }
-        state.author.manage?.let { open -> AuthorConfigurationDialog(open, open.projectId?.let { state.projects.find(it)?.name }, state.author) }
-        state.author.report?.let { AuthorReportPanel(it, state.author::closeReport) }
-        ProposalDialogHost(state)
-        if (state.quickRequestOpen) QuickRequestDialog({ state.assistant.request(it); state.quickRequestOpen = false }, { state.quickRequestOpen = false })
-        if (state.assistantStartup.asking) AssistantStartupDialog(state.assistantStartup)
-        if (state.assistantHelpOpen) AssistantHelpDialog(state.assistantTools) { state.assistantHelpOpen = false }
-        state.confirm?.let { ConfirmDialog(it) { state.confirm = null } }
-        state.projects.groupDialog?.let { key(it) { GroupDialog(it, state.projects) } }
-        state.projects.renaming?.let { RenameDialog(it, { name -> state.projects.rename(it.project, name) }, { state.projects.renaming = null }) }
-        if (state.projects.pickerOpen) FolderPickerDialog(initial = null, dataDir = state.dataDir, onDismiss = { state.projects.pickerOpen = false }, onPicked = state.projects::addAt)
-        if (dropTarget.hovering) DropOverlay()
     }
 }
 
@@ -177,11 +183,11 @@ private fun MainLayout(state: AppState, installation: ClaudeInstallation) = BoxW
 @Composable
 private fun RouteContent(state: AppState) {
     val route = state.route
-    if (route == Route.Prompts) return PromptsScreen(state.prompts, state.projects.all, state.teams.teams, { state.teams.defaultTeamOf(it.id) }, { template, project -> state.openTaskDialog(project.id, template.id) })
+    if (route == Route.Prompts) return PromptsScreen(state.prompts, state.projects.all, state.teams.teams, { state.teams.defaultTeamOf(it.id) }, { template, project -> state.tasks.open(project.id, template.id) })
     if (route == Route.Teams) return TeamsScreen(state.teams, state.projects.all)
-    if (route == Route.Plugins) return PluginsScreen(state.plugins)
-    if (route == Route.Mcp) return McpScreen(state.mcp)
-    if (route == Route.Skills) return SkillsScreen(state.skills)
+    if (route == Route.Plugins) return PluginsScreen(state.extensions.plugins)
+    if (route == Route.Mcp) return McpScreen(state.extensions.mcp)
+    if (route == Route.Skills) return SkillsScreen(state.extensions.skills)
     if (route == Route.Sessions) return SessionsScreen(state)
     if (route == Route.Assistant) return AssistantScreen(state)
     val project = (route as? Route.Project)?.let { target -> state.projects.all.firstOrNull { it.id == target.id } }
@@ -208,19 +214,19 @@ private const val SKELETON_CARDS = 6
 
 private fun startTaskTemplates(state: AppState, project: Project) = TaskTemplates(
     available = state.prompts.forProject(project.id),
-    initialId = state.taskDialogTemplateId,
-    values = state.placeholderValuesOf(project),
+    initialId = state.tasks.templateId,
+    values = state.tasks.placeholderValuesOf(project),
 )
 
 @Composable
 private fun QuickStartPicker(state: AppState, project: Project) =
-    TemplatePickerDialog(state.prompts.forProject(project.id), project.id, state.teams.teams, { state.startTaskFromTemplate(project, it) }, { state.quickStartProjectId = null })
+    TemplatePickerDialog(state.prompts.forProject(project.id), project.id, state.teams.teams, { state.tasks.startFromTemplate(project, it) }, { state.tasks.quickStartProjectId = null })
 
 @Composable
 private fun QueuePicker(state: AppState, project: Project, ccmSessionId: String) =
-    TemplatePickerDialog(state.prompts.forProject(project.id), project.id, state.teams.teams, { state.queueFromTemplate(project, ccmSessionId, it) }, { state.queuePickTarget = null })
+    TemplatePickerDialog(state.prompts.forProject(project.id), project.id, state.teams.teams, { state.tasks.queueFromTemplate(project, ccmSessionId, it) }, { state.tasks.queuePickTarget = null })
 
 private fun startTaskActions(state: AppState, project: Project) = StartTaskActions(
-    onStart = { team, task, makeDefault -> state.startTask(project, team, task, makeDefault) },
-    onDismiss = state::closeTaskDialog,
+    onStart = { team, task, makeDefault -> state.tasks.start(project, team, task, makeDefault) },
+    onDismiss = state.tasks::close,
 )

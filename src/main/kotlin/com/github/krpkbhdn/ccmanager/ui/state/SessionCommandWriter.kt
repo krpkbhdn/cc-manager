@@ -30,6 +30,7 @@ class SessionCommandWriter(private val terminal: TerminalPort, private val pause
     suspend fun run(ccmSessionId: String, command: String, clearDraft: Boolean = true, draftExists: () -> Boolean = { false }): Boolean {
         if (!sending.add(ccmSessionId)) return false
         try {
+            if (!terminal.hasTerminal(ccmSessionId)) return false
             if (terminal.ctrlCWithin(ccmSessionId, EXIT_HINT_MILLIS) || terminal.enterWithin(ccmSessionId, SUBMITTED_TURN_MILLIS)) return false
             if (clearDraft) {
                 terminal.send(ccmSessionId, CLEAR_INPUT)

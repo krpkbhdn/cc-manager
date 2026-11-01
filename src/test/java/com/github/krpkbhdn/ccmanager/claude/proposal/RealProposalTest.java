@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.github.krpkbhdn.ccmanager.CcManagerApplication;
-import com.github.krpkbhdn.ccmanager.claude.hook.HookEvent;
-import com.github.krpkbhdn.ccmanager.claude.hook.HookEventType;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEventType;
 import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher;
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode;
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession;
@@ -144,8 +144,12 @@ class RealProposalTest {
     }
 
     private Proposal awaitProposal(ProposalService proposals, LaunchedSession session, Class<? extends Proposal> kind) throws InterruptedException {
-        await(() -> proposals.pending(session.ccmSessionId()).stream().anyMatch(kind::isInstance));
-        return proposals.pending(session.ccmSessionId()).stream().filter(kind::isInstance).findFirst().orElseThrow();
+        await(() -> ofSession(proposals, session).anyMatch(kind::isInstance));
+        return ofSession(proposals, session).filter(kind::isInstance).findFirst().orElseThrow();
+    }
+
+    private static java.util.stream.Stream<Proposal> ofSession(ProposalService proposals, LaunchedSession session) {
+        return proposals.pending().stream().filter(proposal -> proposal.ccmSessionId().equals(session.ccmSessionId()));
     }
 
     private HookEvent awaitEvent(HookEventType type, String tool) throws InterruptedException {

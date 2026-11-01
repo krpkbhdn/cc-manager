@@ -51,9 +51,25 @@ class SessionCommandWriterTest {
     }
 
     @Test
+    fun nothingIsTypedAndFalseIsReturnedWithoutATerminal() = runBlocking {
+        val closed = object : TerminalPort by terminal {
+            override fun hasTerminal(ccmSessionId: String) = false
+        }
+
+        assertThat(SessionCommandWriter(closed) { }.run("s1", "queued", clearDraft = false)).isFalse()
+        assertThat(events).isEmpty()
+    }
+
+    @Test
     fun nothingIsTypedWhenADraftAppearsBeforeTheWrite() = runBlocking {
         assertThat(writer.run("s1", "queued", clearDraft = false) { true }).isFalse()
         assertThat(events).isEmpty()
+    }
+
+    @Test
+    fun aUserDraftIsNeitherClearedNorTypedOverWhenClearingIsOff() = runBlocking {
+        assertThat(writer.run("s1", "/model x", clearDraft = false) { true }).isFalse()
+        assertThat(events).doesNotContain("s1:\u0003")
     }
 
     @Test

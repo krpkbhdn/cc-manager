@@ -13,8 +13,8 @@ import com.jediterm.terminal.model.TerminalLine
 import com.jediterm.terminal.model.TerminalTextBuffer
 import com.jediterm.terminal.model.TextBufferChangesListener
 import java.io.IOException
-import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -23,6 +23,7 @@ import kotlin.concurrent.thread
 internal const val SCROLLBACK_LINES = 10_000
 private const val FRAME_MILLIS = 16L
 private const val CONNECTOR_RESIZE_MILLIS = 100L
+private const val WORKER_IDLE_SECONDS = 2L
 
 /**
  * The terminal emulation of one process: reads its output on its own thread into [buffer], writes user input and
@@ -36,7 +37,9 @@ internal class TerminalEmulator(
     private val onFrame: () -> Unit,
     scrollbackLines: Int = SCROLLBACK_LINES,
 ) {
-    private val worker = Executors.newSingleThreadScheduledExecutor { task -> Thread(task, "TerminalWorker-${connector.name}").apply { isDaemon = true } }
+    // the idle worker thread exits (an ended session keeps its tab) and is started again on demand
+    private val worker = ScheduledThreadPoolExecutor(1) { task -> Thread(task, "TerminalWorker-${connector.name}").apply { isDaemon = true } }
+        .apply { setKeepAliveTime(WORKER_IDLE_SECONDS, TimeUnit.SECONDS); allowCoreThreadTimeOut(true) }
     private val framePending = AtomicBoolean(false)
     private val discardedLines = AtomicInteger()
     private var connectorResize: ScheduledFuture<*>? = null
@@ -95,6 +98,7 @@ internal class TerminalEmulator(
         } finally {
             terminal.disconnected()
             announceEnd()
+            runCatching { connector.close() }
         }
     }
 

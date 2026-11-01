@@ -12,7 +12,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.github.krpkbhdn.ccmanager.claude.hook.ActivityEntry
 import com.github.krpkbhdn.ccmanager.claude.hook.HookEventStore
-import com.github.krpkbhdn.ccmanager.claude.hook.HookEventType
+import com.github.krpkbhdn.ccmanager.claude.event.HookEventType
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallation
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService
 import com.github.krpkbhdn.ccmanager.claude.install.LoginState
@@ -116,6 +116,7 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
     init { git.notRepositories.add(Path.of("C:/Users/dev/Work/docs-site")) }
     val fakeMcp = FakeMcp()
     val proposals = PreviewProposals()
+    val voice = PreviewVoice()
     val sessionUsage = mapOf(
         "s-working" to SessionUsage("s-working", "Opus 4.7", "xhigh", 62.0, 4.38, 2_400_000L, Instant.now()),
         "s-needs" to SessionUsage("s-needs", "Sonnet 5.5", "medium", 18.5, 0.42, 1_200_000L, Instant.now()),
@@ -334,7 +335,7 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         val shellLauncher = mock(ShellLauncher::class.java)
         `when`(shellLauncher.launch(anyLong(), any())).thenThrow(IllegalStateException("Preview mode: shells cannot be started here."))
 
-        return Backend(projectService, fakeGroupService(), installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), TranscriptService(JsonMapper.builder().build(), previewTranscriptDir), runConfigurationService(), runService(), shellDetector, shellLauncher, mock(AuthorProfileService::class.java), proposals.service(), mock(PromptTemplateService::class.java), terminal = terminal, sessionProperties = SessionProperties(Duration.ofMinutes(10), Duration.ofMinutes(10)))
+        return Backend(projectService, fakeGroupService(), installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), TranscriptService(JsonMapper.builder().build(), previewTranscriptDir), runConfigurationService(), runService(), shellDetector, shellLauncher, mock(AuthorProfileService::class.java), proposals.service(), mock(PromptTemplateService::class.java), terminal = terminal, sessionProperties = SessionProperties(Duration.ofMinutes(10), Duration.ofMinutes(10)), voice = voice.backend)
     }
 
     private fun installationNow() = if (claudeInstalled) {

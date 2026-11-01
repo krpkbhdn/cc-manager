@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
-import com.github.krpkbhdn.ccmanager.claude.hook.HookEvent;
-import com.github.krpkbhdn.ccmanager.claude.hook.HookEventType;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEventType;
 import com.github.krpkbhdn.ccmanager.claude.hook.HookProperties;
 import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalAnswer.Denial;
 import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalAnswer.FormAnswer;
@@ -15,6 +15,7 @@ import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
 import com.github.krpkbhdn.ccmanager.claude.session.TranscriptService;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -28,6 +29,9 @@ class ProposalServiceTest {
 
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
     private static final int WAIT_SECONDS = 2;
+    private static final int MAX_HELD = 3;
+    private static final int ROOMY_CAP = 1000;
+    private static final String BASH_LS = "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"ls\"}}";
     private static final Duration SHORT_HOLD = Duration.ofMillis(100);
 
     private final SessionRegistry registry = new SessionRegistry(new SessionProperties(Duration.ofMinutes(10), Duration.ofMinutes(10)), mock(TranscriptService.class));
@@ -35,12 +39,74 @@ class ProposalServiceTest {
     private final String session = registry.register(1L);
 
     private ProposalService serviceHolding(Duration hold) {
-        return new ProposalService(registry, new HookProperties(10, 1024, 500, hold));
+        return serviceHolding(hold, ROOMY_CAP);
+    }
+
+    private ProposalService serviceHolding(Duration hold, int cap) {
+        return new ProposalService(registry, new HookProperties(10, 1024, 500, hold, cap, 1000));
+    }
+
+    @Test
+    void holdBeyondTheCapIsReleasedAtOnceLeavingTheTerminalInCharge() throws Exception {
+        var capped = serviceHolding(Duration.ofSeconds(30), MAX_HELD);
+        var inside = new ArrayList<CompletableFuture<Optional<String>>>();
+        for (int i = 0; i < MAX_HELD; i++) {
+            inside.add(holdBash(capped));
+        }
+
+        assertThat(released(holdBash(capped))).isTrue();
+        assertThat(capped.pending()).hasSize(MAX_HELD);
+        assertThat(inside).noneMatch(CompletableFuture::isDone);
+    }
+
+    private CompletableFuture<AppDecision> holdForApp(ProposalService target) {
+        registry.on(event(session, HookEventType.PRE_TOOL_USE, BASH_LS));
+        var proposal = new PermissionProposal("app-1", session, Instant.now(), "", "mcp__cc-manager-app__git_push", MAPPER.readTree("{}"), List.of());
+        return target.holdForApp(proposal);
+    }
+
+    @Test
+    void appHeldProposalCompletesWithTheUsersAnswerAndNoHookOutput() throws Exception {
+        var held = holdForApp(service);
+        assertThat(held).isNotDone();
+        assertThat(service.pending()).hasSize(1);
+
+        assertThat(service.answer("app-1", PermissionAllow.once())).isTrue();
+
+        assertThat(held.get(WAIT_SECONDS, TimeUnit.SECONDS)).isInstanceOfSatisfying(AppDecision.Answered.class,
+                answered -> assertThat(answered.answer()).isInstanceOf(PermissionAllow.class));
+        assertThat(service.pending()).isEmpty();
+    }
+
+    @Test
+    void appHeldProposalNamesWhyThereIsNoAnswerOnDismissTimeoutAndWhenTheSessionGoesIdle() throws Exception {
+        var dismissed = holdForApp(service);
+        assertThat(service.dismiss("app-1")).isTrue();
+        assertThat(dismissed.get(WAIT_SECONDS, TimeUnit.SECONDS)).isEqualTo(AppDecision.Unanswered.RELEASED);
+
+        assertThat(holdForApp(serviceHolding(SHORT_HOLD)).get(WAIT_SECONDS, TimeUnit.SECONDS)).isEqualTo(AppDecision.Unanswered.TIMED_OUT);
+
+        var interrupted = holdForApp(service);
+        registry.markInterrupted(session);
+        assertThat(interrupted.get(WAIT_SECONDS, TimeUnit.SECONDS)).isEqualTo(AppDecision.Unanswered.RELEASED);
+    }
+
+    @Test
+    void appHeldProposalBeyondTheCapIsRefusedAtOnce() throws Exception {
+        var capped = serviceHolding(Duration.ofSeconds(30), 0);
+
+        assertThat(holdForApp(capped).get(WAIT_SECONDS, TimeUnit.SECONDS)).isEqualTo(AppDecision.Unanswered.TOO_MANY_PENDING);
     }
 
     private HookEvent event(String sessionId, HookEventType type, String json) {
         var payload = MAPPER.readTree(json);
         return new HookEvent(sessionId, type, type.wireName(), payload, Instant.now());
+    }
+
+    private CompletableFuture<Optional<String>> holdBash(ProposalService target) {
+        var request = event(session, HookEventType.PERMISSION_REQUEST, BASH_LS);
+        registry.on(request);
+        return target.hold(request);
     }
 
     private CompletableFuture<Optional<String>> holdBash(String json) {
@@ -50,7 +116,7 @@ class ProposalServiceTest {
     }
 
     private CompletableFuture<Optional<String>> holdBash() {
-        return holdBash("{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"ls\"}}");
+        return holdBash(BASH_LS);
     }
 
     private boolean released(CompletableFuture<Optional<String>> held) throws Exception {
@@ -60,7 +126,7 @@ class ProposalServiceTest {
     @Test
     void answerCompletesTheHeldCallWithTheRenderedOutputAndRemovesTheProposal() throws Exception {
         var held = holdBash();
-        var proposal = service.pending(session).getFirst();
+        var proposal = service.pending().getFirst();
 
         assertThat(service.answer(proposal.id(), PermissionAllow.once())).isTrue();
 
@@ -107,8 +173,20 @@ class ProposalServiceTest {
         service.hold(otherRequest);
 
         assertThat(service.pending()).hasSize(3);
-        assertThat(service.pending(session)).hasSize(2);
-        assertThat(service.pending(otherSession)).hasSize(1);
+        assertThat(service.pending()).filteredOn(proposal -> proposal.ccmSessionId().equals(session)).hasSize(2);
+        assertThat(service.pending()).filteredOn(proposal -> proposal.ccmSessionId().equals(otherSession)).hasSize(1);
+    }
+
+    @Test
+    void releaseAllHandsEveryHeldCallBackToTheTerminal() throws Exception {
+        var first = holdBash();
+        var second = holdBash("{\"tool_name\":\"Edit\",\"agent_id\":\"sub-1\",\"tool_input\":{}}");
+
+        service.releaseAll();
+
+        assertThat(released(first)).isTrue();
+        assertThat(released(second)).isTrue();
+        assertThat(service.pending()).isEmpty();
     }
 
     @Test
@@ -213,6 +291,18 @@ class ProposalServiceTest {
     }
 
     @Test
+    void concurrentHoldsNeverExceedTheCap() throws Exception {
+        var capped = serviceHolding(Duration.ofSeconds(30), MAX_HELD);
+        try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (var i = 0; i < ROOMY_CAP / 5; i++) {
+                pool.execute(() -> holdBash(capped));
+            }
+        }
+        assertThat(capped.pending()).hasSize(MAX_HELD);
+        capped.releaseAll();
+    }
+
+    @Test
     void concurrentHoldsAndAnswersLoseNothing() throws Exception {
         var count = 200;
         try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
@@ -220,7 +310,9 @@ class ProposalServiceTest {
             for (var i = 0; i < count; i++) {
                 futures.add(CompletableFuture.supplyAsync(this::holdBash, pool).thenCompose(held -> held));
             }
+            var deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(WAIT_SECONDS);
             while (service.pending().size() < count) {
+                assertThat(System.nanoTime()).isLessThan(deadline);
                 Thread.sleep(5);
             }
             service.pending().forEach(proposal -> pool.execute(() -> service.answer(proposal.id(), new Denial("no"))));

@@ -16,8 +16,8 @@ import com.github.krpkbhdn.ccmanager.ui.components.AppButton
 import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant
 import com.github.krpkbhdn.ccmanager.ui.components.EmptyState
 import com.github.krpkbhdn.ccmanager.ui.components.Glyph
-import com.github.krpkbhdn.ccmanager.ui.components.IconButton
 import com.github.krpkbhdn.ccmanager.ui.components.Label
+import com.github.krpkbhdn.ccmanager.ui.extensions.AddAndRefreshActions
 import com.github.krpkbhdn.ccmanager.ui.extensions.BusyLabel
 import com.github.krpkbhdn.ccmanager.ui.extensions.ExtensionContext
 import com.github.krpkbhdn.ccmanager.ui.extensions.ExtensionList
@@ -64,8 +64,7 @@ private fun McpToolbar(state: McpState, count: Int) {
         Box(Modifier.weight(1f))
         state.job?.let { BusyLabel(it.label) }
         AppButton("Check health", { state.checkHealth() }, icon = Icons.Activity, enabled = state.healthCheck != HealthCheck.RUNNING && state.loaded, compact = true)
-        AppButton("Add server", { state.adding = true }, variant = ButtonVariant.PRIMARY, icon = Icons.Plus, enabled = state.job == null, compact = true)
-        IconButton(Icons.Refresh, { state.refresh() }, tooltip = "Refresh", enabled = !state.loading && state.job == null)
+        AddAndRefreshActions("Add server", { state.adding = true }, state.job != null, state.loading, state::refresh)
     }
 }
 

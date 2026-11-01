@@ -2,6 +2,7 @@ package com.github.krpkbhdn.ccmanager.app.mcp;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,6 +16,7 @@ import com.github.krpkbhdn.ccmanager.project.Project;
 import com.github.krpkbhdn.ccmanager.project.ProjectService;
 import com.github.krpkbhdn.ccmanager.team.Team;
 import com.github.krpkbhdn.ccmanager.team.TeamService;
+import com.pty4j.PtyProcess;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
@@ -53,6 +55,22 @@ class ResumeSessionToolTest {
         assertThat(call()).contains("s9");
 
         verify(control).attachSession(launched);
+    }
+
+    @Test
+    void killsTheProcessWhenAttachFails() {
+        app.connect(control);
+        var process = mock(PtyProcess.class);
+        when(process.pid()).thenReturn(Long.MAX_VALUE);
+        var launched = new LaunchedSession("s9", 3, "claude", process);
+        when(provider.getObject()).thenReturn(launcher);
+        when(projects.find(3)).thenReturn(Optional.of(new Project(3, "demo", Path.of("demo"), Instant.EPOCH)));
+        when(launcher.launch(3, LaunchMode.CONTINUE)).thenReturn(launched);
+        doThrow(new IllegalStateException("UI timeout")).when(control).attachSession(launched);
+
+        assertThatThrownBy(this::call).hasMessage("UI timeout");
+
+        verify(process).destroyForcibly();
     }
 
     @Test

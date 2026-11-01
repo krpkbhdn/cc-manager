@@ -1,7 +1,7 @@
 package com.github.krpkbhdn.ccmanager.claude;
 
-import com.github.krpkbhdn.ccmanager.claude.hook.HookEvent;
-import com.github.krpkbhdn.ccmanager.claude.hook.HookEventType;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEventType;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicInteger;
 import tools.jackson.databind.json.JsonMapper;
