@@ -1,7 +1,7 @@
 package com.github.krpkbhdn.ccmanager.claude.proposal;
 
 import com.github.krpkbhdn.ccmanager.claude.hook.DecisionHolder;
-import com.github.krpkbhdn.ccmanager.claude.hook.HookEvent;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
 import com.github.krpkbhdn.ccmanager.claude.hook.HookProperties;
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
@@ -49,7 +49,9 @@ public class ProposalService implements DecisionHolder {
         if (proposal.isEmpty()) {
             return CompletableFuture.completedFuture(Optional.empty());
         }
-        return holdProposal(proposal.get()).thenApply(answer -> answer.map(given -> given.hookOutput(proposal.get())));
+        return holdProposal(proposal.get())
+                .map(held -> held.thenApply(answer -> answer.map(given -> given.hookOutput(proposal.get()))))
+                .orElseGet(() -> CompletableFuture.completedFuture(Optional.empty()));
     }
 
     /**
@@ -61,25 +63,31 @@ public class ProposalService implements DecisionHolder {
             return CompletableFuture.completedFuture(AppDecision.Unanswered.TOO_MANY_PENDING);
         }
         var started = System.nanoTime();
-        return holdProposal(proposal).thenApply(answer -> answer.<AppDecision>map(AppDecision.Answered::new)
-                .orElseGet(() -> System.nanoTime() - started >= properties.decisionHold().toNanos()
-                        ? AppDecision.Unanswered.TIMED_OUT : AppDecision.Unanswered.RELEASED));
+        return holdProposal(proposal)
+                .map(held -> held.thenApply(answer -> answer.<AppDecision>map(AppDecision.Answered::new)
+                        .orElseGet(() -> System.nanoTime() - started >= properties.decisionHold().toNanos()
+                                ? AppDecision.Unanswered.TIMED_OUT : AppDecision.Unanswered.RELEASED)))
+                .orElseGet(() -> CompletableFuture.completedFuture(AppDecision.Unanswered.TOO_MANY_PENDING));
     }
 
-    private CompletableFuture<Optional<ProposalAnswer>> holdProposal(Proposal proposal) {
-        if (held.size() >= properties.maxHeldProposals()) {
-            return CompletableFuture.completedFuture(Optional.empty());
-        }
+    /** Empty when the cap of held proposals is reached. */
+    private Optional<CompletableFuture<Optional<ProposalAnswer>>> holdProposal(Proposal proposal) {
         var decision = new CompletableFuture<Optional<ProposalAnswer>>()
                 .completeOnTimeout(Optional.empty(), properties.decisionHold().toMillis(), TimeUnit.MILLISECONDS);
-        held.put(proposal.id(), new Held(proposal, decision));
+        synchronized (held) {
+            if (held.size() >= properties.maxHeldProposals()) {
+                decision.cancel(false);
+                return Optional.empty();
+            }
+            held.put(proposal.id(), new Held(proposal, decision));
+        }
         decision.whenComplete((answer, error) -> {
             held.remove(proposal.id());
             notifyListeners();
         });
         notifyListeners();
         releaseOfEndedOrInterruptedSessions();
-        return decision;
+        return Optional.of(decision);
     }
 
     public List<Proposal> pending() {

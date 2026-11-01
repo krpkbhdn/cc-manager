@@ -23,6 +23,7 @@ public abstract class McpJsonRpcServer<T extends McpToolDescriptor> {
     private static final int INVALID_REQUEST = -32600;
     private static final int METHOD_NOT_FOUND = -32601;
     private static final int INVALID_PARAMS = -32602;
+    private static final int INTERNAL_ERROR = -32603;
 
     /** Runs a tool for one request; throws IllegalArgumentException or IllegalStateException with a message Claude can act on. */
     @FunctionalInterface
@@ -65,6 +66,9 @@ public abstract class McpJsonRpcServer<T extends McpToolDescriptor> {
             return Optional.of(mapper.writeValueAsString(response));
         } catch (RpcException e) {
             return Optional.of(error(id, e.code, e.getMessage()));
+        } catch (RuntimeException e) {
+            log.warn("MCP request {} failed", request.path("method").asString(""), e);
+            return Optional.of(error(id, INTERNAL_ERROR, "Internal error"));
         }
     }
 

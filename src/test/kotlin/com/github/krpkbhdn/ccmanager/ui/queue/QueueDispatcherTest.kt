@@ -51,7 +51,7 @@ class QueueDispatcherTest {
     fun aPromptAddedWhileTheSessionNeedsActionWaits() {
         observe(AgentStatus.IDLE, queueEmpty = true)
         assertThat(observe(AgentStatus.NEEDS_ACTION)).isEqualTo(QueueDecision.WAIT)
-        assertThat(dispatcher.isWaiting("s")).isFalse()
+        assertThat(dispatcher.needsRecheck("s")).isFalse()
     }
 
     @Test
@@ -100,7 +100,7 @@ class QueueDispatcherTest {
     fun waitsWhileAnUnsentDraftMayExistAndSendsOnceItIsGone() {
         finishATurn()
         assertThat(observe(AgentStatus.IDLE, draft = true)).isEqualTo(QueueDecision.WAIT)
-        assertThat(dispatcher.isWaiting("s")).isTrue()
+        assertThat(dispatcher.needsRecheck("s")).isTrue()
         assertThat(observe(AgentStatus.IDLE)).isEqualTo(QueueDecision.SEND)
     }
 
@@ -115,7 +115,7 @@ class QueueDispatcherTest {
     fun anEmptyQueueSendsNothing() {
         finishATurn()
         assertThat(observe(AgentStatus.IDLE, queueEmpty = true)).isEqualTo(QueueDecision.WAIT)
-        assertThat(dispatcher.isWaiting("s")).isFalse()
+        assertThat(dispatcher.needsRecheck("s")).isFalse()
     }
 
     @Test
@@ -125,7 +125,6 @@ class QueueDispatcherTest {
         assertThat(observe(AgentStatus.IDLE)).isEqualTo(QueueDecision.SEND)
         dispatcher.sent("s", 0)
         assertThat(observe(AgentStatus.IDLE)).isEqualTo(QueueDecision.WAIT)
-        assertThat(dispatcher.isWaiting("s")).isFalse()
     }
 
     private fun observeAt(nowMillis: Long) = dispatcher.observe("s", QueueObservation(AgentStatus.IDLE, false, false, false, null, nowMillis))
@@ -158,13 +157,13 @@ class QueueDispatcherTest {
         finishATurn()
         assertThat(observe(null)).isEqualTo(QueueDecision.WAIT)
         assertThat(observe(AgentStatus.OFFLINE)).isEqualTo(QueueDecision.WAIT)
-        assertThat(dispatcher.isWaiting("s")).isFalse()
+        assertThat(dispatcher.needsRecheck("s")).isFalse()
     }
 
     @Test
     fun retainSessionsForgetsEndedSessions() {
         finishATurn()
         dispatcher.retainSessions(emptySet())
-        assertThat(dispatcher.isWaiting("s")).isFalse()
+        assertThat(dispatcher.needsRecheck("s")).isFalse()
     }
 }

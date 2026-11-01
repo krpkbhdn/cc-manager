@@ -1,6 +1,6 @@
 package com.github.krpkbhdn.ccmanager.claude.proposal;
 
-import com.github.krpkbhdn.ccmanager.claude.hook.HookEvent;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
 import java.time.Instant;
 import java.util.List;
 import tools.jackson.databind.JsonNode;

@@ -1,4 +1,4 @@
-package com.github.krpkbhdn.ccmanager.claude.hook;
+package com.github.krpkbhdn.ccmanager.claude.event;
 
 import java.time.Instant;
 import tools.jackson.databind.JsonNode;

@@ -1,6 +1,6 @@
 package com.github.krpkbhdn.ccmanager.ui.queue
 
-import com.github.krpkbhdn.ccmanager.claude.hook.ActivityFormatter
+import com.github.krpkbhdn.ccmanager.claude.event.ActivityFormatter
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import com.github.krpkbhdn.ccmanager.ui.state.commandBlockedReason
 import kotlinx.coroutines.CoroutineScope

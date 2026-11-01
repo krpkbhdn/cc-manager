@@ -138,4 +138,28 @@ class SessionsStateTest {
         assertThat(state.sessionTeams).isEmpty()
         verify(backend.launcher).launch(1, LaunchMode.CONTINUE)
     }
+
+    @Test
+    fun `quick action send with Enter sends no Ctrl+C and no text while a draft exists`() {
+        val sent = CopyOnWriteArrayList<String>()
+        val errors = CopyOnWriteArrayList<String>()
+        val draftTerminal = object : TerminalPort by terminal {
+            override fun send(ccmSessionId: String, text: String) { sent += text }
+            override fun draftMayExist(ccmSessionId: String) = true
+        }
+        val idle = com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot(
+            "s1", 1, "claude", com.github.krpkbhdn.ccmanager.claude.session.AgentStatus.IDLE, "", "default", null, null,
+            java.time.Instant.EPOCH, java.time.Instant.EPOCH, emptyList(), 0, null,
+        )
+        val state = SessionsState(
+            PreviewWorld().backend(draftTerminal), scope, { LiveSessions(listOf(idle)) }, { null }, { null },
+            onOpened = { _, _ -> }, onClosed = { _, _ -> }, showProject = {}, requestConfirm = {}, reportError = { errors += it },
+        )
+
+        state.send("s1", "/compact" + Keys.ENTER)
+        await { errors.isNotEmpty() }
+
+        assertThat(sent).isEmpty()
+        assertThat(errors).singleElement().asString().contains("unsent text")
+    }
 }

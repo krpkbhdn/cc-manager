@@ -61,6 +61,15 @@ class PluginServiceTest {
     }
 
     @Test
+    void pluginIdWithShellMetacharactersIsRejectedAndNameAtMarketplacePasses() {
+        assertThatThrownBy(() -> service.install("a&calc", ExtensionScope.USER, null)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.details("a@m|b", null)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(cli.directories).isEmpty();
+        service.details("my-plugin_1.0@some.market-place", null);
+        assertThat(cli.directories).hasSize(1);
+    }
+
+    @Test
     void argumentsThatLookLikeOptionsNeverReachTheCli() {
         assertThatThrownBy(() -> service.addMarketplace("--evil", ExtensionScope.USER, null)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> service.removeMarketplace("-x")).isInstanceOf(IllegalArgumentException.class);

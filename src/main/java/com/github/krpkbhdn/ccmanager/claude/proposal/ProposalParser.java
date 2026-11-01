@@ -1,6 +1,6 @@
 package com.github.krpkbhdn.ccmanager.claude.proposal;
 
-import com.github.krpkbhdn.ccmanager.claude.hook.HookEvent;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
 import com.github.krpkbhdn.ccmanager.claude.proposal.PermissionProposal.Suggestion;
 import com.github.krpkbhdn.ccmanager.claude.proposal.QuestionsProposal.Option;
 import com.github.krpkbhdn.ccmanager.claude.proposal.QuestionsProposal.Question;

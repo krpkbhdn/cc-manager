@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.github.krpkbhdn.ccmanager.CcManagerApplication;
-import com.github.krpkbhdn.ccmanager.claude.hook.HookEvent;
-import com.github.krpkbhdn.ccmanager.claude.hook.HookEventType;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEventType;
 import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher;
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode;
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession;

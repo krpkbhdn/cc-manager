@@ -1,6 +1,6 @@
 package com.github.krpkbhdn.ccmanager.notification;
 
-import com.github.krpkbhdn.ccmanager.claude.hook.ActivityFormatter;
+import com.github.krpkbhdn.ccmanager.claude.event.ActivityFormatter;
 import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher;
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;

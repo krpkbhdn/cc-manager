@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
-import com.github.krpkbhdn.ccmanager.claude.hook.HookEvent;
-import com.github.krpkbhdn.ccmanager.claude.hook.HookEventType;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEventType;
 import com.github.krpkbhdn.ccmanager.claude.hook.HookProperties;
 import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalAnswer.Denial;
 import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalAnswer.FormAnswer;
@@ -288,6 +288,18 @@ class ProposalServiceTest {
         unsubscribe.run();
         holdBash();
         assertThat(changes).hasValue(2);
+    }
+
+    @Test
+    void concurrentHoldsNeverExceedTheCap() throws Exception {
+        var capped = serviceHolding(Duration.ofSeconds(30), MAX_HELD);
+        try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (var i = 0; i < ROOMY_CAP / 5; i++) {
+                pool.execute(() -> holdBash(capped));
+            }
+        }
+        assertThat(capped.pending()).hasSize(MAX_HELD);
+        capped.releaseAll();
     }
 
     @Test

@@ -20,6 +20,7 @@ private const val APPLY_TIMEOUT_MILLIS = 6_000L
 private const val APPLY_POLL_MILLIS = 200L
 private const val SWITCH_MODEL_HINT = "If claude asks \"Switch model?\", answer in the terminal."
 private const val DRAFT_MESSAGE = "You have unsent text in the terminal. Send or clear it, then change the model."
+private const val DRAFT_MESSAGE_SEND = "You have unsent text in the terminal. Send or clear it first."
 private const val BUSY_MESSAGE = "The session is not ready for a command yet. Try again in a moment."
 
 private const val LAUNCH_IN_PROGRESS_MESSAGE = "Another session is starting. Try again in a moment."
@@ -168,9 +169,10 @@ class SessionsState(
 
     fun send(ccmSessionId: String, keys: String) {
         if (keys.endsWith(Keys.ENTER)) commandBlockedReason(live().find(ccmSessionId), isAttached(ccmSessionId))?.let { return reportError(it) }
+        if (keys.endsWith(Keys.ENTER) && backend.terminal.draftMayExist(ccmSessionId)) return reportError(DRAFT_MESSAGE_SEND)
         scope.launch {
             guarded {
-                val sent = if (keys.endsWith(Keys.ENTER)) commandWriter.run(ccmSessionId, keys.removeSuffix(Keys.ENTER)) else { backend.terminal.send(ccmSessionId, keys); true }
+                val sent = if (keys.endsWith(Keys.ENTER)) commandWriter.run(ccmSessionId, keys.removeSuffix(Keys.ENTER), clearDraft = false) { backend.terminal.draftMayExist(ccmSessionId) } else { backend.terminal.send(ccmSessionId, keys); true }
                 if (!sent) reportError(BUSY_MESSAGE)
             }
         }

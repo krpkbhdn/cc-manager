@@ -36,21 +36,11 @@ fun ComponentStyling.withAppWindow(palette: AppColors): ComponentStyling {
 @Composable
 private fun titleBarColors(palette: AppColors): TitleBarColors {
     val closePressed = palette.danger.copy(alpha = CLOSE_PRESSED_ALPHA)
-    return if (palette.dark) {
-        TitleBarColors.dark(
-            backgroundColor = palette.sidebar, inactiveBackground = palette.sidebar, contentColor = palette.textSecondary, borderColor = palette.hairline(),
-            fullscreenControlButtonsBackground = palette.sidebar, titlePaneButtonHoveredBackground = palette.hoverOverlay, titlePaneButtonPressedBackground = palette.pressOverlay,
-            titlePaneCloseButtonHoveredBackground = palette.danger, titlePaneCloseButtonPressedBackground = closePressed,
-            iconButtonHoveredBackground = palette.hoverOverlay, iconButtonPressedBackground = palette.pressOverlay,
-            dropdownPressedBackground = palette.pressOverlay, dropdownHoveredBackground = palette.hoverOverlay,
-        )
-    } else {
-        TitleBarColors.light(
-            backgroundColor = palette.sidebar, inactiveBackground = palette.sidebar, contentColor = palette.textSecondary, borderColor = palette.hairline(),
-            fullscreenControlButtonsBackground = palette.sidebar, titlePaneButtonHoveredBackground = palette.hoverOverlay, titlePaneButtonPressedBackground = palette.pressOverlay,
-            titlePaneCloseButtonHoveredBackground = palette.danger, titlePaneCloseButtonPressedBackground = closePressed,
-            iconButtonHoveredBackground = palette.hoverOverlay, iconButtonPressedBackground = palette.pressOverlay,
-            dropdownPressedBackground = palette.pressOverlay, dropdownHoveredBackground = palette.hoverOverlay,
-        )
-    }
+    return TitleBarColors(
+        background = palette.sidebar, inactiveBackground = palette.sidebar, content = palette.textSecondary, border = palette.hairline(),
+        fullscreenControlButtonsBackground = palette.sidebar, titlePaneButtonHoveredBackground = palette.hoverOverlay, titlePaneButtonPressedBackground = palette.pressOverlay,
+        titlePaneCloseButtonHoveredBackground = palette.danger, titlePaneCloseButtonPressedBackground = closePressed,
+        iconButtonHoveredBackground = palette.hoverOverlay, iconButtonPressedBackground = palette.pressOverlay,
+        dropdownPressedBackground = palette.pressOverlay, dropdownHoveredBackground = palette.hoverOverlay,
+    )
 }

@@ -1,5 +1,7 @@
 package com.github.krpkbhdn.ccmanager.claude.hook;
 
+import com.github.krpkbhdn.ccmanager.claude.event.HookEventType;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -248,5 +250,17 @@ class HookServerTest {
 
         assertThat(post(url, "{}").statusCode()).isEqualTo(404);
         verifyNoInteractions(publisher);
+    }
+
+    @Test
+    void startAndStopLeaveNoLiveWorkerThread() {
+        server.stop();
+        for (var i = 0; i < 3; i++) {
+            server.start();
+            server.stop();
+        }
+        server.start();
+        server.stop();
+        assertThat(Thread.getAllStackTraces().keySet()).noneMatch(t -> t.getName().equals("hook-worker") && t.isAlive());
     }
 }

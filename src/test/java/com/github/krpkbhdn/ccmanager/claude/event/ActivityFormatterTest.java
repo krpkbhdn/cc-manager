@@ -1,4 +1,4 @@
-package com.github.krpkbhdn.ccmanager.claude.hook;
+package com.github.krpkbhdn.ccmanager.claude.event;
 
 import static com.github.krpkbhdn.ccmanager.claude.HookEvents.of;
 import static org.assertj.core.api.Assertions.assertThat;

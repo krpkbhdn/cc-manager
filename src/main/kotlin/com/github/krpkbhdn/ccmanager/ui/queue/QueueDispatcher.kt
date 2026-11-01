@@ -50,10 +50,7 @@ class QueueDispatcher {
         return if (ready) QueueDecision.SEND else QueueDecision.WAIT
     }
 
-    /** True while a queued prompt is waiting for the user's draft to be sent or cleared, or for the session to be free. */
-    fun isWaiting(ccmSessionId: String): Boolean = tracks[ccmSessionId]?.armed == true
-
-    /** True while [isWaiting] or a sent prompt has not yet started its turn, so a timed re-check is due. */
+    /** True while a queued prompt waits for the user's draft or a free session, or a sent prompt has not yet started its turn, so a timed re-check is due. */
     fun needsRecheck(ccmSessionId: String): Boolean = tracks[ccmSessionId]?.let { it.armed || it.awaitingTurn } == true
 
     /** The user added a prompt: an idle session after an Esc interrupt may send it. */

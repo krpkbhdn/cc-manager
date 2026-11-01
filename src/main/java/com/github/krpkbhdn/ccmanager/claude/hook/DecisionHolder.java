@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.claude.hook;
 
+import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 

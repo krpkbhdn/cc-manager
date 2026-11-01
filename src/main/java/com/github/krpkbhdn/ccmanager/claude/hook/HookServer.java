@@ -1,5 +1,7 @@
 package com.github.krpkbhdn.ccmanager.claude.hook;
 
+import com.github.krpkbhdn.ccmanager.claude.event.HookEventType;
+import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
 import com.github.krpkbhdn.ccmanager.claude.mcp.McpEndpoint;
 import com.github.krpkbhdn.ccmanager.claude.mcp.AssistantMcpServer;
 import com.sun.net.httpserver.HttpExchange;
@@ -11,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Optional;
@@ -18,6 +21,7 @@ import java.util.function.Function;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
@@ -51,6 +55,7 @@ public class HookServer implements SmartLifecycle {
     private static final int NO_RESPONSE_BODY = -1;
     private static final int PAYLOAD_TOO_LARGE = 413;
     private static final int PATH_PARTS = 2;
+    private static final Duration EXECUTOR_STOP_WAIT = Duration.ofSeconds(2);
 
     private final HookEventStore store;
     private final ApplicationEventPublisher publisher;
@@ -108,7 +113,6 @@ public class HookServer implements SmartLifecycle {
         if (server != null) {
             return;
         }
-        worker = Executors.newSingleThreadExecutor(Thread.ofPlatform().name("hook-worker").daemon().factory());
         try {
             server = HttpServer.create(new InetSocketAddress(InetAddress.getByAddress(new byte[] {127, 0, 0, 1}), 0), 0);
         } catch (IOException e) {
@@ -120,6 +124,7 @@ public class HookServer implements SmartLifecycle {
                 (ex, id, body) -> respondToHook(ex, id, body, this::acceptStatusLine)));
         server.createContext(MCP_CONTEXT_PATH, exchange -> serve(exchange, MCP_CONTEXT_PATH, (ex, id, body) -> respondToMcp(ex, bytes -> mcp.handle(id, bytes), body)));
         server.createContext(ASSISTANT_MCP_CONTEXT_PATH, this::serveAssistantMcp);
+        worker = Executors.newSingleThreadExecutor(Thread.ofPlatform().name("hook-worker").daemon().factory());
         requestExecutor = Executors.newVirtualThreadPerTaskExecutor();
         server.setExecutor(requestExecutor);
         server.start();
@@ -127,13 +132,33 @@ public class HookServer implements SmartLifecycle {
     }
 
     @Override
-    public synchronized void stop() {
-        if (server != null) {
-            proposals.releaseAll();
-            server.stop(0);
+    public void stop() {
+        HttpServer stopping;
+        ExecutorService requests;
+        ExecutorService work;
+        synchronized (this) {
+            stopping = server;
+            requests = requestExecutor;
+            work = worker;
             server = null;
-            requestExecutor.shutdown();
-            worker.shutdown();
+        }
+        if (stopping != null) {
+            proposals.releaseAll();
+            stopping.stop(0);
+            awaitTermination(requests);
+            awaitTermination(work);
+        }
+    }
+
+    private static void awaitTermination(ExecutorService executor) {
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(EXECUTOR_STOP_WAIT.toMillis(), TimeUnit.MILLISECONDS)) {
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
         }
     }
 

@@ -48,6 +48,8 @@ object TerminalHost {
         terminal.session.send(text)
     }
 
+    fun hasTerminal(ccmSessionId: String): Boolean = terminals.containsKey(ccmSessionId)
+
     fun ctrlCWithin(ccmSessionId: String, windowMillis: Long): Boolean =
         terminals[ccmSessionId]?.connector?.ctrlCWithin(windowMillis) == true
 

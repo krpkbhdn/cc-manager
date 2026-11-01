@@ -116,7 +116,7 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
     }
 
     fun send(text: String) {
-        if (CTRL_C_CHAR in text) draftMayExist = false
+        if (CTRL_C_CHAR in text) clearDraftCount()
         emulator.write(text.toByteArray(Charsets.UTF_8))
     }
 
@@ -132,9 +132,22 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
     var draftMayExist = false
         private set
 
+    // shortcut: counts typed characters and Backspaces only, word/line deletes keep the draft flagged, until Enter or Ctrl+C
+    private val draftLength = AtomicInteger()
+
+    private fun addToDraft(delta: Int) {
+        draftMayExist = draftLength.updateAndGet { (it + delta).coerceAtLeast(0) } > 0
+    }
+
+    private fun clearDraftCount() {
+        draftLength.set(0)
+        draftMayExist = false
+    }
+
     private fun trackDraft(bytes: ByteArray) {
-        if (bytes.size == 1 && (bytes[0] == ENTER_BYTE || bytes[0] == CTRL_C_BYTE)) draftMayExist = false
-        else if (bytes.isNotEmpty() && bytes[0] != DELETE_BYTE && (bytes[0] >= SPACE_BYTE || bytes[0] < 0)) draftMayExist = true
+        if (bytes.size == 1 && (bytes[0] == ENTER_BYTE || bytes[0] == CTRL_C_BYTE)) clearDraftCount()
+        else if (bytes.size == 1 && bytes[0] == DELETE_BYTE) addToDraft(-1)
+        else if (bytes.isNotEmpty() && (bytes[0] >= SPACE_BYTE || bytes[0] < 0)) addToDraft(1)
     }
 
     /** Handles a key event; returns true when it was consumed here. */
@@ -196,7 +209,7 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
         val text = runCatching { clipboard.getData(DataFlavor.stringFlavor) as? String }.getOrNull().orEmpty()
         if (text.isEmpty()) return false
         scrollToBottom()
-        draftMayExist = true
+        addToDraft(text.codePointCount(0, text.length))
         emulator.write(pasteBytes(text, modes.bracketedPaste))
         return true
     }

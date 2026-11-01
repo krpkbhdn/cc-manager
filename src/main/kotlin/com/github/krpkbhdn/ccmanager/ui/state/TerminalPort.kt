@@ -15,6 +15,9 @@ interface TerminalPort {
     fun send(ccmSessionId: String, text: String)
     fun close(ccmSessionId: String)
 
+    /** False when the session has no terminal, so [send] would reach nobody. */
+    fun hasTerminal(ccmSessionId: String): Boolean = true
+
     /** Moves the keyboard focus into the session's terminal, if it has one. */
     fun focus(ccmSessionId: String) {}
 
@@ -39,6 +42,7 @@ object HostTerminalPort : TerminalPort {
     override fun openShell(shell: LaunchedShell) = TerminalHost.open(shell)
     override fun send(ccmSessionId: String, text: String) = TerminalHost.send(ccmSessionId, text)
     override fun close(ccmSessionId: String) = TerminalHost.close(ccmSessionId)
+    override fun hasTerminal(ccmSessionId: String) = TerminalHost.hasTerminal(ccmSessionId)
     override fun focus(ccmSessionId: String) = TerminalHost.focus(ccmSessionId)
     override fun ctrlCWithin(ccmSessionId: String, windowMillis: Long) = TerminalHost.ctrlCWithin(ccmSessionId, windowMillis)
     override fun enterWithin(ccmSessionId: String, windowMillis: Long) = TerminalHost.enterWithin(ccmSessionId, windowMillis)

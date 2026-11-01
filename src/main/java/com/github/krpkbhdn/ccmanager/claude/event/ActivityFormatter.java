@@ -1,4 +1,4 @@
-package com.github.krpkbhdn.ccmanager.claude.hook;
+package com.github.krpkbhdn.ccmanager.claude.event;
 
 import java.util.Map;
 import java.util.Optional;

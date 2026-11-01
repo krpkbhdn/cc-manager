@@ -1,6 +1,6 @@
 package com.github.krpkbhdn.ccmanager.ui.state
 
-import com.github.krpkbhdn.ccmanager.claude.hook.HookEventType
+import com.github.krpkbhdn.ccmanager.claude.event.HookEventType
 import com.github.krpkbhdn.ccmanager.workspace.GitDiff
 import java.time.Instant
 import java.time.ZoneId

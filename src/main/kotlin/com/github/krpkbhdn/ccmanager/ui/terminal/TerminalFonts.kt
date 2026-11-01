@@ -50,7 +50,7 @@ internal object BundledTypefaces {
 internal class TerminalFonts(val cellWidth: Int) {
     val fontSize: Float = cellWidth / MONO_ADVANCE_EM
     private val faces = HashMap<Int, Font>()
-    private val fallbackFaces = HashMap<Long, Font>()
+    private val fallbackFaces = BoundedCache<Long, Font>(FALLBACK_FACE_LIMIT)
 
     val cellHeight: Int
     val baseline: Float
@@ -92,5 +92,17 @@ internal class TerminalFonts(val cellWidth: Int) {
 
     private companion object {
         const val STYLE_SHIFT = 8
+        const val FALLBACK_FACE_LIMIT = 256
     }
+}
+
+/** Least-recently-used map that drops its eldest entry beyond [limit]. */
+internal class BoundedCache<K, V>(private val limit: Int) {
+    private val entries = object : LinkedHashMap<K, V>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>) = size > limit
+    }
+
+    val size get() = synchronized(entries) { entries.size }
+
+    fun getOrPut(key: K, create: () -> V): V = synchronized(entries) { entries.getOrPut(key, create) }
 }
