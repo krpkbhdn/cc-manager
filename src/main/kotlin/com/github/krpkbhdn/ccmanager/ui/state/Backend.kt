@@ -16,6 +16,7 @@ import com.github.krpkbhdn.ccmanager.config.AppProperties
 import com.github.krpkbhdn.ccmanager.claude.session.TranscriptService
 import com.github.krpkbhdn.ccmanager.notification.NotificationService
 import com.github.krpkbhdn.ccmanager.notification.NotificationSoundService
+import com.github.krpkbhdn.ccmanager.history.SessionSearchService
 import com.github.krpkbhdn.ccmanager.project.ProjectGroupService
 import com.github.krpkbhdn.ccmanager.project.ProjectService
 import com.github.krpkbhdn.ccmanager.prompt.PromptTemplateService
@@ -68,6 +69,7 @@ class Backend(
     val author: AuthorProfileService,
     val proposals: ProposalService,
     val promptTemplates: PromptTemplateService,
+    val sessionSearch: SessionSearchService,
     val terminal: TerminalPort = HostTerminalPort,
     val updates: UpdateService? = null,
     val sound: NotificationSoundService? = null,
@@ -105,6 +107,7 @@ class Backend(
             author = context.getBean(AuthorProfileService::class.java),
             proposals = context.getBean(ProposalService::class.java),
             promptTemplates = context.getBean(PromptTemplateService::class.java),
+            sessionSearch = context.getBean(SessionSearchService::class.java),
             updates = context.getBean(UpdateService::class.java),
             sound = context.getBean(NotificationSoundService::class.java),
             dataDir = context.getBean(AppProperties::class.java).dataDir(),

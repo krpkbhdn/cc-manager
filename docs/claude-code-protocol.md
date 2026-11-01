@@ -327,3 +327,11 @@ The Assistant (project 0, `ClaudeLauncher.launchAssistant`) gets `--mcp-config` 
 - A process loads one native runtime (`NativeRuntime`, never unloaded), so switching CPU and CUDA needs an app restart; `VoiceInputService` fails the start until then.
 - GPUs are listed by `CudaDriverProbe` through FFM to `nvcuda.dll`; devices are matched by name (`GpuSelection`) because CUDA ordinals can differ from PCI order.
 - Runtimes (`RuntimeBuild`, whisper.cpp release zips) and models (`WhisperModel`) live under `<dataDir>/voice` (`VoiceAssetService`); they are downloaded only by an explicit `install` through `VerifiedDownload` (SHA-256 and the declared size are enforced, a longer body aborts the download).
+
+## 19. Session history search (package `history`, transcripts under `<claudeConfigDir>/projects/<encoded cwd>/<session-uuid>.jsonl`)
+
+- One JSON object per line. Read fields: `type` (`user`, `assistant`; others are skipped), `uuid` (line id), `sessionId`, `cwd`, `timestamp` (ISO-8601), `message.content` (a string, or blocks: `text`, `tool_use` {id, name, input}, `tool_result` {tool_use_id, content: string or `[{text}]`}). Subagent transcripts (`<session>/subagents/*.jsonl`) are not indexed. The session UUID is also the file name stem and is preferred over the line's `sessionId`.
+- The indexer reads from the stored byte offset in batches of whole lines (an unfinished last line waits for its newline); a file whose last indexed byte is not a newline, or that shrank, is read again from the start; files that vanished are forgotten; paths must resolve inside `<claudeConfigDir>/projects`.
+- Secrets: text is masked (`SecretFilter.mask`), and a `tool_use` whose full input (before the 400 character cut) touches a sensitive file or dumps the environment is not indexed, nor is its `tool_result`.
+- Resume uses `claude --resume <uuid>` (valid UUID only) in the transcript's `cwd` if that folder is inside the project, else in the project folder; `--mcp-config`, `--settings`, `--plugin-dir` and `--add-dir` are passed again.
+- Keys: `cc-manager.history.scan-interval` (default `30s`) and `cc-manager.history.max-entries` (default `200000`; the oldest files are evicted over the limit and not indexed again).

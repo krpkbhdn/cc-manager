@@ -9,7 +9,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.regex.Pattern;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -29,9 +28,6 @@ public class HookEventStore {
     private static final String TOOL_RESPONSE = "tool_response";
     private static final Set<String> READ_TOOL_INPUT_FIELDS =
             Set.of("command", "file_path", "notebook_path", "pattern", "url", "query", "description");
-    /** Masks only key=value, key: value and bearer forms; space-separated flags and bare tokens (sk-...) pass through. */
-    private static final Pattern SECRET = Pattern.compile(
-            "(?i)((?:(?:token|secret|passw(?:or)?d|api[_-]?key|credential)[\\w-]*+\\s*[=:]\\s*|bearer\\s+))(\"[^\"]*\"|'[^']*'|\\S+)");
 
     private final JdbcClient jdbc;
     private final JsonMapper mapper;
@@ -122,7 +118,7 @@ public class HookEventStore {
 
     private JsonNode truncated(JsonNode node) {
         if (node.isString()) {
-            return mapper.getNodeFactory().stringNode(SECRET.matcher(cut(node.asString())).replaceAll("$1[redacted]"));
+            return mapper.getNodeFactory().stringNode(SecretPatterns.KEY_VALUE.matcher(cut(node.asString())).replaceAll("$1[redacted]"));
         }
         if (node.isObject()) {
             ObjectNode copy = mapper.createObjectNode();

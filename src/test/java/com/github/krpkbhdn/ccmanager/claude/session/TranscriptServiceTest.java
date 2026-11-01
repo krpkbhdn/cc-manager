@@ -95,6 +95,22 @@ class TranscriptServiceTest {
     }
 
     @Test
+    void windowAroundALineOffsetReturnsTheEntryIndexAndStaysInsideProjects() throws Exception {
+        var projects = Files.createDirectory(dir.resolve("projects"));
+        var file = projects.resolve("w.jsonl");
+        var first = user("a") + "\n";
+        Files.writeString(file, first + user("b") + "\n" + user("c") + "\n");
+
+        var window = service(projects).readWindow(file.toString(), first.length());
+
+        assertThat(window.entries()).extracting(TranscriptEntry::text).containsExactly("a", "b", "c");
+        assertThat(window.index()).isEqualTo(1);
+        var outside = dir.resolve("o.jsonl");
+        Files.writeString(outside, first);
+        assertThat(service(projects).readWindow(outside.toString(), 0).entries()).isEmpty();
+    }
+
+    @Test
     void missingFileGivesNoEntries() {
         assertThat(service(dir).read(dir.resolve("none.jsonl").toString())).isEmpty();
         assertThat(service(dir).read(null)).isEmpty();

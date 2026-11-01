@@ -27,6 +27,16 @@ class ClaudeCommandTest {
     private static final int WINDOWS_COMMAND_LINE_LIMIT = 32_767;
 
     @Test
+    void resumeArgumentsPassTheSessionIdAndRejectAnInvalidOne() {
+        String id = "123e4567-e89b-12d3-a456-426614174000";
+        assertThat(ClaudeCommand.resumeArguments(EXE, FILES, PLUGIN, id, ModelSelection.DEFAULT, null)).endsWith("--resume", id);
+        assertThatThrownBy(() -> ClaudeCommand.resumeArguments(EXE, FILES, PLUGIN, "1-1-1-1-1", ModelSelection.DEFAULT, null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ClaudeCommand.resumeArguments(EXE, FILES, PLUGIN, "--x", ModelSelection.DEFAULT, null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void newSessionHasSettingsMcpConfigAndPlugin() {
         assertThat(ClaudeCommand.launchArguments(EXE, FILES, PLUGIN, LaunchMode.NEW, ModelSelection.DEFAULT))
                 .containsExactly(EXE.toString(), "--settings", SETTINGS.toString(), "--mcp-config", MCP.toString(), "--plugin-dir", PLUGIN.toString());

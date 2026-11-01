@@ -47,6 +47,7 @@ import com.github.krpkbhdn.ccmanager.ui.components.ToastHost
 import com.github.krpkbhdn.ccmanager.ui.components.trackInputModality
 import com.github.krpkbhdn.ccmanager.ui.git.dialog.GitDialogHost
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
+import com.github.krpkbhdn.ccmanager.ui.history.SessionSearchScreen
 import com.github.krpkbhdn.ccmanager.ui.palette.CommandPalette
 import com.github.krpkbhdn.ccmanager.ui.palette.paletteItems
 import com.github.krpkbhdn.ccmanager.ui.picker.FolderPickerDialog
@@ -189,6 +190,7 @@ private fun RouteContent(state: AppState) {
     if (route == Route.Mcp) return McpScreen(state.extensions.mcp)
     if (route == Route.Skills) return SkillsScreen(state.extensions.skills)
     if (route == Route.Sessions) return SessionsScreen(state)
+    if (route == Route.SessionSearch) return SessionSearchScreen(state.sessionSearch, state.projects.projects, { project, hit -> state.sessions.resume(project.id, hit.claudeSessionId, Path.of(hit.cwd)) })
     if (route == Route.Assistant) return AssistantScreen(state)
     val project = (route as? Route.Project)?.let { target -> state.projects.all.firstOrNull { it.id == target.id } }
     Crossfade(project?.id, label = "route") { shown ->

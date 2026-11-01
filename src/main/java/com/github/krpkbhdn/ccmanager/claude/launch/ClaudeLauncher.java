@@ -78,6 +78,25 @@ public class ClaudeLauncher {
                 (files, exe, selection) -> ClaudeCommand.launchArguments(exe, files, plugin.directory(), mode, selection, team));
     }
 
+    /** Resumes a stored conversation in [cwd] (where Claude keeps it) or, if that folder is gone, in the project folder; [team] may be null. */
+    public LaunchedSession resume(long projectId, String claudeSessionId, Path cwd, Team team) {
+        ClaudeCommand.canonicalUuid(claudeSessionId);
+        Project project = project(projectId);
+        Path directory = insideProject(cwd, project.path()) ? cwd : project.path();
+        String label = team == null ? ClaudeCommand.label(LaunchMode.RESUME_PICKER) : ClaudeCommand.label(LaunchMode.RESUME_PICKER, team);
+        return start(projectId, directory, project.modelSelection(), label,
+                (files, exe, selection) -> ClaudeCommand.resumeArguments(exe, files, plugin.directory(), claudeSessionId, selection, team),
+                project.group() ? members(project) : List.of());
+    }
+
+    static boolean insideProject(Path cwd, Path projectPath) {
+        try {
+            return cwd != null && Files.isDirectory(cwd) && cwd.toRealPath().startsWith(projectPath.toRealPath());
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     /** A lead session with the team's roles as subagents; the task is its first prompt. */
     public LaunchedSession launchTeam(long projectId, Team team, String task) {
         return start(projectId, "claude (" + team.name() + ")",

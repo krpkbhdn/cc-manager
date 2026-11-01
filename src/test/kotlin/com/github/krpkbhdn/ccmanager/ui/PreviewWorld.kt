@@ -335,7 +335,7 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         val shellLauncher = mock(ShellLauncher::class.java)
         `when`(shellLauncher.launch(anyLong(), any())).thenThrow(IllegalStateException("Preview mode: shells cannot be started here."))
 
-        return Backend(projectService, fakeGroupService(), installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), TranscriptService(JsonMapper.builder().build(), previewTranscriptDir), runConfigurationService(), runService(), shellDetector, shellLauncher, mock(AuthorProfileService::class.java), proposals.service(), mock(PromptTemplateService::class.java), terminal = terminal, sessionProperties = SessionProperties(Duration.ofMinutes(10), Duration.ofMinutes(10)), voice = voice.backend)
+        return Backend(projectService, fakeGroupService(), installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), TranscriptService(JsonMapper.builder().build(), previewTranscriptDir), runConfigurationService(), runService(), shellDetector, shellLauncher, mock(AuthorProfileService::class.java), proposals.service(), mock(PromptTemplateService::class.java), previewSessionSearch(), terminal = terminal, sessionProperties = SessionProperties(Duration.ofMinutes(10), Duration.ofMinutes(10)), voice = voice.backend)
     }
 
     private fun installationNow() = if (claudeInstalled) {

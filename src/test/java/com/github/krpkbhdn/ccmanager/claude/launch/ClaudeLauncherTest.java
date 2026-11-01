@@ -52,6 +52,33 @@ class ClaudeLauncherTest {
     }
 
     @Test
+    void resumeRejectsInvalidSessionIdBeforeStartingAnything() {
+        assertThatThrownBy(() -> launcher.resume(1, "not-a-uuid; rm -rf", null, null))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(sessions, never()).register(anyLong());
+    }
+
+    @Test
+    void resumeDirectoryMustBeInsideTheProject() throws Exception {
+        var inside = Files.createDirectories(directory.resolve("sub"));
+        var outside = Files.createDirectories(directory.resolveSibling(directory.getFileName() + "-elsewhere"));
+
+        assertThat(ClaudeLauncher.insideProject(inside, directory)).isTrue();
+        assertThat(ClaudeLauncher.insideProject(outside, directory)).isFalse();
+        assertThat(ClaudeLauncher.insideProject(directory.resolve("missing"), directory)).isFalse();
+        assertThat(ClaudeLauncher.insideProject(null, directory)).isFalse();
+    }
+
+    @Test
+    void resumeWithMissingClaudeGivesReadableMessageAndRegistersNothing() {
+        when(installation.current()).thenReturn(new ClaudeInstallation(false, null, null, null, "Claude is missing"));
+
+        assertThatThrownBy(() -> launcher.resume(1, "123e4567-e89b-12d3-a456-426614174000", null, null))
+                .isInstanceOf(IllegalStateException.class).hasMessage("Claude is missing");
+        verify(sessions, never()).register(anyLong());
+    }
+
+    @Test
     void missingClaudeGivesReadableMessageAndRegistersNothing() {
         when(installation.current()).thenReturn(new ClaudeInstallation(false, null, null, null, "Claude is missing"));
 

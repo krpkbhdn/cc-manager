@@ -20,6 +20,7 @@ import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.McpState
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitHost
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitState
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
+import com.github.krpkbhdn.ccmanager.ui.history.SessionSearchState
 import com.github.krpkbhdn.ccmanager.ui.prompts.PromptsState
 import com.github.krpkbhdn.ccmanager.claude.proposal.Proposal
 import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalState
@@ -140,6 +141,7 @@ class AppState(
     val waitingCount: Int get() = live.sessions.count { it.status == AgentStatus.NEEDS_ACTION }
     val teams = TeamsState(backend.teams, scope, { confirm = it }, notifications::reportError)
     val prompts = PromptsState(backend.promptTemplates, scope, { confirm = it }, notifications::reportError, listOf(backend.projects::subscribe, backend.teams::subscribe))
+    val sessionSearch = SessionSearchState(backend.sessionSearch, backend.transcripts, scope, { confirm = it }, notifications::reportError)
     val extensions = ExtensionStates(backend, scope, { confirm = it }, notifications, environment)
     val author = AuthorProfileState(
         backend.author, scope,
@@ -186,6 +188,7 @@ class AppState(
         backend.appControl?.let { unsubscribers += it.connect(AppControlAdapter(this, scope, backend.appControlProperties.uiTimeout())) }
         teams.start()
         prompts.start()
+        sessionSearch.start()
         queue.start()
         author.offerAtStart()
         runs.start()
@@ -213,6 +216,7 @@ class AppState(
         extensions.dispose()
         teams.dispose()
         prompts.dispose()
+        sessionSearch.dispose()
         queue.dispose()
         voice?.let { Thread(it::close, "voice-close").apply { isDaemon = false }.start() }
         runs.dispose()

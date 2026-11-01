@@ -64,6 +64,17 @@ class SessionsState(
         }
     }
 
+    /** Resumes the stored conversation [claudeSessionId]; if it is already live, its tab is focused instead of starting a second claude. */
+    fun resume(projectId: Long, claudeSessionId: String, cwd: java.nio.file.Path?) {
+        live().sessions.firstOrNull { it.claudeSessionId == claudeSessionId }?.let {
+            onOpened(it.projectId, it.ccmSessionId)
+            showProject(it.projectId)
+            return backend.terminal.focus(it.ccmSessionId)
+        }
+        val team = defaultTeam(projectId)
+        launchSession(projectId, team) { backend.launcher.resume(projectId, claudeSessionId, cwd, team) }
+    }
+
     /** Starts the general session outside any project. */
     fun launchAssistant(show: Boolean = true) = launchSession(ClaudeLauncher.ASSISTANT_PROJECT_ID, show = show) { backend.launcher.launchAssistant() }
 

@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -54,6 +55,32 @@ public final class ClaudeCommand {
         addTeam(command, team);
         addModeFlag(command, mode);
         return command;
+    }
+
+    /** Resumes one conversation by id; the id comes from a transcript file, so it must be a canonical UUID. [team] may be null. */
+    static List<String> resumeArguments(Path executable, SessionFiles files, Path pluginDir, String claudeSessionId,
+            ModelSelection selection, Team team) {
+        String id = canonicalUuid(claudeSessionId);
+        List<String> command = base(executable, files);
+        addClaudeManager(command, files, pluginDir);
+        command.addAll((team == null ? selection : selection.orElse(leadSelection(team))).arguments());
+        if (team != null) {
+            addTeam(command, team);
+        }
+        command.addAll(List.of("--resume", id));
+        return command;
+    }
+
+    static String canonicalUuid(String value) {
+        try {
+            String id = UUID.fromString(value).toString();
+            if (id.equalsIgnoreCase(value)) {
+                return id;
+            }
+        } catch (IllegalArgumentException | NullPointerException ignored) {
+            // rethrown below with one message
+        }
+        throw new IllegalArgumentException("Invalid Claude session id");
     }
 
     /** The lead runs with its role's model and effort, the other roles as --agents, and the task as the first prompt (after "--" so it is never read as a flag). */

@@ -24,6 +24,7 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
             AppShortcut.TOGGLE_THEME -> handled { state.prefs.toggleTheme(systemDark()) }
             AppShortcut.OVERVIEW -> handled { state.navigate(Route.Overview) }
             AppShortcut.ALL_SESSIONS -> handled { state.navigate(Route.Sessions) }
+            AppShortcut.SEARCH_SESSIONS -> handled { state.navigate(Route.SessionSearch) }
             AppShortcut.ASSISTANT -> handled { state.navigate(Route.Assistant) }
             AppShortcut.QUICK_REQUEST -> handled { state.quickRequestOpen = true }
             AppShortcut.NEXT_WAITING -> state.answers.answerNextWaiting()
