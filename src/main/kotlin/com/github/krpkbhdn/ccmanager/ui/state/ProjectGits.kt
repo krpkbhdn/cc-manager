@@ -18,6 +18,8 @@ import java.nio.file.Path
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 
@@ -37,6 +39,8 @@ class ProjectGits(
 ) {
     private val states = mutableStateMapOf<Long, GitState>()
     private val worktreeStates = mutableMapOf<Path, GitState>()
+    private val tasksLoaded = mutableSetOf<Path>()
+    private val sweep = Mutex()
 
     /** The worktree each project shows, in memory only; a project missing here shows its main folder. */
     private val active = mutableStateMapOf<Long, Path>()
@@ -70,7 +74,7 @@ class ProjectGits(
             return
         }
         val state = worktreeStates.getOrPut(folder) { GitState(projectId, folder, git, scope, host) }
-        if (state.task == null) loadTask(state, projectId, folder)
+        if (folder !in tasksLoaded) loadTask(state, projectId, folder)
         active[projectId] = folder
         scope.launch {
             main.loadWorktrees()
@@ -82,7 +86,10 @@ class ProjectGits(
     private fun loadTask(state: GitState, projectId: Long, folder: Path) {
         scope.launch {
             val rows = withContext(Dispatchers.IO) { readTasks(projectId) }
-            rows?.let { state.task = it.firstOrNull { row -> sameFolder(row.path(), folder) } }
+            rows?.let {
+                state.task = it.firstOrNull { row -> sameFolder(row.path(), folder) }
+                tasksLoaded.add(folder)
+            }
         }
     }
 
@@ -96,6 +103,7 @@ class ProjectGits(
 
     private fun dropWorktree(folder: Path) {
         worktreeStates.remove(folder)?.close()
+        tasksLoaded.remove(folder)
         active.entries.removeAll { it.value == folder }
     }
 
@@ -168,10 +176,13 @@ class ProjectGits(
         states.keys.filter { it !in projectIds }.forEach { states.remove(it)?.close() }
         worktreeStates.entries.removeAll { (_, state) -> (state.projectId !in projectIds).also { if (it) state.close() } }
         active.keys.removeAll { it !in projectIds }
+        tasksLoaded.retainAll(worktreeStates.keys)
     }
 
-    /** One project at a time, so many projects do not start dozens of git processes at once. */
+    /** One project at a time, so many projects do not start dozens of git processes at once; a periodic reload is skipped while a sweep runs, a first load of new projects waits its turn. */
     private fun loadOneByOne(loaded: List<GitState>, withWorktrees: Boolean = false) {
-        if (loaded.isNotEmpty()) scope.launch { loaded.forEach { it.reloadNow(); if (withWorktrees) it.loadWorktrees() } }
+        if (loaded.isEmpty()) return
+        if (!withWorktrees && sweep.isLocked) return
+        scope.launch { sweep.withLock { loaded.forEach { it.reloadNow(); if (withWorktrees) it.loadWorktrees() } } }
     }
 }

@@ -37,12 +37,27 @@ class VoiceAssetServiceTest {
     Path dataDir;
 
     private final AtomicInteger requests = new AtomicInteger();
+    private final java.util.concurrent.CountDownLatch slowStarted = new java.util.concurrent.CountDownLatch(1);
+    private final java.util.concurrent.CountDownLatch slowRelease = new java.util.concurrent.CountDownLatch(1);
     private HttpServer server;
     private VoiceAssetService service;
 
     @BeforeEach
     void setUp() throws Exception {
         server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+        server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
+        server.createContext("/slow", exchange -> {
+            slowStarted.countDown();
+            try {
+                slowRelease.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            exchange.sendResponseHeaders(200, MODEL.length);
+            try (var out = exchange.getResponseBody()) {
+                out.write(MODEL);
+            }
+        });
         serve("/model", MODEL);
         serve("/runtime.zip", RUNTIME_ZIP);
         serve("/evil.zip", EVIL_ZIP);
@@ -133,31 +148,31 @@ class VoiceAssetServiceTest {
     }
 
     @Test
-    void removeDeletesFileAndDirectory() throws Exception {
-        var file = asset("/model", MODEL, "models/m.bin", false);
-        var archive = asset("/runtime.zip", RUNTIME_ZIP, "runtime/cpu", true);
-        service.install(file, progress -> { });
-        service.install(archive, progress -> { });
+    void staleArchiveDownloadIsCleanedOnInstall() throws Exception {
+        Files.createDirectories(dataDir.resolve("voice"));
+        Files.writeString(dataDir.resolve("voice/download-1.zip.part"), "junk");
 
-        service.remove(file);
-        service.remove(archive);
+        service.install(asset("/model", MODEL, "models/m.bin", false), progress -> { });
 
-        assertThat(service.installed(file)).isFalse();
-        assertThat(service.installed(archive)).isFalse();
+        assertThat(dataDir.resolve("voice/download-1.zip.part")).doesNotExist();
     }
 
     @Test
-    void removeLeavesNoRemovingDirectoryAndStaleDownloadsAreCleanedOnInstall() throws Exception {
-        var archive = asset("/runtime.zip", RUNTIME_ZIP, "runtime/cpu", true);
-        service.install(archive, progress -> { });
-        Files.createDirectories(dataDir.resolve("voice/runtime/cpu.removing"));
-        Files.writeString(dataDir.resolve("voice/download-1.zip.part"), "junk");
+    void aSlowInstallDoesNotBlockTheInstallOfAnotherAsset() throws Exception {
+        var slow = asset("/slow", MODEL, "models/slow.bin", false);
+        var fast = asset("/model", MODEL, "models/fast.bin", false);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            pool.submit(() -> service.install(slow, progress -> { }));
+            assertThat(slowStarted.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
 
-        service.remove(archive);
-        service.install(asset("/model", MODEL, "models/m.bin", false), progress -> { });
+            var done = pool.submit(() -> service.install(fast, progress -> { }));
 
-        assertThat(dataDir.resolve("voice/runtime/cpu.removing")).doesNotExist();
-        assertThat(dataDir.resolve("voice/download-1.zip.part")).doesNotExist();
+            assertThat(done.get(5, java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(dataDir.resolve("voice/models/fast.bin"));
+        } finally {
+            slowRelease.countDown();
+            pool.shutdownNow();
+        }
     }
 
     @Test

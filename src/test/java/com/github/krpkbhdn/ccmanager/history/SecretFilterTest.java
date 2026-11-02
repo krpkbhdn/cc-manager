@@ -2,6 +2,10 @@ package com.github.krpkbhdn.ccmanager.history;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
+
+import java.time.Duration;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -43,6 +47,23 @@ class SecretFilterTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
+            "MYSQL_PWD=hunter2", "mysql -u root -phunter2 db", "sk_live_abcdefghijklmnop1234", "rk_live_abcdefghijklmnop1234",
+            "glpat-abcdefghijklmnop1234", "npm_abcdefghijklmnopqrstuvwxyz0123456789", "Password: hunter2 horse battery"})
+    void masksAdditionalCredentialForms(String text) {
+        assertThat(SecretFilter.mask(text)).contains("[redacted]").doesNotContain("hunter2", "abcdefghijklmnop", "horse", "battery");
+    }
+
+    @Test
+    void aLongWordRunIsProcessedQuicklyAndARealAssignmentStillMasked() {
+        var run = "a1B2".repeat(25_000);
+
+        var masked = assertTimeoutPreemptively(Duration.ofSeconds(1), () -> SecretFilter.mask(run + " password=hunter2"));
+
+        assertThat(masked).doesNotContain("hunter2");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
             "0123456789abcdef0123456789ABCDEF", "abc-DEF_ghi123abc-DEF_ghi123abc-DEF_ghi123xyz",
             "aB3/dE5+fG7/hI9+jK1/lM3+nO5/pQ7+rS9/tU1+vW3"})
     void masksRandomBlobs(String blob) {
@@ -69,7 +90,7 @@ class SecretFilterTest {
     @ParameterizedTest
     @ValueSource(strings = {
             "cat .env", "{\"file_path\":\"/p/.env.local\"}", "C:\\p\\.env", "a/server.pem", "k.KEY", "x.p12", "x.pfx",
-            "x.keystore", "~/.ssh/id_rsa", "id_rsa.pub", "~/.ssh/config", "C:\\Users\\a\\.aws\\config", "cat .netrc",
+            "x.keystore", "~/.ssh/id_rsa", "~/.ssh/id_ed25519", "id_ecdsa", "id_dsa","id_rsa.pub", "~/.ssh/config", "C:\\Users\\a\\.aws\\config", "cat .netrc",
             ".npmrc", ".pypirc", "aws/credentials", "/p/secrets.yml", "cat ~/.pgpass", "~/.docker/config.json",
             "C:\\\\u\\\\.docker\\\\config.json", "prod.tfvars", "~/.kube/kubeconfig", "service-account-prod.json",
             ".git-credentials", "{\"command\":\"printenv\"}", "{\"command\":\"env\"}", "{\"command\":\"env | grep X\"}",

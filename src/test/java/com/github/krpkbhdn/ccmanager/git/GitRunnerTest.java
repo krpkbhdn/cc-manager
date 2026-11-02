@@ -129,6 +129,56 @@ class GitRunnerTest {
     }
 
     @Test
+    void aFailingProgressListenerDoesNotStopTheStderrReader() {
+        var text = new StringBuffer();
+        var stream = new java.io.ByteArrayInputStream("one\ntwo\n".getBytes(StandardCharsets.UTF_8));
+
+        GitRunner.readLines(stream, line -> {
+            throw new IllegalStateException("boom");
+        }, text, 100);
+
+        assertThat(text.toString()).isEqualTo("one\ntwo\n");
+    }
+
+    @Test
+    void interruptKillsTheRunningGitInsteadOfLeavingItBehind() throws Exception {
+        var sandbox = GitCliSandbox.create(root);
+        Thread.currentThread().interrupt();
+
+        try {
+            assertThatThrownBy(() -> sandbox.runner.out(sandbox.repo, "-c", "alias.wait=!sleep 2; touch ran.marker", "wait"))
+                    .isInstanceOfSatisfying(GitException.class, e -> assertThat(e.getMessage()).isEqualTo("Interrupted"));
+        } finally {
+            Thread.interrupted();
+        }
+
+        Thread.sleep(3500);
+        assertThat(sandbox.repo.resolve("ran.marker")).doesNotExist();
+    }
+
+    @Test
+    void interruptDoesNotKillAWritingCommandAndStillReportsInterrupted() throws Exception {
+        var sandbox = GitCliSandbox.create(root);
+        sandbox.write("a.txt", "1\n");
+        sandbox.git("add", "-A");
+        var hook = sandbox.repo.resolve(".git/hooks/pre-commit");
+        java.nio.file.Files.createDirectories(hook.getParent());
+        java.nio.file.Files.writeString(hook, "#!/bin/sh\nsleep 2\ntouch ran.marker\n");
+        hook.toFile().setExecutable(true);
+        Thread.currentThread().interrupt();
+
+        try {
+            assertThatThrownBy(() -> sandbox.runner.out(sandbox.repo, "commit", "-m", "slow"))
+                    .isInstanceOfSatisfying(GitException.class, e -> assertThat(e.getMessage()).isEqualTo("Interrupted"));
+        } finally {
+            Thread.interrupted();
+        }
+
+        assertThat(sandbox.repo.resolve("ran.marker")).exists();
+        assertThat(sandbox.git("log", "--format=%s")).contains("slow");
+    }
+
+    @Test
     void aStderrStreamWithoutNewlinesDoesNotGrowTheLineBuffer() {
         var progress = new ArrayList<String>();
         var stream = new java.io.ByteArrayInputStream("abcdefghij".getBytes(StandardCharsets.UTF_8));

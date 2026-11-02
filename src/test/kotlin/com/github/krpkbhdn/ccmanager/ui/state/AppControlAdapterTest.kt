@@ -53,6 +53,15 @@ class AppControlAdapterTest {
     }
 
     @Test
+    fun `attachSession records the folder the session runs in`() {
+        val folder = java.nio.file.Path.of("task-folder")
+
+        adapter.attachSession(LaunchedSession("s2", 7, "claude", null, folder))
+
+        assertThat(state.sessions.sessionDirectories["s2"]).isEqualTo(folder)
+    }
+
+    @Test
     fun `queuePrompt adds the trimmed text to the session queue`() {
         adapter.queuePrompt("s-working", "  go on ")
 

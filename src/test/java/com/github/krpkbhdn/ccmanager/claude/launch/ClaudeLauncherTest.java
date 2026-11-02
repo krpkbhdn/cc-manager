@@ -120,6 +120,12 @@ class ClaudeLauncherTest {
     }
 
     @Test
+    void attachRejectsUnsafeIdBeforeRegisteringASession() {
+        assertThatThrownBy(() -> launcher.attach(1, "--dangerous")).isInstanceOf(IllegalArgumentException.class);
+        verify(sessions, never()).register(anyLong());
+    }
+
+    @Test
     void resumeDirectoryMustBeInsideTheProject() throws Exception {
         var inside = Files.createDirectories(directory.resolve("sub"));
         var outside = Files.createDirectories(directory.resolveSibling(directory.getFileName() + "-elsewhere"));

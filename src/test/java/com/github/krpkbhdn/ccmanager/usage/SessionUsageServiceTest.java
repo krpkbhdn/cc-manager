@@ -65,4 +65,16 @@ class SessionUsageServiceTest {
 
         assertThat(notified).hasValue(1);
     }
+
+    @Test
+    void reportOfASessionThatEndedDuringMergeIsDropped() {
+        var registry = mock(SessionRegistry.class);
+        var present = java.util.Optional.of(mock(com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot.class));
+        org.mockito.Mockito.when(registry.find("ccm-1")).thenReturn(present).thenReturn(java.util.Optional.empty());
+        var service = new SessionUsageService(registry);
+
+        service.on(new StatusLineReport("ccm-1", JsonMapper.builder().build().createObjectNode(), Instant.now()));
+
+        assertThat(service.of("ccm-1")).isEmpty();
+    }
 }

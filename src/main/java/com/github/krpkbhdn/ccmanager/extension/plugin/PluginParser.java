@@ -114,7 +114,7 @@ final class PluginParser {
         if (whole.startsWith("{") && isJson(whole)) {
             return Optional.of(whole);
         }
-        return stdout.lines().map(String::strip).filter(line -> line.startsWith("{")).reduce((first, second) -> second);
+        return stdout.lines().map(String::strip).filter(line -> line.startsWith("{") && isJson(line)).reduce((first, second) -> second);
     }
 
     private static boolean isJson(String text) {

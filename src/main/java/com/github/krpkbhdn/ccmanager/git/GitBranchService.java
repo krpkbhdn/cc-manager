@@ -132,13 +132,13 @@ public class GitBranchService {
         }
     }
 
-    private static String mergeMessage(String message) {
+    static String mergeMessage(String message) {
         if (message == null) {
             return "";
         }
         var text = message.replace("\r\n", "\n").replace('\r', '\n').replace("\0", "").strip();
-        if (text.length() > MAX_MERGE_MESSAGE) {
-            text = text.substring(0, MAX_MERGE_MESSAGE).strip();
+        if (text.codePointCount(0, text.length()) > MAX_MERGE_MESSAGE) {
+            text = text.substring(0, text.offsetByCodePoints(0, MAX_MERGE_MESSAGE)).strip();
         }
         return text.isEmpty() ? "" : text + "\n";
     }

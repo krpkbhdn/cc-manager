@@ -76,6 +76,7 @@ class McpState(
         get() = mutations.failure
         set(value) { mutations.failure = value }
     private var healthRun = 0
+    private var healthJob: Job? = null
     private var signInJob: Job? = null
 
     fun ensureLoaded() {
@@ -106,10 +107,11 @@ class McpState(
     fun checkHealth() {
         val run = ++healthRun
         healthCheck = HealthCheck.RUNNING
-        scope.launch {
+        healthJob?.cancel()
+        healthJob = scope.launch {
             try {
                 loggedIn = withContext(Dispatchers.IO) { service.loggedInServers() }
-                val result = withContext(Dispatchers.IO) { service.health(projectPath) }
+                val result = withContext(Dispatchers.IO) { runInterruptible { service.health(projectPath) } }
                 if (run == healthRun) { health = result; healthCheck = HealthCheck.DONE }
             } catch (e: CancellationException) {
                 throw e

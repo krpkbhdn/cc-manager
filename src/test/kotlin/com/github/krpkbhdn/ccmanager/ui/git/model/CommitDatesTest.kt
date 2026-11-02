@@ -23,6 +23,8 @@ class CommitDatesTest {
     fun `older commits count weeks months and years`() {
         assertThat(age(Duration.ofDays(7))).isEqualTo("1w ago")
         assertThat(age(Duration.ofDays(21))).isEqualTo("3w ago")
+        assertThat(age(Duration.ofDays(29))).isEqualTo("4w ago")
+        assertThat(age(Duration.ofDays(30))).isEqualTo("1mo ago")
         assertThat(age(Duration.ofDays(60))).isEqualTo("2mo ago")
         assertThat(age(Duration.ofDays(800))).isEqualTo("2y ago")
     }

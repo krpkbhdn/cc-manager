@@ -1,7 +1,6 @@
 package com.github.krpkbhdn.ccmanager.git;
 
 import com.github.krpkbhdn.ccmanager.extension.ClaudeCli;
-import com.github.krpkbhdn.ccmanager.workspace.CommandRunner;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -28,7 +27,7 @@ public class ChangeDescriptionService {
 
     private static final Logger log = LoggerFactory.getLogger(ChangeDescriptionService.class);
     private static final Pattern SAFE_BASE = Pattern.compile("[A-Za-z0-9._/-]+");
-    private static final String NO_DIFF_MARKER = "[cut]";
+    private static final String CUT_SUFFIX = "\n[cut]";
     private static final String RETRY_REMINDER = "\nYour previous answer was not valid. Answer ONLY with a JSON object {\"title\": \"...\", \"body\": \"...\"} "
             + "where title is one line of at most 72 characters describing the change, or exactly NONE. No other text.";
     /** Windows allows 32767 characters per command line and quoting can double quotes and backslashes, so stay far below. */
@@ -55,10 +54,12 @@ public class ChangeDescriptionService {
 
     private final ClaudeCli claude;
     private final ChangeDescriptionProperties properties;
+    private final GitRunner git;
 
-    public ChangeDescriptionService(ClaudeCli claude, ChangeDescriptionProperties properties) {
+    public ChangeDescriptionService(ClaudeCli claude, ChangeDescriptionProperties properties, GitRunner git) {
         this.claude = claude;
         this.properties = properties;
+        this.git = git;
     }
 
     /** @param task what the user asked for; may be empty. Interrupting the thread stops claude and skips the retry. */
@@ -76,7 +77,7 @@ public class ChangeDescriptionService {
 
     /** True when the worktree differs from the fork point of {@code base}: tracked changes or untracked files. */
     public boolean hasChanges(Path worktree, String base) {
-        return !gatherFiles(worktree, base).isEmpty();
+        return changedFiles(worktree, forkPoint(worktree, base), untrackedFiles(worktree)).filter(files -> !files.isEmpty()).isPresent();
     }
 
     private static ChangeDescription withBody(ChangeDescription described, Input input) {
@@ -131,12 +132,24 @@ public class ChangeDescriptionService {
         return prompt(input.withContent("", ""), task);
     }
 
+    /** Drops the tail until at least {@code by} quoted characters plus the cut marker are saved, so quote-heavy text is not over-cut. */
     private static String shrink(String text, int by) {
-        return by <= 0 ? text : cut(text, Math.max(text.length() - by - NO_DIFF_MARKER.length(), 0));
+        if (by <= 0) {
+            return text;
+        }
+        var keep = text.length();
+        for (var needed = by + CUT_SUFFIX.length(); keep > 0 && needed > 0; keep--) {
+            needed -= quotedLength(text.charAt(keep - 1));
+        }
+        return cut(text, keep);
     }
 
     private static int quotedLength(String text) {
-        return text.length() + (int) text.chars().filter(c -> c == '"' || c == '\\').count();
+        return text.chars().map(c -> quotedLength((char) c)).sum();
+    }
+
+    private static int quotedLength(char c) {
+        return c == '"' || c == '\\' ? 2 : 1;
     }
 
     private static String prompt(Input input, String task) {
@@ -147,11 +160,17 @@ public class ChangeDescriptionService {
                 + "<diff>\n" + input.diff() + "\n</diff>\n<untracked>\n" + input.untracked() + "\n</untracked>";
     }
 
+    /** Sends nothing when the changed-file list is unknown: without it secret files cannot be excluded from the diff. */
     private Input gather(Path worktree, String base) {
-        var files = gatherFiles(worktree, base);
+        var forkPoint = forkPoint(worktree, base);
         var untrackedFiles = untrackedFiles(worktree);
+        var changed = changedFiles(worktree, forkPoint, untrackedFiles);
+        if (changed.isEmpty()) {
+            return new Input("", "", List.of(), List.of(), branch(worktree));
+        }
+        var files = changed.get();
         var secrets = files.stream().filter(SecretFiles::looksSecret).toList();
-        var diffCommand = new ArrayList<>(List.of("diff", "--no-color", "--no-ext-diff", "--no-renames", forkPoint(worktree, base), "--", PATHSPEC_ALL));
+        var diffCommand = new ArrayList<>(List.of("diff", "--no-color", "--no-ext-diff", "--no-renames", forkPoint, "--", PATHSPEC_ALL));
         secrets.forEach(secret -> diffCommand.add(EXCLUDE_LITERAL + secret));
         var diff = cut(git(worktree, diffCommand.toArray(String[]::new)), properties.contextChars());
         var untracked = untrackedContent(worktree, untrackedFiles, properties.contextChars() - diff.length())
@@ -163,10 +182,13 @@ public class ChangeDescriptionService {
         return new Input(diff, untracked, subjects, files, branch(worktree));
     }
 
-    private List<String> gatherFiles(Path worktree, String base) {
-        var files = new ArrayList<>(splitNul(git(worktree, "diff", "--name-only", "--no-renames", "-z", forkPoint(worktree, base))));
-        untrackedFiles(worktree).stream().filter(file -> !files.contains(file)).forEach(files::add);
-        return files;
+    /** Empty when git could not list the tracked changes. */
+    private Optional<List<String>> changedFiles(Path worktree, String forkPoint, List<String> untrackedFiles) {
+        return tryGit(worktree, "diff", "--name-only", "--no-renames", "-z", forkPoint).map(tracked -> {
+            var files = new ArrayList<>(splitNul(tracked));
+            untrackedFiles.stream().filter(file -> !files.contains(file)).forEach(files::add);
+            return files;
+        });
     }
 
     private String untrackedContent(Path worktree, List<String> files, int budget) {
@@ -228,18 +250,20 @@ public class ChangeDescriptionService {
     }
 
     private static String cut(String text, int limit) {
-        return text.length() > limit ? text.substring(0, Math.max(limit, 0)) + "\n" + NO_DIFF_MARKER : text;
+        return text.length() > limit ? text.substring(0, Math.max(limit, 0)) + CUT_SUFFIX : text;
     }
 
     /** Empty when git fails. */
     private String git(Path worktree, String... arguments) {
+        return tryGit(worktree, arguments).orElse("");
+    }
+
+    private Optional<String> tryGit(Path worktree, String... arguments) {
         try {
-            var command = new ArrayList<>(List.of("git"));
-            command.addAll(List.of(arguments));
-            var result = CommandRunner.run(command, worktree, properties.gitTimeout());
-            return result.succeeded() ? result.stdout() : "";
-        } catch (IOException e) {
-            return "";
+            var result = git.tryRun(worktree, arguments);
+            return result.ok() ? Optional.of(result.stdout()) : Optional.empty();
+        } catch (GitException e) {
+            return Optional.empty();
         }
     }
 }

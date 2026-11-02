@@ -127,10 +127,8 @@ class SessionsState(
                     started = true
                     onStarted(session.ccmSessionId())
                     team?.let { sessionTeams[session.ccmSessionId()] = it }
-                    (session.directory() ?: directory ?: projectPath(projectId))?.let { sessionDirectories[session.ccmSessionId()] = it }
                     if (rememberTeam) lastTeams[projectId] = team
-                    backend.terminal.open(session)
-                    onOpened(projectId, session.ccmSessionId())
+                    openTab(session, projectId, directory)
                     if (show) showProject(projectId)
                 }
             } catch (e: Throwable) {
@@ -140,6 +138,15 @@ class SessionsState(
                 launching = false
             }
         }
+    }
+
+    /** Shows a session another component started (the Assistant's tools) and records its folder, so the worktree guards see it. */
+    fun adopt(session: LaunchedSession) = openTab(session, session.projectId, null)
+
+    private fun openTab(session: LaunchedSession, projectId: Long, directory: Path?) {
+        (session.directory() ?: directory ?: projectPath(projectId))?.let { sessionDirectories[session.ccmSessionId()] = it }
+        backend.terminal.open(session)
+        onOpened(projectId, session.ccmSessionId())
     }
 
     /**
@@ -188,8 +195,7 @@ class SessionsState(
                 val session = io { backend.launcher.attach(projectId, backgroundId) }
                 attachedSessions.add(session.ccmSessionId())
                 attachedBackgrounds[session.ccmSessionId()] = backgroundId
-                backend.terminal.open(session)
-                onOpened(projectId, session.ccmSessionId())
+                openTab(session, projectId, null)
             }
             attachingBackgrounds.remove(backgroundId)
         }

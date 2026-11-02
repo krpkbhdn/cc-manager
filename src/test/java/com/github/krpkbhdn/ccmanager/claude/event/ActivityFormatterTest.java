@@ -44,6 +44,19 @@ class ActivityFormatterTest {
     }
 
     @Test
+    void truncationNeverSplitsASurrogatePair() {
+        assertThat(ActivityFormatter.truncate("ab😀cd", 3)).isEqualTo("ab…");
+        assertThat(ActivityFormatter.cut("ab😀cd", 4)).isEqualTo("ab😀…");
+    }
+
+    @Test
+    void cutWithNonPositiveLimitYieldsOnlyTheEllipsis() {
+        assertThat(ActivityFormatter.cut("abc", 0)).isEqualTo("…");
+        assertThat(ActivityFormatter.cut("abc", -1)).isEqualTo("…");
+        assertThat(ActivityFormatter.cut("", 0)).isEmpty();
+    }
+
+    @Test
     void truncatesLongValues() {
         var prompt = "x".repeat(200);
 

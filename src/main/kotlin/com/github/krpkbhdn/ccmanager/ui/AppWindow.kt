@@ -62,7 +62,9 @@ private const val WINDOW_ICON_SIZE = 256
 fun ApplicationScope.AppWindow(backend: Backend, onShutdown: () -> Unit, settingsStore: UiSettingsStore = UiSettingsStore.inDataDir(backend.dataDir)) {
     val scope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Main) }
     val state = remember { AppState(backend, scope, settingsStore).also { it.start() } }
-    DisposableEffect(Unit) { onDispose { state.dispose(); scope.cancel() } }
+    val disposed = remember { AtomicBoolean(false) }
+    val disposeState = { if (disposed.compareAndSet(false, true)) state.dispose() }
+    DisposableEffect(Unit) { onDispose { disposeState(); scope.cancel() } }
     val icon = remember { BitmapPainter(drawAppIcon(WINDOW_ICON_SIZE).toComposeImageBitmap()) }
     val bounds = remember { fitToScreens(state.settings.window, visibleScreens()) }
     val windowState = remember {
@@ -82,6 +84,7 @@ fun ApplicationScope.AppWindow(backend: Backend, onShutdown: () -> Unit, setting
     val exit = {
         if (exiting.compareAndSet(false, true)) {
             visible = false
+            disposeState()
             thread(name = "AppShutdown") {
                 try {
                     TerminalHost.closeAll()
@@ -94,12 +97,11 @@ fun ApplicationScope.AppWindow(backend: Backend, onShutdown: () -> Unit, setting
     }
     state.exitApp = exit
     val quit = { state.requestQuit(exit) }
-    LaunchedEffect(Unit) { installMacQuitHandler({ state.live.sessions.isNotEmpty() }) { restore(); quit() } }
+    LaunchedEffect(Unit) { installMacQuitHandler { restore(); quit() } }
     state.trayAvailable = isTraySupported
     val waiting = state.waitingCount
     val taskbar = remember { TaskbarAttention() }
     state.flashTaskbar = { taskbar.flashFor(state.settings, it, state.windowActive) }
-    LaunchedEffect(waiting) { taskbar.showWaiting(waiting) }
     if (isTraySupported) {
         val plainIcon = remember { BitmapPainter(drawAppIcon(TRAY_ICON_SIZE).toComposeImageBitmap()) }
         val badgedIcon = remember(waiting) { BitmapPainter(drawAppIcon(TRAY_ICON_SIZE, waiting).toComposeImageBitmap()) }
@@ -121,6 +123,7 @@ fun ApplicationScope.AppWindow(backend: Backend, onShutdown: () -> Unit, setting
             MainWindow(state, windowState, WINDOW_TITLE, icon, if (isTraySupported && state.settings.minimizeToTray) ({ hideToTray() }) else quit, visible) {
                 val active = LocalWindowInfo.current.isWindowFocused && visible && !windowState.isMinimized
                 SideEffect { state.windowActive = active; taskbar.window = window }
+                LaunchedEffect(waiting) { taskbar.showWaiting(waiting) }
                 LaunchedEffect(restoreRequests) {
                     if (restoreRequests == handledRestores[0]) return@LaunchedEffect
                     handledRestores[0] = restoreRequests
@@ -145,16 +148,12 @@ private fun usableArea(device: GraphicsDevice): ScreenArea {
     return ScreenArea(bounds.x + insets.left, bounds.y + insets.top, bounds.width - insets.left - insets.right, bounds.height - insets.top - insets.bottom)
 }
 
-/** macOS Cmd+Q would otherwise call System.exit and skip the confirmation and the session shutdown. */
-private fun installMacQuitHandler(sessionsRunning: () -> Boolean, onQuit: () -> Unit) {
+/** macOS Cmd+Q would otherwise call System.exit and skip the confirmation and the shutdown; [onQuit] always goes through the app's own exit. */
+private fun installMacQuitHandler(onQuit: () -> Unit) {
     if (!Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.APP_QUIT_HANDLER)) return
     Desktop.getDesktop().setQuitHandler { _, response ->
-        if (sessionsRunning()) {
-            response.cancelQuit()
-            SwingUtilities.invokeLater(onQuit)
-        } else {
-            response.performQuit()
-        }
+        response.cancelQuit()
+        SwingUtilities.invokeLater(onQuit)
     }
 }
 
@@ -164,7 +163,7 @@ private fun installMacQuitHandler(sessionsRunning: () -> Boolean, onQuit: () -> 
  * when [recovery] refuses, the default handler takes over.
  */
 @OptIn(ExperimentalComposeUiApi::class)
-private fun reportingExceptionHandlers(state: AppState, fallback: WindowExceptionHandlerFactory, recovery: WindowRecovery, remount: () -> Unit): WindowExceptionHandlerFactory {
+internal fun reportingExceptionHandlers(state: AppState, fallback: WindowExceptionHandlerFactory, recovery: WindowRecovery, remount: () -> Unit): WindowExceptionHandlerFactory {
     var lastMessage: String? = null
     return WindowExceptionHandlerFactory { window ->
         WindowExceptionHandler { error ->

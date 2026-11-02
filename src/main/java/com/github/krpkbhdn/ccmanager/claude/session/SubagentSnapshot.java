@@ -60,7 +60,7 @@ public record SubagentSnapshot(
                 startedAt, at, at, false);
     }
 
-    /** A zero or negative [staleAfter] disables staleness. */
+    /** A zero [staleAfter] disables staleness. */
     SubagentSnapshot withStale(Instant now, Duration staleAfter) {
         var silent = running() && !staleAfter.isZero() && !staleAfter.isNegative() && silentFor(now).compareTo(staleAfter) > 0;
         return silent == stale ? this : new SubagentSnapshot(agentId, agentType, activity, state, background, toolCalls, lastToolFailed,

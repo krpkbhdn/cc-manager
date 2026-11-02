@@ -68,6 +68,14 @@ class WorkDirectoriesTest {
     }
 
     @Test
+    void gitFailureIsNotTurnedIntoRefusal() throws Exception {
+        var linked = Files.createDirectories(root.resolve("repo-wt-y"));
+        when(worktrees.list(repo)).thenThrow(new IllegalStateException("git failed"));
+
+        assertThatThrownBy(() -> directories.accepts(project, linked)).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     void symlinkedProjectPathIsAccepted() throws Exception {
         var link = root.resolve("link");
         try {

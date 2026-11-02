@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.usage;
 
+import static com.github.krpkbhdn.ccmanager.config.PropertyRules.*;
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
@@ -12,4 +13,14 @@ public record UsageProperties(
         @DefaultValue("80") int fiveHourPercent,
         @DefaultValue("80") int sevenDayPercent,
         @DefaultValue("0") double dailyBudgetUsd,
-        @DefaultValue("5m") Duration rateLimitSampleInterval) {}
+        @DefaultValue("5m") Duration rateLimitSampleInterval) {
+
+    public UsageProperties {
+        positive("cc-manager.usage.raw-retention", rawRetention);
+        positive("cc-manager.usage.retention-interval", retentionInterval);
+        inRange("cc-manager.usage.five-hour-percent", fiveHourPercent, 0, 100);
+        inRange("cc-manager.usage.seven-day-percent", sevenDayPercent, 0, 100);
+        nonNegative("cc-manager.usage.daily-budget-usd", dailyBudgetUsd);
+        positive("cc-manager.usage.rate-limit-sample-interval", rateLimitSampleInterval);
+    }
+}

@@ -117,6 +117,45 @@ class SkillServiceTest {
     }
 
     @Test
+    void aLinkedSkillFileIsNeitherListedNorReadAndItsTargetIsNotLeaked() throws IOException {
+        var secret = Files.writeString(project.resolve("secret.txt"), "private-key");
+        var directory = home.resolve(".claude/skills/stolen");
+        Files.createDirectories(directory);
+        try {
+            Files.createSymbolicLink(directory.resolve("SKILL.md"), secret);
+        } catch (IOException | UnsupportedOperationException | SecurityException e) {
+            Assumptions.abort("cannot create links here");
+        }
+        when(plugins.installed()).thenReturn(List.of());
+        var service = service();
+
+        assertThat(service.list(null)).isEmpty();
+        var linked = new Skill("stolen", "d", ExtensionScope.USER, "", directory.resolve("SKILL.md"));
+        assertThatThrownBy(() -> service.read(linked)).isInstanceOf(ExtensionException.class).hasMessageNotContaining("private-key");
+    }
+
+    @Test
+    void writeReplacesTheContentAndLeavesNoTemporaryFile() throws IOException {
+        var service = service();
+        var created = service.create(ExtensionScope.USER, null, "rewrite", "d");
+
+        service.write(created, "new content");
+
+        assertThat(service.read(created)).isEqualTo("new content");
+        try (var files = Files.list(created.directory())) {
+            assertThat(files.map(path -> path.getFileName().toString())).containsExactly("SKILL.md");
+        }
+    }
+
+    @Test
+    void aSkillWithInvalidUtf8StillListsAndAnEmptyPluginInstallPathContributesNothing() throws IOException {
+        var directory = Files.createDirectories(home.resolve(".claude/skills/binary"));
+        Files.write(directory.resolve("SKILL.md"), new byte[] {'-', '-', '-', '\n', 'n', 'a', 'm', 'e', ':', ' ', 'b', '\n', (byte) 0xFF, (byte) 0xFE, '\n', '-', '-', '-'});
+        when(plugins.installed()).thenReturn(List.of(new InstalledPlugin("p@m", "1", ExtensionScope.USER, true, Path.of(""), null)));
+
+        assertThat(service().list(null)).extracting(Skill::name).containsExactly("b");
+    }
+    @Test
     void writeRefusesALinkedSkillFile() throws IOException {
         var service = service();
         var created = service.create(ExtensionScope.USER, null, "linked-file", "d");

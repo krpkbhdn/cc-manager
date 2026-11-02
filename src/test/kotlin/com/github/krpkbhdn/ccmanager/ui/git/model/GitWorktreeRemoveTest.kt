@@ -24,6 +24,7 @@ class GitWorktreeRemoveTest {
     private var removeFailures = 0
     private var dirty = false
     private var stopping = false
+    private var stuck = false
     private val worktree = Worktree(linked, "feature/x", "a".repeat(40), false, false, false, false, false, false)
 
     @AfterEach
@@ -50,7 +51,7 @@ class GitWorktreeRemoveTest {
         showWorktree = { _, directory, _ -> data.record("show $directory") },
         forgetWorktree = { data.record("forget $it") },
         stopWorktreeWork = { data.record("stop") },
-        workStopping = { stopping.also { stopping = false } },
+        workStopping = { stuck || stopping.also { stopping = false } },
         deleteRunConfigurations = { data.record("deleteConfigs") },
         forgetStoredWorktree = { data.record("forgetStored") },
     )
@@ -112,5 +113,17 @@ class GitWorktreeRemoveTest {
 
         assertThat(stopping).isFalse()
         assertThat(data.calls.indexOf("stop")).isLessThan(data.calls.indexOf("remove from=$main force=true"))
+    }
+
+    @Test
+    fun `work that does not end keeps the worktree and reports it`() {
+        stuck = true
+        val other = state(main)
+
+        other.removeWorktree(worktree, force = true)
+        Thread.sleep(5_500)
+        await { data.calls.any { it.startsWith("toast") } }
+
+        assertThat(data.calls).doesNotContain("remove from=$main force=true")
     }
 }

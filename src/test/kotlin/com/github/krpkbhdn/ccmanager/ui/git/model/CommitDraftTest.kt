@@ -20,12 +20,12 @@ class CommitDraftTest {
     }
 
     @Test
-    fun `amending without a readable last commit keeps the typed text`() {
+    fun `amending without a readable last commit stays off and keeps the typed text`() {
         draft.message.setTextAndPlaceCursorAtEnd("wip text")
 
         draft.setAmend(true, null)
 
-        assertThat(draft.amend).isTrue()
+        assertThat(draft.amend).isFalse()
         assertThat(draft.message.text.toString()).isEqualTo("wip text")
     }
 

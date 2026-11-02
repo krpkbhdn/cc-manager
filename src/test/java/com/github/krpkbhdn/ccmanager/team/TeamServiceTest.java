@@ -82,6 +82,15 @@ class TeamServiceTest {
     }
 
     @Test
+    void duplicateRefusesATeamWithAnUnreadableRoleInsteadOfCopyingItIncomplete() {
+        var team = service.create("Squad", List.of(role("boss", true), role("dev", false)));
+        jdbc.sql("UPDATE team_role SET name = '' WHERE team_id = ? AND name = 'dev'").param(team.id()).update();
+
+        assertThatThrownBy(() -> service.duplicate(team.id())).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("unreadable");
+        assertThat(service.list()).hasSize(2);
+    }
+
+    @Test
     void aThrowingListenerDoesNotStopTheOthers() {
         var calls = new AtomicInteger();
         service.subscribe(() -> {

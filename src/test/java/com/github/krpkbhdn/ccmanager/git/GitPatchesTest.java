@@ -233,6 +233,17 @@ class GitPatchesTest {
     }
 
     @Test
+    void aPureDeletionHunkKeepsGitsLineBeforeStartOnTheNewSide() {
+        var lines = List.of(
+                new Line(LineKind.HUNK, "@@ -3,2 +2,0 @@", null, null),
+                new Line(LineKind.REMOVED, "c", 3, null),
+                new Line(LineKind.REMOVED, "d", 4, null));
+        var diff = new FileDiff("a.txt", null, ChangeType.MODIFIED, 0, 2, false, lines);
+
+        assertThat(GitPatches.lines(diff, 0, Set.of(1, 2))).contains("@@ -3,2 +2,0 @@");
+    }
+
+    @Test
     void rejectsImpossibleRequests() {
         prepare();
         commitFile("a.txt", "a\nb\n");

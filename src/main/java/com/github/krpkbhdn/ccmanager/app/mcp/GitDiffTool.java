@@ -2,6 +2,7 @@ package com.github.krpkbhdn.ccmanager.app.mcp;
 
 import com.github.krpkbhdn.ccmanager.git.GitStatus;
 import com.github.krpkbhdn.ccmanager.git.GitStatusService;
+import com.github.krpkbhdn.ccmanager.git.SecretFiles;
 import com.github.krpkbhdn.ccmanager.project.ProjectService;
 import com.github.krpkbhdn.ccmanager.workspace.GitDiff;
 import java.io.IOException;
@@ -24,11 +25,8 @@ class GitDiffTool extends GitTool {
     private static final String GIT_SHORT_NAME = "GIT~1";
     private static final Pattern TRAILING_DOTS_AND_SPACES = Pattern.compile("[. ]+$");
 
-    private final GitStatusService status;
-
     GitDiffTool(ProjectService projects, GitStatusService status, JsonMapper mapper) {
         super(projects, status, mapper);
-        this.status = status;
     }
 
     @Override
@@ -63,6 +61,10 @@ class GitDiffTool extends GitTool {
         var tooManyFiles = paths.size() > MAX_FILES;
         var text = new StringBuilder();
         for (var changed : paths.subList(0, Math.min(paths.size(), MAX_FILES))) {
+            if (looksSecret(changed)) {
+                text.append("--- ").append(changed).append(" (content omitted: looks like a secret file)\n");
+                continue;
+            }
             Stream.of(true, false).map(staged -> status.diff(repo, changed, staged)).forEach(diff -> append(text, diff));
             if (text.length() > MAX_CHARS) {
                 break;
@@ -90,6 +92,20 @@ class GitDiffTool extends GitTool {
         } catch (IOException e) {
             throw new IllegalArgumentException("Cannot resolve path: " + path);
         }
+    }
+
+    /** Checks the name the way Windows resolves it: no trailing dots, spaces or slashes, no "." or ".." segments. */
+    static boolean looksSecret(String path) {
+        var resolved = new java.util.ArrayDeque<String>();
+        for (var segment : path.split("[/\\\\]")) {
+            var name = TRAILING_DOTS_AND_SPACES.matcher(segment).replaceFirst("");
+            if (segment.equals("..")) {
+                resolved.pollLast();
+            } else if (!name.isEmpty()) {
+                resolved.add(name);
+            }
+        }
+        return SecretFiles.looksSecret(String.join("/", resolved));
     }
 
     /** Windows drops trailing dots and spaces and also serves .git under its 8.3 name. */

@@ -8,7 +8,7 @@ import tools.jackson.databind.json.JsonMapper;
 /** The bundled manifest of the author's setup, read from {@code author-profile/profile.json}. */
 public record AuthorProfile(List<String> files, String commonPrompt, ScopeSetup userSetup, ScopeSetup projectSetup, TeamsSetup teams) {
 
-    private static final JsonMapper MAPPER = JsonMapper.builder().build();
+    static final JsonMapper MAPPER = JsonMapper.builder().build();
 
     public AuthorProfile {
         files = files == null ? List.of() : List.copyOf(files);

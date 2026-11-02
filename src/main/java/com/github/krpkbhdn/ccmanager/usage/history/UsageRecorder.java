@@ -7,6 +7,7 @@ import com.github.krpkbhdn.ccmanager.usage.RateLimitService;
 import com.github.krpkbhdn.ccmanager.usage.SessionUsage;
 import com.github.krpkbhdn.ccmanager.usage.SessionUsageService;
 import com.github.krpkbhdn.ccmanager.usage.UsageProperties;
+import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -16,6 +17,8 @@ import java.util.Objects;
 import java.util.OptionalDouble;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,6 +31,8 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class UsageRecorder {
+
+    private static final Duration SHUTDOWN_WAIT = Duration.ofSeconds(5);
 
     private static final Logger log = LoggerFactory.getLogger(UsageRecorder.class);
 
@@ -87,7 +92,9 @@ public class UsageRecorder {
         var liveIds = live.stream().map(SessionSnapshot::ccmSessionId).toList();
         for (var id : List.copyOf(sessions.keySet())) {
             if (!liveIds.contains(id)) {
-                record(sessions.remove(id));
+                var ended = sessions.remove(id);
+                record(ended);
+                writer.execute(() -> forgetCost(ended));
                 lastUsage.remove(id);
                 lastWritten.remove(id);
             }
@@ -107,6 +114,28 @@ public class UsageRecorder {
         var sample = new UsageSample(Instant.now(), session.ccmSessionId(), session.claudeSessionId(),
                 session.projectId(), model, u.effort(), u.contextUsedPercent(), u.costUsd(), 0);
         writer.execute(() -> write(sample));
+    }
+
+    private void forgetCost(SessionSnapshot ended) {
+        lastCost.remove(ended.ccmSessionId());
+        if (ended.claudeSessionId() != null) {
+            lastCost.remove(ended.claudeSessionId());
+        }
+    }
+
+    @PreDestroy
+    void shutdown() {
+        if (writer instanceof ExecutorService service) {
+            service.shutdown();
+            try {
+                if (!service.awaitTermination(SHUTDOWN_WAIT.toSeconds(), TimeUnit.SECONDS)) {
+                    service.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                service.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
     }
 
     void write(UsageSample sample) {

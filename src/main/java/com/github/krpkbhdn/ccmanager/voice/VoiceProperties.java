@@ -24,7 +24,8 @@ public record VoiceProperties(
         require(positive(window), "window must be positive");
         require(positive(tick), "tick must be positive");
         require(tick.compareTo(window) <= 0, "tick must not exceed window");
-        require(!pause.isNegative(), "pause must not be negative");
+        require(positive(pause), "pause must be positive");
+        require(positive(downloadStallTimeout), "downloadStallTimeout must be positive");
         require(!idleShutdown.isNegative(), "idleShutdown must not be negative");
         require(vadThreshold > 0 && vadThreshold <= 1, "vadThreshold must be in (0, 1]");
         require(speechRms >= 0, "speechRms must not be negative");

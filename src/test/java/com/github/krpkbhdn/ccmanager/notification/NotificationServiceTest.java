@@ -109,6 +109,17 @@ class NotificationServiceTest {
     }
 
     @Test
+    void secondPermissionRequestForAnotherToolRightAfterTheFirstIsAnswered() {
+        fire("UserPromptSubmit", "{}");
+        fire("PermissionRequest", "{\"tool_name\":\"Bash\"}");
+        fire("PostToolUse", "{\"tool_name\":\"Bash\"}");
+        fire("PermissionRequest", "{\"tool_name\":\"Edit\"}");
+
+        assertThat(received).extracting(AppNotification::body)
+                .containsExactly("Waiting for permission: Bash", "Waiting for permission: Edit");
+    }
+
+    @Test
     void stopFailureIsAnErrorWithTheErrorType() {
         fire("UserPromptSubmit", "{}");
         fire("StopFailure", "{\"error\":\"rate_limit\"}");

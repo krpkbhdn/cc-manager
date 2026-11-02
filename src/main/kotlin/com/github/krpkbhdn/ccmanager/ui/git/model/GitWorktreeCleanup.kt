@@ -167,7 +167,7 @@ private fun GitState.cleanupMerged(plan: CleanupPlan) {
     scope.launch {
         gitCall({ fail(CLEANUP_FAILED, it) }) { git.inspectMergedWorktree(plan.worktree, plan.branch, plan.head, plan.mergedInto?.let(::listOf)) } ?: return@launch
         if (refuseWhenBusy()) return@launch
-        host.stopWorktreeWorkAndWait(plan.worktree)
+        if (!stopWorkOrFail(plan.worktree, CLEANUP_FAILED)) return@launch
         val vanishing = leaveVanishingFolder(plan.worktree, plan.mainPath)
         act("Removing merged worktree ${plan.branch}", refreshWorktrees = true, folderVanishes = vanishing, onSuccess = { branchFailure: String? ->
             host.forgetWorktree(plan.worktree)

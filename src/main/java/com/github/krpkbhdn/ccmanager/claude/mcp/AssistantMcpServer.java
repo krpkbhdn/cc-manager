@@ -14,6 +14,6 @@ public interface AssistantMcpServer {
     /** @return the JSON response, empty for a notification */
     Optional<String> handle(byte[] body);
 
-    /** @return the sorted names of all tools; the app dialog is the only gate, so Claude pre-allows every one */
+    /** @return the sorted names of all tools; the endpoint's own dialog is the only gate, so Claude pre-allows every one (a second Claude prompt would ask twice) */
     List<String> toolNames();
 }

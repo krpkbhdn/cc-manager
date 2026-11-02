@@ -112,8 +112,21 @@ class UsageHistoryRepositoryTest {
         assertThat(repository.costOn(DAY)).isCloseTo(7.0, within(1e-9));
         assertThat(repository.dailyCosts(from, to)).singleElement()
                 .satisfies(c -> assertThat(c.costUsd()).isCloseTo(7.0, within(1e-9)));
-        assertThat(repository.topSessions(from, to, 10)).extracting(SessionCost::claudeSessionId).containsExactly("s3");
-        assertThat(repository.lastCost("s1")).isEmpty();
+        assertThat(repository.lastCost("s1")).hasValue(1.0);
+    }
+
+    @Test
+    void costBaselineSurvivesAggregationSoAResumedSessionIsNotCountedTwice() {
+        sample(DAY, 0, "s1", 1, "opus", 4.0, 4.0);
+        sample(DAY, 1, "s1", 1, "opus", 10.0, 6.0);
+        var from = startOf(DAY);
+        var to = startOf(DAY.plusDays(1));
+
+        repository.aggregateBefore(noon(DAY.plusDays(1)).toEpochMilli());
+        repository.aggregateBefore(noon(DAY.plusDays(2)).toEpochMilli());
+
+        assertThat(repository.lastCost("s1")).hasValue(10.0);
+        assertThat(repository.summary(from, to).totalCostUsd()).isCloseTo(10.0, within(1e-9));
     }
 
     @Test
@@ -129,6 +142,15 @@ class UsageHistoryRepositoryTest {
         repository.aggregateBefore(startOf(DAY.plusDays(1)).plusSeconds(13 * 3600L).toEpochMilli());
 
         assertThat(repository.summary(from, to)).isEqualTo(before);
+    }
+
+    @Test
+    void costOnCountsOnlyTheLocalDay() {
+        sample(DAY.minusDays(1), 11, "s1", 1, "opus", 1.0, 1.0);
+        sample(DAY, 0, "s1", 1, "opus", 3.0, 2.0);
+        sample(DAY.plusDays(1), 0, "s1", 1, "opus", 4.0, 1.0);
+
+        assertThat(repository.costOn(DAY)).isCloseTo(2.0, within(1e-9));
     }
 
     @Test

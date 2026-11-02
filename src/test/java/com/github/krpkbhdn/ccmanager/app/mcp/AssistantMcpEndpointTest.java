@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.app.mcp;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -62,6 +63,12 @@ class AssistantMcpEndpointTest {
 
     private void rebuildEndpoint() {
         endpoint = new AssistantMcpEndpoint(List.of(tool, destructive), mapper, proposals, registry);
+    }
+
+    @Test
+    void duplicateToolNamesAreRefused() {
+        assertThatThrownBy(() -> new AssistantMcpEndpoint(List.of(tool, tool), mapper, proposals, registry))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("list_projects");
     }
 
     private String startAssistantSession() {

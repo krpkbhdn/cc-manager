@@ -88,6 +88,30 @@ class UsageAlertServiceTest {
     }
 
     @Test
+    void windowThatAlreadyResetDoesNotAlert() {
+        fiveHour(90, Instant.now().minusSeconds(60));
+        service(0).evaluateRateLimits();
+
+        verifyPosts(0);
+    }
+
+    @Test
+    void failedPersistenceIsRetriedOnTheNextEvaluation() {
+        when(repository.markAlertFired(anyString(), anyLong())).thenThrow(new IllegalStateException("db"))
+                .thenAnswer(call -> fired.add(call.getArgument(0)));
+        var service = service(0);
+        fiveHour(90, RESET);
+        try {
+            service.evaluateRateLimits();
+        } catch (IllegalStateException expected) {
+            // the next evaluation must try again
+        }
+        service.evaluateRateLimits();
+
+        verifyPosts(1);
+    }
+
+    @Test
     void restartDoesNotAlertAgain() {
         fiveHour(90, RESET);
         service(0).evaluateRateLimits();

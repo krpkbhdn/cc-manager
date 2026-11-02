@@ -181,6 +181,57 @@ class GitWatcherTest {
     }
 
     @Test
+    void subscribingDoesNotHoldTheWatcherLockWhileGitResolvesTheRepository() throws Exception {
+        var started = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var slowGit = new GitRunner(PROPERTIES) {
+            @Override
+            public Result tryRun(Path repository, String... args) {
+                started.countDown();
+                try {
+                    release.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                return super.tryRun(repository, args);
+            }
+        };
+        var slowWatcher = new GitWatcher(slowGit);
+        var subscribing = java.util.concurrent.CompletableFuture.runAsync(() -> slowWatcher.subscribe(repo.root(), () -> {}));
+        assertThat(started.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+
+        var closing = java.util.concurrent.CompletableFuture.runAsync(slowWatcher::close);
+
+        try {
+            closing.get(2, java.util.concurrent.TimeUnit.SECONDS);
+        } finally {
+            release.countDown();
+            subscribing.get(10, java.util.concurrent.TimeUnit.SECONDS);
+            slowWatcher.close();
+        }
+    }
+
+    @Test
+    void aSecondSubscriptionForTheSameRootDoesNotSpawnRevParseAgain() {
+        var spawns = new AtomicInteger();
+        var countingWatcher = new GitWatcher(new GitRunner(PROPERTIES) {
+            @Override
+            public Result tryRun(Path repository, String... args) {
+                spawns.incrementAndGet();
+                return super.tryRun(repository, args);
+            }
+        });
+        try {
+            countingWatcher.subscribe(repo.root(), () -> {});
+            countingWatcher.subscribe(repo.root(), () -> {});
+
+            assertThat(spawns.get()).isEqualTo(1);
+        } finally {
+            countingWatcher.close();
+        }
+    }
+
+    @Test
     void resubscribingAfterTheLastSubscriberLeftWorksAgain() {
         watcher.subscribe(repo.root(), () -> {}).run();
 

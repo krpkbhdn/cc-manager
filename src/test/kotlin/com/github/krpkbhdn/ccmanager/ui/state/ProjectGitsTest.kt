@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test
 class ProjectGitsTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val project = Project(1, "demo", Path.of("demo"), Instant.EPOCH, ModelSelection.DEFAULT)
+    private val added = Project(2, "added", Path.of("added"), Instant.EPOCH, ModelSelection.DEFAULT)
     private val worktree = Path.of("demo-task-x")
     private val task = TaskWorktree(7, 1, worktree, "task/x", "main", "x")
     private val fake = FakeGit(SampleRepos.busy())
@@ -31,7 +32,7 @@ class ProjectGitsTest {
     private var taskReadFailures = 0
     private val gits = ProjectGits(
         fake.backend, scope, GitHost({ GitPrefs() }, { }, { _, _, _ -> }),
-        { id -> project.takeIf { it.id == id } },
+        { id -> listOf(project, added).firstOrNull { it.id == id } },
         { taskReads.incrementAndGet(); if (taskReadFailures-- > 0) throw IllegalStateException("database is locked"); listOf(task) },
     )
 
@@ -47,6 +48,15 @@ class ProjectGitsTest {
     private fun loadWorktreeList(): Unit = runBlocking {
         gits.mainOf(1)!!.reloadNow()
         gits.mainOf(1)!!.loadWorktrees()
+    }
+
+    @Test
+    fun `a project added while a sweep runs still gets its git state loaded`() {
+        gits.mainOf(1)
+        gits.reloadUnopened(null)
+        gits.loadNew(setOf(2))
+
+        await { gits.mainOf(2)!!.status != null }
     }
 
     @Test

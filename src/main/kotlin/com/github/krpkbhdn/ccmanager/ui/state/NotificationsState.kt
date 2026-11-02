@@ -31,7 +31,8 @@ class NotificationsState(
     val unreadCount: Int get() = items.count { it.id > readUpTo }
 
     fun restore(history: List<AppNotification>) {
-        items = history.takeLast(NOTIFICATION_CAP)
+        val known = items.map { it.id }.toSet()
+        items = (history.filter { it.id !in known } + items).sortedBy { it.id }.takeLast(NOTIFICATION_CAP)
     }
 
     fun markAllRead() {

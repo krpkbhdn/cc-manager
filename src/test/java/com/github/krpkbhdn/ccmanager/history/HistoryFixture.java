@@ -1,5 +1,10 @@
 package com.github.krpkbhdn.ccmanager.history;
 
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.when;
+
+import com.github.krpkbhdn.ccmanager.workspace.HostEnvironment;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -23,16 +28,26 @@ final class HistoryFixture {
     final SessionSearchService search;
 
     HistoryFixture(Path temp) {
+        this(temp, true);
+    }
+
+    HistoryFixture(Path temp, boolean windowsHost) {
         projects = temp.resolve("projects");
         var dataSource = new DriverManagerDataSource("jdbc:sqlite:" + temp.resolve("test.db"));
         Flyway.configure().dataSource(dataSource).load().migrate();
         jdbc = JdbcClient.create(dataSource);
-        repository = new TranscriptIndexRepository(jdbc, new TransactionTemplate(new DataSourceTransactionManager(dataSource)));
-        search = new SessionSearchService(jdbc, repository);
+        repository = spy(new TranscriptIndexRepository(jdbc, new TransactionTemplate(new DataSourceTransactionManager(dataSource))));
+        var host = mock(HostEnvironment.class);
+        when(host.windows()).thenReturn(windowsHost);
+        search = new SessionSearchService(jdbc, repository, host);
     }
 
     TranscriptIndexer indexer(int maxEntries) {
-        return new TranscriptIndexer(projects, JsonMapper.shared(), repository,
+        return indexer(maxEntries, JsonMapper.shared());
+    }
+
+    TranscriptIndexer indexer(int maxEntries, JsonMapper mapper) {
+        return new TranscriptIndexer(projects, mapper, repository,
                 new SessionHistoryProperties(Duration.ofMinutes(1), maxEntries));
     }
 

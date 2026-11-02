@@ -44,7 +44,7 @@ class ClaudeHookSmokeTest {
                 mock(com.github.krpkbhdn.ccmanager.claude.proposal.ProposalService.class));
         server.start();
         try {
-            var settings = new HookSettingsWriter(server, new AppProperties(workDir.resolve("data")), mapper).write(CCM_ID).settings();
+            var settings = new HookSettingsWriter(server, new AppProperties(workDir.resolve("data")), mapper, hookProperties).write(CCM_ID).settings();
             writeProjectHook();
 
             var output = runClaude(settings);

@@ -110,6 +110,7 @@ public class NotificationService {
     private static boolean duplicate(AppNotification previous, AppNotification candidate) {
         return previous != null
                 && previous.kind() == candidate.kind()
+                && previous.body().equals(candidate.body())
                 && Duration.between(previous.at(), candidate.at()).compareTo(DUPLICATE_WINDOW) < 0;
     }
 

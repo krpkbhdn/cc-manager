@@ -79,13 +79,16 @@ internal fun FolderPicker(initial: Path?, recents: RecentFolders, windowStore: P
     )
     LaunchedEffect(dialogState) {
         snapshotFlow { dialogState.size to dialogState.position }.debounce(BOUNDS_SAVE_DELAY_MILLIS).collect { (size, position) ->
-            if (position.isSpecified) windowStore.save(PickerBounds(position.x.value.toInt(), position.y.value.toInt(), size.width.value.toInt(), size.height.value.toInt()))
+            if (position.isSpecified) withContext(Dispatchers.IO) {
+                windowStore.save(PickerBounds(position.x.value.toInt(), position.y.value.toInt(), size.width.value.toInt(), size.height.value.toInt()))
+            }
         }
     }
     val rows = remember(state.listing, state.showHidden, state.filter.text) {
         (state.listing as? Listing.Loaded)?.let { FolderRules.visible(it.folders, state.showHidden, state.filter.text.toString()) }.orEmpty()
     }
-    val check by produceState(PathCheck.Valid, state.target, state.listing) {
+    val check by produceState(PathCheck.Checking, state.target, state.listing) {
+        value = PathCheck.Checking
         value = withContext(Dispatchers.IO) { FolderRules.check(state.target) }
     }
     val listBlocked = state.target == state.current && state.listing.let { it == Listing.Denied || it == Listing.Missing }
@@ -105,7 +108,7 @@ internal fun FolderPicker(initial: Path?, recents: RecentFolders, windowStore: P
             PickerToolbar(state, listFocus::requestFocus)
             HorizontalRule()
             PickerBody(state, rows, listState, listFocus, ::confirm, Modifier.weight(1f))
-            PickerFooter(state, if (listBlocked) PathCheck.Unreadable else check, onDismiss, ::confirm)
+            PickerFooter(state, if (listBlocked) (if (state.listing == Listing.Missing) PathCheck.NotFound else PathCheck.Unreadable) else check, onDismiss, ::confirm)
         }
     }
 }

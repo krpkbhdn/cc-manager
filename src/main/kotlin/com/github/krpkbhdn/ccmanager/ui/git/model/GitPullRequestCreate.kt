@@ -22,7 +22,7 @@ private val SAFE_BRANCH = Regex("[A-Za-z0-9._/-]+")
 private const val DRAFT_FAILED = "Could not prepare the pull request"
 internal const val MAX_LISTED_COMMITS = 20
 private val DEFAULT_BRANCHES = setOf("develop", "main", "master")
-private val REPOSITORY_URL = Regex("""[:/]([^/:\s]+)/([^/\s]+?)(?:\.git)?/?$""")
+private val REPOSITORY_URL = Regex("""^(?:[\w+.-]+://[^/\s]+/|[^/\s@]+@[^:/\s]+:|[^/\s:]+:)([^/:\s]+)/([^/\s]+?)(?:\.git)?/?$""")
 private const val CREATE_FAILED = "Could not create the pull request"
 private const val CHANGED_AFTER_CONFIRM = "The working tree changed after the confirmation; review and create the pull request again"
 
@@ -34,6 +34,9 @@ fun githubRepository(url: String?): String? = url?.trim()?.let { REPOSITORY_URL.
 
 /** Files whose name looks like a key, credential or env file. */
 fun secretLookingFiles(files: List<String>): List<String> = files.filter(SecretFiles::looksSecret)
+
+internal fun secretFilesWarning(files: List<String>): String? =
+    secretLookingFiles(files).takeIf { it.isNotEmpty() }?.let { "WARNING: these files look like secrets: ${it.joinToString()}" }
 
 /** Null when [base] may go into a claude prompt and a `gh` argument: a valid branch name of plain characters only. */
 fun safeBase(base: String?): String? = base?.trim()?.takeIf { SAFE_BRANCH.matches(it) && WorktreeNames.branchProblem(it).isEmpty() }
@@ -65,7 +68,7 @@ fun PullRequestForm.problem(): String? = when {
 /** Everything the confirm dialog promises, in the order it happens; [commits] are those `git push` uploads. */
 fun confirmText(form: PullRequestForm, files: List<String>, commits: List<String>): String = buildString {
     var step = 1
-    secretLookingFiles(files).takeIf { it.isNotEmpty() }?.let { appendLine("WARNING: these files look like secrets: ${it.joinToString()}") }
+    secretFilesWarning(files)?.let(::appendLine)
     if (files.isNotEmpty()) {
         appendLine("${step++}. git add the ${files.size} listed file(s) and commit them with the message: ${form.title}")
         files.forEach { appendLine("     $it") }

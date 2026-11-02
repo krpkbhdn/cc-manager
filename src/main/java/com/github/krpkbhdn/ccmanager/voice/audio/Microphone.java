@@ -45,7 +45,12 @@ public class Microphone {
         try {
             var line = (TargetDataLine) lineFor(input);
             line.open(FORMAT);
-            line.start();
+            try {
+                line.start();
+            } catch (RuntimeException e) {
+                line.close();
+                throw e;
+            }
             return line;
         } catch (LineUnavailableException | IllegalArgumentException e) {
             throw new IllegalStateException("No usable microphone: " + e.getMessage(), e);

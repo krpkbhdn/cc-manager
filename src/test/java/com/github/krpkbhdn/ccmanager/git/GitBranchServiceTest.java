@@ -388,4 +388,15 @@ class GitBranchServiceTest {
         assertThat(failure.kind()).isEqualTo(Kind.CONFLICT);
         assertThat(Files.exists(sandbox.repo.resolve(".git/rebase-merge"))).isTrue();
     }
+
+    @Test
+    void mergeMessageIsCutOnCodePointsNeverInsideASurrogatePair() {
+        var text = "a" + "😀".repeat(60_000);
+
+        var cut = GitBranchService.mergeMessage(text);
+
+        assertThat(cut.strip().codePointCount(0, cut.strip().length())).isEqualTo(60_000);
+        assertThat(Character.isLowSurrogate(cut.strip().charAt(cut.strip().length() - 1))).isTrue();
+        assertThat(cut.strip().codePoints().noneMatch(cp -> cp == '?' || cp == 0xFFFD)).isTrue();
+    }
 }

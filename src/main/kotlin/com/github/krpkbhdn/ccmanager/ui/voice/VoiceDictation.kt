@@ -118,7 +118,7 @@ class VoiceDictation internal constructor(
             else -> {
                 spaceDown = true
                 armed = true
-                holdTextLength = state.text.length
+                holdTextLength = state.text.length - state.selection.length
                 pending = scope.launch { delay(HOLD_THRESHOLD_MILLIS); activate() }
                 false
             }
@@ -151,7 +151,7 @@ class VoiceDictation internal constructor(
     }
 
     private fun begin(edit: DictationEdit) {
-        val current = Run(edit)
+        val current = Run(edit, state.text.toString())
         run = current
         active = true
         status = DictationStatus.Initializing
@@ -196,11 +196,18 @@ class VoiceDictation internal constructor(
 
     private fun apply(current: Run, utterance: String, commit: Boolean) {
         if (run !== current || current.dead) return
-        val applied = current.edit.apply(state.text.toString(), if (singleLine) utterance.replace(LINE_BREAKS, " ") else utterance, commit)
+        val text = state.text.toString()
+        if (text != current.expectedText) {
+            dictated = null
+            release()
+            return
+        }
+        val applied = current.edit.apply(text, if (singleLine) utterance.replace(LINE_BREAKS, " ") else utterance, commit)
         state.edit {
             replace(applied.replaceFrom.coerceAtMost(length), applied.replaceTo.coerceAtMost(length), applied.inserted)
             selection = TextRange(applied.caret.coerceAtMost(length))
         }
+        current.expectedText = state.text.toString()
         dictated = applied.dictated
     }
 
@@ -240,7 +247,7 @@ class VoiceDictation internal constructor(
         scope.launch { action() }
     }
 
-    private class Run(val edit: DictationEdit) {
+    private class Run(val edit: DictationEdit, var expectedText: String) {
         val released = CompletableDeferred<Unit>()
         var dead = false
         @Volatile var listening = false

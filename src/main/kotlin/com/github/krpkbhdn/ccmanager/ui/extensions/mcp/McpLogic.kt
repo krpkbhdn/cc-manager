@@ -12,6 +12,7 @@ import tools.jackson.databind.json.JsonMapper
 
 private val mapper = JsonMapper.builder().build()
 private val serverName = Regex("[A-Za-z0-9][A-Za-z0-9_.: -]*")
+private val listSeparators = listOf(": ", " - ")
 private const val PLUGIN_PREFIX = "plugin:"
 
 enum class McpTransport(val label: String, val json: String, val icon: ImageVector) {
@@ -34,7 +35,7 @@ data class ServerForm(
 /** Same rule as the backend: letters, digits, spaces and '-', '_', '.', ':'; null when the name is fine. */
 fun nameProblem(name: String, existing: Collection<String>): String? = when {
     name.isBlank() -> "Give the server a name"
-    !serverName.matches(name) -> "Use letters, digits, spaces and - _ . :"
+    !serverName.matches(name) || listSeparators.any { it in name } -> "Use letters, digits, spaces and - _ . :"
     name in existing -> "A server named $name already exists in this scope"
     else -> null
 }
@@ -70,16 +71,16 @@ fun serverJson(form: ServerForm): String {
     return mapper.writeValueAsString(config)
 }
 
-/** Splits on whitespace; single or double quotes keep their content together. */
+/** Splits on whitespace; a quote that opens a token or a value after '=' and is closed later keeps its content together, any other quote is literal. */
 fun splitArguments(text: String): List<String> {
     val arguments = mutableListOf<String>()
     val current = StringBuilder()
     var quote: Char? = null
     var started = false
-    for (c in text) {
+    for ((i, c) in text.withIndex()) {
         when {
             quote != null && c == quote -> quote = null
-            quote == null && (c == '"' || c == '\'') -> { quote = c; started = true }
+            quote == null && (!started || current.endsWith("=")) && (c == '"' || c == '\'') && text.indexOf(c, i + 1) > 0 -> { quote = c; started = true }
             quote == null && c.isWhitespace() -> if (started) { arguments += current.toString(); current.clear(); started = false }
             else -> { current.append(c); started = true }
         }
@@ -134,7 +135,7 @@ fun mcpKey(scope: ExtensionScope?, name: String) = "${scope ?: "plugin"}:$name"
 private val secretSection = Regex("""^(\s*)(Environment|Headers):\s*$""")
 private val queryValue = Regex("""([?&][^=&#\s]+)=[^&#\s]*""")
 private val urlCredentials = Regex("""(?<=//)[^/@\s]+@""")
-private val secretFlag = Regex("""(--?[\w-]*(?:token|key|secret|password)[\w-]*)(=|\s+)\S+""", RegexOption.IGNORE_CASE)
+private val secretFlag = Regex("""((?<!\w)--?(?:[\w-]*?(?:token|key|secret|password)[\w-]*|(?:\w+-)*(?:pass|auth|bearer|headers?|credentials?)(?:-\w+)*))(=|\s+)("[^"]*"|'[^']*'|\S+)""",RegexOption.IGNORE_CASE)
 const val MASK = "••••••"
 
 /** Hides what {@code claude mcp get} prints about env variables, headers and URL credentials or query values, and the value of stdio flags such as --token. */

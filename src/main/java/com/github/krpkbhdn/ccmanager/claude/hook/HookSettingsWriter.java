@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -36,8 +37,8 @@ public class HookSettingsWriter {
     private static final String STATUS_LINE_CURL = "status";
     private static final Pattern SAFE_ID = Pattern.compile("[A-Za-z0-9-]+");
     private static final int HOOK_TIMEOUT_SECONDS = 5;
-    /** These calls are held until the user answers; HookProperties.decisionHold stays a bit below. */
-    private static final int DECISION_TIMEOUT_SECONDS = 600;
+    /** These calls are held until the user answers; the hook timeout is HookProperties.decisionHold plus this margin. */
+    private static final int DECISION_TIMEOUT_MARGIN_SECONDS = 10;
     private static final int CURL_MAX_SECONDS = 3;
     /** WorktreeCreate replaces git behaviour, MessageDisplay is a token firehose, the rest never fire in sessions. */
     private static final Set<HookEventType> NOT_SUBSCRIBED = EnumSet.of(HookEventType.SETUP, HookEventType.WORKTREE_CREATE,
@@ -49,14 +50,16 @@ public class HookSettingsWriter {
     private final Path hooksDir;
     private final JsonMapper mapper;
     private final boolean windows;
+    private final int decisionTimeoutSeconds;
 
     @Autowired
-    public HookSettingsWriter(HookServer server, AppProperties properties, JsonMapper mapper) {
-        this(server, properties, mapper, System.getProperty("os.name").toLowerCase().startsWith("windows"));
+    public HookSettingsWriter(HookServer server, AppProperties properties, JsonMapper mapper, HookProperties hookProperties) {
+        this(server, properties, mapper, hookProperties, System.getProperty("os.name").toLowerCase().startsWith("windows"));
     }
 
-    HookSettingsWriter(HookServer server, AppProperties properties, JsonMapper mapper, boolean windows) {
+    HookSettingsWriter(HookServer server, AppProperties properties, JsonMapper mapper, HookProperties hookProperties, boolean windows) {
         this.server = server;
+        this.decisionTimeoutSeconds = (int) hookProperties.decisionHold().toSeconds() + DECISION_TIMEOUT_MARGIN_SECONDS;
         this.hooksRoot = properties.dataDir().resolve(HOOKS_DIR);
         this.hooksDir = hooksRoot.resolve(String.valueOf(ProcessHandle.current().pid()));
         this.mapper = mapper;
@@ -129,11 +132,21 @@ public class HookSettingsWriter {
 
     /** The hook credentials sit in these files; the group and others must not read them, not even for an instant. Created with the permissions where POSIX exists. */
     private static void writeOwnerOnly(Path file, String content) throws IOException {
-        if (file.getFileSystem().supportedFileAttributeViews().contains("posix")) {
-            Files.deleteIfExists(file);
-            Files.createFile(file, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
+        var posix = file.getFileSystem().supportedFileAttributeViews().contains("posix");
+        var temp = posix
+                ? Files.createTempFile(file.getParent(), file.getFileName().toString(), ".tmp",
+                        PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")))
+                : Files.createTempFile(file.getParent(), file.getFileName().toString(), ".tmp");
+        try {
+            Files.writeString(temp, content);
+            Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            Files.deleteIfExists(temp);
         }
-        Files.writeString(file, content);
+    }
+
+    private static String singleQuoted(String arg) {
+        return "'" + arg.replace("'", "'\\''") + "'";
     }
 
     private static void restrictToOwner(Path path, String permissions) throws IOException {
@@ -189,7 +202,7 @@ public class HookSettingsWriter {
         if (type == HookEventType.SESSION_START) {
             return curlHandler(ccmSessionId);
         }
-        return httpHandler(server.hookUrl(ccmSessionId), type.awaitsDecision() ? DECISION_TIMEOUT_SECONDS : HOOK_TIMEOUT_SECONDS);
+        return httpHandler(server.hookUrl(ccmSessionId), type.awaitsDecision() ? decisionTimeoutSeconds : HOOK_TIMEOUT_SECONDS);
     }
 
     private ObjectNode httpHandler(String url, int timeoutSeconds) {
@@ -208,7 +221,8 @@ public class HookSettingsWriter {
      * and prints nothing, so the status line stays empty. shortcut: a user's own statusLine is replaced in our sessions, chain it when asked.
      */
     private ObjectNode statusLine(String ccmSessionId) {
-        var quoted = curlArgs(STATUS_LINE_CURL, ccmSessionId, server.statusLineUrl(ccmSessionId)).stream().map(arg -> "\"" + arg + "\"").toList();
+        var quoted = curlArgs(STATUS_LINE_CURL, ccmSessionId, server.statusLineUrl(ccmSessionId)).stream()
+                .map(arg -> windows ? "\"" + arg + "\"" : singleQuoted(arg)).toList();
         var command = curlExecutable() + " " + String.join(" ", quoted);
         return mapper.createObjectNode().put("type", "command").put("command", command);
     }

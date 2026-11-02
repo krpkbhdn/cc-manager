@@ -69,6 +69,23 @@ class QueueDispatchTest {
     }
 
     @Test
+    fun `the timed re-check gives up after the retry cap and the next evaluation restarts it`() {
+        val capped = QueueDispatch(queues, { listOf(session()) }, { draft }, { false }, { _, text -> sent += text; true }, scope, clock::get, RETRY_MILLIS, 2)
+        draft = true
+        queues.add("s", "later")
+        runBlocking(dispatcherThread) { capped.evaluate() }
+        Thread.sleep(RETRY_MILLIS * 10)
+
+        draft = false
+        Thread.sleep(RETRY_MILLIS * 5)
+        assertThat(sent).isEmpty()
+
+        runBlocking(dispatcherThread) { capped.evaluate() }
+        await { sent.isNotEmpty() }
+        capped.dispose()
+    }
+
+    @Test
     fun `a sent prompt holds the next one until the session works or the await timeout passes`() {
         queues.add("s", "one")
         evaluate()

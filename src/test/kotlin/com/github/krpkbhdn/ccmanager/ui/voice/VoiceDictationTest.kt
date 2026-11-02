@@ -91,6 +91,34 @@ class VoiceDictationTest {
     }
 
     @Test
+    fun `a selection replaced by the first space leaves no stray space before the speech`() {
+        state.edit { append("foo"); selection = TextRange(0, 3) }
+        assertThat(dictation.onKeyEvent(spaceDown())).isFalse()
+        state.edit { replace(0, 3, " "); selection = TextRange(1) }
+        waitFor("active") { dictation.active }
+        waitFor("listener") { listeners.isNotEmpty() }
+
+        listeners[0].onFinal("hello")
+
+        waitFor("final") { state.text.toString().isNotEmpty() }
+        assertThat(state.text.toString()).isEqualTo("hello")
+    }
+
+    @Test
+    fun `text changed behind the dictation ends it without writing at a stale offset`() {
+        holdUntilActive()
+        waitFor("listener") { listeners.isNotEmpty() }
+        listeners[0].onPartial("one")
+        waitFor("partial") { state.text.toString() == "one" }
+        state.edit { replace(0, 0, "XYZ") }
+
+        listeners[0].onFinal("two")
+
+        waitFor("inactive") { !dictation.active }
+        assertThat(state.text.toString()).isEqualTo("XYZone")
+    }
+
+    @Test
     fun `partial then final are written and the highlight clears on release`() {
         holdUntilActive()
         waitFor("listener") { listeners.isNotEmpty() }

@@ -44,7 +44,7 @@ internal class TaskMergePlan(
 /** Everything the confirm dialog promises, in the order it happens. */
 fun taskMergeConfirmText(form: TaskMergeForm, worktree: Path, mergeFolder: Path, files: List<String>, commits: List<String>, activeFolders: List<Path>): String = buildString {
     if (activeFolders.isNotEmpty()) appendLine("WARNING: a session or run is active in ${activeFolders.joinToString()}; it may change files while this runs")
-    secretLookingFiles(files).takeIf { it.isNotEmpty() }?.let { appendLine("WARNING: these files look like secrets: ${it.joinToString()}") }
+    secretFilesWarning(files)?.let(::appendLine)
     var step = 1
     if (files.isNotEmpty()) {
         appendLine("${step++}. In $worktree: git add the ${files.size} listed file(s) and commit them with the message: ${form.commitMessage.trim()}")

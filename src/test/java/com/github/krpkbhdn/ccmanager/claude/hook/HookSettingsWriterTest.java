@@ -27,7 +27,9 @@ class HookSettingsWriterTest {
     private static final String APP_MCP_URL = "http://127.0.0.1:5555/assistant-mcp/appsecret";
     private static final String DEAD_PID = String.valueOf(Integer.MAX_VALUE);
 
-    private final JsonMapper mapper = JsonMapper.builder().build();
+    private static final HookProperties HOOK_PROPERTIES = new HookProperties(10, 1024, 500, Duration.ofSeconds(590), 10, 1000);
+
+    private final JsonMapper mapper =JsonMapper.builder().build();
     private HookSettingsWriter writer;
     private HookSettingsWriter windowsWriter;
     private HookServer server;
@@ -41,8 +43,39 @@ class HookSettingsWriterTest {
         when(server.hookUrl("abc-1")).thenReturn(URL);
         when(server.statusLineUrl("abc-1")).thenReturn(STATUS_LINE_URL);
         when(server.mcpUrl("abc-1")).thenReturn(MCP_URL);
-        writer = new HookSettingsWriter(server, new AppProperties(dataDir), mapper, false);
-        windowsWriter = new HookSettingsWriter(server, new AppProperties(dataDir), mapper, true);
+        writer = new HookSettingsWriter(server, new AppProperties(dataDir), mapper, HOOK_PROPERTIES, false);
+        windowsWriter = new HookSettingsWriter(server, new AppProperties(dataDir), mapper, HOOK_PROPERTIES, true);
+    }
+
+    @Test
+    void decisionHookTimeoutFollowsTheConfiguredHoldWithAMargin() throws Exception {
+        var longHold = new HookProperties(10, 1024, 500, Duration.ofSeconds(900), 10, 1000);
+        var file = new HookSettingsWriter(server, new AppProperties(dataDir), mapper, longHold, false).write("abc-1").settings();
+
+        var hooks = mapper.readTree(Files.readString(file)).path("hooks");
+
+        assertThat(hooks.path("PermissionRequest").get(0).path("hooks").get(0).path("timeout").asInt()).isEqualTo(910);
+    }
+
+    @Test
+    void onPosixStatusLineArgumentsAreSingleQuotedSoADollarInThePathIsNotExpanded() throws Exception {
+        var odd = dataDir.resolve("a$b`c'd");
+        var oddWriter = new HookSettingsWriter(server, new AppProperties(odd), mapper, HOOK_PROPERTIES, false);
+
+        var command = mapper.readTree(Files.readString(oddWriter.write("abc-1").settings())).path("statusLine").path("command").asString();
+
+        assertThat(command).contains("'-K'", "a$b`c'\\''d").doesNotContain("\"");
+    }
+
+    @Test
+    void rewritingASessionReplacesTheFileAndLeavesNoTemporaryFile() throws Exception {
+        writer.write("abc-1");
+        writer.write("abc-1");
+
+        try (var files = Files.list(ownDir())) {
+            assertThat(files.map(file -> file.getFileName().toString()))
+                    .containsExactlyInAnyOrder("abc-1.json", "abc-1.mcp.json", "abc-1.json.hook.curl", "abc-1.json.status.curl");
+        }
     }
 
     private Path ownDir() {
@@ -113,7 +146,7 @@ class HookSettingsWriterTest {
         var statusLine = mapper.readTree(Files.readString(writer.write("abc-1").settings())).path("statusLine");
 
         assertThat(statusLine.path("type").asString()).isEqualTo("command");
-        assertThat(statusLine.path("command").asString()).startsWith("curl ").contains("\"-K\"", "\"--data-binary\" \"@-\"", "abc-1.json.status.curl")
+        assertThat(statusLine.path("command").asString()).startsWith("curl ").contains("'-K'", "'--data-binary' '@-'", "abc-1.json.status.curl")
                 .doesNotContain(STATUS_LINE_URL);
         assertThat(Files.readString(ownDir().resolve("abc-1.json.status.curl"))).isEqualTo("url = \"" + STATUS_LINE_URL + "\"\n");
     }
@@ -219,7 +252,7 @@ class HookSettingsWriterTest {
     void aSecondWriterInTheSameProcessLeavesTheRunningOnesFilesAlone() throws Exception {
         var live = writer.write("abc-1").settings();
 
-        new HookSettingsWriter(server, new AppProperties(dataDir), mapper, false).deleteStaleFiles();
+        new HookSettingsWriter(server, new AppProperties(dataDir), mapper, HOOK_PROPERTIES, false).deleteStaleFiles();
 
         assertThat(live).exists();
     }

@@ -43,16 +43,29 @@ class LogModel(
         val ticket = ++generation
         loading = true
         scope.launch {
-            val result = fetch(0, null) ?: return@launch finish(ticket)
+            val result = fetch(0, null)
             if (ticket == generation) {
-                val page = result.page()
-                graphState = result.next()
-                rows = page.rows()
-                hasMore = page.hasMore()
-                if (selected != null && rows.none { it.commit().hash() == selected }) clearSelection()
+                if (result == null) clearRows() else showFirstPage(result)
             }
             finish(ticket)
         }
+    }
+
+    /** A failed reload leaves nothing from the previous filter to page from, and lets the view try again. */
+    private fun clearRows() {
+        loaded = false
+        graphState = null
+        rows = emptyList()
+        hasMore = false
+    }
+
+    private fun showFirstPage(result: GitLogService.StatefulPage) {
+        val page = result.page()
+        graphState = result.next()
+        rows = page.rows()
+        hasMore = page.hasMore()
+        // a commit beyond the first page is not gone, only unseen
+        if (selected != null && !hasMore && rows.none { it.commit().hash() == selected }) clearSelection()
     }
 
     fun loadMore() {
@@ -86,8 +99,9 @@ class LogModel(
         scope.launch {
             val loadedDetails = gitCall(onError) { git.log.details(repo(), hash) }
             if (selected == hash) {
+                if (loadedDetails == null) return@launch clearSelection()
                 details = loadedDetails
-                selectedFile = loadedDetails?.files()?.firstOrNull()?.path
+                selectedFile = loadedDetails.files().firstOrNull()?.path
             }
         }
     }

@@ -134,6 +134,7 @@ class TerminalInteractionTest {
         assertThat(written()).isEqualTo("$ESC[<0;5;3M$ESC[<0;5;3m")
         assertThat(session.selection).isNull()
         pointer(PointerEventType.Scroll, point(4, 2), scroll = Offset(0f, 1f))
+        settle(connector, session)
         assertThat(written()).endsWith("$ESC[<65;5;3M")
     }
 

@@ -108,7 +108,27 @@ class HookServerTest {
     }
 
     @Test
-    void otherHooksNeverTouchTheProposals() throws Exception {
+    void stopClosesTheListenerBeforeReleasingHeldProposals() {
+        var url = server.hookUrl("sess-1");
+        var listenerOpenDuringRelease = new java.util.concurrent.atomic.AtomicBoolean();
+        org.mockito.Mockito.doAnswer(call -> {
+            try {
+                post(url, "{\"hook_event_name\":\"PermissionRequest\"}");
+                listenerOpenDuringRelease.set(true);
+            } catch (java.io.IOException refused) {
+                listenerOpenDuringRelease.set(false);
+            }
+            return null;
+        }).when(proposals).releaseAll();
+
+        server.stop();
+
+        verify(proposals).releaseAll();
+        assertThat(listenerOpenDuringRelease).isFalse();
+    }
+
+    @Test
+    void otherHooksNeverTouchTheProposals()throws Exception {
         post(server.hookUrl("sess-1"), "{\"hook_event_name\":\"PreToolUse\"}");
 
         verify(publisher, timeout(VERIFY_TIMEOUT_MS)).publishEvent(ArgumentCaptor.forClass(HookEvent.class).capture());

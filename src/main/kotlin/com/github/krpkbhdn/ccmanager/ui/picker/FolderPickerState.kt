@@ -16,17 +16,18 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 /** Hoisted state of [FolderPickerDialog]: navigation, listing, selection and the two inline editors. */
-class FolderPickerState(initial: Path?, private val scope: CoroutineScope, private val recents: RecentFolders) {
+class FolderPickerState(private val initial: Path?, private val scope: CoroutineScope, private val recents: RecentFolders) {
     private val home: Path = Path.of(System.getProperty("user.home"))
     private var loadJob: Job? = null
+    private var creating = false
     private var typeBuffer = ""
     private var lastTypedAt = 0L
 
-    var history by mutableStateOf(NavigationHistory(initial?.takeIf { Files.isDirectory(it) } ?: home))
+    var history by mutableStateOf(NavigationHistory(initial ?: home))
         private set
     var listing by mutableStateOf<Listing?>(null)
         private set
-    var places by mutableStateOf(PlaceGroups(emptyList(), Places.quick(home), emptyList()))
+    var places by mutableStateOf(PlaceGroups(emptyList(), emptyList(), emptyList()))
         private set
     var showHidden by mutableStateOf(false)
     var highlighted by mutableStateOf<Path?>(null)
@@ -46,8 +47,12 @@ class FolderPickerState(initial: Path?, private val scope: CoroutineScope, priva
     val target: Path get() = highlighted ?: current
 
     init {
-        load(current, select = null)
-        scope.launch { places = withContext(Dispatchers.IO) { Places.discover(home, recents.load()) } }
+        scope.launch {
+            val start = withContext(Dispatchers.IO) { initial?.takeIf { Files.isDirectory(it) } ?: home }
+            if (start != current) history = NavigationHistory(start)
+            load(start, select = null)
+            places = withContext(Dispatchers.IO) { Places.discover(home, recents.load()) }
+        }
     }
 
     fun open(path: Path) = go(history.visit(path), select = null)
@@ -144,22 +149,27 @@ class FolderPickerState(initial: Path?, private val scope: CoroutineScope, priva
     }
 
     fun createFolder() {
+        if (creating) return
+        creating = true
         val name = newFolderName.text.toString()
         scope.launch {
-            val error = withContext(Dispatchers.IO) { FolderRules.newFolderError(current, name) }
-            if (error != null) {
-                newFolderError = error
-                return@launch
+            try {
+                val outcome = withContext(Dispatchers.IO) {
+                    FolderRules.newFolderError(current, name)?.let { Result.failure(IllegalArgumentException(it)) } ?: FolderRules.createFolder(current, name)
+                }
+                outcome.onSuccess {
+                    creatingFolder = false
+                    reload(select = it)
+                }.onFailure { newFolderError = if (it is IllegalArgumentException) it.message else "Could not create the folder: ${it.message}" }
+            } finally {
+                creating = false
             }
-            val created = withContext(Dispatchers.IO) { FolderRules.createFolder(current, name) }
-            created.onSuccess {
-                creatingFolder = false
-                reload(select = it)
-            }.onFailure { newFolderError = "Could not create the folder: ${it.message}" }
         }
     }
 
-    fun recordChoice(path: Path) = recents.add(path)
+    fun recordChoice(path: Path) {
+        scope.launch(Dispatchers.IO) { recents.add(path) }
+    }
 
     fun cacheBadges(path: Path, found: Set<ProjectBadge>) {
         badges[path] = found

@@ -47,6 +47,15 @@ class NotificationsStateTest {
     }
 
     @Test
+    fun `restoring the history keeps a notification that arrived meanwhile`() {
+        state.receive(needsAction(3, "s3"))
+
+        state.restore(listOf(needsAction(1, "s1"), needsAction(2, "s2")))
+
+        assertThat(state.items.map { it.id }).containsExactly(1L, 2L, 3L)
+    }
+
+    @Test
     fun `a received notification is deduplicated and prefixed with the project name`() {
         state.receive(needsAction(1, "s1"))
         state.receive(needsAction(1, "s1"))

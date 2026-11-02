@@ -30,12 +30,17 @@ internal fun GitBackend.requireClean(worktree: Path) {
     }
 }
 
-/** Closes the sessions, shells and runs of the folder on the UI thread and waits, without blocking it, until they and their processes are gone. */
-internal suspend fun GitHost.stopWorktreeWorkAndWait(directory: Path) {
+/** Closes the sessions, shells and runs of the folder on the UI thread and waits, without blocking it, until they and their processes are gone; false when they are not within the bound. */
+internal suspend fun GitHost.stopWorktreeWorkAndWait(directory: Path): Boolean {
     stopWorktreeWork(directory)
     var polls = 0
     while ((hasRunningWork(directory) || workStopping()) && polls++ < STOP_POLLS) delay(STOP_POLL_MILLIS)
+    return !hasRunningWork(directory) && !workStopping()
 }
+
+/** [stopWorktreeWorkAndWait], reporting under [label] that nothing was removed when the work would not end. */
+internal suspend fun GitState.stopWorkOrFail(directory: Path, label: String): Boolean =
+    host.stopWorktreeWorkAndWait(directory).also { if (!it) fail(label, refusal("Sessions or processes in the folder did not end in time, so it is still in use; nothing was removed")) }
 
 /** Removes the linked worktree from the main folder; Windows may still hold the folder for a moment, so one retry. [pause] is injected so tests do not sleep. */
 internal fun GitBackend.removeWorktreeRetrying(mainPath: Path, worktree: Path, force: Boolean, pause: (Long) -> Unit = Thread::sleep) {
@@ -47,7 +52,7 @@ internal fun GitBackend.removeWorktreeRetrying(mainPath: Path, worktree: Path, f
     }
 }
 
-internal fun GitState.refuseWhenBusy(): Boolean = busy.also { if (it) host.notify(NotificationKind.INFO, "Git is busy", "Wait for the running git operation to finish") }
+internal fun GitState.refuseWhenBusy(): Boolean = busy.also { if (it) host.notify(NotificationKind.INFO, GIT_BUSY, "Wait for the running git operation to finish") }
 
 /**
  * A state showing the folder that is about to vanish hands the view to the main folder first (that also releases its watcher)
@@ -57,8 +62,9 @@ internal fun GitState.leaveVanishingFolder(doomed: Path, mainPath: Path): Boolea
     sameFolder(repo, doomed).also { if (it) host.showWorktree(projectId, mainPath, false) }
 
 /**
- * Checks (off the UI thread) that the folder is clean unless [force], and only then stops what runs in it, so a refused
- * removal kills nothing; then removes it, always from the main folder, and the project registered for it. The branch goes only
+ * Checks (off the UI thread) that the folder is clean unless [force], stops what runs in it, checks again (a session may have
+ * written meanwhile; a refusal then has already stopped the sessions) and removes it, always from the main folder, and the
+ * project registered for it. The branch goes only
  * with [deleteBranch], forced when git does not consider it merged. The folder is gone even when the branch cannot be deleted,
  * so the worktree and the run configurations are forgotten anyway and the branch failure is reported afterwards.
  */
@@ -70,12 +76,13 @@ fun GitState.removeWorktree(worktree: Worktree, force: Boolean, deleteBranch: Bo
             mainWorktreePath()
         } ?: return@launch
         if (refuseWhenBusy()) return@launch
-        host.stopWorktreeWorkAndWait(worktree.path())
+        if (!stopWorkOrFail(worktree.path(), REMOVE_FAILED)) return@launch
         val vanishing = leaveVanishingFolder(worktree.path(), main)
         act("Removing worktree ${worktreeTitle(worktree)}", refreshWorktrees = true, folderVanishes = vanishing, onSuccess = { branchFailure: String? ->
             host.forgetWorktree(worktree.path())
             branchFailure?.let { fail(REMOVE_FAILED, refusal(it)) }
         }) {
+            if (!force) requireClean(worktree.path())
             removeWorktreeRetrying(main, worktree.path(), force)
             val failure = if (deleteBranch) deleteBranchAfterRemoval(main, worktree) else null
             host.forgetStoredWorktree(worktree.path())

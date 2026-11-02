@@ -20,11 +20,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicReference
 
 private const val UNEXPECTED_ERROR = "Something went wrong"
 private const val LOAD_FAILED = "Could not read the repository"
-private const val GIT_BUSY = "Git is busy"
+internal const val GIT_BUSY = "Git is busy"
 
 /** Wraps anything that is not already a [GitException] so the UI has one failure type to show. */
 internal fun asGitException(e: RuntimeException): GitException =
@@ -144,6 +147,8 @@ class GitState(
     val noChangesHint: String? get() = task?.baseBranch()?.takeIf { baseChanges == false }?.let { "No changes against $it" }
 
     private val refresher = Refresher(scope) { reload() }
+    private val reloadLock = Mutex()
+    private val pendingProgress = AtomicReference<String?>()
     private var retry: (() -> Unit)? = null
     private var jobCount = 0
     private var refsSignature = ""
@@ -240,9 +245,18 @@ class GitState(
     private suspend fun <T> attempt(label: String, handle: (GitException) -> Boolean, again: () -> Unit, call: GitBackend.((String) -> Unit) -> T): Success<T>? =
         jobCount.let { thisJob ->
             gitCall({ failure -> if (!handle(failure)) fail(label, failure, again) }) {
-                Success(git.call { line -> scope.launch { if (thisJob == jobCount) job = job?.copy(progress = line) } })
+                Success(git.call { line -> postProgress(thisJob, line) })
             }
         }
+
+    /** Chatty git output costs one pending update at most: later lines replace the one not shown yet. */
+    private fun postProgress(thisJob: Int, line: String) {
+        if (pendingProgress.getAndSet(line) != null) return
+        scope.launch {
+            val latest = pendingProgress.getAndSet(null)
+            if (thisJob == jobCount) job = job?.copy(progress = latest)
+        }
+    }
 
     internal fun fail(label: String, e: GitException, again: (() -> Unit)? = null) {
         val plan = errorPlan(e, label)
@@ -253,9 +267,9 @@ class GitState(
 
     internal fun success(title: String, body: String = "") = host.notify(NotificationKind.FINISHED, title, body)
 
-    internal fun retryLast() = retry?.invoke()
+    internal fun retryLast() = retry?.invoke() ?: refresh()
 
-    private suspend fun reload() {
+    private suspend fun reload() = reloadLock.withLock {
         loading = true
         try {
             val loaded = gitCall(::failLoad) {

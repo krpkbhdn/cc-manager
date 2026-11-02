@@ -30,6 +30,7 @@ import com.github.krpkbhdn.ccmanager.ui.components.Pressable
 import com.github.krpkbhdn.ccmanager.ui.components.ProjectAvatar
 import com.github.krpkbhdn.ccmanager.ui.components.Spinner
 import com.github.krpkbhdn.ccmanager.ui.components.card
+import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.maskSecrets
 import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.ExtensionFailure
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.theme.Alpha
@@ -51,7 +52,7 @@ fun ExtensionFailureStrip(failure: ExtensionFailure, onDismiss: () -> Unit, modi
         }
         if (showOutput) {
             Box(Modifier.fillMaxWidth().background(colors.terminal).heightIn(max = outputMaxHeight).verticalScroll(rememberScrollState()).padding(Spacing.md)) {
-                Label(failure.output.trim(), color = colors.textSecondary, style = Type.monoSmall, maxLines = Int.MAX_VALUE)
+                Label(maskSecrets(failure.output.trim()), color = colors.textSecondary, style = Type.monoSmall, maxLines = Int.MAX_VALUE)
             }
         }
     }

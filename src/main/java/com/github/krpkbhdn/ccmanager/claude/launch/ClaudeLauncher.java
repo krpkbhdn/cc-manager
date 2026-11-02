@@ -82,8 +82,7 @@ public class ClaudeLauncher {
 
     /** Like {@link #launch(long, LaunchMode, Team)} in [directory], the project folder or one of its git worktrees; the session still belongs to the project. */
     public LaunchedSession launchIn(long projectId, Path directory, LaunchMode mode, Team team) {
-        String label = team == null ? ClaudeCommand.label(mode) : ClaudeCommand.label(mode, team);
-        return startIn(projectId, directory, label, (files, exe, selection) -> team == null
+        return startIn(projectId, directory, ClaudeCommand.label(mode, team), (files, exe, selection) -> team == null
                 ? ClaudeCommand.launchArguments(exe, files, plugin.directory(), mode, selection)
                 : ClaudeCommand.launchArguments(exe, files, plugin.directory(), mode, selection, team));
     }
@@ -94,7 +93,7 @@ public class ClaudeLauncher {
             return startIn(projectId, directory, ClaudeCommand.label(LaunchMode.NEW),
                     (files, exe, selection) -> ClaudeCommand.taskArguments(exe, files, plugin.directory(), selection, task));
         }
-        return startIn(projectId, directory, "claude (" + team.name() + ")",
+        return startIn(projectId, directory, ClaudeCommand.label(LaunchMode.NEW, team),
                 (files, exe, selection) -> ClaudeCommand.teamArguments(exe, files, plugin.directory(), team, task));
     }
 
@@ -104,8 +103,7 @@ public class ClaudeLauncher {
         Project project = project(projectId);
         boolean keepsCwd = insideProject(cwd, project.path()) || cwd != null && workDirectories.accepts(project, cwd);
         Path directory = keepsCwd ? cwd : project.path();
-        String label = team == null ? ClaudeCommand.label(LaunchMode.RESUME_PICKER) : ClaudeCommand.label(LaunchMode.RESUME_PICKER, team);
-        return start(projectId, directory, project.modelSelection(), label,
+        return start(projectId, directory, project.modelSelection(), ClaudeCommand.label(LaunchMode.RESUME_PICKER, team),
                 (files, exe, selection) -> ClaudeCommand.resumeArguments(exe, files, plugin.directory(), claudeSessionId, selection, team),
                 project.group() ? members(project) : List.of());
     }
@@ -120,7 +118,7 @@ public class ClaudeLauncher {
 
     /** A lead session with the team's roles as subagents; the task is its first prompt. */
     public LaunchedSession launchTeam(long projectId, Team team, String task) {
-        return start(projectId, "claude (" + team.name() + ")",
+        return start(projectId, ClaudeCommand.label(LaunchMode.NEW, team),
                 (files, exe, selection) -> ClaudeCommand.teamArguments(exe, files, plugin.directory(), team, task));
     }
 
@@ -138,6 +136,7 @@ public class ClaudeLauncher {
 
     /** claude attach ID for a background agent; not for a group, whose variadic --add-dir would swallow the subcommand. */
     public LaunchedSession attach(long projectId, String backgroundSessionId) {
+        ClaudeCommand.requireSafeBackgroundId(backgroundSessionId);
         if (project(projectId).group()) {
             throw new IllegalStateException("Background agents cannot be attached to a project group.");
         }
@@ -173,6 +172,7 @@ public class ClaudeLauncher {
         boolean group = !members.isEmpty();
         Path executable = executable();
         String ccmSessionId = sessions.register(projectId);
+        PtyProcess process = null;
         try {
             List<Path> memberPaths = members.stream().map(Project::path).toList();
             if (group) {
@@ -188,10 +188,13 @@ public class ClaudeLauncher {
             Map<String, String> environment = group
                     ? ClaudeCommand.groupEnvironment(System.getenv(), ccmSessionId)
                     : ClaudeCommand.environment(System.getenv(), ccmSessionId);
-            PtyProcess process = PtySpawner.spawn(command, directory, environment);
+            process = PtySpawner.spawn(command, directory, environment);
             watchExit(ccmSessionId, process);
             return new LaunchedSession(ccmSessionId, projectId, label, process, directory);
         } catch (IOException | RuntimeException e) {
+            if (process != null) {
+                process.destroyForcibly();
+            }
             cleanUp(ccmSessionId);
             log.warn("Claude failed to start in {}", directory, e);
             throw new IllegalStateException("Could not start Claude: " + e.getMessage(), e);

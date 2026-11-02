@@ -130,7 +130,7 @@ public final class GitPatches {
         var oldStart = Integer.parseInt(matcher.group(1));
         var newStart = Integer.parseInt(matcher.group(3));
         var originalNewCount = matcher.group(4) == null ? 1 : Integer.parseInt(matcher.group(4));
-        var start = newCount == 0 ? Math.max(0, newStart - 1) : originalNewCount == 0 ? newStart + 1 : newStart;
+        var start = newCount == 0 ? (originalNewCount == 0 ? newStart : Math.max(0, newStart - 1)) : originalNewCount == 0 ? newStart + 1 : newStart;
         return "@@ -" + oldStart + "," + oldCount + " +" + start + "," + newCount + " @@" + matcher.group(5) + "\n";
     }
 }

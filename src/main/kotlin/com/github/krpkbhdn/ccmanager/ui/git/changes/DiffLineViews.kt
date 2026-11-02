@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -65,6 +66,8 @@ private val reviewMarkWidth = 18.dp
 private val reviewMarkIcon = 12.dp
 private const val BAR_GAP = 2
 private const val SELECTED_ALPHA = 0.18f
+internal const val MAX_SHOWN_LINE_LENGTH = 2000
+private const val CUT_MARK = "…"
 
 /** The editable state of one hunk header: how many of its lines are ticked and what the buttons do. */
 internal class HunkControls(
@@ -144,7 +147,7 @@ private fun HunkButtons(controls: HunkControls) {
     val anyPicked = controls.selectedCount > 0
     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
         if (anyPicked) {
-            AppButton("$verb selected (${controls.selectedCount})", { controls.actions.onApplyLines(controls.hunk, controls.picked.toSet()); controls.picked.clear() }, variant = ButtonVariant.PRIMARY, compact = true, enabled = !controls.busy)
+            AppButton("$verb selected (${controls.selectedCount})", { controls.actions.onApplyLines(controls.hunk, controls.picked.toSet()) }, variant = ButtonVariant.PRIMARY, compact = true, enabled = !controls.busy)
         } else {
             AppButton("$verb hunk", { controls.actions.onApplyHunk(controls.hunk) }, compact = true, enabled = !controls.busy)
         }
@@ -154,7 +157,7 @@ private fun HunkButtons(controls: HunkControls) {
 @Composable
 internal fun DiffLineRow(row: DiffRow, viewport: Dp, horizontal: ScrollState, pick: LinePick?, showPicks: Boolean, review: LineReview? = null, showReview: Boolean = false) {
     val line = row.line
-    val shift = LocalWindowInfo.current.keyboardModifiers.isShiftPressed
+    val windowInfo = LocalWindowInfo.current
     val background = when {
         review?.selected == true -> colors.accent.copy(alpha = SELECTED_ALPHA)
         line.kind == GitDiff.LineKind.ADDED -> colors.diffAdded
@@ -172,13 +175,13 @@ internal fun DiffLineRow(row: DiffRow, viewport: Dp, horizontal: ScrollState, pi
         Box(Modifier.width(stripeWidth).height(lineHeight).background(stripe))
         Row(Modifier.horizontalScroll(horizontal).widthIn(min = viewport).padding(start = stripeWidth), verticalAlignment = Alignment.CenterVertically) {
             if (showPicks) PickCell(pick)
-            Row(if (review != null) Modifier.clickable { review.onClick(shift) } else Modifier, verticalAlignment = Alignment.CenterVertically) {
+            Row(if (review != null) Modifier.clickable { review.onClick(windowInfo.keyboardModifiers.isShiftPressed) } else Modifier, verticalAlignment = Alignment.CenterVertically) {
                 if (showReview) ReviewMark(review?.status)
                 Gutter(line.oldNumber)
                 Gutter(line.newNumber)
             }
             Label(lineMarker(line.kind), Modifier.width(markerWidth), color = if (stripe == Color.Transparent) colors.textTertiary else stripe, style = Type.monoBody, align = TextAlign.Center)
-            BasicText(highlighted(line.text, row.highlight, strong), style = Type.monoBody.copy(color = textColor), maxLines = 1, softWrap = false)
+            BasicText(remember(line.text, row.highlight, strong) { highlighted(line.text, row.highlight, strong) }, style =Type.monoBody.copy(color = textColor), maxLines = 1, softWrap = false)
         }
     }
 }
@@ -197,11 +200,14 @@ private fun ReviewMark(status: ReviewStatus?) {
     }
 }
 
-private fun highlighted(text: String, range: IntRange?, color: Color): AnnotatedString =
-    buildAnnotatedString {
-        append(text)
-        range?.let { addStyle(SpanStyle(background = color), it.first, it.last + 1) }
+/** Longer lines are cut for display only (one minified line would be laid out in every row); the diff data stays whole. */
+internal fun highlighted(text: String, range: IntRange?, color: Color): AnnotatedString {
+    val shown = if (text.length > MAX_SHOWN_LINE_LENGTH) text.take(MAX_SHOWN_LINE_LENGTH) + CUT_MARK else text
+    return buildAnnotatedString {
+        append(shown)
+        range?.let { addStyle(SpanStyle(background = color), it.first.coerceAtMost(shown.length), (it.last + 1).coerceAtMost(shown.length)) }
     }
+}
 
 @Composable
 private fun Gutter(number: Int?) {

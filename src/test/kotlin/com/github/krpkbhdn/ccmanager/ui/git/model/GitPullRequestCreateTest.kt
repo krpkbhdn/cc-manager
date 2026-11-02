@@ -77,6 +77,8 @@ class GitPullRequestCreateTest {
         assertThat(githubRepository("https://github.com/o/r.git")).isEqualTo("o/r")
         assertThat(githubRepository("git@github.com:o/r.git")).isEqualTo("o/r")
         assertThat(githubRepository("ssh://git@github.com/o/r")).isEqualTo("o/r")
+        assertThat(githubRepository("https://github.com/owner")).isNull()
+        assertThat(isGithubRemote("https://github.com/owner")).isFalse()
         assertThat(githubRepository("not a url")).isNull()
         assertThat(githubRepository(null)).isNull()
     }

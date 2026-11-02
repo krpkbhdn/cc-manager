@@ -50,7 +50,8 @@ public class AuthorProfileService {
 
     /**
      * Blocking. Teams without failures are recorded as installed at once; the user and project setup are recorded only by
-     * {@link #markInstalled} once the Claude session that finishes them started.
+     * {@link #markInstalled} once the Claude session that finishes them started. Their failed items do not stop the
+     * handoff: the session gets them in the pre-install report.
      *
      * @param projectPath the project Claude works in; without one the Claude-finished components stay in
      *                    {@code awaitingSession} with no handoff, to be prepared later by {@link #handoff}
@@ -60,18 +61,18 @@ public class AuthorProfileService {
             throw new IllegalArgumentException("The project setup needs a project path");
         }
         var outcomes = new ArrayList<ComponentOutcome>();
-        var succeeded = new ArrayList<AuthorEntry>();
+        var awaiting = new ArrayList<AuthorEntry>();
         for (var entry : chosen) {
             var outcome = install(entry, projectPath);
             outcomes.add(new ComponentOutcome(entry.component(), outcome));
-            if (!outcome.hasFailures()) {
-                succeeded.add(entry);
+            if (entry.component() != AuthorComponent.TEAMS) {
+                awaiting.add(entry);
+            } else if (!outcome.hasFailures()) {
+                markInstalled(entry);
             }
         }
-        var awaiting = succeeded.stream().filter(entry -> entry.component() != AuthorComponent.TEAMS).toList();
         var handoff = awaiting.isEmpty() || projectPath == null ? Optional.<SessionHandoff>empty()
                 : Optional.of(handoff(awaiting, projectPath, outcomes));
-        succeeded.stream().filter(entry -> entry.component() == AuthorComponent.TEAMS).forEach(this::markInstalled);
         return new AuthorInstallReport(outcomes, handoff, awaiting);
     }
 

@@ -22,6 +22,7 @@ sealed interface Listing {
 /** Why a typed or selected path cannot be chosen. */
 enum class PathCheck(val message: String?) {
     Valid(null),
+    Checking(null),
     Blank("Type or paste a folder path"),
     Malformed("This is not a valid path"),
     NotFound("This path does not exist"),
@@ -79,7 +80,7 @@ object FolderRules {
 
     fun hiddenCount(folders: List<FolderEntry>): Int = folders.count { it.hidden }
 
-    /** At most a dozen `stat` calls, so it is safe to run for every visible row. */
+    /** At most 18 `stat` calls (one per marker), so it is only safe to run for visible rows. */
     fun badges(dir: Path): Set<ProjectBadge> = buildSet {
         if (gitMarker.any { exists(dir, it) }) add(ProjectBadge.Git)
         if (claudeMarkers.any { exists(dir, it) }) add(ProjectBadge.Claude)

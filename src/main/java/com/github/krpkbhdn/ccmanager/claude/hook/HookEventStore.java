@@ -3,6 +3,7 @@ package com.github.krpkbhdn.ccmanager.claude.hook;
 import com.github.krpkbhdn.ccmanager.claude.event.HookEventType;
 import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
 import com.github.krpkbhdn.ccmanager.claude.event.ActivityFormatter;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -24,6 +25,9 @@ public class HookEventStore {
 
     private static final int PRUNE_EVERY_INSERTS = 100;
     private static final int OVER_FETCH_FACTOR = 4;
+    /** Pruning keeps a session's newest retention / this many rows (at least one), but only rows younger than the max age, so the table stays bounded. */
+    private static final int SESSION_FLOOR_DIVISOR = 100;
+    private static final Duration SESSION_FLOOR_MAX_AGE = Duration.ofDays(7);
     private static final String TOOL_INPUT = "tool_input";
     private static final String TOOL_RESPONSE = "tool_response";
     private static final Set<String> READ_TOOL_INPUT_FIELDS =
@@ -92,8 +96,12 @@ public class HookEventStore {
     }
 
     void prune() {
-        jdbc.sql("DELETE FROM hook_event WHERE id <= (SELECT max(id) FROM hook_event) - ?")
-                .param(properties.retention())
+        jdbc.sql("""
+                        DELETE FROM hook_event WHERE id <= (SELECT max(id) FROM hook_event) - ?
+                        AND (received_at < ? OR id < COALESCE((SELECT e.id FROM hook_event e
+                            WHERE e.ccm_session_id = hook_event.ccm_session_id ORDER BY e.id DESC LIMIT 1 OFFSET ?), 0))""")
+                .params(properties.retention(), Instant.now().minus(SESSION_FLOOR_MAX_AGE).toString(),
+                        properties.retention() / SESSION_FLOOR_DIVISOR)
                 .update();
     }
 

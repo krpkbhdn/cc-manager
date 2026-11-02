@@ -32,6 +32,16 @@ class VoicePropertiesTest {
     }
 
     @Test
+    void rejectsZeroPauseAndZeroDownloadStallTimeout() {
+        assertThatThrownBy(() -> new VoiceProperties("auto", Duration.ofSeconds(10), Duration.ofSeconds(1), Duration.ZERO,
+                0.01, 0.5, 4, Duration.ofSeconds(30), Duration.ofMinutes(5)))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("pause");
+        assertThatThrownBy(() -> new VoiceProperties("auto", Duration.ofSeconds(10), Duration.ofSeconds(1), Duration.ofMillis(700),
+                0.01, 0.5, 4, Duration.ZERO, Duration.ofMinutes(5)))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("downloadStallTimeout");
+    }
+
+    @Test
     void rejectsVadThresholdOutsideZeroToOne() {
         assertThatThrownBy(() -> create(4, Duration.ofSeconds(10), Duration.ofSeconds(1), 0))
                 .isInstanceOf(IllegalArgumentException.class);

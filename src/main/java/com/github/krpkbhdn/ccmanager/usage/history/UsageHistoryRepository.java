@@ -14,6 +14,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class UsageHistoryRepository {
 
     private static final String LOCAL_DAY = "date(at / 1000, 'unixepoch', 'localtime')";
+    private static final String NOT_BASELINE = "id NOT IN (SELECT MAX(id) FROM usage_sample WHERE claude_session_id IS NOT NULL "
+            + "GROUP BY claude_session_id)";
     private static final String SESSION_KEY = "COALESCE(claude_session_id, ccm_session_id)";
 
     private final JdbcClient jdbc;
@@ -96,9 +98,12 @@ public class UsageHistoryRepository {
     }
 
     public double costOn(LocalDate day) {
+        var zone = ZoneId.systemDefault();
         return jdbc.sql("""
-                SELECT (SELECT COALESCE(SUM(cost_delta), 0) FROM usage_sample WHERE %s = :day)
-                     + (SELECT COALESCE(SUM(cost_usd), 0) FROM usage_daily WHERE day = :day)""".formatted(LOCAL_DAY))
+                SELECT (SELECT COALESCE(SUM(cost_delta), 0) FROM usage_sample WHERE at >= :from AND at < :to)
+                     + (SELECT COALESCE(SUM(cost_usd), 0) FROM usage_daily WHERE day = :day)""")
+                .param("from", day.atStartOfDay(zone).toInstant().toEpochMilli())
+                .param("to", day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli())
                 .param("day", day.toString()).query(Double.class).single();
     }
 
@@ -108,7 +113,10 @@ public class UsageHistoryRepository {
                 .params(key, firedAt).update() > 0;
     }
 
-    /** Folds samples of whole local days before the cutoff's day into usage_daily and drops them; totals stay the same. */
+    /**
+     * Folds samples of whole local days before the cutoff's day into usage_daily and drops them; totals stay the same.
+     * The newest sample of each Claude session stays as the baseline of its next cost delta.
+     */
     public void aggregateBefore(long cutoffMillis) {
         var zone = ZoneId.systemDefault();
         var dayStart = Instant.ofEpochMilli(cutoffMillis).atZone(zone).toLocalDate().atStartOfDay(zone).toInstant()
@@ -117,13 +125,13 @@ public class UsageHistoryRepository {
             jdbc.sql("""
                     INSERT INTO usage_daily (day, project_id, model, cost_usd, sessions, samples)
                     SELECT %s, project_id, COALESCE(model, ''), SUM(cost_delta), COUNT(DISTINCT %s), COUNT(*)
-                    FROM usage_sample WHERE at < ? GROUP BY 1, 2, 3
+                    FROM usage_sample WHERE at < ? AND %s GROUP BY 1, 2, 3
                     ON CONFLICT (day, project_id, model) DO UPDATE SET
                         cost_usd = cost_usd + excluded.cost_usd,
                         sessions = sessions + excluded.sessions,
-                        samples = samples + excluded.samples""".formatted(LOCAL_DAY, SESSION_KEY))
+                        samples = samples + excluded.samples""".formatted(LOCAL_DAY, SESSION_KEY, NOT_BASELINE))
                     .param(dayStart).update();
-            jdbc.sql("DELETE FROM usage_sample WHERE at < ?").param(dayStart).update();
+            jdbc.sql("DELETE FROM usage_sample WHERE at < ? AND " + NOT_BASELINE).param(dayStart).update();
             jdbc.sql("DELETE FROM rate_limit_sample WHERE at < ?").param(dayStart).update();
             jdbc.sql("DELETE FROM usage_alert WHERE fired_at < ?").param(dayStart).update();
         });

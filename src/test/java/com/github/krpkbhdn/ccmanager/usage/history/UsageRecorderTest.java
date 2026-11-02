@@ -114,6 +114,45 @@ class UsageRecorderTest {
     }
 
     @Test
+    void endedSessionDoesNotKeepItsInMemoryCostBaseline() {
+        live(AgentStatus.IDLE);
+        live(AgentStatus.WORKING);
+        reportsCost(2.0);
+        live(AgentStatus.IDLE);
+        when(registry.sessions()).thenReturn(List.of());
+        registryChanged.run();
+
+        live(AgentStatus.WORKING);
+        reportsCost(5.0);
+        live(AgentStatus.IDLE);
+
+        var sample = ArgumentCaptor.forClass(UsageSample.class);
+        verify(repository, times(2)).insertSample(sample.capture());
+        assertThat(sample.getAllValues().get(1).costDelta()).isEqualTo(4.0);
+    }
+
+    @Test
+    void shutdownDrainsQueuedSamplesBeforeExit() throws Exception {
+        var executor = java.util.concurrent.Executors.newSingleThreadExecutor();
+        var properties = new UsageProperties(Duration.ofDays(90), Duration.ofHours(6), 80, 80, 0, Duration.ofMinutes(5));
+        var recorder = new UsageRecorder(registry, usage, rateLimits, repository, alerts, properties, executor);
+        var done = new java.util.concurrent.atomic.AtomicBoolean();
+        executor.execute(() -> {
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            done.set(true);
+        });
+
+        recorder.shutdown();
+
+        assertThat(done).isTrue();
+        assertThat(executor.isShutdown()).isTrue();
+    }
+
+    @Test
     void sessionWithoutCostWritesNothing() {
         live(AgentStatus.WORKING);
         live(AgentStatus.IDLE);

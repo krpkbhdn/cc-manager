@@ -12,7 +12,8 @@ import org.slf4j.LoggerFactory;
 public final class DictationSession implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(DictationSession.class);
-    private static final Duration FLUSH_WAIT = Duration.ofSeconds(2);
+    /** Long enough for the last utterance on a slow CPU model; only a hung recognizer reaches it. */
+    private static final Duration FLUSH_WAIT = Duration.ofSeconds(60);
 
     private final AutoCloseable microphone;
     private final Dictation dictation;

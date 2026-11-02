@@ -1,10 +1,14 @@
 package com.github.krpkbhdn.ccmanager.history;
 
+import java.io.File;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -15,6 +19,8 @@ public class TranscriptIndexRepository {
 
     /** Indexing state of one transcript file; {@code sensitiveToolIds} is space separated. */
     public record IndexedFile(long id, long indexedBytes, String sensitiveToolIds) {}
+
+    public record EntryFile(long id, long entryCount) {}
 
     public record NewEntry(String role, String text, String entryUuid, long lineOffset, long atMillis) {}
 
@@ -87,24 +93,42 @@ public class TranscriptIndexRepository {
     }
 
     /** Files that hold entries, oldest last entry first. */
-    public List<Long> fileIdsOldestFirst() {
-        return jdbc.sql("SELECT id FROM transcript_file WHERE entry_count > 0 ORDER BY last_entry_at, id").query(Long.class).list();
+    public List<EntryFile> filesWithEntriesOldestFirst() {
+        return jdbc.sql("SELECT id, entry_count FROM transcript_file WHERE entry_count > 0 ORDER BY last_entry_at, id")
+                .query((rs, row) -> new EntryFile(rs.getLong(1), rs.getLong(2))).list();
     }
 
-    public long entryCount(long fileId) {
-        return jdbc.sql("SELECT entry_count FROM transcript_file WHERE id = ?").param(fileId).query(Long.class).single();
+    /** Forgets the {@code count} oldest entries of a file but keeps its offset, so the file is not indexed again. */
+    public void evictOldestEntries(long fileId, long count) {
+        var oldest = "SELECT entry_id FROM transcript_entry_ref WHERE file_id = ? ORDER BY entry_id LIMIT ?";
+        jdbc.sql("DELETE FROM transcript_entry_fts WHERE rowid IN (" + oldest + ")").params(fileId, count).update();
+        jdbc.sql("DELETE FROM transcript_entry_ref WHERE entry_id IN (" + oldest + ")").params(fileId, count).update();
+        jdbc.sql("UPDATE transcript_file SET entry_count = entry_count - ? WHERE id = ?").params(count, fileId).update();
     }
 
-    /** Forgets the entries of a file but keeps its offset, so the file is not indexed again. */
-    public void evictFile(long fileId) {
-        deleteEntries(fileId);
-        jdbc.sql("UPDATE transcript_file SET entry_count = 0 WHERE id = ?").param(fileId).update();
+    /**
+     * Forgets the entries of every file whose cwd is the project path or below it, and moves each file's offset to
+     * {@code lineEnd} (empty when unknown) so lines written before now are not indexed again.
+     */
+    public void evictProject(String path, boolean ignoreCase, Function<String, OptionalLong> lineEnd) {
+        var files = jdbc.sql("SELECT id, path FROM transcript_file WHERE " + projectCondition("cwd", ignoreCase))
+                .params(projectParams(path, path + File.separator)).query((rs, row) -> Map.entry(rs.getLong(1), rs.getString(2))).list();
+        var ends = files.stream().collect(Collectors.toMap(Map.Entry::getKey, file -> lineEnd.apply(file.getValue())));
+        inWriteTransaction(() -> ends.forEach((fileId, end) -> {
+            deleteEntries(fileId);
+            jdbc.sql("UPDATE transcript_file SET entry_count = 0, indexed_bytes = COALESCE(?, indexed_bytes) WHERE id = ?")
+                    .params(end.stream().boxed().findFirst().orElse(null), fileId).update();
+        }));
     }
 
-    /** Evicts every file whose cwd is the project path or matches {@code likePattern} (escape character {@code !}), ignoring case. */
-    public void evictProject(String path, String likePattern) {
-        inWriteTransaction(() -> jdbc.sql("SELECT id FROM transcript_file WHERE cwd = ? COLLATE NOCASE OR cwd LIKE ? ESCAPE '!'")
-                .params(path, likePattern).query(Long.class).list().forEach(this::evictFile));
+    /** SQL matching a column equal to the project path (one parameter) or below it; parameters from {@link #projectParams}. */
+    public static String projectCondition(String column, boolean ignoreCase) {
+        var collate = ignoreCase ? " COLLATE NOCASE" : "";
+        return "(" + column + " = ?" + collate + " OR substr(" + column + ", 1, ?) = ?" + collate + ")";
+    }
+
+    public static List<Object> projectParams(String path, String prefix) {
+        return List.of(path, prefix.codePointCount(0, prefix.length()), prefix);
     }
 
     /** Forgets every file whose transcript is not in {@code existingPaths} any more, with its entries. */

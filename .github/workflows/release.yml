@@ -4,12 +4,11 @@ on:
   push:
     tags: ["v*"]
 
-permissions:
-  contents: write
-
 jobs:
   windows-msi:
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Check tag matches build version
@@ -17,6 +16,9 @@ jobs:
         run: |
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' build.gradle.kts)
           test "v$version" = "${GITHUB_REF_NAME}" || { echo "Tag ${GITHUB_REF_NAME} does not match version $version"; exit 1; }
+      - name: Test
+        shell: bash
+        run: ./gradlew test --no-daemon
       - name: Build MSI
         shell: bash
         run: ./gradlew packageMsi --no-daemon

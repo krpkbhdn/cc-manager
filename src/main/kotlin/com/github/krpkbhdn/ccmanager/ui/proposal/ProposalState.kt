@@ -81,7 +81,7 @@ class ProposalState(
     fun answer(proposal: Proposal, answer: ProposalAnswer) {
         scope.launch {
             runGuarded(reportError) {
-                io { service.answer(proposal.id(), answer) }
+                if (!io { service.answer(proposal.id(), answer) }) reportError("The question was already answered or expired")
                 hide(proposal)
             }
         }

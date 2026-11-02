@@ -5,7 +5,19 @@ import static com.github.krpkbhdn.ccmanager.history.HistoryFixture.toolResultLin
 import static com.github.krpkbhdn.ccmanager.history.HistoryFixture.userLine;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+
 import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
+import org.mockito.ArgumentMatchers;
+import tools.jackson.databind.json.JsonMapper;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -87,7 +99,7 @@ class TranscriptIndexerTest {
     }
 
     @Test
-    void oldestFilesAreEvictedOverTheLimitAndNotIndexedAgain() {
+    void oldestEntriesAreEvictedOverTheLimitAndNotIndexedAgain() {
         fixture.write(fixture.transcript("p", "old"), userLine("u1", "/w/app", "2026-01-01T10:00:00Z", "oldword")
                 + userLine("u2", "/w/app", "2026-01-01T10:01:00Z", "oldword two"));
         fixture.write(fixture.transcript("p", "new"), userLine("u3", "/w/app", "2026-02-01T10:00:00Z", "newword")
@@ -97,9 +109,49 @@ class TranscriptIndexerTest {
         indexer.scan();
         indexer.scan();
 
-        assertThat(hits("oldword")).isZero();
+        assertThat(hits("oldword")).isEqualTo(1);
         assertThat(hits("newword")).isEqualTo(2);
-        assertThat(fixture.search.indexedEntryCount()).isEqualTo(2);
+        assertThat(fixture.search.indexedEntryCount()).isEqualTo(3);
+    }
+
+    @Test
+    void unchangedTranscriptsTakeNoWriteTransactionPerFile() {
+        for (var name : java.util.List.of("a", "b", "c")) {
+            fixture.write(fixture.transcript("p", name), userLine("u" + name, "/w/app", "2026-01-01T10:00:00Z", "apple"));
+        }
+        var indexer = fixture.indexer(1000);
+        indexer.scan();
+        clearInvocations(fixture.repository);
+
+        indexer.scan();
+
+        verify(fixture.repository, times(2)).inWriteTransaction(ArgumentMatchers.<Supplier<Object>>any());
+    }
+
+    @Test
+    void parsingHappensOutsideTheWriteTransaction() {
+        var inTransaction = new AtomicBoolean();
+        var parsedInTransaction = new AtomicBoolean();
+        var mapper = spy(JsonMapper.shared());
+        doAnswer(call -> {
+            parsedInTransaction.compareAndSet(false, inTransaction.get());
+            return call.callRealMethod();
+        }).when(mapper).readTree(anyString());
+        doAnswer(call -> {
+            inTransaction.set(true);
+            try {
+                return call.callRealMethod();
+            } finally {
+                inTransaction.set(false);
+            }
+        }).when(fixture.repository).inWriteTransaction(ArgumentMatchers.<Supplier<Object>>any());
+        fixture.write(fixture.transcript("p", "s1"), userLine("u1", "/w/app", "2026-01-01T10:00:00Z", "apple"));
+
+        fixture.indexer(1000, mapper).scan();
+
+        assertThat(fixture.search.indexedEntryCount()).isEqualTo(1);
+        verify(mapper, atLeastOnce()).readTree(anyString());
+        assertThat(parsedInTransaction).isFalse();
     }
 
     @Test

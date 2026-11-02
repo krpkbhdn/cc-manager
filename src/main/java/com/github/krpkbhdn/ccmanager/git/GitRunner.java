@@ -2,6 +2,7 @@ package com.github.krpkbhdn.ccmanager.git;
 
 import com.github.krpkbhdn.ccmanager.git.GitException.Kind;
 import com.github.krpkbhdn.ccmanager.workspace.CommandRunner;
+import com.github.krpkbhdn.ccmanager.workspace.ProcessTree;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -34,6 +35,7 @@ import org.springframework.stereotype.Component;
 public class GitRunner {
 
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(GitRunner.class);
     private static final Set<String> NETWORK = Set.of("fetch", "pull", "push", "ls-remote", "clone");
     private static final Set<String> WRITES = Set.of("checkout", "switch", "restore", "reset", "merge", "rebase", "cherry-pick", "revert",
             "stash", "commit", "add", "rm", "apply", "am", "clean", "pull", "worktree");
@@ -127,27 +129,49 @@ public class GitRunner {
         if (mayForceBatchSsh(args, builder.environment()) && !hasConfiguredSsh(repo)) {
             builder.environment().put("GIT_SSH_COMMAND", "ssh -o BatchMode=yes");
         }
+        Process process;
         try {
-            var process = builder.start();
-            var stdout = new ByteArrayOutputStream();
-            var stderr = new StringBuffer();
-            var stdoutTruncated = CommandRunner.drain(process.getInputStream(), stdout);
-            var readers = CompletableFuture.allOf(stdoutTruncated, async(() -> readLines(process.getErrorStream(), progress, stderr, CommandRunner.MAX_OUTPUT_BYTES)));
-            var stdinWritten = async(() -> writeAndClose(process, stdin));
-            if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
-                process.descendants().forEach(ProcessHandle::destroyForcibly);
-                process.destroyForcibly();
-                throw new GitException(Kind.TIMEOUT, "git " + GitFailure.subcommand(args) + " timed out", "");
-            }
-            stdinWritten.join();
-            CommandRunner.awaitReaders(process, readers);
-            return new Result(process.exitValue(), stdout.toString(StandardCharsets.UTF_8), stderr.toString(), stdoutTruncated.getNow(false));
+            process = builder.start();
         } catch (IOException e) {
             throw new GitException(Kind.GIT_MISSING, "Git is not installed or not on PATH", String.valueOf(e.getMessage()));
+        }
+        try {
+            return collect(process, timeout, progress, stdin, args);
         } catch (InterruptedException e) {
+            if (WRITES.contains(GitFailure.subcommand(args))) {
+                finishWrite(process, timeout);
+            } else {
+                ProcessTree.kill(process);
+            }
             Thread.currentThread().interrupt();
             throw new GitException(Kind.OTHER, "Interrupted", "");
         }
+    }
+
+    /** A write is never killed on interrupt (index.lock, half-switched tree): it runs to its end, so "Interrupted" never hides a running commit. */
+    private static void finishWrite(Process process, Duration timeout) {
+        try {
+            if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+                ProcessTree.kill(process);
+            }
+        } catch (InterruptedException again) {
+            ProcessTree.kill(process);
+        }
+    }
+
+    private Result collect(Process process, Duration timeout, Consumer<String> progress, byte[] stdin, List<String> args) throws InterruptedException {
+        var stdout = new ByteArrayOutputStream();
+        var stderr = new StringBuffer();
+        var stdoutTruncated = CommandRunner.drain(process.getInputStream(), stdout);
+        var readers = CompletableFuture.allOf(stdoutTruncated, async(() -> readLines(process.getErrorStream(), progress, stderr, CommandRunner.MAX_OUTPUT_BYTES)));
+        var stdinWritten = async(() -> writeAndClose(process, stdin));
+        if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+            ProcessTree.kill(process);
+            throw new GitException(Kind.TIMEOUT, "git " + GitFailure.subcommand(args) + " timed out", "");
+        }
+        stdinWritten.join();
+        CommandRunner.awaitReaders(process, readers);
+        return new Result(process.exitValue(), stdout.toString(StandardCharsets.UTF_8), stderr.toString(), stdoutTruncated.getNow(false));
     }
 
     /** Writing commands get the long timeout: killing one mid-way leaves index.lock and a half-switched tree. */
@@ -203,7 +227,12 @@ public class GitRunner {
 
     private static void emit(StringBuilder line, Consumer<String> progress) {
         if (progress != null && !line.isEmpty()) {
-            progress.accept(line.toString());
+            try {
+                progress.accept(line.toString());
+            } catch (RuntimeException e) {
+                // keep reading: git would die writing to a full stderr pipe; only the class is logged, the message may hold paths or tokens
+                log.warn("git progress listener failed: {}", e.getClass().getName());
+            }
         }
         line.setLength(0);
     }

@@ -23,6 +23,7 @@ public class UsageAlertService {
 
     private static final long NO_RESET = -1;
     private static final long ASSISTANT_PROJECT = 0;
+    private static final int MAX_SEEN_KEYS = 256;
 
     private static final Logger log = LoggerFactory.getLogger(UsageAlertService.class);
 
@@ -66,7 +67,8 @@ public class UsageAlertService {
     }
 
     private void alertWindow(String name, String label, RateLimitWindow window, int threshold) {
-        if (window == null || threshold <= 0 || window.usedPercent() < threshold) {
+        if (window == null || threshold <= 0 || window.usedPercent() < threshold
+                || window.resetsAt() != null && !window.resetsAt().isAfter(Instant.now())) {
             return;
         }
         fire(name + ":" + resetMinute(window.resetsAt()) + ":" + threshold, "Usage limit: " + label + " window",
@@ -74,10 +76,15 @@ public class UsageAlertService {
     }
 
     private void fire(String key, String title, String body) {
-        if (!seen.add(key)) {
+        if (seen.contains(key)) {
             return;
         }
-        if (repository.markAlertFired(key, System.currentTimeMillis())) {
+        var recorded = repository.markAlertFired(key, System.currentTimeMillis());
+        if (seen.size() >= MAX_SEEN_KEYS) {
+            seen.clear(); // the database still dedupes, so a cleared key only costs one more insert attempt
+        }
+        seen.add(key);
+        if (recorded) {
             try {
                 notifications.post(NotificationKind.USAGE_ALERT, ASSISTANT_PROJECT, null, title, body);
             } catch (RuntimeException e) {

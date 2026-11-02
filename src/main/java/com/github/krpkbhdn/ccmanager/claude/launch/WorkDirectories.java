@@ -29,12 +29,12 @@ public class WorkDirectories {
         throw new IllegalArgumentException("Not a worktree of project " + project.name() + ": " + directory);
     }
 
-    /** Like {@link #validate} but answers false instead of throwing. */
+    /** Like {@link #validate} but answers false for a refused folder; a git failure is not an answer and propagates. */
     public boolean accepts(Project project, Path directory) {
         try {
             validate(project, directory);
             return true;
-        } catch (RuntimeException e) {
+        } catch (IllegalArgumentException e) {
             return false;
         }
     }

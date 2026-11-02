@@ -10,8 +10,10 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 
 /**
- * Deletes a directory tree without ever following a link out of it. Windows junctions look like plain directories to
- * the JDK, so every directory is compared with its real path; a link is unlinked, its target is left alone.
+ * Deletes a directory tree without ever following a link out of it. The JDK reports a Windows junction as a directory
+ * that is also "other", so only such entries need a real-path check: they are links unless their real path is the same
+ * name directly under the real parent (a OneDrive placeholder, say). A link, root included, is unlinked, its target is
+ * left alone; plain directories (a root with an 8.3 short name too) cost no extra lookup.
  */
 public final class TreeDeleter {
 
@@ -21,7 +23,7 @@ public final class TreeDeleter {
         Files.walkFileTree(target, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-                if (isLink(dir)) {
+                if (isLink(dir, attrs)) {
                     Files.delete(dir);
                     return FileVisitResult.SKIP_SUBTREE;
                 }
@@ -55,8 +57,17 @@ public final class TreeDeleter {
         });
     }
 
-    private static boolean isLink(Path directory) throws IOException {
-        var parent = directory.toAbsolutePath().getParent();
-        return parent != null && !directory.toRealPath().equals(parent.toRealPath().resolve(directory.getFileName()));
+    private static boolean isLink(Path dir, BasicFileAttributes attrs) throws IOException {
+        if (attrs.isSymbolicLink()) {
+            return true;
+        }
+        if (!attrs.isOther()) {
+            return false;
+        }
+        var real = dir.toRealPath();
+        var realParent = real.getParent();
+        var parent = dir.toAbsolutePath().getParent();
+        return realParent == null || parent == null || !real.getFileName().toString().equalsIgnoreCase(dir.getFileName().toString())
+                || !realParent.equals(parent.toRealPath());
     }
 }

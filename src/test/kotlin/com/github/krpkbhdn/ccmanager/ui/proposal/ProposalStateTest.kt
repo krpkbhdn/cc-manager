@@ -57,6 +57,16 @@ class ProposalStateTest {
     }
 
     @Test
+    fun anAnswerTheBackendNoLongerAcceptsIsReported() {
+        `when`(service.answer(anyString(), any())).thenReturn(false)
+
+        state.answer(proposal, PermissionAllow.once())
+
+        until { errors.isNotEmpty() }
+        assertThat(errors.single()).contains("already answered or expired")
+    }
+
+    @Test
     fun aProposalIsAnnouncedOnceWhenItArrives() {
         val arrived = java.util.concurrent.CopyOnWriteArrayList<String>()
         val announcing = ProposalState(service, scope, { errors += it }, onArrived = { arrived += it.id() })

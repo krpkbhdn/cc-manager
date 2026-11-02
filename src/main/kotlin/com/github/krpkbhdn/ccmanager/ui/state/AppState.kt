@@ -39,7 +39,9 @@ import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.slf4j.LoggerFactory
 
+private val log = LoggerFactory.getLogger(AppState::class.java)
 private const val TICK_MILLIS = 1_000L
 private const val STALE_REFRESH_TICKS = 30
 private const val UNOPENED_GIT_REFRESH_TICKS = 60
@@ -95,7 +97,7 @@ class AppState(
     val notifications: NotificationsState = NotificationsState({ projects.nameOf(it) }) { windowActive }
     val sessions = SessionsState(
         backend, scope, { live }, { environment.sessionUsage[it] }, { teams.defaultTeamOf(it) },
-        onOpened = { projectId, id -> views[projectId] = viewOf(projectId).openSession(id) },
+        onOpened = ::showSessionTab,
         onClosed = { projectId, id -> views[projectId] = viewOf(projectId).closeSession(id) },
         showProject = { navigate(routeOf(it)) },
         requestConfirm = { confirm = it },
@@ -161,6 +163,7 @@ class AppState(
     var exitApp: () -> Unit = {}
     val agents = AgentsState(backend.transcripts, scope, { live }, ::showSessionTerminal)
     private val unsubscribers = mutableListOf<Runnable>()
+    private val refreshingAgents = mutableSetOf<Long>()
     val worktrees: WorktreeActions = WorktreeActions(projects, sessions, shells, runs, backend.git.taskWorktrees, backend.terminal) { gits }
     val gits = ProjectGits(
         backend.git, scope,
@@ -250,8 +253,12 @@ class AppState(
 
     fun openSession(ccmSessionId: String) {
         val session = live.find(ccmSessionId) ?: return
-        views[session.projectId] = viewOf(session.projectId).openSession(ccmSessionId)
+        showSessionTab(session.projectId, ccmSessionId)
         navigate(routeOf(session.projectId))
+    }
+
+    private fun showSessionTab(projectId: Long, ccmSessionId: String) {
+        views[projectId] = viewOf(projectId).openSession(ccmSessionId)
     }
 
     private fun routeOf(projectId: Long): Route =
@@ -302,7 +309,14 @@ class AppState(
 
     fun refreshBackgroundAgents(projectId: Long) {
         val path: Path = projects.find(projectId)?.path ?: return
-        scope.launch { guarded { backgroundAgents[projectId] = io { backend.backgroundAgents.list(path) } } }
+        if (!refreshingAgents.add(projectId)) return
+        scope.launch {
+            try {
+                guarded { backgroundAgents[projectId] = io { backend.backgroundAgents.list(path) } }
+            } finally {
+                refreshingAgents.remove(projectId)
+            }
+        }
     }
 
     val terminal: TerminalPort get() = backend.terminal
@@ -313,6 +327,7 @@ class AppState(
         try {
             io { backend.hooks.recent(ccmSessionId, ACTIVITY_LIMIT) }
         } catch (e: RuntimeException) {
+            log.warn("Could not read the activity of session {}: {}", ccmSessionId, e.javaClass.simpleName)
             emptyList()
         }
 
@@ -342,8 +357,9 @@ class AppState(
         (listOf(project.id) + projects.membersOf(project.id).map { it.id }).maxOf { backend.sessions.projectStatus(it) }
 
     private suspend fun loadSessions() {
+        val registered = projects.all
         val (sessions, statuses) = io {
-            backend.sessions.sessions() to projects.all.associate { it.id to statusOf(it) }
+            backend.sessions.sessions() to registered.associate { it.id to statusOf(it) }
         }
         val previous = live.sessions.associate { it.ccmSessionId to it.status }
         live = LiveSessions(sessions, statuses)

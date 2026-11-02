@@ -60,6 +60,27 @@ class GitWorktreeServiceTest {
     }
 
     @Test
+    void ignoredEntriesKeepsNamesWithSpacesUnquoted() throws Exception {
+        Files.writeString(sandbox.repo.resolve(".gitignore"), "*.env\n");
+        sandbox.commitAll("ignore");
+        service.add(sandbox.repo, "feature", "main", target);
+        Files.writeString(target.resolve("my secret.env"), "SECRET=1");
+
+        assertThat(service.ignoredEntries(target)).containsExactly("my secret.env");
+    }
+
+    @Test
+    void ignoredEntriesFailsInsteadOfHidingTheWarningWhenGitFails() {
+        assertThatThrownBy(() -> service.ignoredEntries(root))
+                .isInstanceOfSatisfying(GitException.class, e -> assertThat(e.kind()).isEqualTo(Kind.NOT_A_REPOSITORY));
+    }
+
+    @Test
+    void removeRejectsARelativeFolder() {
+        assertThatThrownBy(() -> service.remove(sandbox.repo, Path.of("--force"), true)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void branchWithOwnCommitIsNotMergedAndUntrackedFileMakesItDirty() throws Exception {
         service.add(sandbox.repo, "feature", "main", target);
         Files.writeString(target.resolve("b.txt"), "b");

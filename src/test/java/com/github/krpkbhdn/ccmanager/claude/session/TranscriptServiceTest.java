@@ -73,6 +73,18 @@ class TranscriptServiceTest {
     }
 
     @Test
+    void cachedCustomTitleSurvivesAGeneratedOneInTheShortRefreshTail() throws Exception {
+        var file = dir.resolve("renamed.jsonl");
+        Files.writeString(file, "{\"type\":\"custom-title\",\"customTitle\":\"Mine\"}\n" + user("x") + "\n");
+        var service = service(dir);
+        assertThat(service.title(file.toString())).contains("Mine");
+
+        Files.writeString(file, user("y".repeat(1 << 19)) + "\n{\"type\":\"ai-title\",\"aiTitle\":\"Generated\"}\n" + user("z") + "\n");
+
+        assertThat(service.title(file.toString())).contains("Mine");
+    }
+
+    @Test
     void titleStaysWhenALaterGrowthOfTheFilePushesItOutOfTheTail() throws Exception {
         var file = dir.resolve("big.jsonl");
         Files.writeString(file, "{\"type\":\"ai-title\",\"aiTitle\":\"Kept\"}\n" + user("x") + "\n");

@@ -278,7 +278,8 @@ private fun GitTabHost(state: AppState, project: Project) {
 @Composable
 private fun ActivityTabHost(state: AppState, view: ProjectView, project: Project) {
     val target = view.focusedSession?.takeIf { state.live.find(it) != null } ?: byUrgency(state.live.of(project.id)).firstOrNull()?.ccmSessionId
-    val entries by produceState(emptyList<ActivityEntry>(), target, state.live) {
+    val lastEventAt = target?.let { state.live.find(it)?.lastEventAt }
+    val entries by produceState(emptyList<ActivityEntry>(), target, lastEventAt) {
         value = target?.let { state.activityOf(it) }.orEmpty()
     }
     ActivityTab(entries, hasSession = target != null, onLaunch = { state.sessions.launch(project.id, it) }, launching = state.sessions.launching)

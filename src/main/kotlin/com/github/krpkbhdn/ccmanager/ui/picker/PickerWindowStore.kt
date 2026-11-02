@@ -20,8 +20,7 @@ class PickerWindowStore(private val file: Path) {
     fun save(bounds: PickerBounds) {
         if (bounds.x == null || bounds.y == null) return
         try {
-            Files.createDirectories(file.parent)
-            Files.writeString(file, "${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}")
+            writeAtomically(file, "${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}")
         } catch (_: IOException) {
             // Window bounds are a convenience; failing to save must never block the picker.
         }

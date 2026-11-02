@@ -21,6 +21,7 @@ import java.util.function.Function;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -143,8 +144,8 @@ public class HookServer implements SmartLifecycle {
             server = null;
         }
         if (stopping != null) {
-            proposals.releaseAll();
             stopping.stop(0);
+            proposals.releaseAll();
             awaitTermination(requests);
             awaitTermination(work);
         }
@@ -205,7 +206,11 @@ public class HookServer implements SmartLifecycle {
             return;
         }
         exchange.sendResponseHeaders(OK, NO_RESPONSE_BODY);
-        payload.ifPresent(parsed -> worker.execute(() -> consume(ccmSessionId, parsed, receivedAt, consumer)));
+        try {
+            payload.ifPresent(parsed -> worker.execute(() -> consume(ccmSessionId, parsed, receivedAt, consumer)));
+        } catch (RejectedExecutionException e) {
+            log.debug("Dropped hook call for session {}: server is stopping", ccmSessionId);
+        }
     }
 
     private void respondToMcp(HttpExchange exchange, Function<byte[], Optional<String>> handler, byte[] body) throws IOException {
@@ -235,14 +240,19 @@ public class HookServer implements SmartLifecycle {
     /** The event is stored and published on the worker first, so its order and the NEEDS_ACTION status are as for any hook; the worker never waits. */
     private CompletableFuture<Optional<String>> holdForDecision(String ccmSessionId, JsonNode payload, Instant receivedAt) {
         var decision = new CompletableFuture<Optional<String>>();
-        worker.execute(() -> {
+        Runnable hold = () -> {
             try {
                 proposals.hold(acceptHook(ccmSessionId, payload, receivedAt)).whenComplete((output, error) -> decision.complete(output == null ? Optional.empty() : output));
             } catch (RuntimeException e) {
                 log.debug("Could not hold hook call for session {}: {}", ccmSessionId, e.toString());
                 decision.complete(Optional.empty());
             }
-        });
+        };
+        try {
+            worker.execute(hold);
+        } catch (RejectedExecutionException e) {
+            decision.complete(Optional.empty());
+        }
         return decision;
     }
 

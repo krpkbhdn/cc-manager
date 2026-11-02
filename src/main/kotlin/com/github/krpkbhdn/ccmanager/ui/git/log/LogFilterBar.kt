@@ -57,7 +57,7 @@ fun LogFilterBar(filter: LogFilter, branches: List<GitBranch>, loading: Boolean,
     Row(modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.sm), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         BranchFilter(filter.branch, branches) { name -> onChange { it.forBranch(name) } }
         AppTextField(author, Modifier.widthIn(max = fieldWidth).weight(1f, fill = false), placeholder = "Author", icon = Icons.User)
-        AppTextField(text, Modifier.widthIn(min = fieldWidth).weight(1f), placeholder = "Search message or hash", icon = Icons.Search)
+        AppTextField(text, Modifier.widthIn(min = fieldWidth).weight(1f), placeholder = "Search message", icon = Icons.Search)
         filter.path?.let { PathChip(it) { onChange { f -> f.forPath(null) } } }
         if (filter.isActive) GhostButton("Reset", { author.edit { replace(0, length, "") }; text.edit { replace(0, length, "") }; onChange { LogFilter() } })
         if (loading) Spinner(size = 14.dp)

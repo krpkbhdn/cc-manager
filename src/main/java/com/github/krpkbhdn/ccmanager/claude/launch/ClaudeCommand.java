@@ -124,10 +124,15 @@ public final class ClaudeCommand {
         return toolNames.stream().map(name -> AssistantMcpServer.TOOL_NAME_PREFIX + name).collect(Collectors.joining(","));
     }
 
-    static List<String> attachArguments(Path executable, SessionFiles files, String backgroundSessionId) {
-        if (!SAFE_ID.matcher(backgroundSessionId).matches()) {
+    static String requireSafeBackgroundId(String backgroundSessionId) {
+        if (backgroundSessionId == null || !SAFE_ID.matcher(backgroundSessionId).matches()) {
             throw new IllegalArgumentException("Invalid background session id");
         }
+        return backgroundSessionId;
+    }
+
+    static List<String> attachArguments(Path executable, SessionFiles files, String backgroundSessionId) {
+        requireSafeBackgroundId(backgroundSessionId);
         List<String> command = base(executable, files);
         command.add("attach");
         command.add(backgroundSessionId);
@@ -171,7 +176,11 @@ public final class ClaudeCommand {
         };
     }
 
+    /** [team] may be null, then the label is that of {@link #label(LaunchMode)}. */
     static String label(LaunchMode mode, Team team) {
+        if (team == null) {
+            return label(mode);
+        }
         return switch (mode) {
             case NEW -> "claude (" + team.name() + ")";
             case CONTINUE -> "claude (continue, " + team.name() + ")";

@@ -71,8 +71,11 @@ object TerminalHost {
     fun close(ccmSessionId: String) = synchronized(this) {
         val terminal = detach(ccmSessionId) ?: return@synchronized
         val ending = thread(start = false, isDaemon = true, name = "TerminalClose-$ccmSessionId") {
-            end(listOf(terminal))
-            pendingClose.remove(Thread.currentThread())
+            try {
+                end(listOf(terminal))
+            } finally {
+                pendingClose.remove(Thread.currentThread())
+            }
         }
         pendingClose.add(ending)
         ending.start()
@@ -82,7 +85,7 @@ object TerminalHost {
     fun closeAll() {
         val detached = synchronized(this) { terminals.keys.toList().mapNotNull(::detach) }
         end(detached)
-        pendingClose.toList().forEach(Thread::join)
+        pendingClose.toList().forEach { it.join(EXIT_GRACE_MILLIS * 2) }
     }
 
     private fun detach(ccmSessionId: String): OpenTerminal? = terminals.remove(ccmSessionId)?.also { registry?.discard(ccmSessionId) }

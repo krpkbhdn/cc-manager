@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import com.github.krpkbhdn.ccmanager.shell.LaunchedShell
 import com.github.krpkbhdn.ccmanager.shell.ShellProfile
 import com.github.krpkbhdn.ccmanager.ui.git.model.sameFolder
+import com.github.krpkbhdn.ccmanager.workspace.ProcessTree
 import java.nio.file.Path
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -69,7 +70,7 @@ class ShellsState(
                     labels.remove(launched.terminalId())
                     directories.remove(launched.terminalId())
                     owners.remove(launched.terminalId())
-                    launched.process().destroyForcibly()
+                    ProcessTree.kill(launched.process())
                     throw e
                 }
                 onOpened(projectId, launched.terminalId())
@@ -89,7 +90,7 @@ class ShellsState(
     private fun closeWhenExited(shell: LaunchedShell) {
         scope.launch {
             io { runCatching { shell.process().waitFor() } }
-            close(shell.projectId(), shell.terminalId())
+            if (owns(shell.terminalId())) close(shell.projectId(), shell.terminalId())
         }
     }
 

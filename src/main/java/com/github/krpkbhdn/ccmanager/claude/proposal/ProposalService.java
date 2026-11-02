@@ -59,9 +59,6 @@ public class ProposalService implements DecisionHolder {
      * @return completes with the user's answer, or with the reason there is none (timed out, over the cap, dismissed or session gone)
      */
     public CompletableFuture<AppDecision> holdForApp(PermissionProposal proposal) {
-        if (held.size() >= properties.maxHeldProposals()) {
-            return CompletableFuture.completedFuture(AppDecision.Unanswered.TOO_MANY_PENDING);
-        }
         var started = System.nanoTime();
         return holdProposal(proposal)
                 .map(held -> held.thenApply(answer -> answer.<AppDecision>map(AppDecision.Answered::new)

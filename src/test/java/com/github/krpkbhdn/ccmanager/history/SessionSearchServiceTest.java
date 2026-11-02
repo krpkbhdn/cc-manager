@@ -98,6 +98,44 @@ class SessionSearchServiceTest {
     }
 
     @Test
+    void linesAppendedAfterClearAreIndexedButClearedOnesAreNot() {
+        var app = sep("/w/app");
+        var file = fixture.transcript("a", "s1");
+        fixture.write(file, userLine("u1", app, "2026-01-01T10:00:00Z", "needle before"));
+        var indexer = fixture.indexer(1000);
+        indexer.scan();
+        fixture.append(file, userLine("u2", app, "2026-01-01T10:01:00Z", "needle unscanned"));
+
+        fixture.search.clear(app);
+        fixture.append(file, userLine("u3", app, "2026-01-01T10:02:00Z", "needle after"));
+        indexer.scan();
+
+        assertThat(fixture.search.search("needle", Optional.empty(), ANY, ANY)).extracting(SessionSearchService.SearchHit::entryUuid)
+                .containsExactly("u3");
+    }
+
+    @Test
+    void projectFilterAndClearAreCaseSensitiveOnALinuxHost(@TempDir Path other) {
+        var linux = new HistoryFixture(other, false);
+        linux.write(linux.transcript("a", "s1"), userLine("u1", "/w/app", "2026-01-01T10:00:00Z", "needle"));
+        linux.indexer(1000).scan();
+
+        assertThat(linux.search.search("needle", Optional.of("/W/APP"), ANY, ANY)).isEmpty();
+        assertThat(linux.search.search("needle", Optional.of("/w/app"), ANY, ANY)).hasSize(1);
+        linux.search.clear("/W/APP");
+        assertThat(linux.search.indexedEntryCount()).isEqualTo(1);
+    }
+
+    @Test
+    void projectFilterMatchesPathsWithNonBmpCharacters() {
+        var app = sep("/w/\uD83D\uDE00app");
+        fixture.write(fixture.transcript("a", "s1"), userLine("u1", app + File.separator + "sub", "2026-01-01T10:00:00Z", "needle"));
+        fixture.indexer(1000).scan();
+
+        assertThat(fixture.search.search("needle", Optional.of(app), ANY, ANY)).hasSize(1);
+    }
+
+    @Test
     void queryOfOnlyPunctuationFindsNothingWithoutError() {
         fixture.write(fixture.transcript("p", "s1"), userLine("u1", "/w/app", "2026-01-01T10:00:00Z", "plain text"));
         fixture.indexer(1000).scan();

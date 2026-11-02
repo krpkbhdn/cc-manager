@@ -46,3 +46,11 @@ graphify-out/
 .graphify_python
 jscpd-report/
 .claude/worktrees/
+
+### Secrets ###
+.env
+.env.*
+*.pem
+*.jks
+*.p12
+local.properties

@@ -93,9 +93,9 @@ public class TaskWorktreeService {
         if (repo.isEmpty() || !Files.isDirectory(repo.get())) {
             return;
         }
-        List<Worktree> listed;
+        List<WorktreePorcelainParser.ParsedWorktree> listed;
         try {
-            listed = worktrees.list(repo.get());
+            listed = worktrees.listed(repo.get());
         } catch (RuntimeException e) {
             return;
         }

@@ -52,4 +52,13 @@ class RateLimitParserTest {
         assertThat(snapshot.fiveHour()).isNull();
         assertThat(snapshot.sevenDay()).isNotNull();
     }
+
+    @Test
+    void usedPercentageIsClampedToZeroTo100() {
+        var snapshot = parse("{\"rate_limits\":{\"five_hour\":{\"used_percentage\":130,\"resets_at\":1003600},"
+                + "\"seven_day\":{\"used_percentage\":-4,\"resets_at\":1086400}}}").orElseThrow();
+
+        assertThat(snapshot.fiveHour().usedPercent()).isEqualTo(100);
+        assertThat(snapshot.sevenDay().usedPercent()).isEqualTo(0);
+    }
 }

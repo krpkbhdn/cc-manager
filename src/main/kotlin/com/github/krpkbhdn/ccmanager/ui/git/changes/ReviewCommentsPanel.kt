@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
+import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.ui.components.AppButton
 import com.github.krpkbhdn.ccmanager.ui.components.Chip
 import com.github.krpkbhdn.ccmanager.ui.components.HorizontalRule
@@ -41,6 +42,8 @@ import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
 private val listMaxHeight = 160.dp
 private const val NEW_SESSION = ""
+private const val SEND_FAILED_TITLE = "Review comments not sent"
+private const val SEND_FAILED_BODY = "The session did not accept the prompt. The comments stay open."
 
 /** Collapsible list of the project's review comments with the session picker and the Send button. */
 @Composable
@@ -61,7 +64,7 @@ fun ReviewCommentsPanel(git: GitState, target: ReviewTarget, onSelectFile: (Stri
             Label("Review comments (${comments.size})", Modifier.weight(1f), color = colors.textSecondary, style = Type.smallMedium)
             SessionPicker(sessions, chosen) { picked = it }
             if (sentCount > 0) {
-                AppButton("Re-check sent", { git.reanchorReview(true); git.review.clearRecheckOffer() }, compact = true)
+                AppButton("Re-check sent", { recheckSent(git) }, compact = true)
                 AppButton("Reopen", { git.review.reopenSent() }, compact = true)
             }
             AppButton("Send to agent", { send(git, target, chosen, open); if (chosen == null) picked = null }, compact = true, enabled = open.isNotEmpty())
@@ -80,8 +83,13 @@ private fun send(git: GitState, target: ReviewTarget, sessionId: String?, open: 
     val ids = open.map { it.id }.toSet()
     val prompt = reviewPrompt(open)
     if (sessionId == null) return target.startAndSend(prompt) { git.review.markSent(ids, it, null) }
-    val id = target.send(sessionId, prompt) ?: return
-    git.review.markSent(ids, sessionId, id)
+    val id = target.send(sessionId, prompt)
+    if (id == null) git.host.notify(NotificationKind.ERROR, SEND_FAILED_TITLE, SEND_FAILED_BODY) else git.review.markSent(ids, sessionId, id)
+}
+
+private fun recheckSent(git: GitState) {
+    git.reanchorReview(true)
+    git.review.clearRecheckOffer()
 }
 
 @Composable
@@ -101,7 +109,7 @@ private fun SessionPicker(sessions: List<SessionSnapshot>, selected: String?, on
 private fun RecheckBanner(git: GitState, sentCount: Int) {
     Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.xs), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         Label("Agent finished. Re-check $sentCount sent comments?", Modifier.weight(1f), style = Type.small)
-        AppButton("Re-check", { git.reanchorReview(true); git.review.clearRecheckOffer() }, compact = true)
+        AppButton("Re-check", { recheckSent(git) }, compact = true)
     }
 }
 

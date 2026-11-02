@@ -2,7 +2,9 @@ package com.github.krpkbhdn.ccmanager.git;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -13,6 +15,7 @@ import com.github.krpkbhdn.ccmanager.workspace.CommandRunner;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -24,7 +27,7 @@ class ChangeDescriptionServiceTest {
 
     private final ClaudeCli claude = mock(ClaudeCli.class);
     private final ChangeDescriptionService service = new ChangeDescriptionService(claude,
-            new ChangeDescriptionProperties("haiku", Duration.ofSeconds(1), Duration.ofSeconds(10), 20000, 100));
+            new ChangeDescriptionProperties("haiku", Duration.ofSeconds(1), 20000, 100), new GitRunner());
 
     private static CommandRunner.Result answer(String result) {
         return new CommandRunner.Result(0, "{\"result\":" + tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(result) + "}", "", false);
@@ -105,7 +108,7 @@ class ChangeDescriptionServiceTest {
         sandbox.commitAll("initial");
         sandbox.git("checkout", "-b", "feature");
         sandbox.write("a.txt", "\"q\"\\\n".repeat(50_000));
-        var bigService = new ChangeDescriptionService(claude, new ChangeDescriptionProperties("haiku", Duration.ofSeconds(1), Duration.ofSeconds(10), 200_000, 100));
+        var bigService = new ChangeDescriptionService(claude, new ChangeDescriptionProperties("haiku", Duration.ofSeconds(1), 200_000, 100), new GitRunner());
         when(claude.execute(any(), any(), any())).thenReturn(answer("{\"title\":\"Edit a\",\"body\":\"\"}"));
 
         bigService.describe(sandbox.repo, "main", "t\"".repeat(5000));
@@ -114,6 +117,27 @@ class ChangeDescriptionServiceTest {
         verify(claude).execute(any(), any(), arguments.capture());
         var prompt = (String) ((List<String>) arguments.getValue()).get(1);
         assertThat(prompt.length() + prompt.chars().filter(c -> c == '"' || c == '\\').count()).isLessThan(20_000);
+        assertThat(prompt).contains("+\"q\"\\", "\n[cut]");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void sendsNothingWhenTheChangedFileListFailsSoTrackedSecretsCannotLeak(@TempDir Path root) {
+        var sandbox = GitCliSandbox.create(root);
+        sandbox.write("README.md", "hello\n");
+        sandbox.write(".env", "TOKEN=hunter2\n");
+        sandbox.commitAll("initial");
+        sandbox.git("checkout", "-b", "feature");
+        sandbox.write(".env", "TOKEN=hunter3\n");
+        var failing = spy(new GitRunner());
+        doAnswer(call -> Arrays.asList(call.getArguments()).contains("--name-only") ? new GitRunner.Result(128, "", "index.lock", false) : call.callRealMethod())
+                .when(failing).tryRun(any(), any(String[].class));
+        var guarded = new ChangeDescriptionService(claude, new ChangeDescriptionProperties("haiku", Duration.ofSeconds(1), 20000, 100), failing);
+
+        var description = guarded.describe(sandbox.repo, "main", "");
+
+        verify(claude, times(0)).execute(any(), any(), any());
+        assertThat(description.title()).isEqualTo("Feature");
     }
 
     @Test

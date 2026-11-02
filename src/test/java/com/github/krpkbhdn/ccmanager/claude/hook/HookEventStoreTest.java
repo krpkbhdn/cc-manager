@@ -1,6 +1,8 @@
 package com.github.krpkbhdn.ccmanager.claude.hook;
 
 import static com.github.krpkbhdn.ccmanager.claude.HookEvents.of;
+
+import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
@@ -52,12 +54,13 @@ class HookEventStoreTest {
     void secretsAndUnreadToolFieldsAreNotStored() {
         store.save(of("PreToolUse", "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"TOKEN=abc123\",\"env\":\"hidden\"},"
                 + "\"tool_response\":\"out\"}"));
+        store.save(of("PreToolUse", "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"echo '{\\\"password\\\":\\\"hunter2\\\"}'\"}}"));
         store.save(of("PostToolUse", "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"a.txt\",\"content\":\"filebody\"}}"));
 
         var stored = String.join("", jdbc.sql("SELECT payload FROM hook_event").query(String.class).list());
 
-        assertThat(stored).doesNotContain("abc123", "hidden", "out\"", "filebody").contains("TOKEN=[redacted]", "a.txt");
-        assertThat(store.recent("s1", 10)).extracting(ActivityEntry::text).containsExactly("Bash: TOKEN=[redacted]", "Wrote a.txt");
+        assertThat(stored).doesNotContain("abc123", "hidden", "out\"", "filebody", "hunter2").contains("TOKEN=[redacted]", "a.txt");
+        assertThat(store.recent("s1", 10)).extracting(ActivityEntry::text).contains("Bash: TOKEN=[redacted]", "Wrote a.txt");
     }
 
     @Test
@@ -152,6 +155,40 @@ class HookEventStoreTest {
         var stored = jdbc.sql("SELECT payload FROM hook_event").query(String.class).single();
 
         assertThat(stored).contains("p".repeat(MAX_TEXT)).doesNotContain("p".repeat(MAX_TEXT + 1));
+    }
+
+    @Test
+    void pruneKeepsAQuietSessionsRowsWhileABusySessionOverflowsRetention() {
+        var roomy = new HookEventStore(jdbc, JsonMapper.builder().build(),
+                new HookProperties(200, 1024, MAX_TEXT, Duration.ofSeconds(1), 10, MAX_SCANNED));
+        roomy.save(justNow("quiet", of("UserPromptSubmit", "{\"prompt\":\"quiet\"}")));
+        for (var i = 0; i < 300; i++) {
+            roomy.save(justNow("s1", of("Stop")));
+        }
+
+        roomy.prune();
+
+        assertThat(roomy.recent("quiet", 10)).extracting(ActivityEntry::text).containsExactly("Prompt: quiet");
+    }
+
+    private static HookEvent justNow(String ccmSessionId, HookEvent event) {
+        return new HookEvent(ccmSessionId, event.type(), event.rawName(), event.payload(), java.time.Instant.now());
+    }
+
+    @Test
+    void pruneDropsAQuietSessionsRowsOnceTheyAreOlderThanAWeek() {
+        var roomy = new HookEventStore(jdbc, JsonMapper.builder().build(),
+                new HookProperties(200, 1024, MAX_TEXT, Duration.ofSeconds(1), 10, MAX_SCANNED));
+        var prompt = of("UserPromptSubmit", "{\"prompt\":\"quiet\"}");
+        roomy.save(new HookEvent("quiet", prompt.type(), prompt.rawName(), prompt.payload(), prompt.receivedAt()));
+        jdbc.sql("UPDATE hook_event SET received_at = ?").param(java.time.Instant.now().minus(Duration.ofDays(30)).toString()).update();
+        for (var i = 0; i < 300; i++) {
+            roomy.save(of("Stop"));
+        }
+
+        roomy.prune();
+
+        assertThat(roomy.recent("quiet", 10)).isEmpty();
     }
 
     @Test

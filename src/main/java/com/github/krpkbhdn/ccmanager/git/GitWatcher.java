@@ -83,8 +83,9 @@ public class GitWatcher {
     public Runnable subscribe(Path repo, Runnable onChange) {
         var root = repo.toAbsolutePath().normalize();
         var listener = new Listener(onChange);
-        synchronized (lock) {
-            watches.computeIfAbsent(root, this::open).listeners.add(listener);
+        List<Path> gitDirectories = null;
+        while (!addListener(root, listener, gitDirectories)) {
+            gitDirectories = resolveGitDirectories(root);
         }
         var unsubscribed = new AtomicBoolean();
         return () -> {
@@ -92,6 +93,22 @@ public class GitWatcher {
                 unsubscribe(root, listener);
             }
         };
+    }
+
+    /** @return false when the root is not watched yet and {@code gitDirectories} (resolved outside the lock) is still null */
+    private boolean addListener(Path root, Listener listener, List<Path> gitDirectories) {
+        synchronized (lock) {
+            var watch = watches.get(root);
+            if (watch == null && gitDirectories != null) {
+                watch = open(root, gitDirectories);
+                watches.put(root, watch);
+            }
+            if (watch == null) {
+                return false;
+            }
+            watch.listeners.add(listener);
+            return true;
+        }
     }
 
     @PreDestroy
@@ -105,10 +122,10 @@ public class GitWatcher {
         callbacks.shutdownNow();
     }
 
-    private Watch open(Path root) {
+    private Watch open(Path root, List<Path> gitDirectories) {
         startService();
         var watch = new Watch(root);
-        resolveGitDirectories(root).forEach(gitDir -> {
+        gitDirectories.forEach(gitDir -> {
             register(watch, gitDir, Zone.GIT_ROOT);
             registerTree(watch, gitDir.resolve("refs"), Zone.GIT_REFS, Integer.MAX_VALUE);
         });
@@ -140,7 +157,7 @@ public class GitWatcher {
     private List<Path> resolveGitDirectories(Path root) {
         try {
             var result = git.tryRun(root, "rev-parse", "--absolute-git-dir", "--git-common-dir");
-            return result.ok() ? result.stdout().lines().map(String::strip).map(root::resolve).map(Path::normalize).distinct().toList() : List.of();
+            return result.ok() ? result.stdout().lines().map(root::resolve).map(Path::normalize).distinct().toList() : List.of();
         } catch (GitException e) {
             return List.of();
         }

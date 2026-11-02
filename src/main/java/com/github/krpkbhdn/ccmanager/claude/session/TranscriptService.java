@@ -26,6 +26,7 @@ public class TranscriptService {
 
     private static final int MAX_ENTRIES = 300;
     private static final int TAIL_BYTES = 1 << 20;
+    private static final int REFRESH_TAIL_BYTES = 64 * 1024;
     private static final int WINDOW_BYTES = 512 * 1024;
 
     private static final int TITLE_CACHE_SIZE = 64;
@@ -109,23 +110,28 @@ public class TranscriptService {
         }
         var stamp = stampOf(transcriptPath);
         if (stamp == null) {
-            return readTitle(transcriptPath);
+            return readTitles(transcriptPath, TAIL_BYTES).best();
         }
         var cached = titleCache.get(transcriptPath);
         if (cached != null && cached.stamp().equals(stamp)) {
-            return cached.title();
+            return cached.titles().best();
         }
-        var title = readTitle(transcriptPath);
-        if (title.isEmpty() && cached != null) {
-            title = cached.title();
-        }
-        titleCache.put(transcriptPath, new CachedTitle(stamp, title));
-        return title;
+        var read = readTitles(transcriptPath, cached == null ? TAIL_BYTES : REFRESH_TAIL_BYTES);
+        var titles = cached == null ? read : new Titles(read.custom().or(cached.titles()::custom), read.generated().or(cached.titles()::generated));
+        titleCache.put(transcriptPath, new CachedTitle(stamp, titles));
+        return titles.best();
     }
 
     private record FileStamp(long size, long modifiedMillis) {}
 
-    private record CachedTitle(FileStamp stamp, Optional<String> title) {}
+    private record CachedTitle(FileStamp stamp, Titles titles) {}
+
+    /** The custom title (user /rename) wins over the generated one; each is kept separately so a short tail cannot replace one with the other. */
+    private record Titles(Optional<String> custom, Optional<String> generated) {
+        Optional<String> best() {
+            return custom.or(() -> generated);
+        }
+    }
 
     private static FileStamp stampOf(String transcriptPath) {
         try {
@@ -136,10 +142,10 @@ public class TranscriptService {
         }
     }
 
-    private Optional<String> readTitle(String transcriptPath) {
+    private Titles readTitles(String transcriptPath, int tailBytes) {
         String custom = null;
         String generated = null;
-        for (var line : tail(transcriptPath)) {
+        for (var line : tail(transcriptPath, tailBytes)) {
             if (!line.contains("-title\"")) {
                 continue;
             }
@@ -154,7 +160,7 @@ public class TranscriptService {
                 continue;
             }
         }
-        return Optional.ofNullable(custom != null ? custom : generated);
+        return new Titles(Optional.ofNullable(custom), Optional.ofNullable(generated));
     }
 
     private static Optional<String> nonBlank(String value) {
@@ -162,12 +168,16 @@ public class TranscriptService {
     }
 
     private List<String> tail(String transcriptPath) {
+        return tail(transcriptPath, TAIL_BYTES);
+    }
+
+    private List<String> tail(String transcriptPath, int tailBytes) {
         if (transcriptPath == null || transcriptPath.isBlank()) {
             return List.of();
         }
         try {
             var file = checkedFile(transcriptPath);
-            return file.isPresent() ? tailLines(file.get()) : List.of();
+            return file.isPresent() ? tailLines(file.get(), tailBytes) : List.of();
         } catch (IOException | RuntimeException e) {
             return List.of();
         }
@@ -182,11 +192,11 @@ public class TranscriptService {
         return inside ? Optional.of(file) : Optional.empty();
     }
 
-    /** Complete lines of the last [TAIL_BYTES]: a cut first line and a still-being-written last line are dropped. */
-    private static List<String> tailLines(Path file) throws IOException {
+    /** Complete lines of the last [tailBytes]: a cut first line and a still-being-written last line are dropped. */
+    private static List<String> tailLines(Path file, int tailBytes) throws IOException {
         try (var reader = new RandomAccessFile(file.toFile(), "r")) {
             var length = reader.length();
-            var start = Math.max(0, length - TAIL_BYTES);
+            var start = Math.max(0, length - tailBytes);
             var bytes = new byte[(int) (length - start)];
             reader.seek(start);
             reader.readFully(bytes);

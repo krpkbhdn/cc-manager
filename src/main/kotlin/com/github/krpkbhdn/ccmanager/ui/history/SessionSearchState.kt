@@ -36,6 +36,7 @@ class SessionSearchState(
     private val requestConfirm: (ConfirmRequest) -> Unit,
     private val reportError: (String) -> Unit,
     private val now: () -> Instant = Instant::now,
+    private val refreshMillis: Long = COUNTER_REFRESH_MILLIS,
 ) {
     val query = TextFieldState()
     var project by mutableStateOf<Project?>(null)
@@ -53,6 +54,8 @@ class SessionSearchState(
 
     private var job: Job? = null
     private var counterJob: Job? = null
+    private var searchSequence = 0
+    private var counterFailing = false
 
     /** The entry counter is refreshed on a timer, so a search does not pay for a SUM over the index. */
     @OptIn(FlowPreview::class)
@@ -67,7 +70,7 @@ class SessionSearchState(
         counterJob = scope.launch {
             while (true) {
                 refreshIndexedEntries()
-                delay(COUNTER_REFRESH_MILLIS)
+                delay(refreshMillis)
             }
         }
     }
@@ -78,9 +81,11 @@ class SessionSearchState(
     }
 
     private suspend fun search(text: String, project: Project?, period: SearchPeriod) {
+        val request = ++searchSequence
         error = null
         if (text.isEmpty()) {
             hits = emptyList()
+            searching = false
             return
         }
         searching = true
@@ -89,11 +94,14 @@ class SessionSearchState(
                 hits = io { service.search(text, Optional.ofNullable(project?.path?.toString()), Optional.ofNullable(period.from(now())), Optional.empty()) }
             }
         } finally {
-            searching = false
+            if (request == searchSequence) searching = false
         }
     }
 
-    private suspend fun refreshIndexedEntries() = runGuarded(reportError) { indexedEntries = io { service.indexedEntryCount() } }
+    private suspend fun refreshIndexedEntries() = runGuarded({ if (!counterFailing) reportError(it); counterFailing = true }) {
+        indexedEntries = io { service.indexedEntryCount() }
+        counterFailing = false
+    }
 
     fun open(hit: SearchHit) {
         opened = OpenedTranscript(hit, null)

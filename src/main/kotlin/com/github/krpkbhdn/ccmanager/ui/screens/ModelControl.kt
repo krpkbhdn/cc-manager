@@ -159,7 +159,7 @@ private fun PresetOption(preset: ModelPreset, selection: ModelSelection, onModel
 
 @Composable
 private fun CustomModel(selection: ModelSelection, onModel: (String?) -> Unit) {
-    val field = remember { TextFieldState(if (isCustomModel(selection)) selection.model() else "") }
+    val field = remember(selection.model()) { TextFieldState(if (isCustomModel(selection)) selection.model() else "") }
     var error by remember { mutableStateOf<String?>(null) }
     val apply = {
         runCatching { ModelSelection(field.text.toString(), null).model() }

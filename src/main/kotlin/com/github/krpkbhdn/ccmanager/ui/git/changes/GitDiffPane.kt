@@ -13,12 +13,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import com.github.krpkbhdn.ccmanager.ui.git.model.ReviewStatus
 import com.github.krpkbhdn.ccmanager.ui.state.DiffRow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,17 +54,19 @@ fun GitDiffPane(
     loading: Boolean = false,
     busy: Boolean = false,
     review: ReviewEditing? = null,
+    failed: Boolean = false,
 ) {
     Column(modifier.fillMaxHeight()) {
         when {
             file == null && loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner(size = loadingSpinner) }
+            file == null && failed -> EmptyState(Icons.Diff, "Could not load the diff", "Git could not produce this file's changes. See the error notification.", tint = colors.danger)
             file == null -> EmptyState(Icons.Diff, "Select a file", "Pick a file on the left to review its changes.")
             else -> {
                 DiffFileHeader(file, context)
                 HorizontalRule()
                 when {
                     file.binary -> EmptyState(Icons.Diff, "Binary file", "This file cannot be shown as text.")
-                    file.lines.isEmpty() -> EmptyState(Icons.Diff, "No textual changes", "Only the file mode or name changed.")
+                    file.lines.isEmpty() -> emptyDiffNotice(file.change).let { (title, hint) -> EmptyState(Icons.Diff, title, hint) }
                     else -> DiffBody(file, context, actions, busy, review)
                 }
             }
@@ -72,14 +74,23 @@ fun GitDiffPane(
     }
 }
 
+/** Title and hint for a file without diff lines: a new or removed one is empty, anything else only changed mode or name. */
+internal fun emptyDiffNotice(change: GitDiff.ChangeType): Pair<String, String> = when (change) {
+    GitDiff.ChangeType.ADDED, GitDiff.ChangeType.UNTRACKED, GitDiff.ChangeType.DELETED -> "Empty file" to "This file has no content."
+    else -> "No textual changes" to "Only the file mode or name changed."
+}
+
 @Composable
 private fun DiffBody(file: GitDiff.FileDiff, context: DiffContext, actions: HunkActions?, busy: Boolean, review: ReviewEditing?) {
     val rows = remember(file) { diffRows(file.lines) }
     val hunks = remember(file) { hunksOf(file) }
     val hunkAt = remember(file) { hunks.associateBy { it.header } }
-    val picked = remember(file) { mutableStateListOf<Int>() }
+    // Keyed by content: a refresh with the same lines keeps ticks, a changed diff shifts indexes and drops them.
+    val picked = remember(file.path, file.lines) { mutableStateListOf<Int>() }
     var selection by remember(file.path) { mutableStateOf<IntRange?>(null) }
     val draft = remember(file.path) { TextFieldState() }
+    // A changed diff drops the selection (its indexes shifted) unless the user has unsent comment text.
+    LaunchedEffect(file.lines) { if (draft.text.isEmpty()) selection = null }
     val vertical = rememberLazyListState()
     val horizontal = rememberScrollState()
     val editable = context != DiffContext.READ_ONLY && actions != null
@@ -95,7 +106,7 @@ private fun DiffBody(file: GitDiff.FileDiff, context: DiffContext, actions: Hunk
                         val lineReview = review?.let { reviewOf(it, index, row, selection, hunks, rows) { range -> selection = range } }
                         Column {
                             DiffLineRow(row, viewport, horizontal, pick, showPicks = editable, review = lineReview, showReview = review != null)
-                            if (review != null && selection?.last == index) CommentEditor(draft, { review.onAdd(selection!!, it); draft.clearText(); selection = null }, { draft.clearText(); selection = null })
+                            if (review != null && selection?.last == index) CommentEditor(draft, { text -> selection?.let { review.onAdd(it, text) }; draft.clearText(); selection = null }, { draft.clearText(); selection = null })
                         }
                     }
                 }
@@ -107,8 +118,7 @@ private fun DiffBody(file: GitDiff.FileDiff, context: DiffContext, actions: Hunk
 }
 
 private fun reviewOf(review: ReviewEditing, index: Int, row: DiffRow, selection: IntRange?, hunks: List<Hunk>, rows: List<DiffRow>, select: (IntRange?) -> Unit): LineReview {
-    val covering = review.comments.filter { it.covers(row.line) }
-    val status = covering.minByOrNull { it.status == ReviewStatus.STALE }?.status
+    val status = displayStatus(review.comments.filter { it.covers(row.line) })
     val selectable = { at: Int -> rows[at].line.kind != GitDiff.LineKind.META }
     return LineReview(selection?.let { index in it } == true, status) { extend -> select(extendSelection(selection, index, extend, hunks, selectable)) }
 }

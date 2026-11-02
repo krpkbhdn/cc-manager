@@ -118,7 +118,7 @@ private fun DiffArea(git: GitState, conflicted: Boolean, system: GitSystemAction
         if (conflicted && ref != null) ConflictBar(git, ref, system)
         val context = if (ref?.staged == true) DiffContext.STAGED else DiffContext.UNSTAGED
         val current = loaded?.takeIf { it.first == ref }?.second
-        GitDiffPane(current, context, Modifier.weight(1f), current?.let { hunkActions(git, it, context) }, loading = ref != null && loaded?.first != ref, busy = git.busy, review = current?.let { reviewEditing(git, it) })
+        GitDiffPane(current, context, Modifier.weight(1f), current?.let { hunkActions(git, it, context) }, loading = ref != null && loaded?.first != ref, busy = git.busy, review = current?.let { reviewEditing(git, it) }, failed = ref != null && loaded?.first == ref)
         ReviewCommentsPanel(git, target, { git.selected = refOf(git, it) })
     }
 }

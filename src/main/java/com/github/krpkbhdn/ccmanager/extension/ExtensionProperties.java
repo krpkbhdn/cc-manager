@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.extension;
 
+import static com.github.krpkbhdn.ccmanager.config.PropertyRules.*;
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
@@ -26,5 +27,12 @@ public record ExtensionProperties(
 
     public Duration mcpLoginTimeout() {
         return Duration.ofSeconds(mcpLoginTimeoutSeconds);
+    }
+
+    public ExtensionProperties {
+        positive("cc-manager.extension.query-timeout-seconds", queryTimeoutSeconds);
+        positive("cc-manager.extension.network-timeout-seconds", networkTimeoutSeconds);
+        positive("cc-manager.extension.mcp-health-timeout-seconds", mcpHealthTimeoutSeconds);
+        positive("cc-manager.extension.mcp-login-timeout-seconds", mcpLoginTimeoutSeconds);
     }
 }

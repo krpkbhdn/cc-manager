@@ -32,8 +32,7 @@ class AppControlAdapter(private val state: AppState, private val scope: Coroutin
     }
 
     override fun attachSession(session: LaunchedSession) = onUi {
-        state.terminal.open(session)
-        state.views[session.projectId] = state.viewOf(session.projectId).openSession(session.ccmSessionId())
+        state.sessions.adopt(session)
     }
 
     override fun queuePrompt(ccmSessionId: String, text: String) = onUi {

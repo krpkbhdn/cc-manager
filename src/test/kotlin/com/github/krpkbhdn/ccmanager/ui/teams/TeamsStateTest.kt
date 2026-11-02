@@ -143,6 +143,32 @@ class TeamsStateTest {
     }
 
     @Test
+    fun doubleClickingNewTeamCreatesOneTeam() {
+        state.newTeam()
+        state.newTeam()
+        await { state.selected?.name == "New team" }
+        Thread.sleep(300)
+
+        assertThat(service.list().count { it.name == "New team" }).isEqualTo(1)
+    }
+
+    @Test
+    fun savingARoleEditedBeforeAnotherRoleWasRemovedStillHitsTheRightRole() {
+        val team = state.selected!!
+        state.editRole(team, team.roles.first { it.name() == "developer" })
+        state.dialog!!.form.effort = "high"
+        val withoutTester = team.roles.filter { it.name() != "tester" }.map { it.draft }
+        service.update(team.id, team.name, withoutTester)
+
+        state.saveRole(state.dialog!!) { errors += it }
+        await { state.dialog == null }
+
+        val roles = service.find(team.id).orElseThrow().roles
+        assertThat(roles.map { it.name() }).containsExactly("architect", "developer")
+        assertThat(roles[1].selection().effort()).isEqualTo("high")
+    }
+
+    @Test
     fun projectDefaultTogglesAndFallsBackToTheFirstTeam() {
         assertThat(state.defaultTeamOf(42)?.name).isEqualTo("Dev team")
     }

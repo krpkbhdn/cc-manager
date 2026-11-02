@@ -37,7 +37,11 @@ public abstract class McpJsonRpcServer<T extends McpToolDescriptor> {
     private final String instructions;
 
     protected McpJsonRpcServer(List<T> tools, JsonMapper mapper, String serverName, String instructions) {
-        tools.forEach(tool -> this.tools.put(tool.name(), tool));
+        tools.forEach(tool -> {
+            if (this.tools.put(tool.name(), tool) != null) {
+                throw new IllegalArgumentException("Duplicate MCP tool name: " + tool.name());
+            }
+        });
         this.mapper = mapper;
         this.serverName = serverName;
         this.instructions = instructions;

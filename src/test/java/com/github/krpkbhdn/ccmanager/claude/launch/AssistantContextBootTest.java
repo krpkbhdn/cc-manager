@@ -88,9 +88,10 @@ class AssistantContextBootTest {
     }
 
     @Test
-    void everyToolIsAllowedBecauseTheAppDialogGatesTheDangerousOnes() {
+    void everyToolIsPreAllowedAndOnlyTheAutoApprovedOnesSkipTheAppDialog() {
         var allowed = endpoint.toolNames();
-        assertThat(allowed).contains("list_teams", "get_help", "resume_session", "remove_project", "git_push");
+        assertThat(allowed).contains("list_teams", "get_help", "resume_session", "remove_project", "git_push", "stop_run");
+        assertThat(endpoint.autoApprovedToolNames()).doesNotContain("resume_session", "remove_project", "git_push", "stop_run");
         var arguments = ClaudeCommand.assistantArguments(Path.of("claude"), new SessionFiles(Path.of("s.json"), Path.of("m.json")),
                 ModelSelection.DEFAULT, allowed);
         var list = arguments.get(arguments.indexOf("--allowedTools") + 1);

@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.claude.session;
 
+import com.github.krpkbhdn.ccmanager.claude.event.ActivityFormatter;
 import com.github.krpkbhdn.ccmanager.claude.session.TranscriptEntry.Kind;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -79,7 +80,6 @@ public class TranscriptLineParser {
     }
 
     private static String cut(String value, int limit) {
-        var stripped = value.strip();
-        return stripped.length() <= limit ? stripped : stripped.substring(0, limit) + "…";
+        return ActivityFormatter.cut(value.strip(), limit);
     }
 }

@@ -4,6 +4,7 @@ import com.github.krpkbhdn.ccmanager.git.WorktreePorcelainParser.ParsedWorktree;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -26,7 +27,7 @@ public class GitWorktreeService {
 
     /** The main worktree first, then the linked ones; dirty and merged are computed per entry. */
     public List<Worktree> list(Path repo) {
-        var parsed = WorktreePorcelainParser.parse(git.out(repo, "worktree", "list", "--porcelain"));
+        var parsed = listed(repo);
         var mainHead = parsed.isEmpty() ? "" : parsed.getFirst().head();
         var mergedBranches = mergedBranches(repo, mainHead);
         var result = new ArrayList<Worktree>();
@@ -54,8 +55,10 @@ public class GitWorktreeService {
 
     /** Removes a linked worktree, never its branch; a dirty one needs {@code force}. */
     public void remove(Path repo, Path worktree, boolean force) {
-        var entries = list(repo);
-        if (entries.getFirst().path().normalize().equals(worktree.normalize())) {
+        if (!worktree.isAbsolute()) {
+            throw new IllegalArgumentException("Folder must be an absolute path");
+        }
+        if (listed(repo).getFirst().path().normalize().equals(worktree.normalize())) {
             throw new IllegalArgumentException("The main worktree cannot be removed");
         }
         var command = new ArrayList<>(List.of("worktree", "remove"));
@@ -66,10 +69,18 @@ public class GitWorktreeService {
         git.out(repo, command.toArray(String[]::new));
     }
 
-    /** Top-level ignored entries (.env, build output): {@link #remove} deletes them with the folder, git never lists them as changes. */
+    /**
+     * Top-level ignored entries (.env, build output): {@link #remove} deletes them with the folder, git never lists them as changes.
+     * A failing or oversized status throws {@link GitException} instead of hiding the entries.
+     */
     public List<String> ignoredEntries(Path worktree) {
-        var status = git.tryRun(worktree, "status", "--porcelain", "--ignored");
-        return status.ok() ? status.stdout().lines().filter(line -> line.startsWith(IGNORED_PREFIX)).map(line -> line.substring(IGNORED_PREFIX.length())).toList() : List.of();
+        var status = git.out(worktree, "status", "--porcelain", "-z", "--ignored");
+        return Arrays.stream(status.split("\0")).filter(entry -> entry.startsWith(IGNORED_PREFIX)).map(entry -> entry.substring(IGNORED_PREFIX.length())).toList();
+    }
+
+    /** All entries of {@code worktree list --porcelain}, main worktree first; no per-entry status. */
+    List<ParsedWorktree> listed(Path repo) {
+        return WorktreePorcelainParser.parse(git.out(repo, "worktree", "list", "--porcelain"));
     }
 
     /** One process for all branches instead of a merge-base per worktree. */
@@ -78,7 +89,7 @@ public class GitWorktreeService {
             return Set.of();
         }
         var merged = git.tryRun(repo, "for-each-ref", "--merged=" + mainHead, "--format=%(refname)", BRANCH_REF);
-        return merged.ok() ? merged.stdout().lines().map(String::strip).collect(Collectors.toSet()) : Set.of();
+        return merged.ok() && !merged.truncated() ? merged.stdout().lines().map(String::strip).collect(Collectors.toSet()) : Set.of();
     }
 
     private Worktree toWorktree(ParsedWorktree entry, boolean main, String mainHead, Set<String> mergedBranches) {

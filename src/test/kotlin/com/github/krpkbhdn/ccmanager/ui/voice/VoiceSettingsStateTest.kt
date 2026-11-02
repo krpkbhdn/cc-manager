@@ -453,6 +453,21 @@ class VoiceSettingsStateTest {
     }
 
     @Test
+    fun `close gives up waiting for a dictation session that hangs`() {
+        val session = mock(DictationSession::class.java)
+        val hang = CountDownLatch(1)
+        org.mockito.Mockito.doAnswer { hang.await(30, java.util.concurrent.TimeUnit.SECONDS) }.`when`(session).close()
+        capture(session)
+        state.startDictation(mock(DictationListener::class.java))
+        val started = System.nanoTime()
+
+        state.close()
+        hang.countDown()
+
+        assertThat(java.time.Duration.ofNanos(System.nanoTime() - started)).isLessThan(java.time.Duration.ofSeconds(15))
+    }
+
+    @Test
     fun `close releases the microphone before it returns`() {
         val session = mock(DictationSession::class.java)
         capture(session)

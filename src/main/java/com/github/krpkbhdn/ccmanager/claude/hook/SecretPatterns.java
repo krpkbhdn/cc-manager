@@ -7,7 +7,7 @@ public final class SecretPatterns {
 
     /** Masks only key=value, key: value and bearer forms; space-separated flags and bare tokens (sk-...) pass through. */
     public static final Pattern KEY_VALUE = Pattern.compile(
-            "(?i)((?:(?:token|secret|passw(?:or)?d|api[_-]?key|credential)[\\w-]*+\\s*[=:]\\s*|bearer\\s+))(\"[^\"]*\"|'[^']*'|\\S+)");
+            "(?i)((?:(?:token|secret|passw(?:or)?d|api[_-]?key|credential)[\\w-]*+\"?\\s*[=:]\\s*|bearer\\s+))(\"[^\"]*\"|'[^']*'|\\S+)");
 
     private SecretPatterns() {
     }

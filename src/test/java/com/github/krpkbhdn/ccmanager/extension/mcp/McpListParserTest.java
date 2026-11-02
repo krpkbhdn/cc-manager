@@ -31,6 +31,12 @@ class McpListParserTest {
     }
 
     @Test
+    void failureMentioningAuthIsStillAFailure() {
+        assertThat(McpListParser.parse("x: http://y - ✘ Failed: invalid auth header")).extracting(McpHealth::status)
+                .containsExactly(McpStatus.FAILED);
+    }
+
+    @Test
     void unknownWordingIsUnknownNotAnError() {
         assertThat(McpListParser.parse("x: y - ? Whatever")).extracting(McpHealth::status).containsExactly(McpStatus.UNKNOWN);
     }

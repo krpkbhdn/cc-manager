@@ -7,8 +7,9 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.DoubleConsumer;
 import org.springframework.stereotype.Component;
 
@@ -23,6 +24,8 @@ public class VoiceAssetService {
     private final Path root;
     private final VerifiedDownload downloads;
     private final VoiceProperties properties;
+    private final Map<String, Object> locks = new ConcurrentHashMap<>();
+    private int activeInstalls;
 
     VoiceAssetService(AppProperties app, VerifiedDownload downloads, VoiceProperties properties) {
         this.root = app.dataDir().resolve(VOICE_DIRECTORY);
@@ -38,13 +41,36 @@ public class VoiceAssetService {
         return Optional.of(root.resolve(asset.relativePath())).filter(Files::exists);
     }
 
-    public synchronized Path install(VoiceAsset asset, DoubleConsumer progress) throws IOException {
+    /** Installs of different assets run in parallel; the same asset is downloaded once. */
+    public Path install(VoiceAsset asset, DoubleConsumer progress) throws IOException {
         var target = root.resolve(asset.relativePath());
-        if (Files.exists(target)) {
-            return target;
+        synchronized (locks.computeIfAbsent(asset.relativePath(), key -> new Object())) {
+            if (Files.exists(target)) {
+                return target;
+            }
+            beginInstall();
+            try {
+                return download(asset, target, progress);
+            } finally {
+                endInstall();
+            }
         }
+    }
+
+    /** Stale downloads are swept only while no other install is writing its own partial files. */
+    private synchronized void beginInstall() throws IOException {
         Files.createDirectories(root);
-        deleteStaleDownloads();
+        if (activeInstalls == 0) {
+            deleteStaleDownloads();
+        }
+        activeInstalls++;
+    }
+
+    private synchronized void endInstall() {
+        activeInstalls--;
+    }
+
+    private Path download(VoiceAsset asset, Path target, DoubleConsumer progress) throws IOException {
         if (!asset.archive()) {
             Files.createDirectories(target.getParent());
             return fetch(asset, target, progress);
@@ -58,22 +84,6 @@ public class VoiceAssetService {
             Files.deleteIfExists(zip);
         }
         return target;
-    }
-
-    /** Renaming first proves nothing holds the files; a half-deleted runtime never counts as installed. */
-    public synchronized void remove(VoiceAsset asset) throws IOException {
-        var target = root.resolve(asset.relativePath());
-        var removing = target.resolveSibling(target.getFileName() + ".removing");
-        ZipExtraction.deleteRecursively(removing);
-        if (!Files.exists(target)) {
-            return;
-        }
-        try {
-            Files.move(target, removing, StandardCopyOption.ATOMIC_MOVE);
-        } catch (IOException e) {
-            throw new IOException(asset.name() + " is in use and cannot be removed; stop voice input and try again", e);
-        }
-        ZipExtraction.deleteRecursively(removing);
     }
 
     private Path fetch(VoiceAsset asset, Path target, DoubleConsumer progress) throws IOException {

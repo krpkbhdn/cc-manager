@@ -36,7 +36,7 @@ fun UsagePage(state: AppState) {
 /** Numeric field that saves a valid text on Enter or when it loses focus; an invalid text stays in the field with its message and is not saved. */
 @Composable
 private fun <T> ThresholdField(initial: String, parse: (String) -> ThresholdInput<T>, onValid: (T) -> Unit) {
-    val text = remember { TextFieldState(initial) }
+    val text = remember(initial) { TextFieldState(initial) }
     val commit = {
         val typed = text.text.toString()
         if (typed != initial) (parse(typed) as? ThresholdInput.Valid)?.let { onValid(it.value) }

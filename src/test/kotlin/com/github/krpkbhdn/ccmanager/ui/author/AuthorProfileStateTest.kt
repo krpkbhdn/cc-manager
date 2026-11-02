@@ -229,12 +229,12 @@ class AuthorProfileStateTest {
         assertThat(launched).isEmpty()
         state.offerForProject(PROJECT_ID)
         await { launched.isNotEmpty() }
+        verify(service, timeout(WAIT_MILLIS)).markInstalled(listOf(user))
         state.offerForProject(PROJECT_ID)
         Thread.sleep(SETTLE_MILLIS)
 
         assertThat(launched).hasSize(1)
         assertThat(launched.single().first).isEqualTo(PROJECT_ID)
-        verify(service, timeout(WAIT_MILLIS)).markInstalled(listOf(user))
     }
 
     @Test

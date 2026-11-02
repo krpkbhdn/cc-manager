@@ -64,7 +64,7 @@ class UsageRetentionServiceTest {
         assertThat(after.sampleCount()).isEqualTo(before.sampleCount());
         assertThat(repository.summary(NOW.minus(Duration.ofDays(2)), to).sampleCount()).isEqualTo(1);
         assertThat(repository.topSessions(from, to, 10)).extracting(SessionCost::claudeSessionId)
-                .containsExactly("s2");
+                .containsExactly("s2", "s1");
     }
 
     @Test

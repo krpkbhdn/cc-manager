@@ -1,11 +1,15 @@
 package com.github.krpkbhdn.ccmanager.history;
 
+import com.github.krpkbhdn.ccmanager.workspace.HostEnvironment;
 import java.io.File;
+import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
@@ -18,14 +22,15 @@ public class SessionSearchService {
 
     private static final int LIMIT = 100;
     private static final int SNIPPET_TOKENS = 16;
-    private static final String LIKE_ESCAPE = "!";
 
     private final JdbcClient jdbc;
     private final TranscriptIndexRepository repository;
+    private final HostEnvironment host;
 
-    public SessionSearchService(JdbcClient jdbc, TranscriptIndexRepository repository) {
+    public SessionSearchService(JdbcClient jdbc, TranscriptIndexRepository repository, HostEnvironment host) {
         this.jdbc = jdbc;
         this.repository = repository;
+        this.host = host;
     }
 
     public List<SearchHit> search(String query, Optional<String> cwdPrefix, Optional<Instant> from, Optional<Instant> to) {
@@ -40,9 +45,8 @@ public class SessionSearchService {
                 WHERE transcript_entry_fts MATCH ?""".formatted(SNIPPET_TOKENS));
         var params = new ArrayList<Object>(List.of(match));
         cwdPrefix.ifPresent(path -> {
-            sql.append(" AND (f.cwd = ? COLLATE NOCASE OR f.cwd LIKE ? ESCAPE '").append(LIKE_ESCAPE).append("')");
-            params.add(path);
-            params.add(likePattern(path));
+            sql.append(" AND ").append(TranscriptIndexRepository.projectCondition("f.cwd", ignoresPathCase()));
+            params.addAll(TranscriptIndexRepository.projectParams(path, path + File.separator));
         });
         from.ifPresent(instant -> {
             sql.append(" AND e.at >= ?");
@@ -59,9 +63,13 @@ public class SessionSearchService {
                 .list();
     }
 
-    /** Forgets the indexed entries of the project and everything below it; the files are not indexed again. */
+    /** Forgets the indexed entries of the project and everything below it; lines written before now are not indexed again. */
     public void clear(String projectPath) {
-        repository.evictProject(projectPath, likePattern(projectPath));
+        repository.evictProject(projectPath, ignoresPathCase(), SessionSearchService::completeLinesEnd);
+    }
+
+    private boolean ignoresPathCase() {
+        return host.windows() || host.os() == HostEnvironment.OperatingSystem.MACOS;
     }
 
     /** @return how many entries the index holds */
@@ -78,11 +86,17 @@ public class SessionSearchService {
         return tokens.isEmpty() ? "" : String.join(" ", tokens) + "*";
     }
 
-    private static String likePattern(String path) {
-        return escapeLike(path + File.separator) + "%";
-    }
-
-    private static String escapeLike(String value) {
-        return value.replace(LIKE_ESCAPE, LIKE_ESCAPE + LIKE_ESCAPE).replace("%", LIKE_ESCAPE + "%").replace("_", LIKE_ESCAPE + "_");
+    /** shortcut: a file that ends mid-line keeps its old offset, so that line may be indexed once it is finished. */
+    private static OptionalLong completeLinesEnd(String path) {
+        try (var reader = new RandomAccessFile(path, "r")) {
+            long size = reader.length();
+            if (size == 0) {
+                return OptionalLong.of(0);
+            }
+            reader.seek(size - 1);
+            return reader.read() == '\n' ? OptionalLong.of(size) : OptionalLong.empty();
+        } catch (IOException e) {
+            return OptionalLong.empty();
+        }
     }
 }

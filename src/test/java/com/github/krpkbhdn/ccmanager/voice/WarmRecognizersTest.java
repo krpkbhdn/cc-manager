@@ -91,6 +91,69 @@ class WarmRecognizersTest {
     }
 
     @Test
+    void acquireFailsWhenTheRecognizerDoesNotOpenInTime() throws Exception {
+        var shortWait = new WarmRecognizers(scheduler, IDLE, Duration.ofMillis(100));
+        var opening = new java.util.concurrent.CountDownLatch(1);
+        var second = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+        var opener = Executors.newSingleThreadExecutor();
+        try {
+            opener.submit(() -> shortWait.acquire(KEY, () -> {
+                try {
+                    opening.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                return open();
+            }));
+            Thread.sleep(50);
+            try {
+                shortWait.acquire(KEY, this::open);
+            } catch (IllegalStateException e) {
+                second.set(e);
+            }
+        } finally {
+            opening.countDown();
+            opener.shutdownNow();
+        }
+
+        assertThat(second.get()).hasMessageContaining("took longer");
+    }
+
+    @Test
+    void acquireWaitsForASlowCloseOfTheIdleRecognizerBeforeOpeningAnother() throws Exception {
+        var closing = new java.util.concurrent.CountDownLatch(1);
+        var closeStarted = new java.util.concurrent.CountDownLatch(1);
+        warm.acquire(KEY, () -> new Recognizer() {
+            @Override
+            public Transcript transcribe(float[] samples, String language) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void close() {
+                closeStarted.countDown();
+                try {
+                    closing.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }).release();
+        assertThat(closeStarted.await(5, TimeUnit.SECONDS)).isTrue();
+
+        var acquired = java.util.concurrent.CompletableFuture.supplyAsync(() -> warm.acquire(KEY, this::open));
+
+        Thread.sleep(300);
+        assertThat(acquired).isNotDone();
+        assertThat(opened).hasValue(0);
+
+        closing.countDown();
+
+        assertThat(acquired.get(5, TimeUnit.SECONDS)).isNotNull();
+        assertThat(opened).hasValue(1);
+    }
+
+    @Test
     void shutdownClosesLiveRecognizerOnceAndLateReleaseDoesNotCloseAgain() throws Exception {
         var lease = warm.acquire(KEY, this::open);
 

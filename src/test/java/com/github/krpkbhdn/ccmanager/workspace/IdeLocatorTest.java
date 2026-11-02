@@ -62,6 +62,16 @@ class IdeLocatorTest {
     }
 
     @Test
+    void installFolderWithBuildTimestampDoesNotOverflowVersionParsing() {
+        var programFiles = Path.of("C:\\Program Files\\JetBrains");
+        var host = new FakeHostEnvironment(OperatingSystem.WINDOWS, home)
+                .withEnv("ProgramFiles", "C:\\Program Files")
+                .withFile(programFiles.resolve("IntelliJ IDEA 2025.2.3 20251010123456").resolve("bin/idea64.exe"));
+
+        assertThat(locator.find(host)).isPresent();
+    }
+
+    @Test
     void nothingFoundOnEmptyHost() {
         assertThat(locator.find(new FakeHostEnvironment(OperatingSystem.LINUX, home))).isEmpty();
     }

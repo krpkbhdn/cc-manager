@@ -32,6 +32,19 @@ class TerminalHostTest {
     }
 
     @Test
+    fun `a close that fails does not leave the host closing`() {
+        val process = process()
+        `when`(process.isAlive).thenThrow(IllegalStateException("boom"))
+        TerminalHost.open(LaunchedSession("ccm-host-fail", 1, "claude", process))
+
+        TerminalHost.close("ccm-host-fail")
+
+        val deadline = System.currentTimeMillis() + 3_000
+        while (TerminalHost.closing() && System.currentTimeMillis() < deadline) Thread.sleep(20)
+        assertThat(TerminalHost.closing()).isFalse()
+    }
+
+    @Test
     fun `opening an open session with another process kills the new one`() {
         val first = process()
         val second = process()

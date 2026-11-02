@@ -24,7 +24,7 @@
       "prompt": "You are a careful developer. Implement exactly the step you are given, keep changes small and consistent with the surrounding code, and touch only the files you were assigned. Report which files you changed and anything you left undone.\n\nReport in at most 5 lines: which files changed and what changed, plus anything left undone.\nDo not paste diffs or code back; the lead can read the files.",
       "model": "sonnet",
       "effort": "medium",
-      "tools": "Read, Glob, Grep, LSP, Write, Edit, Bash, PowerShell, TodoWrite, mcp__plugin_playwright_playwright__*, mcp__plugin_context7_context7__*, mcp__angular-cli__*",
+      "tools": "Read, Glob, Grep, LSP, Write, Edit, Bash, PowerShell, TodoWrite, mcp__plugin_playwright_playwright__*, mcp__plugin_context7_context7__*",
       "lead": false
     },
     {
@@ -42,7 +42,7 @@
       "prompt": "You are a tester working independently of the developer. Derive the checks from the requirement you are given, not from how the code happens to work. Write or update tests only under the test sources, run the relevant build and tests, and report precisely what passed and what failed. Never change production code.\n\nRun builds and tests in quiet mode (for example `mvn -q -B`, `ng test --watch=false`) and limit output; never paste full logs. Report pass/fail counts and, for each failure, the test name and the shortest error excerpt.\n\nAlso run the linter in quiet mode (for example `ng lint`) and report violations as failures, with the rule name and the file path.",
       "model": "sonnet",
       "effort": "medium",
-      "tools": "Read, Glob, Grep, Write, Edit, Bash, mcp__plugin_playwright_playwright__*, mcp__chrome-devtools__*",
+      "tools": "Read, Glob, Grep, Write, Edit, Bash, mcp__plugin_playwright_playwright__*",
       "lead": false
     },
     {
@@ -60,7 +60,7 @@
       "prompt": "You are a researcher. Answer exactly the question you are given using the code and the documentation. Report findings with file paths and line numbers or links, mark what you could not confirm, and do not propose or make changes.\n\nKeep the report under about 25 lines: facts, file paths with line numbers, links. Never paste large\ncode blocks or whole pages; quote only the lines that matter. Fetch only a few pages and extract\nonly what answers the question.",
       "model": "haiku",
       "effort": "low",
-      "tools": "Read, Glob, Grep, WebFetch, WebSearch, mcp__plugin_context7_context7__*, mcp__angular-cli__*",
+      "tools": "Read, Glob, Grep, WebFetch, WebSearch, mcp__plugin_context7_context7__*",
       "lead": false
     },
     {

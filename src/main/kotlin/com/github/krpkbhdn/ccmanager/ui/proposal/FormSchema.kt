@@ -36,17 +36,10 @@ fun formFields(schema: JsonNode): List<FormField> {
             "boolean" -> FieldKind.BOOLEAN
             else -> FieldKind.TEXT
         }
-        val kind = when {
-            choices.isNotEmpty() -> FieldKind.CHOICE
-            property.path("type").asString("") == "number" -> FieldKind.NUMBER
-            property.path("type").asString("") == "integer" -> FieldKind.INTEGER
-            property.path("type").asString("") == "boolean" -> FieldKind.BOOLEAN
-            else -> FieldKind.TEXT
-        }
-        val initial = property.path("default").asString("").ifEmpty { if (kind == FieldKind.BOOLEAN) "false" else "" }
+        val kind = if (choices.isNotEmpty()) FieldKind.CHOICE else valueKind
         FormField(
             key, property.path("title").asString(key), property.path("description").asString(""), key in required, kind,
-            choices.map { it.first }, choices.map { it.second }, initial,
+            choices.map { it.first }, choices.map { it.second }, property.path("default").asString(""),
             property.path("minimum").asDouble(Double.NaN).takeUnless { it.isNaN() }, property.path("maximum").asDouble(Double.NaN).takeUnless { it.isNaN() },
             property.path("minLength").asInt(-1).takeIf { it >= 0 }, property.path("maxLength").asInt(-1).takeIf { it >= 0 },
             valueKind,
@@ -100,6 +93,7 @@ fun formContent(fields: List<FormField>, values: Map<String, String>): ObjectNod
         val value = values[field.key].orEmpty().trim()
         val kind = if (field.kind == FieldKind.CHOICE) field.valueKind else field.kind
         when {
+            field.kind == FieldKind.BOOLEAN && value.isEmpty() && !field.required -> Unit
             field.kind == FieldKind.BOOLEAN -> content.put(field.key, value.toBoolean())
             value.isEmpty() -> Unit
             kind == FieldKind.BOOLEAN -> content.put(field.key, value.toBoolean())

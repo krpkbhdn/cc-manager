@@ -33,4 +33,14 @@ class TerminalScrollbackCapTest {
         assertThat(session.scrollTarget).isEqualTo(12f)
         assertThat(session.selection!!.textIn(session.buffer)).isEqualTo(text)
     }
+
+    @Test
+    fun selectionIsClearedWhenItsLinesAreDiscardedFromTheScrollback() {
+        play((1..100).joinToString("\r\n") { "row $it" })
+        session.select(CellSelection(Cell(0, -CAP), Cell(4, -CAP)))
+
+        play((1..40).joinToString("") { "\r\nmore $it" })
+
+        assertThat(session.selection).isNull()
+    }
 }

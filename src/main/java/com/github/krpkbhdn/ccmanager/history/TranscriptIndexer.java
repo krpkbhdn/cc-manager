@@ -2,6 +2,7 @@ package com.github.krpkbhdn.ccmanager.history;
 
 import com.github.krpkbhdn.ccmanager.claude.session.TranscriptEntry.Kind;
 import com.github.krpkbhdn.ccmanager.claude.session.TranscriptLineParser;
+import com.github.krpkbhdn.ccmanager.history.TranscriptIndexRepository.IndexedFile;
 import com.github.krpkbhdn.ccmanager.history.TranscriptIndexRepository.NewEntry;
 import com.github.krpkbhdn.ccmanager.history.TranscriptIndexRepository.Progress;
 import com.github.krpkbhdn.ccmanager.workspace.HostEnvironment;
@@ -52,21 +53,21 @@ public class TranscriptIndexer {
 
     private record Line(String text, long byteLength) {}
 
-    private record Pass(long fileId, Set<String> sensitiveToolIds, String sessionId, String cwd, long lastEntryAt, int added) {
+    private record Pass(Set<String> sensitiveToolIds, String sessionId, String cwd, long lastEntryAt) {
 
         Pass seen(String lineSessionId, String lineCwd) {
-            return new Pass(fileId, sensitiveToolIds, lineSessionId.isEmpty() ? sessionId : lineSessionId,
-                    lineCwd.isEmpty() ? cwd : lineCwd, lastEntryAt, added);
+            return new Pass(sensitiveToolIds, lineSessionId.isEmpty() ? sessionId : lineSessionId,
+                    lineCwd.isEmpty() ? cwd : lineCwd, lastEntryAt);
         }
 
         Pass withSensitive(String toolUseId) {
             var ids = new LinkedHashSet<>(sensitiveToolIds);
             ids.add(toolUseId);
-            return new Pass(fileId, ids, sessionId, cwd, lastEntryAt, added);
+            return new Pass(ids, sessionId, cwd, lastEntryAt);
         }
 
         Pass withEntryAt(long at) {
-            return new Pass(fileId, sensitiveToolIds, sessionId, cwd, Math.max(lastEntryAt, at), added + 1);
+            return new Pass(sensitiveToolIds, sessionId, cwd, Math.max(lastEntryAt, at));
         }
     }
 
@@ -156,36 +157,53 @@ public class TranscriptIndexer {
         }
     }
 
-    /** Indexes the next batch of whole lines in one transaction; true when more of the file may be left to read. */
+    /**
+     * Indexes the next batch of whole lines; true when more of the file may be left to read. Reading, parsing and masking
+     * happen before the write transaction, which only inserts, so the write lock is held briefly.
+     */
     private boolean indexBatch(Path file) {
         var path = file.toString();
+        var size = fileSize(file);
+        var known = repository.findFile(path);
+        if (known.isPresent() && known.get().indexedBytes() == size) {
+            return false;
+        }
+        boolean reset = known.isPresent() && rewritten(file, known.get().indexedBytes(), size);
+        long start = known.isEmpty() || reset ? 0 : known.get().indexedBytes();
+        var lines = nextLines(file, start, size);
+        if (lines.isEmpty() && !reset) {
+            return false;
+        }
+        var sensitiveIds = reset ? "" : known.map(IndexedFile::sensitiveToolIds).orElse("");
+        var sensitive = sensitiveIds.isBlank() ? Set.<String>of()
+                : new LinkedHashSet<>(Arrays.asList(sensitiveIds.split(TOOL_ID_SEPARATOR)));
+        var entries = new ArrayList<NewEntry>();
+        var pass = new Pass(sensitive, "", "", 0);
+        long offset = start;
+        for (var line : lines) {
+            pass = indexLine(line.text(), offset, pass, entries);
+            offset += line.byteLength();
+        }
+        var sessionId = UUID_NAME.matcher(stem(file)).matches() ? "" : pass.sessionId();
+        var finalOffset = offset;
+        var finalPass = pass;
         return repository.inWriteTransaction(() -> {
-            var size = fileSize(file);
-            var state = repository.findFile(path).orElseGet(() -> repository.createFile(path, stem(file)));
-            if (rewritten(file, state.indexedBytes(), size)) {
-                repository.resetFile(state.id());
-                state = repository.findFile(path).orElseThrow();
+            var current = repository.findFile(path);
+            if (!current.map(IndexedFile::indexedBytes).equals(known.map(IndexedFile::indexedBytes))) {
+                return true;
             }
-            var lines = state.indexedBytes() == size ? List.<Line>of() : nextLines(file, state.indexedBytes(), size);
-            if (lines.isEmpty()) {
-                return false;
+            var fileId = current.map(IndexedFile::id).orElseGet(() -> repository.createFile(path, stem(file)).id());
+            if (reset) {
+                repository.resetFile(fileId);
             }
-            var sensitive = state.sensitiveToolIds().isBlank() ? Set.<String>of()
-                    : new LinkedHashSet<>(Arrays.asList(state.sensitiveToolIds().split(TOOL_ID_SEPARATOR)));
-            var pass = new Pass(state.id(), sensitive, "", "", 0, 0);
-            long offset = state.indexedBytes();
-            for (var line : lines) {
-                pass = indexLine(line.text(), offset, pass);
-                offset += line.byteLength();
-            }
-            var sessionId = UUID_NAME.matcher(stem(file)).matches() ? "" : pass.sessionId();
-            repository.recordProgress(state.id(), new Progress(offset, size, modifiedMillis(file), sessionId, pass.cwd(),
-                    pass.lastEntryAt(), pass.added(), String.join(TOOL_ID_SEPARATOR, pass.sensitiveToolIds())));
-            return offset < size;
+            entries.forEach(entry -> repository.insertEntry(fileId, entry));
+            repository.recordProgress(fileId, new Progress(finalOffset, size, modifiedMillis(file), sessionId, finalPass.cwd(),
+                    finalPass.lastEntryAt(), entries.size(), String.join(TOOL_ID_SEPARATOR, finalPass.sensitiveToolIds())));
+            return finalOffset < size;
         });
     }
 
-    private Pass indexLine(String text, long lineOffset, Pass pass) {
+    private Pass indexLine(String text, long lineOffset, Pass pass, List<NewEntry> sink) {
         var parsed = parser.parse(text);
         if (parsed.isEmpty()) {
             return pass;
@@ -205,20 +223,25 @@ public class TranscriptIndexer {
                 continue;
             }
             long at = line.at().toEpochMilli();
-            repository.insertEntry(current.fileId(), new NewEntry(role(entry.kind()), masked, line.uuid(), lineOffset, at));
+            sink.add(new NewEntry(role(entry.kind()), masked, line.uuid(), lineOffset, at));
             current = current.withEntryAt(at);
         }
         return current;
     }
 
+    /** Trims the oldest files' oldest entries down to the limit, so one huge growing file loses only its excess. */
     private void evictOverLimit() {
-        var total = repository.totalEntries();
-        for (var fileId : repository.fileIdsOldestFirst()) {
-            if (total <= properties.maxEntries()) {
+        var excess = repository.totalEntries() - properties.maxEntries();
+        if (excess <= 0) {
+            return;
+        }
+        for (var file : repository.filesWithEntriesOldestFirst()) {
+            var count = Math.min(excess, file.entryCount());
+            repository.evictOldestEntries(file.id(), count);
+            excess -= count;
+            if (excess <= 0) {
                 return;
             }
-            total -= repository.entryCount(fileId);
-            repository.evictFile(fileId);
         }
     }
 

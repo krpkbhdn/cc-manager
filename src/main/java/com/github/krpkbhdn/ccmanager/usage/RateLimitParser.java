@@ -28,6 +28,6 @@ final class RateLimitParser {
             return null;
         }
         var resetsAt = Instant.ofEpochSecond(node.path("resets_at").asLong());
-        return resetsAt.isAfter(now) ? new RateLimitWindow(node.path("used_percentage").asDouble(), resetsAt) : null;
+        return resetsAt.isAfter(now) ? new RateLimitWindow(Math.clamp(node.path("used_percentage").asDouble(), 0, 100), resetsAt) : null;
     }
 }
