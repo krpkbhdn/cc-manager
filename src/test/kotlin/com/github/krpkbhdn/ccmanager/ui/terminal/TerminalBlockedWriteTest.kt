@@ -21,8 +21,7 @@ class TerminalBlockedWriteTest {
             session.send("x".repeat(1000))
             session.fit(100, 30)
 
-            val deadline = System.currentTimeMillis() + 3_000
-            while (session.columns != 100 && System.currentTimeMillis() < deadline) Thread.sleep(20)
+            session.awaitModel { session.columns == 100 }
 
             assertThat(session.columns).isEqualTo(100)
         } finally {

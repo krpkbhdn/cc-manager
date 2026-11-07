@@ -104,10 +104,19 @@ final class GitCliSandbox {
     }
 
     private void configureIdentity(Path directory) {
-        runner.out(directory, "config", "user.name", "Test User");
-        runner.out(directory, "config", "user.email", "test@example.com");
-        runner.out(directory, "config", "commit.gpgsign", "false");
-        runner.out(directory, "config", "core.autocrlf", "false");
+        try {
+            Files.writeString(directory.resolve(".git").resolve("config"), """
+                    [user]
+                    \tname = Test User
+                    \temail = test@example.com
+                    [commit]
+                    \tgpgsign = false
+                    [core]
+                    \tautocrlf = false
+                    """, java.nio.file.StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     private static GitRunner isolatedRunner(Path root, GitProperties properties) {

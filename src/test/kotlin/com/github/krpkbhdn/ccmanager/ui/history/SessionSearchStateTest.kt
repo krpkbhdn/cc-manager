@@ -12,7 +12,11 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.timeout
+import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
+
+private const val POLLS_AFTER_FAILURE = 4
 
 class SessionSearchStateTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -33,7 +37,7 @@ class SessionSearchStateTest {
 
         state.start()
         await { errors.isNotEmpty() }
-        Thread.sleep(200)
+        verify(service, timeout(5_000).atLeast(POLLS_AFTER_FAILURE)).indexedEntryCount()
 
         assertThat(errors).containsExactly("index broken")
     }

@@ -3,6 +3,7 @@ package com.github.krpkbhdn.ccmanager.ui.proposal
 import com.github.krpkbhdn.ccmanager.claude.proposal.PermissionProposal
 import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalAnswer.PermissionAllow
 import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalService
+import com.github.krpkbhdn.ccmanager.ui.await
 import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,9 +18,6 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.`when`
 import tools.jackson.databind.json.JsonMapper
 
-private const val WAIT_MILLIS = 5_000L
-private const val POLL_MILLIS = 20L
-
 class ProposalStateTest {
     private val proposal = PermissionProposal("p", "s", Instant.now(), "", "Bash", JsonMapper.builder().build().readTree("{}"), emptyList())
     private val service = mock(ProposalService::class.java).also { `when`(it.pending()).thenReturn(listOf(proposal)) }
@@ -27,23 +25,17 @@ class ProposalStateTest {
     private val errors = mutableListOf<String>()
     private val state = ProposalState(service, scope, { errors += it }).also {
         it.start()
-        until { it.of("s").isNotEmpty() }
+        await { it.of("s").isNotEmpty() }
     }
 
     @AfterEach
     fun close() = scope.cancel()
 
-    private fun until(condition: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + WAIT_MILLIS
-        while (!condition() && System.currentTimeMillis() < deadline) Thread.sleep(POLL_MILLIS)
-        assertThat(condition()).isTrue()
-    }
-
     @Test
     fun aTakenAnswerHidesTheDialog() {
         state.answer(proposal, PermissionAllow.once())
 
-        until { state.dialogFor("s") == null }
+        await { state.dialogFor("s") == null }
     }
 
     @Test
@@ -52,7 +44,7 @@ class ProposalStateTest {
 
         state.answer(proposal, PermissionAllow.once())
 
-        until { errors.isNotEmpty() }
+        await { errors.isNotEmpty() }
         assertThat(state.dialogFor("s")).isSameAs(proposal)
     }
 
@@ -62,7 +54,7 @@ class ProposalStateTest {
 
         state.answer(proposal, PermissionAllow.once())
 
-        until { errors.isNotEmpty() }
+        await { errors.isNotEmpty() }
         assertThat(errors.single()).contains("already answered or expired")
     }
 
@@ -71,11 +63,14 @@ class ProposalStateTest {
         val arrived = java.util.concurrent.CopyOnWriteArrayList<String>()
         val announcing = ProposalState(service, scope, { errors += it }, onArrived = { arrived += it.id() })
 
-        announcing.start()
-        until { arrived.isNotEmpty() }
-        announcing.start()
-        Thread.sleep(POLL_MILLIS * 5)
+        val next = PermissionProposal("q", "s", Instant.now(), "", "Bash", JsonMapper.builder().build().readTree("{}"), emptyList())
 
-        assertThat(arrived).containsExactly("p")
+        announcing.start()
+        await { arrived.isNotEmpty() }
+        `when`(service.pending()).thenReturn(listOf(proposal, next))
+        announcing.start()
+        await { arrived.size == 2 }
+
+        assertThat(arrived).containsExactly("p", "q")
     }
 }

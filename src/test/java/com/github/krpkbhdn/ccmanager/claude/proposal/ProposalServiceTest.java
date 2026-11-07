@@ -313,7 +313,7 @@ class ProposalServiceTest {
             var deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(WAIT_SECONDS);
             while (service.pending().size() < count) {
                 assertThat(System.nanoTime()).isLessThan(deadline);
-                Thread.sleep(5);
+                Thread.sleep(1);
             }
             service.pending().forEach(proposal -> pool.execute(() -> service.answer(proposal.id(), new Denial("no"))));
             for (var future : futures) {

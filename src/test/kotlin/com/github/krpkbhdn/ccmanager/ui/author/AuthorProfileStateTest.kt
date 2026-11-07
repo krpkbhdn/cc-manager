@@ -14,10 +14,13 @@ import java.nio.file.Path
 import java.time.Instant
 import java.util.Optional
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.job
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -30,7 +33,6 @@ import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 
 private const val WAIT_MILLIS = 5_000L
-private const val SETTLE_MILLIS = 200L
 private const val PROJECT_ID = 7L
 
 class AuthorProfileStateTest {
@@ -48,14 +50,23 @@ class AuthorProfileStateTest {
         { error("no sign-in expected") }, { errors += it }, { _: NotificationKind, title: String, _: String -> toasts += title },
     )
 
+    private val startOfferGate = CountDownLatch(1)
+
     private val user = entry(AuthorComponent.USER_SETUP)
     private val teams = entry(AuthorComponent.TEAMS)
     private val projectSetup = entry(AuthorComponent.PROJECT_SETUP, projectId = PROJECT_ID)
 
     @AfterEach
     fun stop() {
+        startOfferGate.countDown()
         scope.cancel()
         assertThat(errors).isEmpty()
+    }
+
+    private fun awaitIdle() = await { scope.coroutineContext.job.children.none { it.isActive } }
+
+    private fun holdStartOfferUntilGateOpens() {
+        `when`(service.entries(null)).thenAnswer { startOfferGate.await(WAIT_MILLIS, TimeUnit.MILLISECONDS); listOf(user) }
     }
 
     private fun entry(component: AuthorComponent, status: AuthorStatus = AuthorStatus.NOT_INSTALLED, projectId: Long = 0, replaces: Boolean = false) =
@@ -79,7 +90,7 @@ class AuthorProfileStateTest {
         `when`(service.entries(null)).thenReturn(listOf(entry(AuthorComponent.USER_SETUP, AuthorStatus.INSTALLED)))
 
         state.offerAtStart()
-        Thread.sleep(SETTLE_MILLIS)
+        awaitIdle()
 
         assertThat(state.offer).isNull()
     }
@@ -93,7 +104,7 @@ class AuthorProfileStateTest {
         assertThat(state.offer!!.entries).containsExactly(projectSetup)
         state.closeOffer()
         state.offerForProject(PROJECT_ID)
-        Thread.sleep(SETTLE_MILLIS)
+        awaitIdle()
 
         assertThat(state.offer).isNull()
         verify(service).entries(PROJECT_ID)
@@ -107,7 +118,7 @@ class AuthorProfileStateTest {
         await { state.offer != null }
 
         state.offerForProject(PROJECT_ID)
-        Thread.sleep(SETTLE_MILLIS)
+        awaitIdle()
 
         assertThat(state.offer!!.entries).containsExactly(user)
         verify(service, never()).entries(PROJECT_ID)
@@ -132,11 +143,12 @@ class AuthorProfileStateTest {
 
     @Test
     fun projectOfferThatArrivesDuringTheStartOfferIsSkippedAndOfferedOnTheNextVisit() {
-        `when`(service.entries(null)).thenAnswer { Thread.sleep(SETTLE_MILLIS); listOf(user) }
+        holdStartOfferUntilGateOpens()
         `when`(service.entries(PROJECT_ID)).thenReturn(listOf(projectSetup))
         state.offerAtStart()
 
         state.offerForProject(PROJECT_ID)
+        startOfferGate.countDown()
         await { state.offer != null }
         assertThat(state.offer!!.entries).containsExactly(user)
         state.closeOffer()
@@ -174,7 +186,7 @@ class AuthorProfileStateTest {
 
         state.install(listOf(user))
         await { launched.isNotEmpty() }
-        Thread.sleep(SETTLE_MILLIS)
+        awaitIdle()
 
         verify(service, never()).markInstalled(anyList())
     }
@@ -231,7 +243,7 @@ class AuthorProfileStateTest {
         await { launched.isNotEmpty() }
         verify(service, timeout(WAIT_MILLIS)).markInstalled(listOf(user))
         state.offerForProject(PROJECT_ID)
-        Thread.sleep(SETTLE_MILLIS)
+        awaitIdle()
 
         assertThat(launched).hasSize(1)
         assertThat(launched.single().first).isEqualTo(PROJECT_ID)
@@ -243,13 +255,14 @@ class AuthorProfileStateTest {
         val awaiting = report(false, listOf(user))
         `when`(service.install(listOf(user), null)).thenReturn(awaiting)
         `when`(service.handoff(awaiting, project.path)).thenReturn(SessionHandoff("go", Path.of("profile")))
-        `when`(service.entries(null)).thenAnswer { Thread.sleep(SETTLE_MILLIS); listOf(user) }
+        holdStartOfferUntilGateOpens()
         state.install(listOf(user))
         await { toasts.isNotEmpty() }
         state.offerAtStart()
 
         state.offerForProject(PROJECT_ID)
         await { launched.isNotEmpty() }
+        startOfferGate.countDown()
     }
 
     @Test
@@ -317,10 +330,10 @@ class AuthorProfileStateTest {
         `when`(service.install(listOf(user), project.path)).thenReturn(report(true, listOf(user)))
         state.install(listOf(user))
         await { launched.isNotEmpty() }
-        Thread.sleep(SETTLE_MILLIS)
+        awaitIdle()
 
         state.offerForProject(PROJECT_ID)
-        Thread.sleep(SETTLE_MILLIS)
+        awaitIdle()
 
         assertThat(launched).hasSize(1)
         verify(service, never()).handoff(any(), any())

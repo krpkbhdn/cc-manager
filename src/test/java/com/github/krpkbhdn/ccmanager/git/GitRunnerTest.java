@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -141,19 +142,39 @@ class GitRunnerTest {
     }
 
     @Test
-    void interruptKillsTheRunningGitInsteadOfLeavingItBehind() throws Exception {
+    void interruptKillsTheRunningGitAndItsChildInsteadOfLeavingThemBehind() throws Exception {
         var sandbox = GitCliSandbox.create(root);
-        Thread.currentThread().interrupt();
+        var before = ProcessHandle.current().descendants().map(ProcessHandle::pid).collect(java.util.stream.Collectors.toSet());
+        var failure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+        var runner = new Thread(() -> {
+            try {
+                sandbox.runner.out(sandbox.repo, "-c", "alias.wait=!touch started.marker; exec sleep 60", "wait");
+            } catch (Throwable e) {
+                failure.set(e);
+            }
+        });
+        runner.start();
+        var started = sandbox.repo.resolve("started.marker");
+        var deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (!java.nio.file.Files.exists(started) && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        assertThat(started).exists();
+        var running = ProcessHandle.current().descendants().filter(handle -> !before.contains(handle.pid())).toList();
+        assertThat(running).isNotEmpty();
 
         try {
-            assertThatThrownBy(() -> sandbox.runner.out(sandbox.repo, "-c", "alias.wait=!sleep 2; touch ran.marker", "wait"))
-                    .isInstanceOfSatisfying(GitException.class, e -> assertThat(e.getMessage()).isEqualTo("Interrupted"));
-        } finally {
-            Thread.interrupted();
-        }
+            runner.interrupt();
+            runner.join(10_000);
 
-        Thread.sleep(3500);
-        assertThat(sandbox.repo.resolve("ran.marker")).doesNotExist();
+            assertThat(runner.isAlive()).isFalse();
+            assertThat(failure.get()).isInstanceOfSatisfying(GitException.class, e -> assertThat(e.getMessage()).isEqualTo("Interrupted"));
+            for (var process : running) {
+                process.onExit().get(10, TimeUnit.SECONDS);
+            }
+        } finally {
+            running.forEach(ProcessHandle::destroyForcibly);
+        }
     }
 
     @Test
@@ -163,7 +184,7 @@ class GitRunnerTest {
         sandbox.git("add", "-A");
         var hook = sandbox.repo.resolve(".git/hooks/pre-commit");
         java.nio.file.Files.createDirectories(hook.getParent());
-        java.nio.file.Files.writeString(hook, "#!/bin/sh\nsleep 2\ntouch ran.marker\n");
+        java.nio.file.Files.writeString(hook, "#!/bin/sh\nsleep 0.3\ntouch ran.marker\n");
         hook.toFile().setExecutable(true);
         Thread.currentThread().interrupt();
 

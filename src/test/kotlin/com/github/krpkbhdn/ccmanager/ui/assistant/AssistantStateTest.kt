@@ -18,9 +18,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.job
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+
+private const val POLLS_BEFORE_ASSERTING = 3
 
 private const val TRUST_SCREEN = " Do you trust the files in this folder?\n > 1. Yes, I trust this folder\n   2. No, exit"
 
@@ -36,17 +39,19 @@ class AssistantStateTest {
     private val errors = CopyOnWriteArrayList<String>()
     @Volatile private var screen = ""
     @Volatile private var live = LiveSessions()
+    private val liveReads = AtomicInteger()
+    private val screenReads = AtomicInteger()
     private val terminal = object : TerminalPort {
         override fun open(session: LaunchedSession) = Unit
         override fun send(ccmSessionId: String, text: String) { sent += text }
         override fun close(ccmSessionId: String) = Unit
-        override fun screenText(ccmSessionId: String) = screen
+        override fun screenText(ccmSessionId: String): String { screenReads.incrementAndGet(); return screen }
 
         @Composable
         override fun View(ccmSessionId: String, modifier: Modifier) = Unit
     }
     private val state = AssistantState(
-        scope, terminal, { live }, Path.of("assistant"), { launches.incrementAndGet() }, { shown.incrementAndGet() }, { id, text -> queued += id to text }, { confirms += it }, { title, _ -> errors += title },
+        scope, terminal, { liveReads.incrementAndGet(); live }, Path.of("assistant"), { launches.incrementAndGet() }, { shown.incrementAndGet() }, { id, text -> queued += id to text }, { confirms += it }, { title, _ -> errors += title },
         pollMillis = 10, watchMillis = 400, answerMillis = 400,
     )
 
@@ -126,7 +131,8 @@ class AssistantStateTest {
     fun `trust dialog appearing after the watch time is still offered`() {
         state.start()
         live = LiveSessions(listOf(session(null)))
-        Thread.sleep(250)
+        val reads = screenReads.get()
+        await { screenReads.get() >= reads + POLLS_BEFORE_ASSERTING }
         screen = TRUST_SCREEN
         await { confirms.isNotEmpty() }
 
@@ -139,7 +145,7 @@ class AssistantStateTest {
 
         state.start()
         live = LiveSessions(listOf(session("claude-1")))
-        Thread.sleep(100)
+        await { scope.coroutineContext.job.children.none { it.isActive } }
 
         assertThat(confirms).isEmpty()
     }
@@ -178,7 +184,8 @@ class AssistantStateTest {
         state.request("first")
         state.request("second")
         live = LiveSessions(listOf(session(null)))
-        Thread.sleep(100)
+        val reads = liveReads.get()
+        await { liveReads.get() >= reads + POLLS_BEFORE_ASSERTING }
         assertThat(queued).isEmpty()
         live = LiveSessions(listOf(session("claude-1")))
         await { queued.size == 2 }

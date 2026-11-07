@@ -71,6 +71,7 @@ public class TranscriptIndexer {
         }
     }
 
+    private final long batchBytes;
     private final Path projectsRoot;
     private final TranscriptIndexRepository repository;
     private final TranscriptLineParser parser;
@@ -86,6 +87,12 @@ public class TranscriptIndexer {
 
     public TranscriptIndexer(Path projectsRoot, JsonMapper mapper, TranscriptIndexRepository repository,
             SessionHistoryProperties properties) {
+        this(projectsRoot, mapper, repository, properties, BATCH_BYTES);
+    }
+
+    TranscriptIndexer(Path projectsRoot, JsonMapper mapper, TranscriptIndexRepository repository,
+            SessionHistoryProperties properties, long batchBytes) {
+        this.batchBytes = batchBytes;
         this.projectsRoot = projectsRoot;
         this.parser = new TranscriptLineParser(mapper);
         this.repository = repository;
@@ -273,9 +280,9 @@ public class TranscriptIndexer {
      * Up to a batch of whole lines from {@code from}; a longer first line widens the read until it fits, and an
      * unfinished last line is left out.
      */
-    private static List<Line> nextLines(Path file, long from, long size) {
+    private List<Line> nextLines(Path file, long from, long size) {
         try (var reader = new RandomAccessFile(file.toFile(), "r")) {
-            long length = Math.min(size - from, BATCH_BYTES);
+            long length = Math.min(size - from, batchBytes);
             while (true) {
                 var bytes = new byte[(int) length];
                 reader.seek(from);

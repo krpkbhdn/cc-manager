@@ -11,6 +11,8 @@ import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 
+private const val JOIN_MILLIS = 10_000L
+
 class TerminalHostTest {
     private fun process(): PtyProcess = mock(PtyProcess::class.java).also {
         `when`(it.inputStream).thenReturn(PipedInputStream())
@@ -39,8 +41,7 @@ class TerminalHostTest {
 
         TerminalHost.close("ccm-host-fail")
 
-        val deadline = System.currentTimeMillis() + 3_000
-        while (TerminalHost.closing() && System.currentTimeMillis() < deadline) Thread.sleep(20)
+        Thread.getAllStackTraces().keys.filter { it.name.startsWith("TerminalClose-") }.forEach { it.join(JOIN_MILLIS) }
         assertThat(TerminalHost.closing()).isFalse()
     }
 

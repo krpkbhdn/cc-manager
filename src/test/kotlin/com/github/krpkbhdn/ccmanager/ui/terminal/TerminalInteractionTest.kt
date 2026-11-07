@@ -84,7 +84,7 @@ class TerminalInteractionTest {
         val before = session.columns
         pressed(AwtKeyEvent.VK_EQUALS, '=', InputEvent.CTRL_DOWN_MASK)
         scene.frame()
-        Thread.sleep(300)
+        session.awaitModel { session.columns < before }
         scene.image()
         assertThat(session.cellDp).isEqualTo(DEFAULT_CELL_DP + 1)
         assertThat(session.columns).isLessThan(before)
@@ -153,10 +153,7 @@ class TerminalInteractionTest {
         dismissed.save(File(shotDirectory(), "context-menu-dismissed.png"))
         assertThat(dismissed.toBitmap().rgbAt(150, 148)).isEqualTo(0x0F1115)
         pointer(PointerEventType.Scroll, point(30, 5), scroll = Offset(0f, -3f))
-        repeat(40) {
-            scene.frame()
-            Thread.sleep(8)
-        }
+        repeat(40) { scene.frame() }
         scene.image().save(File(shotDirectory(), "scrollbar-scrolled.png"))
     }
 

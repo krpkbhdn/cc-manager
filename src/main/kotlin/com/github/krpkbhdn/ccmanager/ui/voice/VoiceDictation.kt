@@ -27,6 +27,7 @@ import com.github.krpkbhdn.ccmanager.voice.DictationSession
 import com.github.krpkbhdn.ccmanager.voice.stream.DictationListener
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -51,6 +52,7 @@ class VoiceDictation internal constructor(
     private val start: (DictationListener) -> DictationSession,
     private val fail: (String) -> Unit,
     private val singleLine: Boolean = false,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
 ) {
     var active by mutableStateOf(false)
         private set
@@ -156,7 +158,7 @@ class VoiceDictation internal constructor(
         active = true
         status = DictationStatus.Initializing
         level = 0f
-        scope.launch(Dispatchers.IO) { listen(current) }
+        scope.launch(io) { listen(current) }
     }
 
     private suspend fun listen(current: Run) {

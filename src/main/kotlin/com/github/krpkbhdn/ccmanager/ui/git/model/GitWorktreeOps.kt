@@ -83,7 +83,7 @@ fun GitState.removeWorktree(worktree: Worktree, force: Boolean, deleteBranch: Bo
             branchFailure?.let { fail(REMOVE_FAILED, refusal(it)) }
         }) {
             if (!force) requireClean(worktree.path())
-            removeWorktreeRetrying(main, worktree.path(), force)
+            removeWorktreeRetrying(main, worktree.path(), force, host.unlockPause)
             val failure = if (deleteBranch) deleteBranchAfterRemoval(main, worktree) else null
             host.forgetStoredWorktree(worktree.path())
             host.deleteRunConfigurations(worktree.path())

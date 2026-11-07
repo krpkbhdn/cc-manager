@@ -62,6 +62,8 @@ class GitHost(
     val deleteRunConfigurations: (directory: Path) -> Unit = {},
     val runConfigurationNames: (directory: Path) -> List<String> = { emptyList() },
     val forgetStoredWorktree: (directory: Path) -> Unit = {},
+    /** Waits [millis] before the retry of a removal Windows still holds; tests replace it so they do not sleep. */
+    val unlockPause: (millis: Long) -> Unit = Thread::sleep,
 )
 
 /** The running mutation: what it does and the latest progress line git printed. */
@@ -146,6 +148,7 @@ class GitState(
     /** Why publishing or merging has nothing to do, or null when it has something (or that is not known). */
     val noChangesHint: String? get() = task?.baseBranch()?.takeIf { baseChanges == false }?.let { "No changes against $it" }
 
+    private val jobLock = Any()
     private val refresher = Refresher(scope) { reload() }
     private val reloadLock = Mutex()
     private val pendingProgress = AtomicReference<String?>()
@@ -220,12 +223,11 @@ class GitState(
         onSuccess: (T) -> Unit = {},
         call: GitBackend.((String) -> Unit) -> T,
     ) {
-        job?.let { return host.notify(NotificationKind.INFO, GIT_BUSY, "Wait for ${it.label.lowercase()} to finish") }
-        job = GitJob(label)
-        jobCount++
+        val running = synchronized(jobLock) { job ?: run { job = GitJob(label); jobCount++; null } }
+        if (running != null) return host.notify(NotificationKind.INFO, GIT_BUSY, "Wait for ${running.label.lowercase()} to finish")
         scope.launch {
             val outcome = attempt(label, handle, { act(label, handle, refreshWorktrees, folderVanishes, onSuccess, call) }, call)
-            job = null
+            synchronized(jobLock) { job = null }
             if (outcome == null || !folderVanishes) reloadAfterAct(refreshWorktrees)
             outcome?.let {
                 error = null
@@ -243,7 +245,7 @@ class GitState(
     private class Success<T>(val value: T)
 
     private suspend fun <T> attempt(label: String, handle: (GitException) -> Boolean, again: () -> Unit, call: GitBackend.((String) -> Unit) -> T): Success<T>? =
-        jobCount.let { thisJob ->
+        synchronized(jobLock) { jobCount }.let { thisJob ->
             gitCall({ failure -> if (!handle(failure)) fail(label, failure, again) }) {
                 Success(git.call { line -> postProgress(thisJob, line) })
             }
@@ -254,7 +256,7 @@ class GitState(
         if (pendingProgress.getAndSet(line) != null) return
         scope.launch {
             val latest = pendingProgress.getAndSet(null)
-            if (thisJob == jobCount) job = job?.copy(progress = latest)
+            synchronized(jobLock) { if (thisJob == jobCount) job = job?.copy(progress = latest) }
         }
     }
 

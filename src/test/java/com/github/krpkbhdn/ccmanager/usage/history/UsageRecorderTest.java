@@ -139,7 +139,7 @@ class UsageRecorderTest {
         var done = new java.util.concurrent.atomic.AtomicBoolean();
         executor.execute(() -> {
             try {
-                Thread.sleep(200);
+                Thread.sleep(20);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }

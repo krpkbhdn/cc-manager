@@ -60,6 +60,9 @@ class FakeRepoData(
     val watchers: MutableList<Runnable> = java.util.Collections.synchronizedList(mutableListOf())
     var progressDelayMillis: Long = 0
 
+    /** While set, a streaming call stays running after its first progress line until the latch is released. */
+    @Volatile var progressGate: java.util.concurrent.CountDownLatch? = null
+
     fun status() = if (!repository) GitStatus.notARepository() else GitStatus(
         true, branch, rows.firstOrNull()?.commit()?.hash() ?: "0".repeat(HASH_LENGTH), branch == null, upstream, ahead, behind, operation, stashes.size, stashes.firstOrNull()?.hash(), changes.toList(),
     )
@@ -154,7 +157,7 @@ class FakeGit(val data: FakeRepoData) {
 
     private fun stream(call: String, progress: Consumer<String>?, vararg lines: String, effect: () -> Unit) {
         data.record(call)
-        lines.forEach { progress?.accept(it); if (data.progressDelayMillis > 0) Thread.sleep(data.progressDelayMillis) }
+        lines.forEach { progress?.accept(it); if (data.progressDelayMillis > 0) Thread.sleep(data.progressDelayMillis); data.progressGate?.await() }
         effect()
     }
 

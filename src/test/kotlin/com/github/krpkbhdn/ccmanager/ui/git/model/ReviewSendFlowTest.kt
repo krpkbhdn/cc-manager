@@ -88,15 +88,18 @@ class ReviewSendFlowTest {
         status = AgentStatus.WORKING
         addThree()
         sendOpen()
-        Thread.sleep(150)
+        drainDispatcher()
         assertThat(sent).isEmpty()
 
         status = AgentStatus.IDLE
         draft = true
         runBlocking(thread) { dispatch.evaluate() }
-        Thread.sleep(150)
+        drainDispatcher()
         assertThat(sent).isEmpty()
     }
+
+    /** The scope runs on one thread, so a task queued now ends after everything queued before it. */
+    private fun drainDispatcher() = executor.submit {}.get()
 
     @Test
     fun `comment text with a blank body is not a prompt`() {

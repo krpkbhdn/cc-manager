@@ -18,7 +18,7 @@ import org.junit.jupiter.api.io.TempDir;
 class GitWatcherTest {
 
     private static final long WAIT_MILLIS = 5000;
-    private static final long QUIET_MILLIS = 800;
+    private static final long QUIET_MILLIS = 300;
     private static final boolean WINDOWS = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
 
     private static final GitProperties PROPERTIES = watcherProperties();
@@ -49,7 +49,7 @@ class GitWatcherTest {
             if (condition.getAsBoolean()) {
                 return true;
             }
-            sleep(25);
+            sleep(3);
         }
         return condition.getAsBoolean();
     }

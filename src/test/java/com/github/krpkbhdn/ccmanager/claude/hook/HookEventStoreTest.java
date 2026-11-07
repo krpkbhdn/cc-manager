@@ -24,6 +24,8 @@ import tools.jackson.databind.json.JsonMapper;
 class HookEventStoreTest {
 
     private static final int RETENTION = 5;
+    /** Large enough that the per-session floor (retention / 100) is 2, not 0. */
+    private static final int ROOMY_RETENTION = 200;
     private static final int MAX_TEXT = 20;
     private static final int MAX_SCANNED = 1000;
 
@@ -160,9 +162,9 @@ class HookEventStoreTest {
     @Test
     void pruneKeepsAQuietSessionsRowsWhileABusySessionOverflowsRetention() {
         var roomy = new HookEventStore(jdbc, JsonMapper.builder().build(),
-                new HookProperties(200, 1024, MAX_TEXT, Duration.ofSeconds(1), 10, MAX_SCANNED));
+                new HookProperties(ROOMY_RETENTION, 1024, MAX_TEXT, Duration.ofSeconds(1), 10, MAX_SCANNED));
         roomy.save(justNow("quiet", of("UserPromptSubmit", "{\"prompt\":\"quiet\"}")));
-        for (var i = 0; i < 300; i++) {
+        for (var i = 0; i < ROOMY_RETENTION + 100; i++) {
             roomy.save(justNow("s1", of("Stop")));
         }
 
@@ -178,11 +180,11 @@ class HookEventStoreTest {
     @Test
     void pruneDropsAQuietSessionsRowsOnceTheyAreOlderThanAWeek() {
         var roomy = new HookEventStore(jdbc, JsonMapper.builder().build(),
-                new HookProperties(200, 1024, MAX_TEXT, Duration.ofSeconds(1), 10, MAX_SCANNED));
+                new HookProperties(ROOMY_RETENTION, 1024, MAX_TEXT, Duration.ofSeconds(1), 10, MAX_SCANNED));
         var prompt = of("UserPromptSubmit", "{\"prompt\":\"quiet\"}");
         roomy.save(new HookEvent("quiet", prompt.type(), prompt.rawName(), prompt.payload(), prompt.receivedAt()));
         jdbc.sql("UPDATE hook_event SET received_at = ?").param(java.time.Instant.now().minus(Duration.ofDays(30)).toString()).update();
-        for (var i = 0; i < 300; i++) {
+        for (var i = 0; i < ROOMY_RETENTION + 100; i++) {
             roomy.save(of("Stop"));
         }
 

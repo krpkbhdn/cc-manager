@@ -1,17 +1,17 @@
 package com.github.krpkbhdn.ccmanager.ui.teams
 
+import com.github.krpkbhdn.ccmanager.ui.await
 import com.github.krpkbhdn.ccmanager.ui.previewTeamService
 import com.github.krpkbhdn.ccmanager.ui.state.ConfirmRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.job
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-
-private const val WAIT_MILLIS = 5_000L
 
 class TeamsStateTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -147,7 +147,7 @@ class TeamsStateTest {
         state.newTeam()
         state.newTeam()
         await { state.selected?.name == "New team" }
-        Thread.sleep(300)
+        await { scope.coroutineContext.job.children.none { it.isActive } }
 
         assertThat(service.list().count { it.name == "New team" }).isEqualTo(1)
     }
@@ -171,11 +171,5 @@ class TeamsStateTest {
     @Test
     fun projectDefaultTogglesAndFallsBackToTheFirstTeam() {
         assertThat(state.defaultTeamOf(42)?.name).isEqualTo("Dev team")
-    }
-
-    private fun await(condition: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + WAIT_MILLIS
-        while (!condition() && System.currentTimeMillis() < deadline) Thread.sleep(20)
-        assertThat(condition()).describedAs("condition within ${WAIT_MILLIS}ms").isTrue()
     }
 }

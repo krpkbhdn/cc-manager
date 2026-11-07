@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+
 package com.github.krpkbhdn.ccmanager.ui.git.model
 
 import com.github.krpkbhdn.ccmanager.git.GitException
@@ -12,6 +14,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestCoroutineScheduler
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -54,6 +58,7 @@ class GitWorktreeRemoveTest {
         workStopping = { stuck || stopping.also { stopping = false } },
         deleteRunConfigurations = { data.record("deleteConfigs") },
         forgetStoredWorktree = { data.record("forgetStored") },
+        unlockPause = { },
     )
 
     private fun state(folder: Path) = GitState(1, folder, backend(), scope, host())
@@ -106,10 +111,11 @@ class GitWorktreeRemoveTest {
     @Test
     fun `the removal waits for processes that are still ending`() {
         stopping = true
-        val other = state(main)
+        val scheduler = TestCoroutineScheduler()
+        val other = GitState(1, main, backend(), CoroutineScope(SupervisorJob() + StandardTestDispatcher(scheduler)), host())
 
         other.removeWorktree(worktree, force = true)
-        await { "forget $linked" in data.calls }
+        await { scheduler.advanceTimeBy(250); scheduler.runCurrent(); "forget $linked" in data.calls }
 
         assertThat(stopping).isFalse()
         assertThat(data.calls.indexOf("stop")).isLessThan(data.calls.indexOf("remove from=$main force=true"))
@@ -118,11 +124,11 @@ class GitWorktreeRemoveTest {
     @Test
     fun `work that does not end keeps the worktree and reports it`() {
         stuck = true
-        val other = state(main)
+        val scheduler = TestCoroutineScheduler()
+        val other = GitState(1, main, backend(), CoroutineScope(SupervisorJob() + StandardTestDispatcher(scheduler)), host())
 
         other.removeWorktree(worktree, force = true)
-        Thread.sleep(5_500)
-        await { data.calls.any { it.startsWith("toast") } }
+        await { scheduler.advanceTimeBy(250); scheduler.runCurrent(); data.calls.any { it.startsWith("toast") } }
 
         assertThat(data.calls).doesNotContain("remove from=$main force=true")
     }

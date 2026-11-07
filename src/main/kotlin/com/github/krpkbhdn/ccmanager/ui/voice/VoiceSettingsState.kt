@@ -37,6 +37,7 @@ class VoiceSettingsState(
     private val settings: () -> UiSettings,
     private val update: ((UiSettings) -> UiSettings) -> Unit,
     private val reportError: (title: String, message: String) -> Unit,
+    private val closeTimeoutMillis: Long = EXIT_CLOSE_TIMEOUT_MILLIS,
 ) {
     val models: List<WhisperModel> = WhisperModel.entries
 
@@ -128,7 +129,7 @@ class VoiceSettingsState(
     /** Stops a running live test and dictation and waits a bounded time for the microphone; for the app exit, never the UI thread's normal flow. */
     fun close() {
         live.close()
-        dictationSession?.let { session -> thread(isDaemon = true) { session.close() }.join(EXIT_CLOSE_TIMEOUT_MILLIS) }
+        dictationSession?.let { session -> thread(isDaemon = true) { session.close() }.join(closeTimeoutMillis) }
     }
 
     private fun dictationRequest() = DictationRequest(model, resolved.spec, input, null)

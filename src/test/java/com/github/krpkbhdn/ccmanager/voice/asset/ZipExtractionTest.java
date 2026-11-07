@@ -43,7 +43,7 @@ class ZipExtractionTest {
 
     @Test
     void moveFailureIsReportedAfterRetries() {
-        assertThatThrownBy(() -> ZipExtraction.moveIntoPlace(dir.resolve("missing"), dir.resolve("target")))
+        assertThatThrownBy(() -> ZipExtraction.moveIntoPlace(dir.resolve("missing"), dir.resolve("target"), 1))
                 .isInstanceOf(IOException.class).hasMessageContaining("5 attempts");
     }
 

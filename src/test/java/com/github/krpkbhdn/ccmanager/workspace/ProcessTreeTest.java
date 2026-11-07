@@ -35,16 +35,17 @@ class ProcessTreeTest {
             if (found.isPresent()) {
                 return found.get();
             }
-            Thread.sleep(100);
+            Thread.sleep(5);
         }
         throw new IOException("The child process never appeared");
     }
 
     private static boolean awaitExit(ProcessHandle handle) throws InterruptedException {
-        var deadline = System.nanoTime() + WAIT.toNanos();
-        while (handle.isAlive() && System.nanoTime() < deadline) {
-            Thread.sleep(100);
+        try {
+            handle.onExit().get(WAIT.toSeconds(), java.util.concurrent.TimeUnit.SECONDS);
+            return true;
+        } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException e) {
+            return !handle.isAlive();
         }
-        return !handle.isAlive();
     }
 }

@@ -51,6 +51,11 @@ final class HistoryFixture {
                 new SessionHistoryProperties(Duration.ofMinutes(1), maxEntries));
     }
 
+    TranscriptIndexer indexer(int maxEntries, long batchBytes) {
+        return new TranscriptIndexer(projects, JsonMapper.shared(), repository,
+                new SessionHistoryProperties(Duration.ofMinutes(1), maxEntries), batchBytes);
+    }
+
     static String userLine(String uuid, String cwd, String at, String text) {
         return "{\"type\":\"user\",\"uuid\":\"" + uuid + "\",\"sessionId\":\"s1\",\"cwd\":" + JsonMapper.shared().writeValueAsString(cwd)
                 + ",\"timestamp\":\"" + at + "\",\"message\":{\"content\":" + JsonMapper.shared().writeValueAsString(text) + "}}\n";

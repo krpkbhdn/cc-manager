@@ -62,6 +62,10 @@ final class ZipExtraction {
 
     /** Retries because on Windows a virus scanner or indexer may briefly hold the freshly written files. */
     static void moveIntoPlace(Path from, Path to) throws IOException {
+        moveIntoPlace(from, to, MOVE_RETRY_PAUSE_MILLIS);
+    }
+
+    static void moveIntoPlace(Path from, Path to, long pauseMillis) throws IOException {
         for (var attempt = 1; ; attempt++) {
             try {
                 Files.move(from, to, StandardCopyOption.ATOMIC_MOVE);
@@ -71,14 +75,14 @@ final class ZipExtraction {
                     throw new IOException("Could not move " + from.getFileName() + " into place after " + MOVE_ATTEMPTS
                             + " attempts; another program may be using its files", e);
                 }
-                pause();
+                pause(pauseMillis);
             }
         }
     }
 
-    private static void pause() throws IOException {
+    private static void pause(long millis) throws IOException {
         try {
-            Thread.sleep(MOVE_RETRY_PAUSE_MILLIS);
+            Thread.sleep(millis);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("Interrupted", e);

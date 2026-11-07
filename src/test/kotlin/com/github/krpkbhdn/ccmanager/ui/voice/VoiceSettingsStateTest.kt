@@ -17,6 +17,7 @@ import java.io.IOException
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.DoubleConsumer
@@ -32,6 +33,9 @@ import org.mockito.ArgumentMatchers.eq
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
+
+/** Upper bound on how long a blocked call waits for an overlapping one; only reached when nothing overlaps. */
+private const val OVERLAP_PROBE_MILLIS = 100L
 
 class VoiceSettingsStateTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -177,12 +181,14 @@ class VoiceSettingsStateTest {
     fun `download all fetches the missing ones one after another`() {
         val running = AtomicInteger()
         val overlap = AtomicBoolean()
+        val secondCouldStart = CountDownLatch(1)
         val order = mutableListOf<VoiceAsset>()
         `when`(assets.install(any(), any())).thenAnswer { call ->
+            val asset = call.getArgument<VoiceAsset>(0)
+            val first = synchronized(order) { order += asset; order.size == 1 }
             if (running.incrementAndGet() > 1) overlap.set(true)
-            Thread.sleep(50)
-            synchronized(order) { order += call.getArgument<VoiceAsset>(0) }
-            installed += call.getArgument<VoiceAsset>(0)
+            if (first) secondCouldStart.await(OVERLAP_PROBE_MILLIS, TimeUnit.MILLISECONDS) else secondCouldStart.countDown()
+            installed += asset
             running.decrementAndGet()
             Path.of("x")
         }
@@ -338,25 +344,34 @@ class VoiceSettingsStateTest {
     @Test
     fun `stop while loading is not turned into an error by a later start failure`() {
         val release = CountDownLatch(1)
-        `when`(voice.start(any<DictationRequest>(), any<DictationListener>())).thenAnswer { release.await(); throw IllegalStateException("boom") }
+        val stateWhenSecondStarts = java.util.concurrent.atomic.AtomicReference<LiveTestState>()
+        val calls = AtomicInteger()
         val ready = ready()
+        `when`(voice.start(any<DictationRequest>(), any<DictationListener>())).thenAnswer {
+            if (calls.incrementAndGet() == 1) { release.await(); throw IllegalStateException("boom") }
+            stateWhenSecondStarts.set(ready.liveTest)
+            mock(DictationSession::class.java)
+        }
         ready.setEnabled(true)
         ready.startLiveTest()
-
+        await { calls.get() == 1 }
         ready.stopLiveTest()
-        release.countDown()
-        Thread.sleep(300)
-
         assertThat(ready.liveTest).isEqualTo(LiveTestState.Stopped)
+
+        ready.startLiveTest()
+        release.countDown()
+
+        await { ready.liveTest == LiveTestState.Listening }
+        assertThat(stateWhenSecondStarts.get()).isEqualTo(LiveTestState.Loading)
     }
 
     @Test
     fun `quick start stop start ends with one live session and closes the abandoned ones`() {
         val sessions = java.util.concurrent.CopyOnWriteArrayList<DictationSession>()
         val starts = AtomicInteger()
+        val firstStartRelease = CountDownLatch(1)
         `when`(voice.start(any<DictationRequest>(), any<DictationListener>())).thenAnswer {
-            starts.incrementAndGet()
-            Thread.sleep(100)
+            if (starts.incrementAndGet() == 1) firstStartRelease.await()
             mock(DictationSession::class.java).also { sessions += it }
         }
         val ready = ready()
@@ -366,8 +381,8 @@ class VoiceSettingsStateTest {
         await { starts.get() == 1 }
         ready.stopLiveTest()
         ready.startLiveTest()
+        firstStartRelease.countDown()
         await { ready.liveTest == LiveTestState.Listening }
-        Thread.sleep(300)
 
         assertThat(sessions).hasSize(2)
         verify(sessions[0]).close()
@@ -428,27 +443,33 @@ class VoiceSettingsStateTest {
 
     @Test
     fun `a second start waits until the first one has finished`() {
-        val release = CountDownLatch(1)
+        val secondCouldStart = CountDownLatch(1)
+        val firstEntered = CountDownLatch(1)
         val running = AtomicInteger()
+        val calls = AtomicInteger()
         val overlap = AtomicBoolean()
         `when`(voice.start(any<DictationRequest>(), any<DictationListener>())).thenAnswer {
+            val first = calls.incrementAndGet() == 1
             if (running.incrementAndGet() > 1) overlap.set(true)
-            release.await()
+            if (first) {
+                firstEntered.countDown()
+                secondCouldStart.await(OVERLAP_PROBE_MILLIS, TimeUnit.MILLISECONDS)
+            } else {
+                secondCouldStart.countDown()
+            }
             running.decrementAndGet()
             mock(DictationSession::class.java)
         }
         val ready = ready()
         ready.setEnabled(true)
         ready.startLiveTest()
-        await { running.get() == 1 }
+        assertThat(firstEntered.await(5, TimeUnit.SECONDS)).isTrue()
 
         ready.stopLiveTest()
         ready.startLiveTest()
-        Thread.sleep(200)
-        verify(voice, org.mockito.Mockito.times(1)).start(any<DictationRequest>(), any<DictationListener>())
-        release.countDown()
 
         await { ready.liveTest == LiveTestState.Listening }
+        verify(voice, org.mockito.Mockito.times(2)).start(any<DictationRequest>(), any<DictationListener>())
         assertThat(overlap.get()).isFalse()
     }
 
@@ -458,13 +479,15 @@ class VoiceSettingsStateTest {
         val hang = CountDownLatch(1)
         org.mockito.Mockito.doAnswer { hang.await(30, java.util.concurrent.TimeUnit.SECONDS) }.`when`(session).close()
         capture(session)
-        state.startDictation(mock(DictationListener::class.java))
+        val impatient = VoiceSettingsState(VoiceBackend(voice, devices, assets, microphone), scope, { settings }, { settings = it(settings) }, { _, message -> errors += message }, closeTimeoutMillis = 20)
+        impatient.startDictation(mock(DictationListener::class.java))
         val started = System.nanoTime()
 
-        state.close()
-        hang.countDown()
+        impatient.close()
 
+        assertThat(hang.count).isEqualTo(1)
         assertThat(java.time.Duration.ofNanos(System.nanoTime() - started)).isLessThan(java.time.Duration.ofSeconds(15))
+        hang.countDown()
     }
 
     @Test
@@ -611,18 +634,23 @@ class VoiceSettingsStateTest {
     }
 
     @Test
-    fun `the last of several quick choices wins`() {
-        await { state.resources.size == 3 }
+    fun `the last of several quick choices wins over a run that read older settings`() {
+        val entered = CountDownLatch(1)
+        val gate = CountDownLatch(1)
+        `when`(devices.select("best")).thenAnswer { entered.countDown(); gate.await(); gpu }
+        state.model
+        assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue()
 
         state.selectModel(WhisperModel.LARGE_V3_TURBO_Q5_0)
         state.selectDevice("cpu")
         state.selectModel(WhisperModel.SMALL_Q5_1)
         state.selectDevice("best")
         state.selectModel(WhisperModel.LARGE_V3_TURBO)
+        state.selectDevice("cpu")
+        assertThat(state.resources).isEmpty()
+        gate.countDown()
 
-        await { state.resources.map { it.asset } == listOf(RuntimeBuild.WINDOWS_X64_CUDA12.asset(), WhisperModel.LARGE_V3_TURBO.asset(), VoiceAsset.SILERO_VAD) }
-        Thread.sleep(200)
-        assertThat(state.resources[1].asset).isEqualTo(WhisperModel.LARGE_V3_TURBO.asset())
+        await { state.resources.map { it.asset } == listOf(RuntimeBuild.WINDOWS_X64_CPU.asset(), WhisperModel.LARGE_V3_TURBO.asset(), VoiceAsset.SILERO_VAD) }
     }
 
     @Test
@@ -702,7 +730,7 @@ class VoiceSettingsStateTest {
     fun `thirty rapid start stop cycles leave no open session and the test can start again`() {
         val sessions = java.util.concurrent.CopyOnWriteArrayList<DictationSession>()
         `when`(voice.start(any<DictationRequest>(), any<DictationListener>())).thenAnswer {
-            Thread.sleep(5)
+            Thread.yield()
             mock(DictationSession::class.java).also { sessions += it }
         }
         val ready = ready()
@@ -710,7 +738,6 @@ class VoiceSettingsStateTest {
 
         repeat(30) { ready.startLiveTest(); ready.stopLiveTest() }
         await { !ready.liveTestActive }
-        Thread.sleep(300)
         ready.startLiveTest()
         await { ready.liveTest == LiveTestState.Listening }
 

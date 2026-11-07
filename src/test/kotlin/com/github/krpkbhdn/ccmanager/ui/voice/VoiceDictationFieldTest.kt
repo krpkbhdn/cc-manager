@@ -3,7 +3,6 @@ package com.github.krpkbhdn.ccmanager.ui.voice
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.focus.FocusRequester
@@ -22,6 +21,8 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 private const val FRAME_NANOS = 16_000_000L
 private const val SPACE = 32
+private const val KEY_REPEAT_MILLIS = 40L
+private const val LOADING_KEY_REPEATS = 23
 
 /** Sends the key events a held Space produces on desktop (down, typed char, repeated) through the real [AppTextArea]. */
 @OptIn(InternalComposeUiApi::class)
@@ -29,13 +30,12 @@ class VoiceDictationFieldTest {
     private val listeners = CopyOnWriteArrayList<DictationListener>()
     private val state = TextFieldState()
     private var nanos = 0L
-    private val slowStart = java.util.concurrent.atomic.AtomicBoolean()
+    private val loop = DictationLoop()
 
     private val scene = ImageComposeScene(600, 300, Density(1f)) {
         AppTheme(dark = true) {
-            val scope = rememberCoroutineScope()
             val focus = remember { FocusRequester() }
-            val dictation = remember { VoiceDictation(state, scope, { true }, { listeners += it; while (slowStart.get()) Thread.sleep(10); mock(DictationSession::class.java) }, {}) }
+            val dictation = remember { VoiceDictation(state, loop.scope, { true }, { listeners += it; mock(DictationSession::class.java) }, {}, io = loop.io) }
             LaunchedEffect(Unit) { focus.requestFocus() }
             AppTextArea(state, focusRequester = focus, voice = dictation)
         }
@@ -54,13 +54,8 @@ class VoiceDictationFieldTest {
         repeat(6) { frame() }
         press()
         typed()
-        val end = System.nanoTime() + 700_000_000L
-        while (System.nanoTime() < end) {
-            Thread.sleep(40)
-            press()
-            typed()
-            frame()
-        }
+        repeat(18) { repeatKey() }
+        loop.pump()
 
         assertThat(listeners).isNotEmpty()
         release()
@@ -68,22 +63,14 @@ class VoiceDictationFieldTest {
     }
     @Test
     fun `every key is used up while the session is still loading`() {
-        slowStart.set(true)
         state.edit { append("ab"); selection = androidx.compose.ui.text.TextRange(2) }
         repeat(6) { frame() }
         press()
         typed()
-        val end = System.nanoTime() + 900_000_000L
-        while (System.nanoTime() < end) {
-            Thread.sleep(40)
-            press()
-            typed()
-            frame()
-        }
+        repeat(LOADING_KEY_REPEATS) { repeatKey() }
 
         assertThat(state.text.toString()).isEqualTo("ab")
         assertThat(state.selection.min).isEqualTo(2)
-        slowStart.set(false)
         release()
         scene.close()
     }
@@ -112,14 +99,12 @@ class VoiceDictationFieldTest {
         repeat(6) { frame() }
         press()
         typed()
-        val end = System.nanoTime() + 700_000_000L
-        while (System.nanoTime() < end && listeners.isEmpty()) {
-            Thread.sleep(40)
-            press()
-            typed()
-            frame()
+        var repeats = 0
+        while (listeners.isEmpty()) {
+            check(++repeats < 100) { "dictation never started" }
+            repeatKey()
+            loop.pump()
         }
-        Thread.sleep(300)
         repeat(6) { frame() }
     }
 
@@ -133,9 +118,16 @@ class VoiceDictationFieldTest {
         scene.close()
     }
 
+    private fun repeatKey() {
+        loop.advance(KEY_REPEAT_MILLIS)
+        press()
+        typed()
+        frame()
+    }
+
     private fun settle(millis: Long = 400) {
-        val end = System.nanoTime() + millis * 1_000_000
-        while (System.nanoTime() < end) { frame(); Thread.sleep(16) }
+        loop.pump()
+        repeat((millis * 1_000_000 / FRAME_NANOS).toInt()) { frame() }
     }
 
     private fun shot(name: String): List<Byte> {

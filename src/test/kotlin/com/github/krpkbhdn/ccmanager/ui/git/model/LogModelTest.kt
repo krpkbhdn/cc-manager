@@ -4,6 +4,7 @@ import com.github.krpkbhdn.ccmanager.git.GitException
 import com.github.krpkbhdn.ccmanager.git.GitLog
 import com.github.krpkbhdn.ccmanager.git.GitLogService
 import com.github.krpkbhdn.ccmanager.git.GraphState
+import com.github.krpkbhdn.ccmanager.ui.await
 import com.github.krpkbhdn.ccmanager.ui.git.FakeGit
 import com.github.krpkbhdn.ccmanager.ui.git.SampleRepos
 import java.nio.file.Path
@@ -41,14 +42,6 @@ class LogModelTest {
         }
         val backend = GitBackend(fake.status, fake.index, fake.branches, fake.sync, log, fake.stashes, fake.history, fake.conflicts, fake.worktrees, fake.watcher, fake.taskWorktrees)
         return LogModel({ Path.of("repo") }, backend, scope) { errors += it }
-    }
-
-    private fun await(condition: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + 5_000
-        while (!condition()) {
-            check(System.currentTimeMillis() < deadline) { "condition not met in time" }
-            Thread.sleep(10)
-        }
     }
 
     @Test

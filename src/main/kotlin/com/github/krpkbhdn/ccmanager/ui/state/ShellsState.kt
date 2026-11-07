@@ -9,6 +9,7 @@ import com.github.krpkbhdn.ccmanager.shell.ShellProfile
 import com.github.krpkbhdn.ccmanager.ui.git.model.sameFolder
 import com.github.krpkbhdn.ccmanager.workspace.ProcessTree
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -38,7 +39,7 @@ class ShellsState(
         scope.launch { guarded { available = io { backend.shellDetector.detect() } } }
     }
 
-    private val owners = mutableMapOf<String, Long>()
+    private val owners = ConcurrentHashMap<String, Long>()
 
     fun hasShellIn(directory: Path) = directories.values.any { sameFolder(it, directory) }
 

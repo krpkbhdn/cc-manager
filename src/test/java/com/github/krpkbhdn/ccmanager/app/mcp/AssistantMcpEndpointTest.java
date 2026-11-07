@@ -88,7 +88,7 @@ class AssistantMcpEndpointTest {
     private List<PermissionProposal> awaitPending(int count) throws Exception {
         var deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(WAIT_SECONDS);
         while (proposals.pending().size() < count && System.nanoTime() < deadline) {
-            TimeUnit.MILLISECONDS.sleep(10);
+            TimeUnit.MILLISECONDS.sleep(1);
         }
         assertThat(proposals.pending()).hasSize(count);
         return proposals.pending().stream().map(PermissionProposal.class::cast).toList();

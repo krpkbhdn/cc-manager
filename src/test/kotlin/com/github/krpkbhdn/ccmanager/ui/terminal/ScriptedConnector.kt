@@ -62,8 +62,8 @@ internal class ScriptedConnector : TtyConnector {
     }
 }
 
-private const val SETTLE_POLL_MILLIS = 40L
-private const val SETTLE_STABLE_POLLS = 4
+private const val SETTLE_POLL_MILLIS = 10L
+private const val SETTLE_STABLE_POLLS = 3
 private const val SETTLE_LIMIT_MILLIS = 5_000L
 
 /** Waits until the emulator has consumed all fed output and the screen has stopped changing. */

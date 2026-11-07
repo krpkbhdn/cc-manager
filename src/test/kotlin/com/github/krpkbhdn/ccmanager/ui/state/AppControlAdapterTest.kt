@@ -71,11 +71,11 @@ class AppControlAdapterTest {
     @Test
     fun `a call that started before the timeout is awaited and returns normally`() {
         val slow = AppControlAdapter(state, scope, Duration.ofMillis(100))
-        val started = java.util.concurrent.CountDownLatch(1)
+        val finished = java.util.concurrent.atomic.AtomicBoolean()
 
-        slow.onUi { started.countDown(); Thread.sleep(250) }
+        slow.onUi { Thread.sleep(150); finished.set(true) }
 
-        assertThat(started.count).isZero()
+        assertThat(finished).isTrue()
     }
 
     @Test

@@ -209,17 +209,17 @@ class TranscriptIndexerTest {
     @Test
     void fileLargerThanOneBatchIsIndexedCompletely() {
         var content = new StringBuilder();
-        var padding = "p".repeat(1000);
-        for (int i = 0; i < 9_000; i++) {
+        var padding = "p".repeat(100);
+        for (int i = 0; i < 300; i++) {
             content.append(userLine("u" + i, "/w/app", "2026-01-01T10:00:00Z", "entry " + i + " " + padding));
         }
         fixture.write(fixture.transcript("p", "big"), content.toString());
-        var indexer = fixture.indexer(100_000);
+        var indexer = fixture.indexer(100_000, 4_096L);
 
         indexer.scan();
         indexer.scan();
 
-        assertThat(fixture.search.indexedEntryCount()).isEqualTo(9_000);
+        assertThat(fixture.search.indexedEntryCount()).isEqualTo(300);
     }
 
     @Test

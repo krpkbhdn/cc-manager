@@ -1,7 +1,7 @@
 package com.github.krpkbhdn.ccmanager.claude.session;
 
 import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
-import java.time.Instant;
+import java.time.Clock;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -12,6 +12,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.UnaryOperator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -28,16 +29,23 @@ public class SessionRegistry {
     private final SessionProperties properties;
 
     private final TranscriptService transcripts;
+    private final Clock clock;
 
+    @Autowired
     public SessionRegistry(SessionProperties properties, TranscriptService transcripts) {
+        this(properties, transcripts, Clock.systemUTC());
+    }
+
+    public SessionRegistry(SessionProperties properties, TranscriptService transcripts, Clock clock) {
         this.properties = properties;
         this.transcripts = transcripts;
+        this.clock = clock;
     }
 
     /** Creates a live session in IDLE state and returns its ccm id. */
     public String register(long projectId) {
         var ccmSessionId = UUID.randomUUID().toString();
-        states.put(ccmSessionId, SessionState.initial(ccmSessionId, projectId, Instant.now()));
+        states.put(ccmSessionId, SessionState.initial(ccmSessionId, projectId, clock.instant()));
         notifyListeners();
         return ccmSessionId;
     }
@@ -109,7 +117,7 @@ public class SessionRegistry {
     }
 
     private SessionSnapshot snapshotOf(SessionState state) {
-        return state.toSnapshot(Instant.now(), properties.subagentStaleAfter());
+        return state.toSnapshot(clock.instant(), properties.subagentStaleAfter());
     }
 
     private void update(String ccmSessionId, UnaryOperator<SessionState> change) {

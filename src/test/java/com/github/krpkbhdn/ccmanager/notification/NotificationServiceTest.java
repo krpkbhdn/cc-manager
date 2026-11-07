@@ -74,8 +74,25 @@ class NotificationServiceTest {
     }
 
     @Test
-    void goingIdleOnlyBecauseABackgroundAgentWentStaleIsNotFinished() throws Exception {
-        var shortLived = new SessionRegistry(new SessionProperties(java.time.Duration.ofMillis(200), java.time.Duration.ofMinutes(10)), mock(TranscriptService.class));
+    void goingIdleOnlyBecauseABackgroundAgentWentStaleIsNotFinished() {
+        var skew = new java.util.concurrent.atomic.AtomicReference<>(java.time.Duration.ZERO);
+        var clock = new java.time.Clock() {
+            @Override
+            public java.time.ZoneId getZone() {
+                return java.time.ZoneOffset.UTC;
+            }
+
+            @Override
+            public java.time.Clock withZone(java.time.ZoneId zone) {
+                return this;
+            }
+
+            @Override
+            public java.time.Instant instant() {
+                return java.time.Instant.now().plus(skew.get());
+            }
+        };
+        var shortLived = new SessionRegistry(new SessionProperties(java.time.Duration.ofMinutes(5), java.time.Duration.ofMinutes(10)), mock(TranscriptService.class), clock);
         var stale = new NotificationService(shortLived);
         var seen = new ArrayList<AppNotification>();
         stale.subscribe(seen::add);
@@ -88,7 +105,7 @@ class NotificationServiceTest {
         }
         assertThat(shortLived.find(sid).orElseThrow().status().name()).isEqualTo("WORKING");
 
-        Thread.sleep(400);
+        skew.set(java.time.Duration.ofMinutes(6));
         var nudge = of("Notification", "{\"notification_type\":\"idle_prompt\"}");
         shortLived.on(new HookEvent(sid, nudge.type(), "Notification", nudge.payload(), java.time.Instant.now()));
 

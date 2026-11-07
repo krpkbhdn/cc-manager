@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.ui.extensions
 
+import com.github.krpkbhdn.ccmanager.ui.await
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
@@ -47,14 +48,9 @@ class MutationRunnerTest {
     @Test
     fun `a failing mutation is kept as the failure and frees the runner`() {
         runner.run("Removing", "rm", { error("boom") })
-        awaitIdle()
+        await { runner.job == null && runner.failure != null }
 
         assertThat(runner.failure?.title).isEqualTo("Removing")
         assertThat(runner.failure?.message).isEqualTo("boom")
-    }
-
-    private fun awaitIdle() {
-        val deadline = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(WAIT_SECONDS)
-        while ((runner.job != null || runner.failure == null) && System.currentTimeMillis() < deadline) Thread.sleep(10)
     }
 }
