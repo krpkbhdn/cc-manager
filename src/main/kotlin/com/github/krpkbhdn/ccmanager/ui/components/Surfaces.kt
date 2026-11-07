@@ -156,15 +156,30 @@ private fun atCursor(cursor: IntOffset, windowSize: IntSize, popupContentSize: I
 /** Dropdown menu anchored to its parent composable, or opened at the offset [at] inside it; Esc or an outside click dismisses it. */
 @Composable
 fun PopupMenu(entries: List<MenuEntry>, onDismiss: () -> Unit, alignEnd: Boolean = false, at: IntOffset? = null) {
-    AnchoredPopup(onDismiss, alignEnd, Modifier.widthIn(min = menuWidth).width(IntrinsicSize.Max), at) {
-        Column(Modifier.heightIn(max = menuMaxHeight).verticalScroll(rememberScrollState()).padding(Spacing.xs)) { entries.forEach { MenuItem(it, onDismiss) } }
-    }
+    AnchoredPopup(onDismiss, alignEnd, Modifier.widthIn(min = menuWidth).width(IntrinsicSize.Max), at) { MenuColumn(entries, onDismiss) }
 }
 
-/** Raised floating card anchored below its parent composable; [modifier] sizes it, Esc or an outside click dismisses it. */
+/** The scrolling list of [entries] inside a menu card; each selection first calls [onDismiss]. */
 @Composable
-fun AnchoredPopup(onDismiss: () -> Unit, alignEnd: Boolean = false, modifier: Modifier = Modifier, at: IntOffset? = null, content: @Composable () -> Unit) {
-    Popup(popupPositionProvider = remember(alignEnd, at) { BelowAnchor(alignEnd, at) }, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
+fun MenuColumn(entries: List<MenuEntry>, onDismiss: () -> Unit) {
+    Column(Modifier.heightIn(max = menuMaxHeight).verticalScroll(rememberScrollState()).padding(Spacing.xs)) { entries.forEach { MenuItem(it, onDismiss) } }
+}
+
+/**
+ * Raised floating card anchored below its parent composable (or where [positionProvider] says); [modifier] sizes it, an outside click dismisses it,
+ * and so does Esc unless the popup is not [focusable] (a hover popup must not take focus from what is under it).
+ */
+@Composable
+fun AnchoredPopup(
+    onDismiss: () -> Unit,
+    alignEnd: Boolean = false,
+    modifier: Modifier = Modifier,
+    at: IntOffset? = null,
+    focusable: Boolean = true,
+    positionProvider: PopupPositionProvider? = null,
+    content: @Composable () -> Unit,
+) {
+    Popup(popupPositionProvider = positionProvider ?: remember(alignEnd, at) { BelowAnchor(alignEnd, at) }, onDismissRequest = onDismiss, properties = PopupProperties(focusable = focusable)) {
         val shape = RoundedCornerShape(Radius.md)
         Box(
             Modifier.popIn(TransformOrigin(if (alignEnd && at == null) 1f else 0f, 0f))

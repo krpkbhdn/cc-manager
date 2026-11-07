@@ -52,7 +52,6 @@ import com.github.krpkbhdn.ccmanager.ui.components.ToastHost
 import com.github.krpkbhdn.ccmanager.ui.components.trackInputModality
 import com.github.krpkbhdn.ccmanager.ui.git.dialog.GitDialogHost
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
-import com.github.krpkbhdn.ccmanager.ui.history.SessionSearchScreen
 import com.github.krpkbhdn.ccmanager.ui.palette.CommandPalette
 import com.github.krpkbhdn.ccmanager.ui.palette.paletteItems
 import com.github.krpkbhdn.ccmanager.ui.picker.FolderPickerDialog
@@ -195,8 +194,7 @@ private fun RouteContent(state: AppState) {
     if (route == Route.Plugins) return PluginsScreen(state.extensions.plugins)
     if (route == Route.Mcp) return McpScreen(state.extensions.mcp)
     if (route == Route.Skills) return SkillsScreen(state.extensions.skills)
-    if (route == Route.Sessions) return SessionsScreen(state)
-    if (route == Route.SessionSearch) return SessionSearchScreen(state.sessionSearch, state.projects.projects, { project, hit ->
+    if (route == Route.Sessions) return SessionsScreen(state, { project, hit ->
         runCatching { Path.of(hit.cwd) }.onSuccess { state.sessions.resume(project.id, hit.claudeSessionId, it) }
             .onFailure { state.notifications.reportError("Could not resume the session", "The recorded folder is not a valid path.") }
     })

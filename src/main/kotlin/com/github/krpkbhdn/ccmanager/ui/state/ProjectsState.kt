@@ -1,7 +1,6 @@
 package com.github.krpkbhdn.ccmanager.ui.state
 
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
@@ -44,13 +43,6 @@ class ProjectsState(
     var pickerOpen by mutableStateOf(false)
     var renaming by mutableStateOf<RenameRequest?>(null)
 
-    /** Groups folded in the sidebar. */
-    val foldedGroups = mutableStateListOf<Long>()
-
-    fun toggleFolded(groupId: Long) {
-        if (!foldedGroups.remove(groupId)) foldedGroups.add(groupId)
-    }
-
     fun membersOf(groupId: Long): List<Project> = all.filter { it.groupId == groupId }
 
     fun nameOf(id: Long): String =
@@ -61,7 +53,6 @@ class ProjectsState(
     suspend fun load() {
         val loaded = io { backend.projects.list() }
         all = loaded
-        foldedGroups.retainAll(groups.map { it.id }.toSet())
         onLoaded(loaded.map { it.id }.toSet())
     }
 

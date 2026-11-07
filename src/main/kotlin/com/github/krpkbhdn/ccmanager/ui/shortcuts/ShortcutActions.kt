@@ -4,9 +4,11 @@ import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
 import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
 import com.github.krpkbhdn.ccmanager.ui.git.model.push
+import com.github.krpkbhdn.ccmanager.ui.sessions.SessionsTab
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
 import com.github.krpkbhdn.ccmanager.ui.state.Route
+import com.github.krpkbhdn.ccmanager.ui.state.sidebarProjectOrder
 
 /** Runs [AppShortcut]s against the app state; returns false when a shortcut does not apply right now so the key stays untouched. */
 class ShortcutActions(private val state: AppState, private val systemDark: () -> Boolean) {
@@ -24,8 +26,8 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
             AppShortcut.TOGGLE_QUICK_ACTIONS -> handled(state.prefs::toggleQuickBar)
             AppShortcut.TOGGLE_THEME -> handled { state.prefs.toggleTheme(systemDark()) }
             AppShortcut.OVERVIEW -> handled { state.navigate(Route.Overview) }
-            AppShortcut.ALL_SESSIONS -> handled { state.navigate(Route.Sessions) }
-            AppShortcut.SEARCH_SESSIONS -> handled { state.navigate(Route.SessionSearch) }
+            AppShortcut.ALL_SESSIONS -> handled { state.openSessions(SessionsTab.ACTIVE) }
+            AppShortcut.SEARCH_SESSIONS -> handled { state.openSessions(SessionsTab.HISTORY) }
             AppShortcut.ASSISTANT -> handled { state.navigate(Route.Assistant) }
             AppShortcut.QUICK_REQUEST -> handled { state.quickRequestOpen = true }
             AppShortcut.NEXT_WAITING -> state.answers.answerNextWaiting()
@@ -75,10 +77,7 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
 
     internal fun sidebarOrder(): List<Project> {
         val projects = state.projects
-        val railShowsAll = state.settings.sidebarCollapsed
-        return projects.groups.flatMap { group ->
-            if (railShowsAll || group.id !in projects.foldedGroups) listOf(group) + projects.membersOf(group.id) else listOf(group)
-        } + projects.ungrouped
+        return sidebarProjectOrder(projects.groups, projects::membersOf, projects.ungrouped, state.settings.foldedGroups)
     }
 
     private fun closeOverlay(): Boolean {

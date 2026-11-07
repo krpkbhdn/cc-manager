@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.ui.state
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -21,6 +22,7 @@ import com.github.krpkbhdn.ccmanager.ui.git.model.GitHost
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitState
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
 import com.github.krpkbhdn.ccmanager.ui.history.SessionSearchState
+import com.github.krpkbhdn.ccmanager.ui.sessions.SessionsTab
 import com.github.krpkbhdn.ccmanager.ui.prompts.PromptsState
 import com.github.krpkbhdn.ccmanager.claude.proposal.Proposal
 import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalState
@@ -67,6 +69,10 @@ class AppState(
         private set
     var route by mutableStateOf<Route>(Route.Overview)
         private set
+    var sessionsTab by mutableStateOf(SessionsTab.ACTIVE)
+        private set
+    var searchFocusRequests by mutableIntStateOf(0)
+        private set
     var windowActive by mutableStateOf(true)
     var confirm by mutableStateOf<ConfirmRequest?>(null)
     var notificationsOpen by mutableStateOf(false)
@@ -90,7 +96,7 @@ class AppState(
         requestConfirm = { confirm = it },
         showProject = { navigate(Route.Project(it)) },
         onRemoved = { if (route == Route.Project(it)) route = Route.Overview },
-        onLoaded = { forgetRemovedProjects(it); gits.loadNew(it) },
+        onLoaded = { forgetRemovedProjects(it); gits.loadNew(it); prefs.retainFoldedGroups(it) },
         reportError = { title, message -> notifications.reportError(title, message) },
         reportActionError = { notifications.reportError(it) },
     )
@@ -249,6 +255,16 @@ class AppState(
         notificationsOpen = false
         usageOpen = false
         modelPickerOpen = false
+    }
+
+    fun openSessions(tab: SessionsTab) {
+        sessionsTab = tab
+        if (tab == SessionsTab.HISTORY) searchFocusRequests++
+        navigate(Route.Sessions)
+    }
+
+    fun selectSessionsTab(tab: SessionsTab) {
+        sessionsTab = tab
     }
 
     fun openSession(ccmSessionId: String) {

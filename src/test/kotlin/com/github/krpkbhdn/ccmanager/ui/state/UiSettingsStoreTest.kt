@@ -23,6 +23,19 @@ class UiSettingsStoreTest {
     }
 
     @Test
+    fun `folded sidebar sections and groups round trip and garbage ids are dropped`(@TempDir dir: Path) {
+        val file = dir.resolve("ui.properties")
+        val store = UiSettingsStore(file)
+        store.save(UiSettings(foldedSections = setOf("LIBRARY", "PROJECTS"), foldedGroups = setOf(3L, 7L)))
+        assertThat(store.load()).extracting({ it.foldedSections }, { it.foldedGroups }).containsExactly(setOf("LIBRARY", "PROJECTS"), setOf(3L, 7L))
+        Files.writeString(file, "sidebar.foldedGroups=4,x,,9\n")
+        assertThat(store.load().foldedGroups).containsExactlyInAnyOrder(4L, 9L)
+        assertThat(store.load().foldedSections).isEmpty()
+        Files.writeString(file, "sidebar.foldedSections=LIBRARY,BOGUS\n")
+        assertThat(store.load().foldedSections).containsExactly("LIBRARY")
+    }
+
+    @Test
     fun `assistant startup mode round trips and garbage falls back to ask`(@TempDir dir: Path) {
         val file = dir.resolve("ui.properties")
         val store = UiSettingsStore(file)
