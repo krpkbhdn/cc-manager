@@ -37,6 +37,8 @@ import androidx.compose.ui.window.rememberDialogState
 import com.github.krpkbhdn.ccmanager.ui.components.HorizontalRule
 import com.github.krpkbhdn.ccmanager.ui.components.VerticalRule
 import com.github.krpkbhdn.ccmanager.ui.drawAppIcon
+import com.github.krpkbhdn.ccmanager.ui.theme.LocalScale
+import com.github.krpkbhdn.ccmanager.ui.theme.ScaledDensity
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -61,6 +63,7 @@ fun FolderPickerDialog(initial: Path?, dataDir: Path, onDismiss: () -> Unit, onP
 @OptIn(FlowPreview::class)
 @Composable
 internal fun FolderPicker(initial: Path?, recents: RecentFolders, windowStore: PickerWindowStore, onDismiss: () -> Unit, onPicked: (Path) -> Unit) {
+    val scale = LocalScale.current
     val scope = rememberCoroutineScope()
     val state = remember { FolderPickerState(initial, scope, recents) }
     val listFocus = remember { FocusRequester() }
@@ -79,13 +82,16 @@ internal fun FolderPicker(initial: Path?, recents: RecentFolders, windowStore: P
     )
     LaunchedEffect(dialogState) {
         snapshotFlow { dialogState.size to dialogState.position }.debounce(BOUNDS_SAVE_DELAY_MILLIS).collect { (size, position) ->
-            if (position.isSpecified) windowStore.save(PickerBounds(position.x.value.toInt(), position.y.value.toInt(), size.width.value.toInt(), size.height.value.toInt()))
+            if (position.isSpecified) withContext(Dispatchers.IO) {
+                windowStore.save(PickerBounds(position.x.value.toInt(), position.y.value.toInt(), size.width.value.toInt(), size.height.value.toInt()))
+            }
         }
     }
     val rows = remember(state.listing, state.showHidden, state.filter.text) {
         (state.listing as? Listing.Loaded)?.let { FolderRules.visible(it.folders, state.showHidden, state.filter.text.toString()) }.orEmpty()
     }
-    val check by produceState(PathCheck.Valid, state.target, state.listing) {
+    val check by produceState(PathCheck.Checking, state.target, state.listing) {
+        value = PathCheck.Checking
         value = withContext(Dispatchers.IO) { FolderRules.check(state.target) }
     }
     val listBlocked = state.target == state.current && state.listing.let { it == Listing.Denied || it == Listing.Missing }
@@ -97,15 +103,17 @@ internal fun FolderPicker(initial: Path?, recents: RecentFolders, windowStore: P
         onPicked(chosen)
     }
     DialogWindow(onCloseRequest = onDismiss, state = dialogState, title = DIALOG_TITLE, icon = icon, resizable = true) {
-        window.minimumSize = Dimension(PickerWindowStore.MIN_WIDTH, PickerWindowStore.MIN_HEIGHT)
+        window.minimumSize = Dimension(scale.scaled(PickerWindowStore.MIN_WIDTH), scale.scaled(PickerWindowStore.MIN_HEIGHT))
         LaunchedEffect(Unit) { withFrameNanos { }; listFocus.requestFocus() }
-        Column(Modifier.fillMaxSize().background(colors.surfaceRaised).onKeyEvent { dialogKey(it, state, ::confirm, onDismiss) }) {
-            PickerHeader()
-            HorizontalRule()
-            PickerToolbar(state, listFocus::requestFocus)
-            HorizontalRule()
-            PickerBody(state, rows, listState, listFocus, ::confirm, Modifier.weight(1f))
-            PickerFooter(state, if (listBlocked) PathCheck.Unreadable else check, onDismiss, ::confirm)
+        ScaledDensity {
+            Column(Modifier.fillMaxSize().background(colors.surfaceRaised).onKeyEvent { dialogKey(it, state, ::confirm, onDismiss) }) {
+                PickerHeader()
+                HorizontalRule()
+                PickerToolbar(state, listFocus::requestFocus)
+                HorizontalRule()
+                PickerBody(state, rows, listState, listFocus, ::confirm, Modifier.weight(1f))
+                PickerFooter(state, if (listBlocked) (if (state.listing == Listing.Missing) PathCheck.NotFound else PathCheck.Unreadable) else check, onDismiss, ::confirm)
+            }
         }
     }
 }

@@ -50,6 +50,12 @@ public class GitLogService {
         return new StatefulPage(new GitLog.Page(List.copyOf(rows), hasMore), laidOut.stateAfterMarked());
     }
 
+    /** One line per commit of {@code since..HEAD}, newest first, at most {@code limit}; what a push of HEAD would add. */
+    public List<String> outgoing(Path repo, String since, int limit) {
+        GitRevisions.requireNotOption(since);
+        return git.out(repo, "log", "--oneline", "--no-decorate", "--max-count=" + limit, since + "..HEAD").lines().filter(line -> !line.isBlank()).toList();
+    }
+
     public GitLog.Details details(Path repo, String hash) {
         GitRevisions.requireNotOption(hash);
         var commit = GitLogParser.parse(git.out(repo, "log", "-1", "--decorate=full", GitLogParser.FORMAT, hash), Integer.MAX_VALUE)

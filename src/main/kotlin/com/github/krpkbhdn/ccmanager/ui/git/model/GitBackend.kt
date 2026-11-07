@@ -9,7 +9,12 @@ import com.github.krpkbhdn.ccmanager.git.GitStashService
 import com.github.krpkbhdn.ccmanager.git.GitStatusService
 import com.github.krpkbhdn.ccmanager.git.GitSyncService
 import com.github.krpkbhdn.ccmanager.git.GitWatcher
+import com.github.krpkbhdn.ccmanager.git.TaskWorktreeService
 import com.github.krpkbhdn.ccmanager.git.GitWorktreeService
+import com.github.krpkbhdn.ccmanager.github.GhCli
+import com.github.krpkbhdn.ccmanager.github.GhProperties
+import com.github.krpkbhdn.ccmanager.git.ChangeDescriptionService
+import com.github.krpkbhdn.ccmanager.github.PullRequestService
 import org.springframework.context.ConfigurableApplicationContext
 
 /** Every git service the Git tab talks to; all calls block, so callers stay off the UI thread. */
@@ -24,6 +29,8 @@ class GitBackend(
     val conflicts: GitConflictService,
     val worktrees: GitWorktreeService,
     val watcher: GitWatcher,
+    val taskWorktrees: TaskWorktreeService,
+    val github: GitHubPort = GitHubPort.ABSENT,
 ) {
     companion object {
         fun from(context: ConfigurableApplicationContext) = GitBackend(
@@ -37,6 +44,8 @@ class GitBackend(
             conflicts = context.getBean(GitConflictService::class.java),
             worktrees = context.getBean(GitWorktreeService::class.java),
             watcher = context.getBean(GitWatcher::class.java),
+            taskWorktrees = context.getBean(TaskWorktreeService::class.java),
+            github = GitHubPort.of(context.getBean(GhCli::class.java), context.getBean(PullRequestService::class.java), context.getBean(ChangeDescriptionService::class.java), context.getBean(GhProperties::class.java)),
         )
     }
 }

@@ -9,7 +9,7 @@ import java.time.format.DateTimeFormatter
 private const val DAYS_PER_WEEK = 7L
 private const val DAYS_PER_MONTH = 30L
 private const val DAYS_PER_YEAR = 365L
-private const val WEEKS_ONLY_UNTIL_DAYS = 28L
+private const val WEEKS_ONLY_UNTIL_DAYS = DAYS_PER_MONTH
 private val absoluteFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
 /** "3m ago", "5d ago", "3w ago", "7mo ago", "2y ago": compact age of a commit. */

@@ -99,6 +99,31 @@ class ExtensionInstallerTest {
     }
 
     @Test
+    void invalidPluginIdIsReportedAsFailureAndTheRestIsInstalled() {
+        when(plugins.install("bad@m ", ExtensionScope.USER, null)).thenThrow(new IllegalArgumentException("Invalid plugin id"));
+        when(plugins.install("good@m", ExtensionScope.USER, null)).thenReturn(new PluginInstallResult(true, "ok", null));
+
+        var outcome = installer.install(pluginSet("bad@m ", "good@m"), ExtensionScope.USER, null);
+
+        assertThat(outcome.failed()).containsExactly("plugin bad@m : Invalid plugin id");
+        assertThat(outcome.installed()).containsExactly("plugin good@m");
+    }
+
+    @Test
+    void identicalExistingSkillIsReportedPlainlyPresent() throws IOException {
+        var existing = Files.createDirectories(temp.resolve("skills/jscpd"));
+        try (var in = new AuthorProfileLoader().open("user/skills/jscpd/SKILL.md")) {
+            Files.write(existing.resolve("SKILL.md"), in.readAllBytes());
+        }
+        when(skills.skillDirectory(ExtensionScope.USER, null, "jscpd")).thenReturn(existing);
+
+        var outcome = installer.install(new ExtensionSet(null, null, List.of(new ProfileSkill("jscpd", List.of("SKILL.md"))), null),
+                ExtensionScope.USER, null);
+
+        assertThat(outcome.alreadyPresent()).containsExactly("skill jscpd");
+    }
+
+    @Test
     void copiesMissingSkillAndNeverOverwritesAnExistingOne() throws IOException {
         var fresh = temp.resolve("skills/jscpd");
         var existing = Files.createDirectories(temp.resolve("skills/dry-refactoring"));
@@ -113,7 +138,7 @@ class ExtensionInstallerTest {
         assertThat(fresh.resolve("SKILL.md")).isRegularFile();
         assertThat(existing.resolve("SKILL.md")).hasContent("mine");
         assertThat(outcome.installed()).containsExactly("skill jscpd");
-        assertThat(outcome.alreadyPresent()).containsExactly("skill dry-refactoring");
+        assertThat(outcome.alreadyPresent()).containsExactly("skill dry-refactoring (differs from the bundled version, left unchanged)");
     }
 
     @Test

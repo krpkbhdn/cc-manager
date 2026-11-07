@@ -59,7 +59,7 @@ private fun starterBody(name: String) = "# $name\n\nDescribe what this skill doe
 private fun fileOf(root: Path, name: String) = root.resolve(name).resolve("SKILL.md")
 
 /** Skills for the preview: user and project skills plus read-only skills of plugins, with real-looking SKILL.md bodies. */
-class FakeSkills : SkillService(mock(HostEnvironment::class.java), mock(PluginService::class.java)) {
+class FakeSkills : SkillService(mock(HostEnvironment::class.java), mock(PluginService::class.java), com.github.krpkbhdn.ccmanager.extension.ExtensionProperties(30, 180, 90, 300, 16384)) {
     private val projectRoot = Path.of("C:/Users/dev/Work/cc-manager/.claude/skills")
     private val bodies = mutableMapOf<Path, String>()
     private var all = mutableListOf(

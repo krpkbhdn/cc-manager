@@ -37,7 +37,13 @@ public class ClaudePluginWriter {
                     throw new IllegalStateException("Missing bundled resource " + RESOURCE_ROOT + file);
                 }
                 Files.createDirectories(target.getParent());
-                Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+                var temp = Files.createTempFile(target.getParent(), target.getFileName().toString(), ".tmp");
+                try {
+                    Files.copy(in, temp, StandardCopyOption.REPLACE_EXISTING);
+                    Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                } finally {
+                    Files.deleteIfExists(temp);
+                }
             } catch (IOException e) {
                 throw new UncheckedIOException("Cannot write plugin file " + target, e);
             }

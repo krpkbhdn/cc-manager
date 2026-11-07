@@ -1,22 +1,27 @@
 package com.github.krpkbhdn.ccmanager.extension.skill;
 
 import com.github.krpkbhdn.ccmanager.extension.ExtensionException;
+import com.github.krpkbhdn.ccmanager.extension.ExtensionProperties;
 import com.github.krpkbhdn.ccmanager.extension.ExtensionScope;
 import com.github.krpkbhdn.ccmanager.extension.plugin.InstalledPlugin;
 import com.github.krpkbhdn.ccmanager.extension.plugin.PluginService;
 import com.github.krpkbhdn.ccmanager.workspace.HostEnvironment;
 import com.github.krpkbhdn.ccmanager.workspace.TreeDeleter;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
@@ -29,15 +34,18 @@ public class SkillService {
     static final String SKILL_FILE = "SKILL.md";
     private static final String CLAUDE_DIRECTORY = ".claude";
     private static final String SKILLS_DIRECTORY = "skills";
+    private static final Logger log = LoggerFactory.getLogger(SkillService.class);
     private static final int MAX_NAME_LENGTH = 64;
     private static final Pattern KEBAB_CASE = Pattern.compile("[a-z0-9]+(-[a-z0-9]+)*");
 
     private final HostEnvironment host;
     private final PluginService plugins;
+    private final ExtensionProperties properties;
 
-    public SkillService(HostEnvironment host, PluginService plugins) {
+    public SkillService(HostEnvironment host, PluginService plugins, ExtensionProperties properties) {
         this.host = host;
         this.plugins = plugins;
+        this.properties = properties;
     }
 
     /** User skills, plus the project's own and those of plugins active for it when a project directory is given. */
@@ -52,6 +60,9 @@ public class SkillService {
     }
 
     public String read(Skill skill) {
+        if (!Files.isRegularFile(skill.file(), LinkOption.NOFOLLOW_LINKS)) {
+            throw new ExtensionException("Cannot read " + skill.file() + ": a linked or missing SKILL.md is refused");
+        }
         try {
             return Files.readString(skill.file());
         } catch (IOException e) {
@@ -68,7 +79,13 @@ public class SkillService {
             if (!isDirectChildOf(skill.directory().getParent(), skill.directory())) {
                 throw new ExtensionException("Refusing to write " + skill.file() + ": its folder is a link to somewhere else");
             }
-            Files.writeString(skill.file(), content);
+            var temporary = Files.createTempFile(skill.directory(), SKILL_FILE, ".tmp");
+            try {
+                Files.writeString(temporary, content);
+                Files.move(temporary, skill.file(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } finally {
+                Files.deleteIfExists(temporary);
+            }
         } catch (IOException e) {
             throw new ExtensionException("Cannot write " + skill.file() + ": " + e.getMessage());
         }
@@ -131,12 +148,13 @@ public class SkillService {
     private List<InstalledPlugin> activePlugins(Path projectDirectory) {
         return plugins.installed().stream()
                 .filter(InstalledPlugin::enabled)
+                .filter(plugin -> !plugin.installPath().toString().isEmpty())
                 .filter(plugin -> plugin.scope() == ExtensionScope.USER
                         || projectDirectory != null && projectDirectory.equals(plugin.projectPath()))
                 .toList();
     }
 
-    private static List<Skill> readDirectory(Path root, ExtensionScope scope, String pluginId) {
+    private List<Skill> readDirectory(Path root, ExtensionScope scope, String pluginId) {
         if (!Files.isDirectory(root)) {
             return List.of();
         }
@@ -151,21 +169,28 @@ public class SkillService {
         }
     }
 
-    private static Optional<Skill> readSkill(Path root, Path directory, ExtensionScope scope, String pluginId) {
+    private Optional<Skill> readSkill(Path root, Path directory, ExtensionScope scope, String pluginId) {
         var file = directory.resolve(SKILL_FILE);
-        if (!Files.isRegularFile(file)) {
+        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
             return Optional.empty();
         }
         try {
             if (!isDirectChildOf(root, directory)) {
                 return Optional.empty();
             }
-            var fields = SkillFrontmatter.parse(Files.readString(file));
+            var fields = SkillFrontmatter.parse(readPrefix(file));
             var name = fields.getOrDefault("name", "");
             return Optional.of(new Skill(name.isEmpty() ? directory.getFileName().toString() : name,
                     fields.getOrDefault("description", ""), scope, pluginId, file));
         } catch (IOException e) {
+            log.warn("Skipping unreadable skill file {}: {}", file, e.getClass().getSimpleName());
             return Optional.empty();
+        }
+    }
+
+    private String readPrefix(Path file) throws IOException {
+        try (var input = Files.newInputStream(file)) {
+            return new String(input.readNBytes(properties.skillFrontmatterLimitBytes()), StandardCharsets.UTF_8);
         }
     }
 

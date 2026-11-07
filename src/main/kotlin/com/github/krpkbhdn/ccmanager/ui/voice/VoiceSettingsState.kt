@@ -11,6 +11,7 @@ import com.github.krpkbhdn.ccmanager.voice.asset.RuntimeBuild
 import com.github.krpkbhdn.ccmanager.voice.asset.VoiceAsset
 import com.github.krpkbhdn.ccmanager.voice.asset.WhisperModel
 import com.github.krpkbhdn.ccmanager.voice.device.ComputeDevice
+import kotlin.concurrent.thread
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -24,6 +25,7 @@ private const val INPUTS_FAILED = "Could not list microphones: "
 private const val RESTART_HINT = "Restart the app to switch between CPU and GPU"
 private const val DOWNLOAD_FIRST_HINT = "Download all components first"
 private const val ENABLE_FIRST_HINT = "Enable voice input first"
+private const val EXIT_CLOSE_TIMEOUT_MILLIS = 4000L
 
 /**
  * Compose state of the voice input settings page: choices, the downloads they need, restart warning and a live dictation test. What the choices
@@ -35,6 +37,7 @@ class VoiceSettingsState(
     private val settings: () -> UiSettings,
     private val update: ((UiSettings) -> UiSettings) -> Unit,
     private val reportError: (title: String, message: String) -> Unit,
+    private val closeTimeoutMillis: Long = EXIT_CLOSE_TIMEOUT_MILLIS,
 ) {
     val models: List<WhisperModel> = WhisperModel.entries
 
@@ -123,10 +126,10 @@ class VoiceSettingsState(
 
     fun dictationFailed(message: String) = reportError(HARDWARE_FAILED_TITLE, message)
 
-    /** Stops a running live test and waits for the microphone; call when the page, dialog or app goes away. */
+    /** Stops a running live test and dictation and waits a bounded time for the microphone; for the app exit, never the UI thread's normal flow. */
     fun close() {
         live.close()
-        dictationSession?.close()
+        dictationSession?.let { session -> thread(isDaemon = true) { session.close() }.join(closeTimeoutMillis) }
     }
 
     private fun dictationRequest() = DictationRequest(model, resolved.spec, input, null)

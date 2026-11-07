@@ -71,10 +71,7 @@ public class TeamService {
     public Team update(long id, String name, List<RoleDraft> roles) {
         var cleanName = validate(name, roles);
         var current = find(id).orElseThrow(() -> new IllegalArgumentException("Team not found: " + id));
-        long stored = jdbc.sql("SELECT COUNT(*) FROM team_role WHERE team_id = ?").param(id).query(Long.class).single();
-        if (stored != current.roles().size()) {
-            throw new IllegalArgumentException("This team has unreadable roles; saving would delete them. Fix the broken role, or delete and recreate the team");
-        }
+        requireReadable(current, "saving would delete them");
         transaction.executeWithoutResult(status -> {
             jdbc.sql("UPDATE team SET name = ? WHERE id = ?").param(cleanName).param(id).update();
             jdbc.sql("DELETE FROM team_role WHERE team_id = ?").param(id).update();
@@ -86,7 +83,15 @@ public class TeamService {
 
     public Team duplicate(long id) {
         var source = find(id).orElseThrow(() -> new IllegalArgumentException("Team not found: " + id));
+        requireReadable(source, "the copy would miss them");
         return create(uniqueCopyName(source.name()), source.roles().stream().map(TeamRole::draft).toList());
+    }
+
+    private void requireReadable(Team team, String consequence) {
+        long stored = jdbc.sql("SELECT COUNT(*) FROM team_role WHERE team_id = ?").param(team.id()).query(Long.class).single();
+        if (stored != team.roles().size()) {
+            throw new IllegalArgumentException("This team has unreadable roles; " + consequence + ". Fix the broken role, or delete and recreate the team");
+        }
     }
 
     private String uniqueCopyName(String sourceName) {

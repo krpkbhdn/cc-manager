@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
 
 /**
  * MCP servers: configuration is read from Claude's files, changes go through {@code claude mcp}.
@@ -54,6 +55,9 @@ public class McpService {
     /** @param json the server config object, e.g. {@code {"type":"http","url":"..."}} */
     public void add(String name, String json, ExtensionScope scope, Path projectDirectory) {
         requireValidName(name);
+        if (name.contains(": ") || name.contains(" - ")) {
+            throw new ExtensionException("Invalid server name: \": \" and \" - \" would break the server list");
+        }
         if (!Json.parse(json).isObject()) {
             throw new ExtensionException("The server config must be a JSON object");
         }
@@ -65,13 +69,29 @@ public class McpService {
         }
     }
 
-    /** The CLI may echo the config or single env and header values in an error; keep them out of messages. */
+    /** The CLI may echo the config, its url or arguments, or single env and header values in an error; keep them out of messages. */
     private static String without(String json, String text) {
         var redacted = text.replace(json, "<config>");
+        var root = Json.parse(json);
+        var url = root.path("url").asString("");
+        if (!url.isBlank()) {
+            redacted = redacted.replace(url, McpTargetRedaction.redact(url));
+        }
+        var commandLine = commandLine(root);
+        if (commandLine.contains(" ")) {
+            redacted = redacted.replace(commandLine, McpTargetRedaction.redact(commandLine));
+        }
         for (var secret : secretValues(json)) {
             redacted = redacted.replace(secret, "<secret>");
         }
         return redacted;
+    }
+
+    private static String commandLine(JsonNode root) {
+        var parts = new ArrayList<String>();
+        parts.add(root.path("command").asString(""));
+        root.path("args").forEach(arg -> parts.add(arg.asString("")));
+        return String.join(" ", parts).strip();
     }
 
     private static List<String> secretValues(String json) {

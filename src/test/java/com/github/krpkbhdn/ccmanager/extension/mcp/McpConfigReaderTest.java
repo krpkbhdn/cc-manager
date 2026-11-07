@@ -121,4 +121,13 @@ class McpConfigReaderTest {
 
         assertThat(reader(HostEnvironment.OperatingSystem.LINUX).read(project)).extracting(McpServerConfig::name).containsExactly("a");
     }
+
+    @Test
+    void halfWrittenUserConfigIsTreatedAsEmpty() throws IOException {
+        Files.writeString(home.resolve(".claude.json"), "{\"mcpServers\":{\"u\":{\"comm");
+        Files.writeString(project.resolve(".mcp.json"), "{\"mcpServers\":{\"a\":{\"command\":\"x\"}}}");
+
+        assertThat(reader(HostEnvironment.OperatingSystem.LINUX).read(project)).extracting(McpServerConfig::name).containsExactly("a");
+        assertThat(reader(HostEnvironment.OperatingSystem.LINUX).approvedOutsideRepository(project)).isEmpty();
+    }
 }

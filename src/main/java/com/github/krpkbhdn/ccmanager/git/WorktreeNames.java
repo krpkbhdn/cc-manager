@@ -20,7 +20,26 @@ public final class WorktreeNames {
     private static final String COMPONENT_HIDDEN_START = ".";
     private static final String COMPONENT_LOCK_ENDING = ".lock";
 
+    private static final String DIRECTORY_INFIX = "-wt-";
+
     private WorktreeNames() {}
+
+    /**
+     * A sibling of the repository folder named {@code <repo>-wt-<branch>}.
+     *
+     * @throws IllegalArgumentException when the repository has no folder name or the branch cannot form a valid path
+     */
+    public static String defaultPath(Path top, String branch) {
+        var name = top.getFileName();
+        if (name == null) {
+            throw new IllegalArgumentException("Cannot derive a worktree folder from " + top);
+        }
+        try {
+            return top.resolveSibling(name + DIRECTORY_INFIX + branch.replace('/', '-')).toString();
+        } catch (InvalidPathException e) {
+            throw new IllegalArgumentException("Branch '" + branch + "' cannot form a folder name", e);
+        }
+    }
 
     public static Optional<String> branchProblem(String name) {
         if (name == null || name.isBlank()) {

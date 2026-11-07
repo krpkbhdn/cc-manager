@@ -3,13 +3,21 @@ package com.github.krpkbhdn.ccmanager.claude.hook;
 import com.github.krpkbhdn.ccmanager.claude.event.HookEventType;
 import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
 import com.github.krpkbhdn.ccmanager.claude.event.ActivityFormatter;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.regex.Pattern;
+import jakarta.annotation.PreDestroy;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -23,25 +31,45 @@ import tools.jackson.databind.node.ObjectNode;
 @EnableConfigurationProperties(HookProperties.class)
 public class HookEventStore {
 
+    private static final Logger log = LoggerFactory.getLogger(HookEventStore.class);
     private static final int PRUNE_EVERY_INSERTS = 100;
     private static final int OVER_FETCH_FACTOR = 4;
+    /** Pruning keeps a session's newest retention / this many rows (at least one), but only rows younger than the max age, so the table stays bounded. */
+    private static final int SESSION_FLOOR_DIVISOR = 100;
+    private static final Duration SESSION_FLOOR_MAX_AGE = Duration.ofDays(7);
     private static final String TOOL_INPUT = "tool_input";
     private static final String TOOL_RESPONSE = "tool_response";
     private static final Set<String> READ_TOOL_INPUT_FIELDS =
             Set.of("command", "file_path", "notebook_path", "pattern", "url", "query", "description");
-    /** Masks only key=value, key: value and bearer forms; space-separated flags and bare tokens (sk-...) pass through. */
-    private static final Pattern SECRET = Pattern.compile(
-            "(?i)((?:(?:token|secret|passw(?:or)?d|api[_-]?key|credential)[\\w-]*+\\s*[=:]\\s*|bearer\\s+))(\"[^\"]*\"|'[^']*'|\\S+)");
 
     private final JdbcClient jdbc;
     private final JsonMapper mapper;
     private final HookProperties properties;
     private final AtomicInteger insertsSincePrune = new AtomicInteger();
+    private final AtomicBoolean pruning = new AtomicBoolean();
+    private final Executor pruner;
 
+    @Autowired
     public HookEventStore(JdbcClient jdbc, JsonMapper mapper, HookProperties properties) {
+        this(jdbc, mapper, properties, Executors.newSingleThreadExecutor(task -> {
+            var thread = new Thread(task, "hook-event-prune");
+            thread.setDaemon(true);
+            return thread;
+        }));
+    }
+
+    HookEventStore(JdbcClient jdbc, JsonMapper mapper, HookProperties properties, Executor pruner) {
         this.jdbc = jdbc;
         this.mapper = mapper;
         this.properties = properties;
+        this.pruner = pruner;
+    }
+
+    @PreDestroy
+    void shutdown() {
+        if (pruner instanceof ExecutorService service) {
+            service.shutdownNow();
+        }
     }
 
     public void save(HookEvent event) {
@@ -53,7 +81,26 @@ public class HookEventStore {
                 .update();
         if (insertsSincePrune.incrementAndGet() >= PRUNE_EVERY_INSERTS) {
             insertsSincePrune.set(0);
-            prune();
+            pruneInBackground();
+        }
+    }
+
+    private void pruneInBackground() {
+        if (!pruning.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            pruner.execute(() -> {
+                try {
+                    prune();
+                } catch (RuntimeException e) {
+                    log.warn("Could not prune hook events", e);
+                } finally {
+                    pruning.set(false);
+                }
+            });
+        } catch (RuntimeException e) {
+            pruning.set(false);
         }
     }
 
@@ -96,8 +143,12 @@ public class HookEventStore {
     }
 
     void prune() {
-        jdbc.sql("DELETE FROM hook_event WHERE id <= (SELECT max(id) FROM hook_event) - ?")
-                .param(properties.retention())
+        jdbc.sql("""
+                        DELETE FROM hook_event WHERE id <= (SELECT max(id) FROM hook_event) - ?
+                        AND (received_at < ? OR id < COALESCE((SELECT e.id FROM hook_event e
+                            WHERE e.ccm_session_id = hook_event.ccm_session_id ORDER BY e.id DESC LIMIT 1 OFFSET ?), 0))""")
+                .params(properties.retention(), Instant.now().minus(SESSION_FLOOR_MAX_AGE).toString(),
+                        properties.retention() / SESSION_FLOOR_DIVISOR)
                 .update();
     }
 
@@ -122,7 +173,7 @@ public class HookEventStore {
 
     private JsonNode truncated(JsonNode node) {
         if (node.isString()) {
-            return mapper.getNodeFactory().stringNode(SECRET.matcher(cut(node.asString())).replaceAll("$1[redacted]"));
+            return mapper.getNodeFactory().stringNode(SecretPatterns.KEY_VALUE.matcher(cut(node.asString())).replaceAll("$1[redacted]"));
         }
         if (node.isObject()) {
             ObjectNode copy = mapper.createObjectNode();

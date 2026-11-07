@@ -9,6 +9,7 @@ enum class SettingsCategory(val label: String) {
     APPEARANCE("Appearance"),
     NOTIFICATIONS("Notifications"),
     SESSIONS("Sessions"),
+    USAGE("Usage"),
     ASSISTANT("Assistant"),
     VOICE("Voice input"),
     UPDATES("Updates"),

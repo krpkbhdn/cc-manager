@@ -15,6 +15,14 @@ class PromptQueuesTest {
     }
 
     @Test
+    fun addReturnsTheIdOfTheQueuedPrompt() {
+        val id = queues.add("a", "first")
+        queues.add("a", "second")
+        assertThat(queues.of("a").first().id).isEqualTo(id)
+        assertThat(queues.of("a").map { it.id }).doesNotHaveDuplicates()
+    }
+
+    @Test
     fun sessionsHaveSeparateQueues() {
         queues.add("a", "one")
         assertThat(queues.of("b")).isEmpty()

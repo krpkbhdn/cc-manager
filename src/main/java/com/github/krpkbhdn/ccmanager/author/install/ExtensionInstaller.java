@@ -19,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -30,7 +31,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * Installs the marketplaces, plugins, skills and MCP servers of a profile scope. One failing item never stops the rest,
- * an existing skill is never overwritten and a plugin that needs a confirmation is left to the Plugins page.
+ * an existing skill is never overwritten (a differing one is reported) and a plugin that needs a confirmation is left to the Plugins page.
  */
 @Service
 public class ExtensionInstaller {
@@ -104,7 +105,7 @@ public class ExtensionInstaller {
             try {
                 var result = plugins.install(id, scope, directory);
                 (result.needsConfirmation() ? attention : installed).add(label);
-            } catch (ExtensionException e) {
+            } catch (RuntimeException e) {
                 failed.add(label + ": " + e.getMessage());
             }
         }
@@ -123,7 +124,8 @@ public class ExtensionInstaller {
             try {
                 var target = skills.skillDirectory(scope, directory, skill.name());
                 if (Files.exists(target)) {
-                    present.add(label);
+                    present.add(Files.isDirectory(target) && sameContent(skill, source, target) ? label
+                            : label + " (differs from the bundled version, left unchanged)");
                 } else {
                     copySkill(skill, source, target);
                     installed.add(label);
@@ -132,6 +134,18 @@ public class ExtensionInstaller {
                 failed.add(label + ": " + e.getMessage());
             }
         }
+    }
+
+    private boolean sameContent(ProfileSkill skill, String source, Path target) throws IOException {
+        for (var file : skill.files()) {
+            var existing = target.resolve(file);
+            try (var in = loader.open(source + "/skills/" + skill.name() + "/" + file)) {
+                if (!Files.isRegularFile(existing) || !Arrays.equals(in.readAllBytes(), Files.readAllBytes(existing))) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     private void copySkill(ProfileSkill skill, String source, Path target) throws IOException {
@@ -193,7 +207,7 @@ public class ExtensionInstaller {
         try {
             action.run();
             installed.add(label);
-        } catch (ExtensionException e) {
+        } catch (RuntimeException e) {
             failed.add(label + ": " + e.getMessage());
         }
     }

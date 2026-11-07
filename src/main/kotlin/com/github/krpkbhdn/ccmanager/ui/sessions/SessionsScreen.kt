@@ -46,6 +46,7 @@ fun SessionsScreen(state: AppState, modifier: Modifier = Modifier) {
             now = { state.now },
             stale = { isStale(session, state.now, state.workingStaleAfter) },
             proposalHeadline = state.proposals.headlineOf(session.ccmSessionId),
+            worktreeBranch = state.gits.worktreeBadgeOf(session.projectId, session.ccmSessionId),
             onOpen = { state.openSession(session.ccmSessionId) },
             onAnswer = { state.answers.answer(session.ccmSessionId) },
             modifier = cardModifier,

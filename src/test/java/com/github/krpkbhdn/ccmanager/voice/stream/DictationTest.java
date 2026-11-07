@@ -33,7 +33,7 @@ class DictationTest {
     private final DictationListener listener = mock(DictationListener.class);
     private final VoiceProperties properties = new VoiceProperties("auto", Duration.ofSeconds(10),
             Duration.ofMillis(1500), Duration.ofMillis(700), 0.01, 0.5, 4,
-            Duration.ofSeconds(30), Duration.ofMinutes(5));
+            Duration.ofSeconds(30), Duration.ofMinutes(5), Duration.ofMinutes(2), Duration.ofSeconds(60));
 
     @BeforeEach
     void setUp() throws IOException {

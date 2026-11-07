@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
-import tools.jackson.databind.json.JsonMapper;
 
 /** Loads and checks the bundled author profile at startup; a broken profile is a build defect, so it fails fast. */
 @Component
@@ -21,14 +20,17 @@ public class AuthorProfileLoader {
 
     private static final String ROOT = "/author-profile/";
     private static final Pattern KEBAB_CASE = Pattern.compile("[a-z0-9]+(-[a-z0-9]+)*");
-    private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
     private final AuthorProfile profile;
     private final List<TeamTemplate> teamTemplates;
 
     public AuthorProfileLoader() {
+        this(readBundledProfile());
+    }
+
+    AuthorProfileLoader(AuthorProfile profile) {
         try {
-            this.profile = readProfile();
+            this.profile = profile;
             validateManifest();
             this.teamTemplates = loadTeamTemplates();
         } catch (IOException e) {
@@ -64,9 +66,13 @@ public class AuthorProfileLoader {
         return in;
     }
 
-    private AuthorProfile readProfile() throws IOException {
-        try (var in = open("profile.json")) {
+    private static AuthorProfile readBundledProfile() {
+        try (var in = AuthorProfileLoader.class.getResourceAsStream(ROOT + "profile.json")) {
             return AuthorProfile.parse(in);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        } catch (RuntimeException e) {
+            throw new IllegalStateException("Bundled author profile is invalid: " + e.getMessage(), e);
         }
     }
 
@@ -93,6 +99,7 @@ public class AuthorProfileLoader {
         for (var skill : scope.extensions().skills()) {
             require(skill.name() != null && KEBAB_CASE.matcher(skill.name()).matches(), "skill name must be kebab-case: " + skill.name());
             skill.files().forEach(file -> paths.add(directory + "/skills/" + skill.name() + "/" + file));
+            require(paths.contains(directory + "/skills/" + skill.name() + "/SKILL.md"), "skill " + skill.name() + " needs SKILL.md");
         }
         return paths;
     }
@@ -101,7 +108,7 @@ public class AuthorProfileLoader {
         var templates = new ArrayList<TeamTemplate>();
         for (var path : profile.teams().templates()) {
             try (var in = open(path)) {
-                var template = MAPPER.readValue(in, TeamTemplate.class);
+                var template = AuthorProfile.MAPPER.readValue(in, TeamTemplate.class);
                 TeamService.validate(template.name(), template.roles());
                 templates.add(template);
             }

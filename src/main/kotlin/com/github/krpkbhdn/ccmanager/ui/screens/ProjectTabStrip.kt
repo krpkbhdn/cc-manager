@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
+import com.github.krpkbhdn.ccmanager.ui.components.Chip
 import com.github.krpkbhdn.ccmanager.ui.components.Glyph
 import com.github.krpkbhdn.ccmanager.ui.components.IconButton
 import com.github.krpkbhdn.ccmanager.ui.components.Label
@@ -47,11 +48,12 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import androidx.compose.ui.graphics.Color
 
-/** One entry of the tab strip; [status] is null for tabs without a traffic light. */
-data class TabSpec(val tab: ProjectTab, val label: String, val status: AgentStatus?, val icon: ImageVector?, val closable: Boolean)
+/** One entry of the tab strip; [status] is null for tabs without a traffic light, [badge] is the worktree branch of a session working outside the main folder. */
+data class TabSpec(val tab: ProjectTab, val label: String, val status: AgentStatus?, val icon: ImageVector?, val closable: Boolean, val badge: String? = null)
 
 private val pillHeight = 30.dp
 private val pillMaxWidth = 220.dp
+private val badgeMaxWidth = 120.dp
 private val closeSize = 20.dp
 private val scrollbarDrop = 8.dp
 private val tabScrollbarThickness = 3.dp
@@ -119,6 +121,7 @@ private fun TabPill(spec: TabSpec, selected: Boolean, onSelect: () -> Unit, onCl
             spec.status?.let { StatusDot(it, size = 7.dp) }
             spec.icon?.let { Glyph(it, tint, size = IconSize.medium) }
             Label(spec.label, Modifier.weight(1f, fill = false).widthIn(max = pillMaxWidth), color = tint, style = if (selected) Type.smallMedium else Type.small, tooltipWhenTruncated = true)
+            spec.badge?.let { Chip(it, colors.accent, Modifier.widthIn(max = badgeMaxWidth)) }
             if (spec.closable) {
                 if (hovered || selected) IconButton(Icons.Close, onClose, tint = colors.textTertiary, size = closeSize, tooltip = "Close tab", hint = AppShortcut.CLOSE_SESSION.hint()) else Box(Modifier.size(closeSize))
             }

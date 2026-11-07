@@ -15,6 +15,9 @@ interface TerminalPort {
     fun send(ccmSessionId: String, text: String)
     fun close(ccmSessionId: String)
 
+    /** True while closed terminals still have processes being ended. */
+    fun closing(): Boolean = false
+
     /** False when the session has no terminal, so [send] would reach nobody. */
     fun hasTerminal(ccmSessionId: String): Boolean = true
 
@@ -42,6 +45,7 @@ object HostTerminalPort : TerminalPort {
     override fun openShell(shell: LaunchedShell) = TerminalHost.open(shell)
     override fun send(ccmSessionId: String, text: String) = TerminalHost.send(ccmSessionId, text)
     override fun close(ccmSessionId: String) = TerminalHost.close(ccmSessionId)
+    override fun closing() = TerminalHost.closing()
     override fun hasTerminal(ccmSessionId: String) = TerminalHost.hasTerminal(ccmSessionId)
     override fun focus(ccmSessionId: String) = TerminalHost.focus(ccmSessionId)
     override fun ctrlCWithin(ccmSessionId: String, windowMillis: Long) = TerminalHost.ctrlCWithin(ccmSessionId, windowMillis)

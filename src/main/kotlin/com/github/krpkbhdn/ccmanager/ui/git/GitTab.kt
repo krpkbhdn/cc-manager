@@ -15,6 +15,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import com.github.krpkbhdn.ccmanager.github.GhAvailability
+import com.github.krpkbhdn.ccmanager.ui.git.model.refreshPullRequest
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -27,10 +31,12 @@ import com.github.krpkbhdn.ccmanager.ui.components.SkeletonBlock
 import com.github.krpkbhdn.ccmanager.ui.components.Spinner
 import com.github.krpkbhdn.ccmanager.ui.git.branch.BranchesView
 import com.github.krpkbhdn.ccmanager.ui.git.changes.ChangesView
+import com.github.krpkbhdn.ccmanager.ui.git.changes.ReviewTarget
 import com.github.krpkbhdn.ccmanager.ui.git.log.LogView
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitState
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
 import com.github.krpkbhdn.ccmanager.ui.git.model.changeSections
+import com.github.krpkbhdn.ccmanager.ui.git.model.workBanner
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.theme.Motion
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
@@ -42,26 +48,45 @@ private const val MONO_PROGRESS_LINES = 1
 
 /** The project's Git tab: toolbar, banners, a section switcher and the section itself, all driven by one [GitState]. */
 @Composable
-fun GitTab(git: GitState, system: GitSystemActions, now: () -> Instant, modifier: Modifier = Modifier) {
+fun GitTab(git: GitState, system: GitSystemActions, review: ReviewTarget, now: () -> Instant, modifier: Modifier = Modifier, work: WorkContextActions = WorkContextActions.NONE) {
     val status = git.status
     val loadError = git.loadError
+    PullRequestPolling(git)
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            if (status == null || status.repository()) GitToolbar(git)
+            val banner = workBanner(status?.branch(), git.task, work.active?.main == false)
+            if (status == null || status.repository()) GitToolbar(git, work, pullRequestHere = banner == null)
+            banner?.let { WorkBannerStrip(it, git, work) }
             JobLine(git)
             GitBanners(git)
             when {
                 status == null && loadError == null -> TabSkeleton()
                 status == null -> EmptyState(Icons.Alert, loadError!!.title, loadError.headline, tint = colors.danger)
                 !status.repository() -> EmptyState(Icons.Branch, "Not a git repository", "Run git init in this folder to track history, branches and changes here.")
-                else -> Sections(git, system, now)
+                else -> Sections(git, system, review, now, work)
             }
         }
     }
 }
 
+/** Polls the pull request while the tab is shown; slower while gh is not ready, since installing or signing in is rare. */
 @Composable
-private fun Sections(git: GitState, system: GitSystemActions, now: () -> Instant) {
+private fun PullRequestPolling(git: GitState) {
+    val branch = git.status?.branch()
+    LaunchedEffect(git, branch) {
+        if (branch == null) return@LaunchedEffect
+        val interval = git.git.github.pollInterval.toMillis()
+        while (true) {
+            git.refreshPullRequest()
+            delay(if (git.ghStatus == GhAvailability.READY || git.ghStatus == null) interval else interval * SLOW_POLL_FACTOR)
+        }
+    }
+}
+
+private const val SLOW_POLL_FACTOR = 6
+
+@Composable
+private fun Sections(git: GitState, system: GitSystemActions, review: ReviewTarget, now: () -> Instant, work: WorkContextActions) {
     HorizontalRule()
     Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
         SegmentedControl(segments(git), git.view, git::show)
@@ -69,12 +94,12 @@ private fun Sections(git: GitState, system: GitSystemActions, now: () -> Instant
     HorizontalRule()
     Crossfade(git.view, Modifier.fillMaxSize(), animationSpec = Motion.base(), label = "gitSection") { view ->
         when (view) {
-            GitSubView.CHANGES -> ChangesView(git, system)
+            GitSubView.CHANGES -> ChangesView(git, system, review)
             GitSubView.LOG -> LogView(git, now)
             GitSubView.BRANCHES -> BranchesView(git)
             GitSubView.STASHES -> StashesView(git, now)
             GitSubView.TAGS -> TagsView(git)
-            GitSubView.WORKTREES -> WorktreesView(git)
+            GitSubView.WORKTREES -> WorktreesView(git, work)
         }
     }
 }

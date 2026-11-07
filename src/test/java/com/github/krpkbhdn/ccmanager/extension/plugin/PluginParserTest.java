@@ -84,7 +84,7 @@ class PluginParserTest {
 
     @Test
     void detailsDropTheTrailingNoteOfAComponentLine() {
-        var text = "Component inventory\n  Hooks (3)  SessionStart, SubagentStart  (harness-only — no model context cost)\n";
+        var text = "Component inventory\n  Hooks (3)  SessionStart, SubagentStart  (harness-only â€” no model context cost)\n";
 
         assertThat(PluginParser.details(text).components()).containsExactly(
                 new PluginComponent("Hooks", 3, java.util.List.of("SessionStart", "SubagentStart")));
@@ -112,5 +112,13 @@ class PluginParserTest {
 
         assertThat(result.installed()).isFalse();
         assertThat(result.message()).isEqualTo("Plugin not found");
+    }
+
+    @Test
+    void installResultIgnoresABraceLineThatIsNotJson() {
+        var result = PluginParser.installResult(0, "Installed\n{tool} ready", "");
+
+        assertThat(result.installed()).isTrue();
+        assertThat(result.message()).contains("Installed");
     }
 }

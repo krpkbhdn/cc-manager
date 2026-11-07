@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.dp
@@ -66,24 +67,20 @@ fun PromptDialog(form: PromptDialogState, prompts: PromptsState, projects: List<
 }
 
 @Composable
-private fun ProjectSelect(selected: Long?, projects: List<Project>, onSelect: (Long?) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        AppButton(projects.firstOrNull { it.id == selected }?.name ?: ALL_PROJECTS, { open = !open }, icon = Icons.Folder, tooltip = "Project the prompt belongs to")
-        if (open) {
-            val entries = listOf(MenuEntry(ALL_PROJECTS) { onSelect(null) }) + projects.map { MenuEntry(it.name, dividerAbove = it === projects.first()) { onSelect(it.id) } }
-            PopupMenu(entries, { open = false })
-        }
-    }
-}
+private fun ProjectSelect(selected: Long?, projects: List<Project>, onSelect: (Long?) -> Unit) =
+    EntrySelect(projects.firstOrNull { it.id == selected }?.name ?: ALL_PROJECTS, Icons.Folder, "Project the prompt belongs to", ALL_PROJECTS, projects.map { it.name to it.id }, onSelect)
 
 @Composable
-private fun TeamSelect(selected: Long?, teams: List<Team>, onSelect: (Long?) -> Unit) {
+private fun TeamSelect(selected: Long?, teams: List<Team>, onSelect: (Long?) -> Unit) =
+    EntrySelect(teams.firstOrNull { it.id == selected }?.name ?: NO_DEFAULT_TEAM, Icons.Users, "Team preselected when the prompt is used", NO_DEFAULT_TEAM, teams.map { it.name to it.id }, onSelect)
+
+@Composable
+private fun EntrySelect(current: String, icon: ImageVector, tooltip: String, noneLabel: String, options: List<Pair<String, Long>>, onSelect: (Long?) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        AppButton(teams.firstOrNull { it.id == selected }?.name ?: NO_DEFAULT_TEAM, { open = !open }, icon = Icons.Users, tooltip = "Team preselected when the prompt is used")
+        AppButton(current, { open = !open }, icon = icon, tooltip = tooltip)
         if (open) {
-            val entries = listOf(MenuEntry(NO_DEFAULT_TEAM) { onSelect(null) }) + teams.map { MenuEntry(it.name, dividerAbove = it === teams.first()) { onSelect(it.id) } }
+            val entries = listOf(MenuEntry(noneLabel) { onSelect(null) }) + options.mapIndexed { index, (name, id) -> MenuEntry(name, dividerAbove = index == 0) { onSelect(id) } }
             PopupMenu(entries, { open = false })
         }
     }

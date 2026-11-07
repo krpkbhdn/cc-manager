@@ -43,6 +43,23 @@ class RunConfigurationServiceTest {
     }
 
     @Test
+    void deleteByDirectoryRemovesConfigurationsOfAllProjectsInThatDirectoryOnly() throws Exception {
+        var other = java.nio.file.Files.createDirectory(temp.resolve("other"));
+        jdbc.sql("INSERT INTO project (name, path, created_at) VALUES ('second', ?, 'now')").param(other.toString()).update();
+        var secondId = jdbc.sql("SELECT id FROM project WHERE name = 'second'").query(Long.class).single();
+        service.save(projectId, "a", "run", other);
+        service.save(secondId, "b", "run", other.resolve("..").resolve("other"));
+        service.save(projectId, "keep", "run", temp);
+
+        assertThat(service.listByDirectory(other)).extracting(RunConfiguration::name).containsExactly("a", "b");
+
+        service.deleteByDirectory(other);
+
+        assertThat(service.list(projectId)).extracting(RunConfiguration::name).containsExactly("keep");
+        assertThat(service.list(secondId)).isEmpty();
+    }
+
+    @Test
     void agentWrittenConfigurationNeedsConfirmationUntilItsCommandChanges() {
         var written = service.saveByAgent(projectId, "web", "npm start", temp);
         assertThat(written.confirmed()).isFalse();
@@ -140,5 +157,16 @@ class RunConfigurationServiceTest {
         assertThatThrownBy(() -> service.save(projectId, "web", "a", Path.of("relative"))).hasMessageContaining("absolute");
         assertThatThrownBy(() -> service.save(projectId, "web", "a", temp.resolve("missing"))).hasMessageContaining("does not exist");
         assertThatThrownBy(() -> service.save(projectId + 99, "web", "a", temp)).hasMessageContaining("project");
+    }
+
+    @Test
+    void throwingSubscriberDoesNotStopTheOthers() {
+        var calls = new AtomicInteger();
+        service.subscribe(() -> { throw new IllegalStateException("boom"); });
+        service.subscribe(calls::incrementAndGet);
+
+        service.save(projectId, "web", "a", temp);
+
+        assertThat(calls).hasValue(1);
     }
 }

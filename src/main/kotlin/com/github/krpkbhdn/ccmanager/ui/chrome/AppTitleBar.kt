@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.ui.components.Label
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
+import com.github.krpkbhdn.ccmanager.ui.theme.ScaledDensity
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
@@ -23,15 +24,17 @@ private val markSize = 18.dp
 @Composable
 fun DecoratedWindowScope.AppTitleBar(state: AppState) {
     TitleBar {
-        Row(Modifier.align(Alignment.Start).padding(start = Spacing.xs), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-            icon?.let { Image(it, null, Modifier.size(markSize)) }
-            Label(title, color = colors.textPrimary, style = Type.smallMedium)
-        }
-        SearchPill({ state.paletteOpen = true }, Modifier.align(Alignment.CenterHorizontally))
-        Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
-            ThemeToggle(state)
-            UsageIndicator(state)
-            NotificationBell(state)
+        ScaledDensity {
+            Row(Modifier.align(Alignment.Start).padding(start = Spacing.xs), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                icon?.let { Image(it, null, Modifier.size(markSize)) }
+                Label(title, color = colors.textPrimary, style = Type.smallMedium)
+            }
+            SearchPill({ state.paletteOpen = true }, Modifier.align(Alignment.CenterHorizontally))
+            Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+                ThemeToggle(state)
+                UsageIndicator(state)
+                NotificationBell(state)
+            }
         }
     }
 }

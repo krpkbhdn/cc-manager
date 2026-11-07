@@ -159,4 +159,16 @@ class RunServiceTest {
     void startFailsReadablyForAMissingConfiguration() {
         assertThatThrownBy(() -> runs.start(12345)).isInstanceOf(IllegalStateException.class).hasMessageContaining("no longer exists");
     }
+
+    @Test
+    void throwingSubscriberDoesNotStopTheOthers() throws Exception {
+        var configuration = configurations.save(projectId, "ok", "exit 0", temp);
+        var notified = new CountDownLatch(1);
+        runs.subscribe(() -> { throw new IllegalStateException("boom"); });
+        runs.subscribe(notified::countDown);
+
+        runs.start(configuration.id());
+
+        assertThat(notified.await(TIMEOUT.toSeconds(), TimeUnit.SECONDS)).isTrue();
+    }
 }

@@ -1,17 +1,17 @@
 package com.github.krpkbhdn.ccmanager.ui.teams
 
+import com.github.krpkbhdn.ccmanager.ui.await
 import com.github.krpkbhdn.ccmanager.ui.previewTeamService
 import com.github.krpkbhdn.ccmanager.ui.state.ConfirmRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.job
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-
-private const val WAIT_MILLIS = 5_000L
 
 class TeamsStateTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -143,13 +143,33 @@ class TeamsStateTest {
     }
 
     @Test
-    fun projectDefaultTogglesAndFallsBackToTheFirstTeam() {
-        assertThat(state.defaultTeamOf(42)?.name).isEqualTo("Dev team")
+    fun doubleClickingNewTeamCreatesOneTeam() {
+        state.newTeam()
+        state.newTeam()
+        await { state.selected?.name == "New team" }
+        await { scope.coroutineContext.job.children.none { it.isActive } }
+
+        assertThat(service.list().count { it.name == "New team" }).isEqualTo(1)
     }
 
-    private fun await(condition: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + WAIT_MILLIS
-        while (!condition() && System.currentTimeMillis() < deadline) Thread.sleep(20)
-        assertThat(condition()).describedAs("condition within ${WAIT_MILLIS}ms").isTrue()
+    @Test
+    fun savingARoleEditedBeforeAnotherRoleWasRemovedStillHitsTheRightRole() {
+        val team = state.selected!!
+        state.editRole(team, team.roles.first { it.name() == "developer" })
+        state.dialog!!.form.effort = "high"
+        val withoutTester = team.roles.filter { it.name() != "tester" }.map { it.draft }
+        service.update(team.id, team.name, withoutTester)
+
+        state.saveRole(state.dialog!!) { errors += it }
+        await { state.dialog == null }
+
+        val roles = service.find(team.id).orElseThrow().roles
+        assertThat(roles.map { it.name() }).containsExactly("architect", "developer")
+        assertThat(roles[1].selection().effort()).isEqualTo("high")
+    }
+
+    @Test
+    fun projectDefaultTogglesAndFallsBackToTheFirstTeam() {
+        assertThat(state.defaultTeamOf(42)?.name).isEqualTo("Dev team")
     }
 }

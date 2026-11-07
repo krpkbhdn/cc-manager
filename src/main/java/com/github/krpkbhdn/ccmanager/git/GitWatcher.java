@@ -83,8 +83,9 @@ public class GitWatcher {
     public Runnable subscribe(Path repo, Runnable onChange) {
         var root = repo.toAbsolutePath().normalize();
         var listener = new Listener(onChange);
-        synchronized (lock) {
-            watches.computeIfAbsent(root, this::open).listeners.add(listener);
+        List<Path> gitDirectories = null;
+        while (!addListener(root, listener, gitDirectories)) {
+            gitDirectories = resolveGitDirectories(root);
         }
         var unsubscribed = new AtomicBoolean();
         return () -> {
@@ -92,6 +93,22 @@ public class GitWatcher {
                 unsubscribe(root, listener);
             }
         };
+    }
+
+    /** @return false when the root is not watched yet and {@code gitDirectories} (resolved outside the lock) is still null */
+    private boolean addListener(Path root, Listener listener, List<Path> gitDirectories) {
+        synchronized (lock) {
+            var watch = watches.get(root);
+            if (watch == null && gitDirectories != null) {
+                watch = open(root, gitDirectories);
+                watches.put(root, watch);
+            }
+            if (watch == null) {
+                return false;
+            }
+            watch.listeners.add(listener);
+            return true;
+        }
     }
 
     @PreDestroy
@@ -105,10 +122,10 @@ public class GitWatcher {
         callbacks.shutdownNow();
     }
 
-    private Watch open(Path root) {
+    private Watch open(Path root, List<Path> gitDirectories) {
         startService();
         var watch = new Watch(root);
-        resolveGitDirectories(root).forEach(gitDir -> {
+        gitDirectories.forEach(gitDir -> {
             register(watch, gitDir, Zone.GIT_ROOT);
             registerTree(watch, gitDir.resolve("refs"), Zone.GIT_REFS, Integer.MAX_VALUE);
         });
@@ -140,7 +157,7 @@ public class GitWatcher {
     private List<Path> resolveGitDirectories(Path root) {
         try {
             var result = git.tryRun(root, "rev-parse", "--absolute-git-dir", "--git-common-dir");
-            return result.ok() ? result.stdout().lines().map(String::strip).map(root::resolve).map(Path::normalize).distinct().toList() : List.of();
+            return result.ok() ? result.stdout().lines().map(root::resolve).map(Path::normalize).distinct().toList() : List.of();
         } catch (GitException e) {
             return List.of();
         }
@@ -210,8 +227,11 @@ public class GitWatcher {
             if (event.kind() == OVERFLOW) {
                 changed = true;
             } else if (isRelevant(registration.zone(), (Path) event.context())) {
-                changed = true;
-                onCreated(registration, ((Path) key.watchable()).resolve((Path) event.context()), event.kind());
+                var path = ((Path) key.watchable()).resolve((Path) event.context());
+                if (!isDirectoryTimestampNoise(registration.zone(), event.kind(), path)) {
+                    changed = true;
+                }
+                onCreated(registration, path, event.kind());
             }
         }
         if (!key.reset()) {
@@ -221,6 +241,24 @@ public class GitWatcher {
         if (changed) {
             registration.watch().changed();
         }
+    }
+
+    /** Lets tests wait until a new folder is registered instead of sleeping. */
+    boolean isWatching(Path directory) {
+        return registrations.keySet().stream().anyMatch(key -> isSameDirectory((Path) key.watchable(), directory));
+    }
+
+    private static boolean isSameDirectory(Path first, Path second) {
+        try {
+            return Files.isSameFile(first, second);
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /** Windows reports a MODIFY for every ancestor folder of a changed file, even when that file sits in an ignored folder. */
+    private static boolean isDirectoryTimestampNoise(Zone zone, WatchEvent.Kind<?> kind, Path path) {
+        return zone == Zone.TREE && kind == ENTRY_MODIFY && Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS);
     }
 
     private static boolean isRelevant(Zone zone, Path name) {

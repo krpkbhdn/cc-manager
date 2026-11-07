@@ -19,10 +19,14 @@ import androidx.compose.ui.unit.Density
 import org.jetbrains.skia.Bitmap
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
+import com.jediterm.terminal.model.TerminalModelListener
 import java.io.File
+import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
 
 private const val FRAME_NANOS = 16_000_000L
 private const val FIT_FRAMES = 15
+private const val WAIT_SECONDS = 10L
 internal val HEADER_COLOR = Color(0xFFFF00FF)
 
 /** A terminal view rendered into an offscreen Compose scene, no OS window involved. */
@@ -51,10 +55,7 @@ internal class TerminalScene(
     }
 
     private fun awaitFit() {
-        repeat(FIT_FRAMES) {
-            frame()
-            Thread.sleep(40)
-        }
+        repeat(FIT_FRAMES) { frame() }
         settle(connector, session)
     }
 
@@ -84,6 +85,18 @@ internal class TerminalScene(
     }
 
     override fun close() = scene.close()
+}
+
+/** Blocks until [condition] holds, re-checking on every change of the terminal model (output, resize); fails after [WAIT_SECONDS]. */
+internal fun TerminalSession.awaitModel(condition: () -> Boolean) {
+    val changed = Semaphore(0)
+    val listener = TerminalModelListener { changed.release() }
+    buffer.addModelListener(listener)
+    try {
+        while (!condition()) check(changed.tryAcquire(WAIT_SECONDS, TimeUnit.SECONDS)) { "terminal model did not reach the awaited state" }
+    } finally {
+        buffer.removeModelListener(listener)
+    }
 }
 
 internal fun Image.save(file: File) {

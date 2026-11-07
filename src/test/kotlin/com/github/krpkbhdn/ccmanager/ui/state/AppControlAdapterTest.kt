@@ -53,6 +53,15 @@ class AppControlAdapterTest {
     }
 
     @Test
+    fun `attachSession records the folder the session runs in`() {
+        val folder = java.nio.file.Path.of("task-folder")
+
+        adapter.attachSession(LaunchedSession("s2", 7, "claude", null, folder))
+
+        assertThat(state.sessions.sessionDirectories["s2"]).isEqualTo(folder)
+    }
+
+    @Test
     fun `queuePrompt adds the trimmed text to the session queue`() {
         adapter.queuePrompt("s-working", "  go on ")
 
@@ -62,11 +71,15 @@ class AppControlAdapterTest {
     @Test
     fun `a call that started before the timeout is awaited and returns normally`() {
         val slow = AppControlAdapter(state, scope, Duration.ofMillis(100))
-        val started = java.util.concurrent.CountDownLatch(1)
+        val finished = java.util.concurrent.atomic.AtomicBoolean()
 
-        slow.onUi { started.countDown(); Thread.sleep(250) }
+        slow.onUi {
+            val pastTimeout = System.nanoTime() + Duration.ofMillis(150).toNanos()
+            com.github.krpkbhdn.ccmanager.ui.await { System.nanoTime() > pastTimeout }
+            finished.set(true)
+        }
 
-        assertThat(started.count).isZero()
+        assertThat(finished).isTrue()
     }
 
     @Test

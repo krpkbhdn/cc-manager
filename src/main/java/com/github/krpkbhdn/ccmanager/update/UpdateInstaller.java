@@ -33,13 +33,30 @@ class UpdateInstaller {
         if (appExecutable == null) {
             throw new IllegalStateException("The app was not started from an installed package");
         }
+        Path script = null;
         try {
-            var script = Files.createTempFile("cc-manager-update", ".cmd");
+            script = Files.createTempFile("cc-manager-update", ".cmd");
             Files.writeString(script, script(ProcessHandle.current().pid()));
-            CommandRunner.startDetached(List.of("cmd.exe", "/c", "start", "\"\"", "/min", script.toString(), msi.toString(), appExecutable));
+            CommandRunner.startDetached(command(script, msi, appExecutable));
         } catch (IOException e) {
+            if (script != null) {
+                try {
+                    Files.deleteIfExists(script);
+                } catch (IOException ignored) {
+                    // the temp directory is cleaned by the OS eventually
+                }
+            }
             throw new IllegalStateException("Could not start the installer: " + e.getMessage(), e);
         }
+    }
+
+    /** Every path is quoted so that & ^ or spaces in it do not split the cmd line; the JDK passes a quoted argument through as is. */
+    static List<String> command(Path script, Path msi, String appExecutable) {
+        return List.of("cmd.exe", "/c", "start", "\"\"", "/min", quoted(script.toString()), quoted(msi.toString()), quoted(appExecutable));
+    }
+
+    private static String quoted(String path) {
+        return "\"" + path + "\"";
     }
 
     static String script(long pid) {

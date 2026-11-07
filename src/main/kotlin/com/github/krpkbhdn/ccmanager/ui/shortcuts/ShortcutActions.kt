@@ -14,6 +14,7 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
     fun perform(shortcut: AppShortcut): Boolean {
         if (shortcut == AppShortcut.CLOSE_OVERLAY) return closeOverlay()
         if (modalOpen()) return false
+        if (overlayOpen() && shortcut !in OVERLAY_TOGGLES) return false
         shortcut.projectSlot?.let { return openProject(it) }
         return when (shortcut) {
             AppShortcut.PALETTE -> handled { state.paletteOpen = !state.paletteOpen }
@@ -24,6 +25,7 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
             AppShortcut.TOGGLE_THEME -> handled { state.prefs.toggleTheme(systemDark()) }
             AppShortcut.OVERVIEW -> handled { state.navigate(Route.Overview) }
             AppShortcut.ALL_SESSIONS -> handled { state.navigate(Route.Sessions) }
+            AppShortcut.SEARCH_SESSIONS -> handled { state.navigate(Route.SessionSearch) }
             AppShortcut.ASSISTANT -> handled { state.navigate(Route.Assistant) }
             AppShortcut.QUICK_REQUEST -> handled { state.quickRequestOpen = true }
             AppShortcut.NEXT_WAITING -> state.answers.answerNextWaiting()
@@ -87,6 +89,8 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
 
     private fun currentProject(): Project? = (state.route as? Route.Project)?.let { route -> state.projects.all.firstOrNull { it.id == route.id } }
 
+    private fun overlayOpen() = state.paletteOpen || state.shortcutsOpen || state.notificationsOpen || state.usageOpen
+
     private fun modalOpen() = state.answers.dialog != null || state.quickRequestOpen || state.assistantHelpOpen || state.assistantStartup.asking || state.confirm != null || state.projects.renaming != null || state.projects.groupDialog != null || state.projects.pickerOpen || state.extensions.projectSettings != null || state.settingsDialog.open ||
         state.tasks.projectId != null || state.tasks.quickStartProjectId != null || state.tasks.queuePickTarget != null ||state.runs.dialog != null || state.teams.dialog != null || state.agents.log != null || state.extensions.plugins.pending != null || state.extensions.mcp.adding || state.extensions.skills.creating || state.author.offer != null || state.author.manage != null || state.author.report != null ||
         currentProject()?.let { state.gits.of(it.id)?.dialog } != null
@@ -96,6 +100,8 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
         return true
     }
 }
+
+private val OVERLAY_TOGGLES = setOf(AppShortcut.PALETTE, AppShortcut.SHORTCUT_SHEET, AppShortcut.NOTIFICATIONS, AppShortcut.USAGE)
 
 private val PROJECT_ONLY = setOf(
     AppShortcut.OPEN_TERMINAL, AppShortcut.GIT_TAB, AppShortcut.GIT_CHANGES, AppShortcut.GIT_COMMIT,

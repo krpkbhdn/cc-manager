@@ -41,7 +41,7 @@ class QueueDispatcher {
             track.awaitingTurn = false
         } else {
             if (track.awaitingTurn && observation.nowMillis - track.sentAtMillis >= AWAIT_TURN_TIMEOUT_MILLIS) track.awaitingTurn = false
-            if (track.previous == AgentStatus.WORKING) track.heldByInterrupt = observation.interrupted
+            if (track.previous == AgentStatus.WORKING || track.previous == AgentStatus.NEEDS_ACTION) track.heldByInterrupt = observation.interrupted
             if (!track.heldByInterrupt && !track.awaitingTurn && !observation.queueEmpty) track.armed = true
         }
         track.previous = status

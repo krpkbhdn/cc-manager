@@ -19,7 +19,8 @@ public final class McpTargetRedaction {
 
     public static String redact(String target) {
         var text = target == null ? "" : target.strip();
-        return URL.matcher(text).matches() ? redactUrl(text) : executable(text);
+        var first = text.split("\\s+", 2)[0];
+        return URL.matcher(first).matches() ? redactUrl(first) : first;
     }
 
     private static String redactUrl(String url) {
@@ -33,9 +34,5 @@ public final class McpTargetRedaction {
             // an unparsable URL is a single token that may itself be the secret, so only its scheme stays
         }
         return url.substring(0, url.indexOf(URL_MARK)) + URL_MARK + HIDDEN;
-    }
-
-    private static String executable(String command) {
-        return command.split("\\s+", 2)[0];
     }
 }

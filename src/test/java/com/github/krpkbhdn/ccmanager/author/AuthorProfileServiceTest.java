@@ -97,7 +97,7 @@ class AuthorProfileServiceTest {
     }
 
     @Test
-    void nothingIsRecordedWhenPreparingTheSessionFails() {
+    void teamsAreRecordedEvenWhenPreparingTheSessionFails() {
         when(teams.install()).thenReturn(InstallOutcome.NONE);
         when(extensions.install(any(), any(), any())).thenReturn(InstallOutcome.NONE);
         when(prompt.prepare(any(), any(), any())).thenThrow(new UncheckedIOException(new IOException("disk")));
@@ -105,17 +105,29 @@ class AuthorProfileServiceTest {
         assertThatThrownBy(() -> service.install(List.of(entry(AuthorComponent.TEAMS, 0), entry(AuthorComponent.USER_SETUP, 0)), PROJECT))
                 .isInstanceOf(UncheckedIOException.class);
 
-        verify(decisions, never()).record(any(), anyLong(), any(), anyInt());
+        verify(decisions).record(AuthorComponent.TEAMS, 0, AuthorChoice.INSTALLED, 1);
+        verify(decisions, never()).record(eq(AuthorComponent.USER_SETUP), anyLong(), any(), anyInt());
     }
+
     @Test
-    void failedComponentIsNotRecordedAndGetsNoSession() {
+    void failedExtensionItemsDoNotStopTheHandoff() {
         when(extensions.install(any(), any(), any())).thenReturn(FAILED);
+        when(prompt.prepare(any(), any(), any())).thenReturn(handoff);
 
         var report = service.install(List.of(entry(AuthorComponent.USER_SETUP, 0)), PROJECT);
 
+        assertThat(report.handoff()).contains(handoff);
         verify(decisions, never()).record(any(), anyLong(), any(), anyInt());
-        assertThat(report.handoff()).isEmpty();
         assertThat(report.components().getFirst().failed()).isTrue();
+    }
+
+    @Test
+    void failedTeamsAreNotRecorded() {
+        when(teams.install()).thenReturn(FAILED);
+
+        service.install(List.of(entry(AuthorComponent.TEAMS, 0)), null);
+
+        verify(decisions, never()).record(any(), anyLong(), any(), anyInt());
     }
 
     @Test

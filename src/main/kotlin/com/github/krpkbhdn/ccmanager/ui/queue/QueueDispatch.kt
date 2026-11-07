@@ -11,8 +11,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 const val QUEUE_RETRY_MILLIS = 1_000L
+const val QUEUE_MAX_RETRIES = 600
 
-/** Sends queued prompts through [sendPrompt] as [QueueDispatcher] allows and re-checks on a timer while one waits. Runs on [scope] only. */
+/** Sends queued prompts through [sendPrompt] as [QueueDispatcher] allows and re-checks on a timer while one waits, up to [maxRetries] times until the next [evaluate] (a status change) restarts it. Runs on [scope] only. */
 class QueueDispatch(
     private val queues: PromptQueues,
     private val sessions: () -> List<SessionSnapshot>,
@@ -22,15 +23,22 @@ class QueueDispatch(
     private val scope: CoroutineScope,
     private val clock: () -> Long = System::currentTimeMillis,
     private val retryMillis: Long = QUEUE_RETRY_MILLIS,
+    private val maxRetries: Int = QUEUE_MAX_RETRIES,
 ) {
     private val dispatcher = QueueDispatcher()
     private val sending = mutableMapOf<String, Job>()
     private var retry: Job? = null
     private var disposed = false
+    private var retries = 0
 
     fun promptAdded(ccmSessionId: String) = dispatcher.promptAdded(ccmSessionId)
 
     fun evaluate() {
+        retries = 0
+        check()
+    }
+
+    private fun check() {
         val snapshots = sessions()
         val live = snapshots.map { it.ccmSessionId }.toSet()
         queues.retainSessions(live)
@@ -79,11 +87,12 @@ class QueueDispatch(
     }
 
     private fun scheduleRetry() {
-        if (disposed || retry?.isActive == true) return
+        if (disposed || retry?.isActive == true || retries >= maxRetries) return
+        retries++
         retry = scope.launch {
             delay(retryMillis)
             retry = null
-            evaluate()
+            check()
         }
     }
 }

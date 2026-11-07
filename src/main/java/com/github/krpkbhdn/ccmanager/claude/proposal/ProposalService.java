@@ -5,16 +5,14 @@ import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
 import com.github.krpkbhdn.ccmanager.claude.hook.HookProperties;
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
+import com.github.krpkbhdn.ccmanager.workspace.ChangeListeners;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
@@ -26,10 +24,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class ProposalService implements DecisionHolder {
 
-    private static final Logger log = LoggerFactory.getLogger(ProposalService.class);
-
     private final Map<String, Held> held = new ConcurrentHashMap<>();
-    private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
+    private final ChangeListeners listeners = new ChangeListeners("Proposal");
     private final SessionRegistry sessions;
     private final HookProperties properties;
 
@@ -59,9 +55,6 @@ public class ProposalService implements DecisionHolder {
      * @return completes with the user's answer, or with the reason there is none (timed out, over the cap, dismissed or session gone)
      */
     public CompletableFuture<AppDecision> holdForApp(PermissionProposal proposal) {
-        if (held.size() >= properties.maxHeldProposals()) {
-            return CompletableFuture.completedFuture(AppDecision.Unanswered.TOO_MANY_PENDING);
-        }
         var started = System.nanoTime();
         return holdProposal(proposal)
                 .map(held -> held.thenApply(answer -> answer.<AppDecision>map(AppDecision.Answered::new)
@@ -74,18 +67,21 @@ public class ProposalService implements DecisionHolder {
     private Optional<CompletableFuture<Optional<ProposalAnswer>>> holdProposal(Proposal proposal) {
         var decision = new CompletableFuture<Optional<ProposalAnswer>>()
                 .completeOnTimeout(Optional.empty(), properties.decisionHold().toMillis(), TimeUnit.MILLISECONDS);
+        var entry = new Held(proposal, decision);
         synchronized (held) {
             if (held.size() >= properties.maxHeldProposals()) {
                 decision.cancel(false);
                 return Optional.empty();
             }
-            held.put(proposal.id(), new Held(proposal, decision));
+            held.put(proposal.id(), entry);
         }
         decision.whenComplete((answer, error) -> {
-            held.remove(proposal.id());
-            notifyListeners();
+            synchronized (held) {
+                held.remove(proposal.id(), entry);
+            }
+            listeners.fire();
         });
-        notifyListeners();
+        listeners.fire();
         releaseOfEndedOrInterruptedSessions();
         return Optional.of(decision);
     }
@@ -123,8 +119,7 @@ public class ProposalService implements DecisionHolder {
 
     /** @return unsubscribe handle; callback fires (any thread) after a proposal appears or goes */
     public Runnable subscribe(Runnable onChange) {
-        listeners.add(onChange);
-        return () -> listeners.remove(onChange);
+        return listeners.add(onChange);
     }
 
     @EventListener
@@ -139,16 +134,6 @@ public class ProposalService implements DecisionHolder {
         held.values().stream()
                 .filter(pending -> sessions.find(pending.proposal().ccmSessionId()).map(session -> session.status() == AgentStatus.IDLE).orElse(true))
                 .forEach(pending -> pending.decision().complete(Optional.empty()));
-    }
-
-    private void notifyListeners() {
-        for (var listener : listeners) {
-            try {
-                listener.run();
-            } catch (RuntimeException e) {
-                log.warn("Proposal listener failed", e);
-            }
-        }
     }
 
     private record Held(Proposal proposal, CompletableFuture<Optional<ProposalAnswer>> decision) {}

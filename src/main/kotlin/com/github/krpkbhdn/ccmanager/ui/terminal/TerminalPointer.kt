@@ -156,6 +156,7 @@ private class PointerGestures(
             count > 1 -> session.select(CellSelection.of(cell, count, session.lineText(cell.line), session.columns))
             else -> session.clearSelection()
         }
+        autoscroll?.cancel()
         autoscroll = scope.launch { autoscrollWhileOutside() }
     }
 

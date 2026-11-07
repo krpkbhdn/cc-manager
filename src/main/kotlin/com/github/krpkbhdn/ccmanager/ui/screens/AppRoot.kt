@@ -22,6 +22,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -47,6 +52,7 @@ import com.github.krpkbhdn.ccmanager.ui.components.ToastHost
 import com.github.krpkbhdn.ccmanager.ui.components.trackInputModality
 import com.github.krpkbhdn.ccmanager.ui.git.dialog.GitDialogHost
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
+import com.github.krpkbhdn.ccmanager.ui.history.SessionSearchScreen
 import com.github.krpkbhdn.ccmanager.ui.palette.CommandPalette
 import com.github.krpkbhdn.ccmanager.ui.palette.paletteItems
 import com.github.krpkbhdn.ccmanager.ui.picker.FolderPickerDialog
@@ -61,6 +67,9 @@ import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalDialogHost
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantScreen
 import com.github.krpkbhdn.ccmanager.ui.sessions.SessionsScreen
+import com.github.krpkbhdn.ccmanager.ui.state.usageWindowDetails
+import com.github.krpkbhdn.ccmanager.ui.usage.UsageScreen
+import com.github.krpkbhdn.ccmanager.ui.usage.projectLabel
 import com.github.krpkbhdn.ccmanager.ui.state.Route
 import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.PluginCommandDialog
 import com.github.krpkbhdn.ccmanager.ui.extensions.plugins.PluginsScreen
@@ -91,7 +100,7 @@ private val NARROW_WIDTH = 1040.dp
 @OptIn(ExperimentalComposeUiApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), modifier: Modifier = Modifier) {
-    val dropTarget = remember { FolderDropTarget(state) }
+    val dropTarget = rememberCoroutineScope().let { scope -> remember { FolderDropTarget(state, scope) } }
     CompositionLocalProvider(LocalVoice provides state.voice) {
         Box(
             modifier.fillMaxSize().background(colors.background).trackInputModality()
@@ -110,7 +119,7 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
             if (state.paletteOpen) CommandPalette(paletteItems(state, colors.dark)) { state.paletteOpen = false }
             if (state.shortcutsOpen) ShortcutSheet { state.shortcutsOpen = false }
             (state.route as? Route.Project)?.let { state.gits.of(it.id) }?.let { GitDialogHost(it) }
-            state.tasks.projectId?.let { id -> state.projects.all.firstOrNull { it.id == id } }?.let { StartTaskDialog(it, state.teams, startTaskTemplates(state, it), startTaskActions(state, it)) }
+            state.tasks.projectId?.let { id -> state.projects.all.firstOrNull { it.id == id } }?.let { StartTaskDialog(it, state.teams, startTaskTemplates(state, it), startTaskActions(state, it), state.gits.branchOf(it.id) != null) }
             state.tasks.quickStartProjectId?.let { id -> state.projects.all.firstOrNull { it.id == id } }?.let { QuickStartPicker(state, it) }
             state.tasks.queuePickTarget?.let { (id, sessionId) -> state.projects.all.firstOrNull { it.id == id }?.let { QueuePicker(state, it, sessionId) } }
             state.prompts.dialog?.let { PromptDialog(it, state.prompts, state.projects.all, state.teams.teams) }
@@ -138,7 +147,7 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
 
 /** Accepts a dropped folder anywhere in the window and adds it as a project. */
 @OptIn(ExperimentalComposeUiApi::class)
-private class FolderDropTarget(private val state: AppState) : DragAndDropTarget {
+private class FolderDropTarget(private val state: AppState, private val scope: CoroutineScope) : DragAndDropTarget {
     var hovering by mutableStateOf(false)
 
     override fun onEntered(event: DragAndDropEvent) { hovering = true }
@@ -150,13 +159,11 @@ private class FolderDropTarget(private val state: AppState) : DragAndDropTarget 
     override fun onDrop(event: DragAndDropEvent): Boolean {
         hovering = false
         val dropped = (event.dragData() as? DragData.FilesList)?.readFiles().orEmpty().mapNotNull(::toPath)
-        val folder = dropped.firstOrNull { Files.isDirectory(it) }
-        if (folder == null) {
-            state.notifications.reportError("Could not add project", NOT_A_FOLDER)
-            return false
+        scope.launch {
+            val folder = withContext(Dispatchers.IO) { dropped.firstOrNull { Files.isDirectory(it) } }
+            if (folder == null) state.notifications.reportError("Could not add project", NOT_A_FOLDER) else state.projects.addAt(folder)
         }
-        state.projects.addAt(folder)
-        return true
+        return dropped.isNotEmpty()
     }
 
     private fun toPath(uri: String): Path? = runCatching { Path.of(URI(uri)) }.getOrNull()
@@ -189,6 +196,11 @@ private fun RouteContent(state: AppState) {
     if (route == Route.Mcp) return McpScreen(state.extensions.mcp)
     if (route == Route.Skills) return SkillsScreen(state.extensions.skills)
     if (route == Route.Sessions) return SessionsScreen(state)
+    if (route == Route.SessionSearch) return SessionSearchScreen(state.sessionSearch, state.projects.projects, { project, hit ->
+        runCatching { Path.of(hit.cwd) }.onSuccess { state.sessions.resume(project.id, hit.claudeSessionId, it) }
+            .onFailure { state.notifications.reportError("Could not resume the session", "The recorded folder is not a valid path.") }
+    })
+    if (route == Route.Usage) return UsageScreen(state.usage, usageWindowDetails(state.environment.rateLimits, state.now), projectName = { id -> projectLabel(id) { state.projects.find(it)?.name } })
     if (route == Route.Assistant) return AssistantScreen(state)
     val project = (route as? Route.Project)?.let { target -> state.projects.all.firstOrNull { it.id == target.id } }
     Crossfade(project?.id, label = "route") { shown ->
@@ -227,6 +239,6 @@ private fun QueuePicker(state: AppState, project: Project, ccmSessionId: String)
     TemplatePickerDialog(state.prompts.forProject(project.id), project.id, state.teams.teams, { state.tasks.queueFromTemplate(project, ccmSessionId, it) }, { state.tasks.queuePickTarget = null })
 
 private fun startTaskActions(state: AppState, project: Project) = StartTaskActions(
-    onStart = { team, task, makeDefault -> state.tasks.start(project, team, task, makeDefault) },
+    onStart = { team, task, makeDefault, isolated -> state.tasks.start(project, team, task, makeDefault, isolated) },
     onDismiss = state.tasks::close,
 )

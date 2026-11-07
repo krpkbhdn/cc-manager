@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.focus.FocusRequester
@@ -22,6 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 private const val FRAME_NANOS = 16_000_000L
 private const val SPACE = 32
+private const val PAST_HOLD_THRESHOLD_MILLIS = 400L
 
 /** Two dictation fields in one scene: holding Space dictates only into the one with focus. */
 @OptIn(InternalComposeUiApi::class)
@@ -30,14 +30,15 @@ class VoiceTextAreaTest {
     private val secondStarts = AtomicInteger()
     private var nanos = 0L
 
+    private val loop = DictationLoop()
+    private val first = TextFieldState()
+    private val second = TextFieldState()
+    private val firstDictation = VoiceDictation(first, loop.scope, { true }, { firstStarts.incrementAndGet(); mock(DictationSession::class.java) }, {}, io = loop.io)
+    private val secondDictation = VoiceDictation(second, loop.scope, { true }, { secondStarts.incrementAndGet(); mock(DictationSession::class.java) }, {}, io = loop.io)
+
     private val scene = ImageComposeScene(600, 400, Density(1f)) {
         AppTheme(dark = true) {
-            val scope = rememberCoroutineScope()
-            val first = remember { TextFieldState() }
-            val second = remember { TextFieldState() }
             val focus = remember { FocusRequester() }
-            val firstDictation = remember { VoiceDictation(first, scope, { true }, { firstStarts.incrementAndGet(); mock(DictationSession::class.java) }, {}) }
-            val secondDictation = remember { VoiceDictation(second, scope, { true }, { secondStarts.incrementAndGet(); mock(DictationSession::class.java) }, {}) }
             LaunchedEffect(Unit) { focus.requestFocus() }
             Column {
                 DictationArea(first, firstDictation, usable = true)
@@ -54,12 +55,8 @@ class VoiceTextAreaTest {
     fun `holding Space dictates only into the focused field`() {
         repeat(6) { frame() }
         key(KeyEventType.KeyDown)
-        val end = System.nanoTime() + 700_000_000L
-        while (System.nanoTime() < end && secondStarts.get() == 0) {
-            Thread.sleep(40)
-            key(KeyEventType.KeyDown)
-            frame()
-        }
+        loop.advance(PAST_HOLD_THRESHOLD_MILLIS)
+        loop.pump()
 
         assertThat(secondStarts.get()).isEqualTo(1)
         assertThat(firstStarts.get()).isZero()

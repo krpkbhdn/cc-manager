@@ -56,7 +56,6 @@ import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
 private val dialogWidth = 420.dp
 private val dialogIconBox = 40.dp
-private const val MESSAGE_LINES = 5
 
 /**
  * Scrim plus a centred, animated surface; Esc (unless [escapeDismisses] is off) and clicks outside the card call [onDismiss],
@@ -134,7 +133,7 @@ fun DialogActions(confirmLabel: String, confirmEnabled: Boolean, destructive: Bo
 fun ConfirmDialog(request: ConfirmRequest, onDismiss: () -> Unit) {
     ModalHost(onDismiss) {
         DialogBody(request.title, Icons.Alert, if (request.destructive) colors.danger else colors.accent) {
-            Label(request.message, color = colors.textSecondary, maxLines = MESSAGE_LINES)
+            Label(request.message, color = colors.textSecondary, maxLines = request.messageLines)
             DialogActions(request.confirmLabel, true, request.destructive, { onDismiss(); request.onConfirm() }, onDismiss)
         }
     }

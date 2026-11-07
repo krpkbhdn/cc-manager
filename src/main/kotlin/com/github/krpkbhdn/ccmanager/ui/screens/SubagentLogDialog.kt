@@ -121,7 +121,7 @@ private fun EntryList(entries: List<TranscriptEntry>) {
 }
 
 @Composable
-private fun LogEntry(entry: TranscriptEntry) {
+internal fun LogEntry(entry: TranscriptEntry, modifier: Modifier = Modifier) {
     val tint = when (entry.kind) {
         Kind.PROMPT -> colors.accent
         Kind.ASSISTANT -> colors.success
@@ -129,7 +129,7 @@ private fun LogEntry(entry: TranscriptEntry) {
         Kind.TOOL_RESULT -> colors.textTertiary
     }
     val mono = entry.kind == Kind.TOOL_CALL || entry.kind == Kind.TOOL_RESULT
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
         Label(entry.title, color = tint, style = Type.captionMedium)
         Label(entry.text, color = if (mono) colors.textSecondary else colors.textPrimary, style = if (mono) Type.monoSmall else Type.small, maxLines = ENTRY_LINES, tooltipWhenTruncated = true)
     }

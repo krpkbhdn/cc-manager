@@ -45,6 +45,11 @@ class McpTargetRedactionTest {
     }
 
     @Test
+    void urlFollowedByTextIsStillReducedToHost() {
+        assertThat(McpTargetRedaction.redact("https://h/mcp?token=abc def")).isEqualTo("https://h/…");
+    }
+
+    @Test
     void nullIsEmpty() {
         assertThat(McpTargetRedaction.redact(null)).isEmpty();
     }

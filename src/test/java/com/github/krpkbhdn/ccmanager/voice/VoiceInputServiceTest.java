@@ -73,7 +73,7 @@ class VoiceInputServiceTest {
         when(opener.open(any(), any(), any(), any(), any())).thenReturn(recognizer);
         when(microphone.open(any(), any())).thenReturn(micHandle);
         properties = new VoiceProperties("auto", Duration.ofSeconds(10), Duration.ofMillis(1500),
-                Duration.ofMillis(700), 0.01, 0.5, 4, Duration.ofSeconds(30), Duration.ofMinutes(5));
+                Duration.ofMillis(700), 0.01, 0.5, 4, Duration.ofSeconds(30), Duration.ofMinutes(5), Duration.ofMinutes(2), Duration.ofSeconds(60));
         service = new VoiceInputService(devices, assets, microphone, properties, opener, scheduler);
     }
 

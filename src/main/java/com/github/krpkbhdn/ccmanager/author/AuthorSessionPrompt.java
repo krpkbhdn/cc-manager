@@ -12,7 +12,6 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 import org.springframework.stereotype.Component;
 
 /**
@@ -22,7 +21,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class AuthorSessionPrompt {
 
-    private static final String PROMPT_FILE_PREFIX = "session-prompt-";
+    private static final String PROMPT_FILE = "session-prompt.md";
     private static final String PREINSTALL_REPORT = "{{preInstallReport}}";
     private static final String PROFILE_DIR = "{{profileDir}}";
     private static final String PROJECT_PATH = "{{projectPath}}";
@@ -36,11 +35,6 @@ public class AuthorSessionPrompt {
         this.directory = properties.dataDir().resolve("author-profile");
         this.loader = loader;
         this.host = host;
-    }
-
-    /** The directory passed to claude as {@code --add-dir}. */
-    public Path profileDirectory() {
-        return directory;
     }
 
     /** @param claudeComponents the components Claude finishes: USER_SETUP and/or PROJECT_SETUP, others are ignored */
@@ -60,7 +54,7 @@ public class AuthorSessionPrompt {
                 .replace(PROFILE_DIR, directory.toString())
                 .replace(PROJECT_PATH, projectPath.toString())
                 .replace(CLAUDE_CONFIG_DIR, host.claudeConfigDirectory().toString());
-        var promptFile = directory.resolve(PROMPT_FILE_PREFIX + UUID.randomUUID() + ".md");
+        var promptFile = directory.resolve(PROMPT_FILE);
         write(promptFile, prompt);
         return new SessionHandoff("Read " + promptFile + " and carry out its instructions.", directory);
     }

@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,6 +23,7 @@ import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.ui.state.GroupDialogRequest
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.ui.components.CountBadge
@@ -55,16 +57,21 @@ fun Sidebar(state: AppState, modifier: Modifier = Modifier, forceCollapsed: Bool
     val collapsed = state.settings.sidebarCollapsed || forceCollapsed
     val width by animateDpAsState(if (collapsed) railWidth else expandedWidth, Motion.slow(), label = "sidebarWidth")
     Row(modifier.fillMaxHeight()) {
-        Column(Modifier.width(width).fillMaxHeight().background(colors.sidebar).padding(horizontal = if (collapsed) Spacing.sm else Spacing.md)) {
-            SidebarHeader(collapsed, forceCollapsed, state)
-            NavItem(Icons.Grid, "Overview", state.route == Route.Overview, collapsed, state.live.sessions.size) { state.navigate(Route.Overview) }
-            NavItem(Icons.Layers, "All sessions", state.route == Route.Sessions, collapsed, state.live.sessions.count { it.status == AgentStatus.NEEDS_ACTION }) { state.navigate(Route.Sessions) }
-            NavItem(Icons.Sparkles, "Assistant", state.route == Route.Assistant, collapsed, 0) { state.navigate(Route.Assistant) }
-            NavItem(Icons.Message, "Prompt Library", state.route == Route.Prompts, collapsed, 0) { state.navigate(Route.Prompts) }
-            NavItem(Icons.Users, "Teams", state.route == Route.Teams, collapsed, 0) { state.navigate(Route.Teams) }
-            ExtensionsGroup(state, collapsed)
-            ProjectsSection(state, collapsed, Modifier.weight(1f))
-            Box(Modifier.padding(top = Spacing.sm, bottom = Spacing.lg)) {
+        val edge = if (collapsed) Spacing.sm else Spacing.md
+        Column(Modifier.width(width).fillMaxHeight().background(colors.sidebar)) {
+            Column(Modifier.padding(horizontal = edge)) {
+                SidebarHeader(collapsed, forceCollapsed, state)
+                NavItem(Icons.Grid, "Overview", state.route == Route.Overview, collapsed, state.live.sessions.size) { state.navigate(Route.Overview) }
+                NavItem(Icons.Layers, "All sessions", state.route == Route.Sessions, collapsed, state.live.sessions.count { it.status == AgentStatus.NEEDS_ACTION }) { state.navigate(Route.Sessions) }
+                NavItem(Icons.Search, "Search sessions", state.route == Route.SessionSearch, collapsed, 0) { state.navigate(Route.SessionSearch) }
+                NavItem(Icons.Gauge, "Usage", state.route == Route.Usage, collapsed, 0) { state.navigate(Route.Usage) }
+                NavItem(Icons.Sparkles, "Assistant", state.route == Route.Assistant, collapsed, 0) { state.navigate(Route.Assistant) }
+                NavItem(Icons.Message, "Prompt Library", state.route == Route.Prompts, collapsed, 0) { state.navigate(Route.Prompts) }
+                NavItem(Icons.Users, "Teams", state.route == Route.Teams, collapsed, 0) { state.navigate(Route.Teams) }
+                ExtensionsGroup(state, collapsed)
+            }
+            ProjectsSection(state, collapsed, edge, Modifier.weight(1f))
+            Box(Modifier.padding(start = edge, end = edge, top = Spacing.sm, bottom = Spacing.lg)) {
                 NavItem(Icons.Settings, "Settings", state.settingsDialog.open, collapsed, 0) { state.settingsDialog.show() }
             }
         }
@@ -123,19 +130,19 @@ internal fun NavItem(icon: ImageVector, label: String, selected: Boolean, collap
 }
 
 @Composable
-private fun ProjectsSection(state: AppState, collapsed: Boolean, modifier: Modifier) {
+private fun ProjectsSection(state: AppState, collapsed: Boolean, edge: Dp, modifier: Modifier) {
     val list: LazyListState = rememberLazyListState()
     Column(modifier) {
         if (!collapsed) {
-            Row(Modifier.fillMaxWidth().padding(start = Spacing.sm, top = Spacing.lg, bottom = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(start = edge + Spacing.sm, end = edge, top = Spacing.lg, bottom = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
                 Label("Projects", Modifier.weight(1f), color = colors.textTertiary, style = Type.overline)
                 CountBadge(state.projects.topLevelCount)
             }
         } else {
-            HorizontalRule(Modifier.padding(vertical = Spacing.sm, horizontal = Spacing.sm))
+            HorizontalRule(Modifier.padding(vertical = Spacing.sm, horizontal = edge + Spacing.sm))
         }
         Box(Modifier.weight(1f)) {
-            LazyColumn(Modifier.animateContentSize(), list, verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
+            LazyColumn(Modifier.animateContentSize(), list, contentPadding = PaddingValues(start = edge, end = edge + Spacing.xs), verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
                 state.projects.groups.forEach { group ->
                     val members = state.projects.membersOf(group.id)
                     val open = collapsed || group.id !in state.projects.foldedGroups

@@ -134,14 +134,6 @@ Installers are written to `build/compose/binaries/main/<format>/`.
 
 The first build needs internet: it downloads Gradle and JBR 25, so it takes a while. Without JBR the app falls back to the plain OS window frame; `-Dccm.nativeFrame=true` forces the native OS frame even on JBR.
 
-### UI preview without Claude (for contributors)
-
-```sh
-./gradlew runPreview                                   # UI with fake services
-./gradlew runPreview --args="--shots --out=build/shots --size=1600x1000"
-./gradlew gitShots --args="--out=build/shots --dark"   # Git tab, rendered offscreen
-```
-
 ## Keyboard shortcuts
 
 <details>

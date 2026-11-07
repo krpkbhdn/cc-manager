@@ -14,6 +14,6 @@ public record TeamRole(long id, RoleDraft draft, int position) {
     }
 
     public ModelSelection selection() {
-        return draft.selection();
+        return new ModelSelection(draft.model(), draft.effort());
     }
 }

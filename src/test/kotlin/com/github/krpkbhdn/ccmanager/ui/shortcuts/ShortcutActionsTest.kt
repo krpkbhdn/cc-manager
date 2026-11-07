@@ -92,6 +92,27 @@ class ShortcutActionsTest {
         assertThat(actions.sidebarOrder().map { it.id }).doesNotContainAnyElementsOf(hidden.map { it.id }).contains(group.id)
     }
 
+    @Test
+    fun `an open palette blocks other shortcuts but can be toggled closed`() {
+        state.paletteOpen = true
+
+        assertThat(actions.perform(AppShortcut.ALL_SESSIONS)).isFalse()
+        assertThat(actions.perform(AppShortcut.NEW_SESSION)).isFalse()
+        assertThat(actions.perform(AppShortcut.SHORTCUT_SHEET)).isTrue()
+        assertThat(actions.perform(AppShortcut.PALETTE)).isTrue()
+        assertThat(state.paletteOpen).isFalse()
+    }
+
+    @Test
+    fun `open notifications and usage panels block other shortcuts`() {
+        state.notificationsOpen = true
+        assertThat(actions.perform(AppShortcut.ALL_SESSIONS)).isFalse()
+        state.notificationsOpen = false
+
+        state.usageOpen = true
+        assertThat(actions.perform(AppShortcut.ALL_SESSIONS)).isFalse()
+    }
+
     enum class Modal(val open: ShortcutActionsTest.() -> Unit) {
         CONFIRMATION({ state.confirm = confirmation() }),
         FOLDER_PICKER({ state.projects.pickerOpen = true }),

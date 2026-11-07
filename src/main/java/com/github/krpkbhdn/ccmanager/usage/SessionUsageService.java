@@ -29,6 +29,10 @@ public class SessionUsageService {
         }
         var usage = SessionUsageParser.parse(report.ccmSessionId(), report.payload(), report.receivedAt());
         bySession.merge(report.ccmSessionId(), usage, (current, incoming) -> incoming.receivedAt().isBefore(current.receivedAt()) ? current : incoming);
+        if (sessions.find(report.ccmSessionId()).isEmpty()) {
+            bySession.remove(report.ccmSessionId());
+            return;
+        }
         listeners.fire();
     }
 

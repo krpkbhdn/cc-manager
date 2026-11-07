@@ -44,10 +44,6 @@ public record RoleDraft(String name, String description, String prompt, String m
         return TOOL_ENTRY.matcher(entry).matches();
     }
 
-    public ModelSelection selection() {
-        return new ModelSelection(model, effort);
-    }
-
     private static String normalizedTools(String tools) {
         var entries = tools == null ? new String[0] : tools.split(",");
         var kept = new java.util.ArrayList<String>();

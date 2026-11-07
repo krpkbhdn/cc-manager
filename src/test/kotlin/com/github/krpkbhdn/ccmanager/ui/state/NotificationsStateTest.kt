@@ -22,7 +22,7 @@ class NotificationsStateTest {
     fun `a session leaving needs action dismisses its toast and popup`() {
         state.receive(needsAction(1, "s1"))
         windowActive = false
-        state.receive(needsAction(2, "s1"))
+        state.popup(OsNotice(NotificationKind.NEEDS_ACTION, "project-1: Needs you", "b", "s1", 1))
         assertThat(state.toasts).hasSize(1)
         assertThat(state.popups).hasSize(1)
 
@@ -44,6 +44,15 @@ class NotificationsStateTest {
         )
 
         assertThat(state.toasts.map { it.id }).containsExactly(1L, 2L, 3L)
+    }
+
+    @Test
+    fun `restoring the history keeps a notification that arrived meanwhile`() {
+        state.receive(needsAction(3, "s3"))
+
+        state.restore(listOf(needsAction(1, "s1"), needsAction(2, "s2")))
+
+        assertThat(state.items.map { it.id }).containsExactly(1L, 2L, 3L)
     }
 
     @Test

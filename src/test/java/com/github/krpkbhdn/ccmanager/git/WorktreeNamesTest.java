@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.git;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,6 +14,22 @@ class WorktreeNamesTest {
 
     @TempDir
     Path root;
+
+    @Test
+    void defaultPathIsSiblingWithSlashesFlattened() {
+        var top = root.resolve("repo");
+        assertThat(WorktreeNames.defaultPath(top, "task/fix-1")).isEqualTo(root.resolve("repo-wt-task-fix-1").toString());
+    }
+
+    @Test
+    void defaultPathFailsForRootWithoutName() {
+        assertThatThrownBy(() -> WorktreeNames.defaultPath(root.getRoot(), "x")).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void defaultPathFailsForInvalidPathCharacters() {
+        assertThatThrownBy(() -> WorktreeNames.defaultPath(root.resolve("repo"), "a\0b")).isInstanceOf(IllegalArgumentException.class);
+    }
 
     @ParameterizedTest
     @ValueSource(strings = {"feature/x", "fix-1", "a.b", "v1.0"})

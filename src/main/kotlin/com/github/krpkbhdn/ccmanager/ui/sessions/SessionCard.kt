@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -17,6 +18,7 @@ import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import com.github.krpkbhdn.ccmanager.ui.components.AppButton
 import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant
+import com.github.krpkbhdn.ccmanager.ui.components.Chip
 import com.github.krpkbhdn.ccmanager.ui.components.Label
 import com.github.krpkbhdn.ccmanager.ui.components.Pressable
 import com.github.krpkbhdn.ccmanager.ui.components.ProjectAvatar
@@ -38,6 +40,7 @@ import kotlin.math.roundToInt
 
 private const val ACTIVITY_LINES = 3
 private val footerHeight = 28.dp
+private val branchChipMaxWidth = 140.dp
 
 /** One session at a glance: project, title, status, last action, time since the last event, context and cost. Every card has the same height. */
 @Composable
@@ -48,6 +51,7 @@ fun SessionCard(
     now: () -> Instant,
     stale: () -> Boolean,
     proposalHeadline: String?,
+    worktreeBranch: String?,
     onOpen: () -> Unit,
     onAnswer: () -> Unit,
     modifier: Modifier = Modifier,
@@ -64,7 +68,10 @@ fun SessionCard(
                 ProjectAvatar(projectName, size = 36.dp, status = session.status, cutout = colors.surface)
                 Column(Modifier.weight(1f)) {
                     Label(sessionTitle(session), style = Type.subtitle, tooltipWhenTruncated = true)
-                    Label(projectName, color = colors.textSecondary, style = Type.small, tooltipWhenTruncated = true)
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
+                        Label(projectName, Modifier.weight(1f, fill = false), color = colors.textSecondary, style = Type.small, tooltipWhenTruncated = true)
+                        worktreeBranch?.let { Chip(it, colors.accent, Modifier.widthIn(max = branchChipMaxWidth)) }
+                    }
                 }
                 StatusChip(session.status)
             }

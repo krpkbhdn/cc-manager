@@ -14,7 +14,8 @@ class AssistantHelpCoverageTest {
 
     private val routeWords = mapOf(
         "Overview" to "Overview", "Teams" to "Teams", "Prompts" to "Prompt Library", "Plugins" to "Plugins",
-        "Mcp" to "MCP servers", "Skills" to "Skills", "Sessions" to "All sessions", "Assistant" to "Assistant", "Project" to "project",
+        "Mcp" to "MCP servers", "Skills" to "Skills", "Sessions" to "All sessions", "SessionSearch" to "Search sessions", "Assistant" to "Assistant", "Project" to "project",
+        "Usage" to "Usage screen",
     )
 
     @Test

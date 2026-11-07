@@ -3,7 +3,6 @@ package com.github.krpkbhdn.ccmanager.ui.voice
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.focus.FocusRequester
@@ -23,6 +22,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 private const val FRAME_NANOS = 16_000_000L
 private const val SPACE = 32
+private const val PAST_HOLD_THRESHOLD_MILLIS = 400L
 
 /** Hold-Space dictation through the real single-line [DictationField]. */
 @OptIn(InternalComposeUiApi::class)
@@ -31,11 +31,12 @@ class VoiceTextFieldTest {
     private val state = TextFieldState()
     private var nanos = 0L
 
+    private val loop = DictationLoop()
+    private val dictation = VoiceDictation(state, loop.scope, { true }, { listeners += it; mock(DictationSession::class.java) }, {}, singleLine = true, io = loop.io)
+
     private val scene = ImageComposeScene(600, 200, Density(1f)) {
         AppTheme(dark = true) {
-            val scope = rememberCoroutineScope()
             val focus = remember { FocusRequester() }
-            val dictation = remember { VoiceDictation(state, scope, { true }, { listeners += it; mock(DictationSession::class.java) }, {}, singleLine = true) }
             LaunchedEffect(Unit) { focus.requestFocus() }
             DictationField(state, dictation, usable = true, focusRequester = focus, placeholder = "Say it")
         }
@@ -53,14 +54,8 @@ class VoiceTextFieldTest {
         repeat(6) { frame() }
         press()
         typed()
-        val end = System.nanoTime() + 700_000_000L
-        while (System.nanoTime() < end && listeners.isEmpty()) {
-            Thread.sleep(40)
-            press()
-            typed()
-            frame()
-        }
-        Thread.sleep(300)
+        loop.advance(PAST_HOLD_THRESHOLD_MILLIS)
+        loop.pump()
         repeat(6) { frame() }
     }
 
@@ -83,7 +78,8 @@ class VoiceTextFieldTest {
         state.edit { append("ab cd"); selection = TextRange(2) }
         holdUntilListening()
         listeners[0].onFinal("hello\nworld")
-        repeat(6) { frame(); Thread.sleep(20) }
+        loop.pump()
+        repeat(6) { frame() }
 
         assertThat(state.text.toString()).isEqualTo("ab hello world cd")
         release()

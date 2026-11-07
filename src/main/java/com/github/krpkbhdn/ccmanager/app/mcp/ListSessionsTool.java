@@ -26,7 +26,7 @@ class ListSessionsTool implements AssistantMcpTool {
 
     @Override
     public String description() {
-        return "Lists the Claude sessions with id, project id, status (IDLE, WORKING, NEEDS_ACTION, OFFLINE) and the last activity; optionally only those of one project.";
+        return "Lists the Claude sessions with id, project id, status (IDLE, WORKING, NEEDS_ACTION, OFFLINE); optionally only those of one project.";
     }
 
     @Override
@@ -40,7 +40,7 @@ class ListSessionsTool implements AssistantMcpTool {
         if (list.isEmpty()) {
             return "No sessions.";
         }
-        return list.stream().map(session -> "- id: %s | project: %s | status: %s | activity: %s".formatted(session.ccmSessionId(), session.projectId(),
-                session.status(), session.activity() == null ? "-" : session.activity())).collect(Collectors.joining("\n"));
+        return list.stream().map(session -> "- id: %s | project: %s | status: %s".formatted(session.ccmSessionId(), session.projectId(),
+                session.status())).collect(Collectors.joining("\n"));
     }
 }

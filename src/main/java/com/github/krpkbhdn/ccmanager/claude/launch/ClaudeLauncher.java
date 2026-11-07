@@ -49,12 +49,14 @@ public class ClaudeLauncher {
     private final GroupWorkspace groupWorkspace;
     private final ProjectMcpServers projectMcpServers;
     private final AssistantMcpServer assistantMcp;
+    private final WorkDirectories workDirectories;
 
     public ClaudeLauncher(ProjectService projects, ClaudeInstallationService installation,
             HookSettingsWriter hookSettings, ClaudePluginWriter plugin, SessionRegistry sessions, AppProperties properties,
             ProjectGroupService groups, GroupWorkspace groupWorkspace, ProjectMcpServers projectMcpServers,
-            AssistantMcpServer assistantMcp) {
+            AssistantMcpServer assistantMcp, WorkDirectories workDirectories) {
         this.assistantMcp = assistantMcp;
+        this.workDirectories = workDirectories;
         this.dataDir = properties.dataDir();
         this.groups = groups;
         this.groupWorkspace = groupWorkspace;
@@ -78,9 +80,45 @@ public class ClaudeLauncher {
                 (files, exe, selection) -> ClaudeCommand.launchArguments(exe, files, plugin.directory(), mode, selection, team));
     }
 
+    /** Like {@link #launch(long, LaunchMode, Team)} in [directory], the project folder or one of its git worktrees; the session still belongs to the project. */
+    public LaunchedSession launchIn(long projectId, Path directory, LaunchMode mode, Team team) {
+        return startIn(projectId, directory, ClaudeCommand.label(mode, team), (files, exe, selection) -> team == null
+                ? ClaudeCommand.launchArguments(exe, files, plugin.directory(), mode, selection)
+                : ClaudeCommand.launchArguments(exe, files, plugin.directory(), mode, selection, team));
+    }
+
+    /** A task session in [directory] (project folder or git worktree); with a [team] as {@link #launchTeam}, without as {@link #launchTask}. */
+    public LaunchedSession launchTaskIn(long projectId, Path directory, Team team, String task) {
+        if (team == null) {
+            return startIn(projectId, directory, ClaudeCommand.label(LaunchMode.NEW),
+                    (files, exe, selection) -> ClaudeCommand.taskArguments(exe, files, plugin.directory(), selection, task));
+        }
+        return startIn(projectId, directory, ClaudeCommand.label(LaunchMode.NEW, team),
+                (files, exe, selection) -> ClaudeCommand.teamArguments(exe, files, plugin.directory(), team, task));
+    }
+
+    /** Resumes a stored conversation in [cwd] (where Claude keeps it) or, if that folder is gone, in the project folder; [team] may be null. */
+    public LaunchedSession resume(long projectId, String claudeSessionId, Path cwd, Team team) {
+        ClaudeCommand.canonicalUuid(claudeSessionId);
+        Project project = project(projectId);
+        boolean keepsCwd = insideProject(cwd, project.path()) || cwd != null && workDirectories.accepts(project, cwd);
+        Path directory = keepsCwd ? cwd : project.path();
+        return start(projectId, directory, project.modelSelection(), ClaudeCommand.label(LaunchMode.RESUME_PICKER, team),
+                (files, exe, selection) -> ClaudeCommand.resumeArguments(exe, files, plugin.directory(), claudeSessionId, selection, team),
+                project.group() ? members(project) : List.of());
+    }
+
+    static boolean insideProject(Path cwd, Path projectPath) {
+        try {
+            return cwd != null && Files.isDirectory(cwd) && cwd.toRealPath().startsWith(projectPath.toRealPath());
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     /** A lead session with the team's roles as subagents; the task is its first prompt. */
     public LaunchedSession launchTeam(long projectId, Team team, String task) {
-        return start(projectId, "claude (" + team.name() + ")",
+        return start(projectId, ClaudeCommand.label(LaunchMode.NEW, team),
                 (files, exe, selection) -> ClaudeCommand.teamArguments(exe, files, plugin.directory(), team, task));
     }
 
@@ -98,6 +136,7 @@ public class ClaudeLauncher {
 
     /** claude attach ID for a background agent; not for a group, whose variadic --add-dir would swallow the subcommand. */
     public LaunchedSession attach(long projectId, String backgroundSessionId) {
+        ClaudeCommand.requireSafeBackgroundId(backgroundSessionId);
         if (project(projectId).group()) {
             throw new IllegalStateException("Background agents cannot be attached to a project group.");
         }
@@ -123,11 +162,17 @@ public class ClaudeLauncher {
                 project.group() ? members(project) : List.of());
     }
 
+    private LaunchedSession startIn(long projectId, Path directory, String label, CommandFactory commandFactory) {
+        Project project = project(projectId);
+        return start(projectId, workDirectories.validate(project, directory), project.modelSelection(), label, commandFactory, List.of());
+    }
+
     private LaunchedSession start(long projectId, Path directory, ModelSelection modelSelection, String label,
             CommandFactory commandFactory, List<Project> members) {
         boolean group = !members.isEmpty();
         Path executable = executable();
         String ccmSessionId = sessions.register(projectId);
+        PtyProcess process = null;
         try {
             List<Path> memberPaths = members.stream().map(Project::path).toList();
             if (group) {
@@ -140,13 +185,17 @@ public class ClaudeLauncher {
             if (group) {
                 ClaudeCommand.addDirectories(command, memberPaths);
             }
-            Map<String, String> environment = group
-                    ? ClaudeCommand.groupEnvironment(System.getenv(), ccmSessionId)
+            Map<String, String> environment = projectId == ASSISTANT_PROJECT_ID
+                    ? ClaudeCommand.assistantEnvironment(System.getenv(), ccmSessionId, hookSettings.assistantToken())
+                    : group ? ClaudeCommand.groupEnvironment(System.getenv(), ccmSessionId)
                     : ClaudeCommand.environment(System.getenv(), ccmSessionId);
-            PtyProcess process = PtySpawner.spawn(command, directory, environment);
+            process = PtySpawner.spawn(command, directory, environment);
             watchExit(ccmSessionId, process);
-            return new LaunchedSession(ccmSessionId, projectId, label, process);
+            return new LaunchedSession(ccmSessionId, projectId, label, process, directory);
         } catch (IOException | RuntimeException e) {
+            if (process != null) {
+                process.destroyForcibly();
+            }
             cleanUp(ccmSessionId);
             log.warn("Claude failed to start in {}", directory, e);
             throw new IllegalStateException("Could not start Claude: " + e.getMessage(), e);

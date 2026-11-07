@@ -48,6 +48,15 @@ class FormSchemaTest {
     }
 
     @Test
+    fun anUntouchedOptionalBooleanWithoutDefaultIsLeftOut() {
+        val optional = formFields(JsonMapper.builder().build().readTree("""{"required":["r"],"properties":{"o":{"type":"boolean"},"r":{"type":"boolean"}}}"""))
+
+        assertThat(optional[0].initial).isEmpty()
+        assertThat(formContent(optional, mapOf("o" to "", "r" to "")).toString()).isEqualTo("""{"r":false}""")
+        assertThat(formContent(optional, mapOf("o" to "true", "r" to "true")).toString()).isEqualTo("""{"o":true,"r":true}""")
+    }
+
+    @Test
     fun oneOfBecomesChoicesWithTitlesAsLabelsAndConstsAsValues() {
         val oneOf = formFields(JsonMapper.builder().build().readTree("""{"properties":{"p":{"oneOf":[{"const":"a","title":"Alpha"},{"const":"b"}]}}}"""))
 

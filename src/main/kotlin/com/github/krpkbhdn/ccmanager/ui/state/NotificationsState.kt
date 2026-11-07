@@ -31,7 +31,8 @@ class NotificationsState(
     val unreadCount: Int get() = items.count { it.id > readUpTo }
 
     fun restore(history: List<AppNotification>) {
-        items = history.takeLast(NOTIFICATION_CAP)
+        val known = items.map { it.id }.toSet()
+        items = (history.filter { it.id !in known } + items).sortedBy { it.id }.takeLast(NOTIFICATION_CAP)
     }
 
     fun markAllRead() {
@@ -55,23 +56,31 @@ class NotificationsState(
         val toast = ToastItem(
             id = notification.id,
             kind = notification.kind,
-            title = "${projectName(notification.projectId)}: ${notification.title}",
+            title = if (notification.kind == NotificationKind.USAGE_ALERT) notification.title else "${projectName(notification.projectId)}: ${notification.title}",
             body = notification.body,
             projectId = notification.projectId,
             ccmSessionId = notification.ccmSessionId,
         )
-        show(toast)
+        if (toastPlaceFor(windowActive()) == ToastPlace.IN_APP) pushToast(toast)
     }
 
     /** An answer is wanted in a session that raises no notification of its own (the Assistant); clicking the toast opens it. */
     fun needsAnswer(projectId: Long, ccmSessionId: String, title: String, body: String) =
         show(ToastItem(nextToastId(), NotificationKind.NEEDS_ACTION, title, body, projectId, ccmSessionId))
 
+    /** A desktop popup for a notice [OsNotifier] let through; it is a window of its own, so it shows even when the main window is hidden. */
+    fun popup(notice: OsNotice) =
+        addPopup(ToastItem(nextToastId(), notice.kind, notice.title, notice.body, notice.projectId, notice.ccmSessionId, notice.summary))
+
     private fun show(toast: ToastItem) {
         when (toastPlaceFor(windowActive())) {
             ToastPlace.IN_APP -> pushToast(toast)
-            ToastPlace.DESKTOP_POPUP -> popups = (popups + toast).takeLast(MAX_TOASTS)
+            ToastPlace.DESKTOP_POPUP -> addPopup(toast)
         }
+    }
+
+    private fun addPopup(toast: ToastItem) {
+        popups = (popups + toast).takeLast(MAX_TOASTS)
     }
 
     /** A toast asking for the user is stale once its session left NEEDS_ACTION, whoever answered. */
