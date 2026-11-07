@@ -11,18 +11,20 @@ import com.github.krpkbhdn.ccmanager.git.ChangeDescriptionService
 import com.github.krpkbhdn.ccmanager.github.PullRequestLookup
 import com.github.krpkbhdn.ccmanager.github.PullRequestService
 import com.github.krpkbhdn.ccmanager.github.PullRequestState
+import com.github.krpkbhdn.ccmanager.gitlab.GlabCli
+import com.github.krpkbhdn.ccmanager.gitlab.MergeRequestService
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
 
-/** What the Git tab needs from the GitHub CLI; calls block, so callers stay off the UI thread. */
-interface GitHubPort {
+/** What the Git tab needs from the forge CLI (gh or glab); calls block, so callers stay off the UI thread. */
+interface PullRequestPort {
     val pollInterval: Duration
 
-    fun availability(directory: Path): GhAvailability
+    fun availability(directory: Path, remote: ForgeRemote): GhAvailability
 
-    /** A failed gh call is [PullRequestLookup.failed], never "no pull request". */
-    fun lookup(directory: Path, branch: String): PullRequestLookup
+    /** A failed CLI call is [PullRequestLookup.failed], never "no pull request". */
+    fun lookup(directory: Path, remote: ForgeRemote, branch: String): PullRequestLookup
 
     /** Slow (claude runs); never throws. */
     fun draft(worktree: Path, base: String, task: String): ChangeDescription = ChangeDescription("", "")
@@ -30,23 +32,39 @@ interface GitHubPort {
     /** Whether the worktree differs from [base] (tracked or untracked); unknown counts as yes. */
     fun hasChanges(worktree: Path, base: String): Boolean = true
 
-    /** @return the URL of the new pull request */
-    fun create(directory: Path, draft: PullRequestDraft): String = throw UnsupportedOperationException("No GitHub CLI")
+    /** @return the URL of the new pull or merge request */
+    fun create(directory: Path, forge: Forge, draft: PullRequestDraft): String = throw UnsupportedOperationException("No forge CLI")
 
     companion object {
-        val ABSENT = object : GitHubPort {
+        val ABSENT = object : PullRequestPort {
             override val pollInterval: Duration = Duration.ofSeconds(20)
-            override fun availability(directory: Path) = GhAvailability.MISSING
-            override fun lookup(directory: Path, branch: String) = PullRequestLookup.none()
+            override fun availability(directory: Path, remote: ForgeRemote) = GhAvailability.MISSING
+            override fun lookup(directory: Path, remote: ForgeRemote, branch: String) = PullRequestLookup.none()
         }
 
-        fun of(cli: GhCli, pullRequests: PullRequestService, drafts: ChangeDescriptionService, properties: GhProperties) = object : GitHubPort {
+        fun of(
+            gh: GhCli,
+            pullRequests: PullRequestService,
+            glab: GlabCli,
+            mergeRequests: MergeRequestService,
+            drafts: ChangeDescriptionService,
+            properties: GhProperties,
+        ) = object : PullRequestPort {
             override val pollInterval: Duration = properties.ciPollInterval()
-            override fun availability(directory: Path) = cli.availability(directory)
-            override fun lookup(directory: Path, branch: String) = pullRequests.find(directory, branch)
+            override fun availability(directory: Path, remote: ForgeRemote) = when (remote.forge) {
+                Forge.GITHUB -> gh.availability(directory)
+                Forge.GITLAB -> glab.availability(directory, remote.host)
+            }
+            override fun lookup(directory: Path, remote: ForgeRemote, branch: String) = when (remote.forge) {
+                Forge.GITHUB -> pullRequests.find(directory, branch)
+                Forge.GITLAB -> mergeRequests.find(directory, remote.repository, branch)
+            }
             override fun draft(worktree: Path, base: String, task: String) = drafts.describe(worktree, base, task)
             override fun hasChanges(worktree: Path, base: String) = drafts.hasChanges(worktree, base)
-            override fun create(directory: Path, draft: PullRequestDraft) = pullRequests.create(directory, draft)
+            override fun create(directory: Path, forge: Forge, draft: PullRequestDraft) = when (forge) {
+                Forge.GITHUB -> pullRequests.create(directory, draft)
+                Forge.GITLAB -> mergeRequests.create(directory, draft)
+            }
         }
     }
 }
@@ -55,17 +73,18 @@ interface GitHubPort {
 internal fun isLinkedWorktree(repo: Path) = Files.isRegularFile(repo.resolve(".git"))
 
 /**
- * Re-reads gh availability and, only when gh is ready, the pull request of the current branch of a linked worktree.
- * gh failures are never an error: missing or signed-out gh is a state; an undecided availability or a failed lookup (offline,
+ * Re-reads the CLI availability and, only when it is ready, the pull or merge request of the current branch of a linked worktree.
+ * CLI failures are never an error: a missing or signed-out CLI is a state; an undecided availability or a failed lookup (offline,
  * rate limit) keeps the last value.
  */
 suspend fun GitState.refreshPullRequest() {
     refreshBaseChanges()
     val branch = status?.branch()
+    val remote = forgeRemote
     val outcome = gitCall({}) {
         when {
-            branch == null || !isLinkedWorktree(repo) -> null to PullRequestLookup.none()
-            else -> git.github.availability(repo).let { it to if (it == GhAvailability.READY) git.github.lookup(repo, branch) else PullRequestLookup.none() }
+            branch == null || remote == null || !isLinkedWorktree(repo) -> null to PullRequestLookup.none()
+            else -> git.forge.availability(repo, remote).let { it to if (it == GhAvailability.READY) git.forge.lookup(repo, remote, branch) else PullRequestLookup.none() }
         }
     } ?: return
     val (availability, lookup) = outcome
@@ -77,7 +96,7 @@ suspend fun GitState.refreshPullRequest() {
 /** Only a task worktree knows its base without a worktree listing; any other state keeps "unknown", which gates nothing. */
 private suspend fun GitState.refreshBaseChanges() {
     val base = task?.baseBranch()?.let(::safeBase) ?: return
-    gitCall({}) { git.github.hasChanges(repo, base) }?.let { baseChanges = it }
+    gitCall({}) { git.forge.hasChanges(repo, base) }?.let { baseChanges = it }
 }
 
 enum class ChipTone { NEUTRAL, SUCCESS, DANGER, WARNING }
@@ -85,15 +104,15 @@ enum class ChipTone { NEUTRAL, SUCCESS, DANGER, WARNING }
 /** The CI chip as text and tone; [url] is set when the chip opens a pull request. */
 data class PullRequestChip(val text: String, val hint: String, val tone: ChipTone, val url: String? = null)
 
-private const val INSTALL_HINT = "Install GitHub CLI: https://cli.github.com"
-private const val SIGN_IN_HINT = "Run `gh auth login` in a terminal"
-
-fun pullRequestChip(availability: GhAvailability?, pullRequest: PullRequest?, githubRemote: Boolean): PullRequestChip? = when {
-    !githubRemote -> null
-    availability == GhAvailability.MISSING -> PullRequestChip("GitHub CLI not installed", INSTALL_HINT, ChipTone.NEUTRAL)
-    availability == GhAvailability.NOT_AUTHENTICATED -> PullRequestChip("GitHub CLI not signed in", SIGN_IN_HINT, ChipTone.NEUTRAL)
+fun pullRequestChip(availability: GhAvailability?, pullRequest: PullRequest?, remote: ForgeRemote?): PullRequestChip? = when {
+    remote == null -> null
+    availability == GhAvailability.MISSING -> PullRequestChip("${remote.forge.cliName} not installed", remote.forge.installHint, ChipTone.NEUTRAL)
+    availability == GhAvailability.NOT_AUTHENTICATED -> PullRequestChip("${remote.forge.cliName} not signed in", remote.signInHint(), ChipTone.NEUTRAL)
     pullRequest == null -> null
-    else -> PullRequestChip("PR #${pullRequest.number()} ${checkLabel(pullRequest)}", "Open pull request #${pullRequest.number()} on GitHub", checkTone(pullRequest), pullRequest.url())
+    else -> {
+        val id = "${remote.forge.idPrefix}${pullRequest.number()}"
+        PullRequestChip("${remote.forge.shortName} $id ${checkLabel(pullRequest)}", "Open ${remote.forge.longName} $id on ${remote.host}", checkTone(pullRequest), pullRequest.url())
+    }
 }
 
 private fun checkLabel(pr: PullRequest) = when {

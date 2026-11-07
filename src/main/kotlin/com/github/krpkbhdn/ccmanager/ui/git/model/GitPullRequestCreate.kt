@@ -19,18 +19,14 @@ import kotlinx.coroutines.launch
 private const val FALLBACK_BASE = "main"
 private const val DEFAULT_REMOTE = "origin"
 private val SAFE_BRANCH = Regex("[A-Za-z0-9._/-]+")
-private const val DRAFT_FAILED = "Could not prepare the pull request"
+private const val DRAFT_FAILED = "Could not prepare the request"
 internal const val MAX_LISTED_COMMITS = 20
 private val DEFAULT_BRANCHES = setOf("develop", "main", "master")
-private val REPOSITORY_URL = Regex("""^(?:[\w+.-]+://[^/\s]+/|[^/\s@]+@[^:/\s]+:|[^/\s:]+:)([^/:\s]+)/([^/\s]+?)(?:\.git)?/?$""")
-private const val CREATE_FAILED = "Could not create the pull request"
-private const val CHANGED_AFTER_CONFIRM = "The working tree changed after the confirmation; review and create the pull request again"
+private const val CREATE_FAILED = "Could not create the request"
+private const val CHANGED_AFTER_CONFIRM = "The working tree changed after the confirmation; review and create the request again"
 
-/** What the pull request dialog edits; [head] and [remote] are shown but fixed. */
-data class PullRequestForm(val base: String, val head: String, val remote: String, val title: String, val body: String, val repo: String = "")
-
-/** `owner/name` of a GitHub remote URL (https, ssh or scp style), null when it has none. */
-fun githubRepository(url: String?): String? = url?.trim()?.let { REPOSITORY_URL.find(it) }?.let { "${it.groupValues[1]}/${it.groupValues[2]}" }
+/** What the pull or merge request dialog edits; [head] and [remote] are shown but fixed, [forge] and [repo] come from the remote. */
+data class PullRequestForm(val base: String, val head: String, val remote: String, val title: String, val body: String, val repo: String = "", val forge: Forge = Forge.GITHUB)
 
 /** Files whose name looks like a key, credential or env file. */
 fun secretLookingFiles(files: List<String>): List<String> = files.filter(SecretFiles::looksSecret)
@@ -43,12 +39,9 @@ fun safeBase(base: String?): String? = base?.trim()?.takeIf { SAFE_BRANCH.matche
 
 fun defaultBase(mainWorktreeBranch: String?): String = safeBase(mainWorktreeBranch) ?: FALLBACK_BASE
 
-/** True for a remote whose URL names a GitHub repository. */
-fun isGithubRemote(url: String?): Boolean = url != null && url.contains("github", ignoreCase = true) && githubRepository(url) != null
-
-/** gh READY only ever follows a check of a linked worktree (see [refreshPullRequest]), so it stands for that rule too. */
-fun canCreatePullRequest(branch: String?, availability: GhAvailability?, pullRequest: PullRequest?, githubRemote: Boolean): Boolean =
-    githubRemote && branch != null && availability == GhAvailability.READY && pullRequest?.state() != PullRequestState.OPEN
+/** READY only ever follows a check of a linked worktree (see [refreshPullRequest]), so it stands for that rule too. */
+fun canCreatePullRequest(branch: String?, availability: GhAvailability?, pullRequest: PullRequest?, remote: ForgeRemote?): Boolean =
+    remote != null && branch != null && availability == GhAvailability.READY && pullRequest?.state() != PullRequestState.OPEN
 
 /** The remote `git push` will use: that of the upstream, else the only remote, else origin. */
 fun pullRequestRemote(upstream: String?, remoteNames: List<String>): String =
@@ -60,9 +53,13 @@ fun PullRequestForm.problem(): String? = when {
     safeBase(base) == null -> "'$base' is not a valid base branch"
     safeBase(head) == null -> "'$head' is not a valid head branch"
     head == base -> "Head and base are the same branch"
-    head in DEFAULT_BRANCHES -> "'$head' is a default branch; open the pull request from a feature branch"
-    repo.isBlank() -> "Remote '$remote' has no GitHub repository address"
+    head in DEFAULT_BRANCHES -> "'$head' is a default branch; open the ${forge.longName} from a feature branch"
     else -> null
+}
+
+private fun createCommand(form: PullRequestForm) = when (form.forge) {
+    Forge.GITHUB -> "gh pr create --repo ${form.repo} --base ${form.base} --head ${form.head}"
+    Forge.GITLAB -> "glab mr create -R ${form.repo} --target-branch ${form.base} --source-branch ${form.head}"
 }
 
 /** Everything the confirm dialog promises, in the order it happens; [commits] are those `git push` uploads. */
@@ -75,12 +72,12 @@ fun confirmText(form: PullRequestForm, files: List<String>, commits: List<String
     }
     appendLine("${step++}. git push -u ${form.remote} ${form.head}, uploading ${commits.size} commit(s)${if (commits.size > MAX_LISTED_COMMITS) " (newest $MAX_LISTED_COMMITS shown)" else ""}:")
     commits.take(MAX_LISTED_COMMITS).forEach { appendLine("     $it") }
-    appendLine("$step. gh pr create --repo ${form.repo} --base ${form.base} --head ${form.head}")
+    appendLine("$step. ${createCommand(form)}")
     appendLine("Title: ${form.title}")
     append("Body:\n${form.body.ifBlank { "(empty)" }}")
 }
 
-/** Commit what is still dirty, push with upstream, open the pull request; stops at the first failing step. */
+/** Commit what is still dirty, push with upstream, open the request on the forge frozen in [form]; stops at the first failing step. */
 internal fun GitBackend.publishPullRequest(repo: Path, form: PullRequestForm, files: List<String>, confirmedHead: String?, progress: (String) -> Unit): String {
     val current = status.status(repo)
     refuseUnfinishedWork(repo, current)
@@ -93,9 +90,9 @@ internal fun GitBackend.publishPullRequest(repo: Path, form: PullRequestForm, fi
         index.commit(repo, CommitRequest(form.title, false, false, false))
     }
     sync.push(repo, PushOptions(false, true, false), progress)
-    progress("Creating pull request")
+    progress("Creating ${form.forge.longName}")
     try {
-        return github.create(repo, PullRequestDraft(form.repo, form.base, form.head, form.title, form.body))
+        return forge.create(repo, form.forge, PullRequestDraft(form.repo, form.base, form.head, form.title, form.body))
     } catch (e: IOException) {
         throw GitException(GitException.Kind.OTHER, e.message ?: CREATE_FAILED, "")
     }
@@ -104,21 +101,19 @@ internal fun GitBackend.publishPullRequest(repo: Path, form: PullRequestForm, fi
 /** The toolbar button: drafts title and body in the background (cancel closes the dialog), then opens the editable form. */
 fun GitState.startPullRequest() {
     val head = status?.branch() ?: return
-    val remoteNames = remotes.map { it.name() }
-    val upstream = status?.upstream()
+    val target = forgeRemote ?: return
+    val remoteName = pullRequestRemoteName
     val taskText = task?.task().orEmpty()
     val job = scope.launch(start = CoroutineStart.LAZY) {
         val drafted = gitCall({ fail(DRAFT_FAILED, it) }) {
             val base = draftBase()
-            base to git.github.draft(repo, base, taskText)
+            base to git.forge.draft(repo, base, taskText)
         }
         dialog = drafted?.let { (base, text) ->
-            val remote = pullRequestRemote(upstream, remoteNames)
-            val remoteUrl = remotes.firstOrNull { it.name() == remote }?.let { it.pushUrl() ?: it.fetchUrl() }
-            GitDialog.PullRequest(PullRequestForm(base, head, remote, text.title(), text.body(), githubRepository(remoteUrl).orEmpty()))
+            GitDialog.PullRequest(PullRequestForm(base, head, remoteName, text.title(), text.body(), target.repository, target.forge))
         }
     }
-    dialog = GitDialog.Drafting("Create pull request", job)
+    dialog = GitDialog.Drafting("Create ${target.forge.longName}", job)
     job.start()
 }
 
@@ -130,13 +125,14 @@ fun GitState.reviewPullRequest(form: PullRequestForm) {
     scope.launch {
         val commits = gitCall({ fail(DRAFT_FAILED, it) }) { git.log.outgoing(repo, since, MAX_LISTED_COMMITS + 1) } ?: return@launch
         dialog = GitDialog.Confirm(
-            ConfirmRequest("Create pull request", confirmText(form, files, commits), "Create pull request", destructive = false, messageLines = ALL_CONFIRM_LINES) { createPullRequest(form, files, confirmedHead) },
+            ConfirmRequest("Create ${form.forge.longName}", confirmText(form, files, commits), "Create ${form.forge.longName}", destructive = false, messageLines = ALL_CONFIRM_LINES) { createPullRequest(form, files, confirmedHead) },
         )
     }
 }
 
-private fun GitState.createPullRequest(form: PullRequestForm, files: List<String>, head: String?) =
-    act("Creating pull request", onSuccess = { url: String ->
-        success("Pull request created", url)
+private fun GitState.createPullRequest(form: PullRequestForm, files: List<String>, head: String?) {
+    act("Creating ${form.forge.longName}", onSuccess = { url: String ->
+        success("${form.forge.longName.replaceFirstChar(Char::uppercase)} created", url)
         scope.launch { refreshPullRequest() }
     }) { progress -> publishPullRequest(repo, form, files, head, progress) }
+}

@@ -49,7 +49,7 @@ public class PullRequestService {
             var result = gh.run(directory, "pr", "create", "--repo=" + draft.repo(), "--base=" + draft.base(), "--head=" + draft.head(),
                     "--title=" + draft.title(), "--body-file=" + bodyFile);
             if (!result.succeeded()) {
-                throw new IOException(failureMessage(result.exitCode(), result.stderr()));
+                throw new IOException(failureMessage("gh pr create", "gh auth login", result.exitCode(), result.stderr()));
             }
             return result.stdout().strip();
         } finally {
@@ -64,11 +64,12 @@ public class PullRequestService {
     }
 
     /** Never carries the body or anything URL- or token-like: only the sign-in hint, a harmless last stderr line, or the exit code. */
-    static String failureMessage(int exitCode, String stderr) {
-        var base = "gh pr create failed with exit code " + exitCode;
+    /** @param action the failed command shown to the user; @param signInCommand the command whose mention in stderr means "not signed in" */
+    public static String failureMessage(String action, String signInCommand, int exitCode, String stderr) {
+        var base = action + " failed with exit code " + exitCode;
         var lines = stderr.lines().map(String::strip).filter(line -> !line.isEmpty()).toList();
-        if (stderr.toLowerCase(Locale.ROOT).contains("gh auth login")) {
-            return base + "; run `gh auth login` in a terminal";
+        if (stderr.toLowerCase(Locale.ROOT).contains(signInCommand)) {
+            return base + "; run `" + signInCommand + "` in a terminal";
         }
         return lines.isEmpty() || !SAFE_LINE.matcher(lines.getLast()).matches() ? base : base + ": " + lines.getLast();
     }

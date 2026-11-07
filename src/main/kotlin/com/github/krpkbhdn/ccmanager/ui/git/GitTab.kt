@@ -75,7 +75,7 @@ private fun PullRequestPolling(git: GitState) {
     val branch = git.status?.branch()
     LaunchedEffect(git, branch) {
         if (branch == null) return@LaunchedEffect
-        val interval = git.git.github.pollInterval.toMillis()
+        val interval = git.git.forge.pollInterval.toMillis()
         while (true) {
             git.refreshPullRequest()
             delay(if (git.ghStatus == GhAvailability.READY || git.ghStatus == null) interval else interval * SLOW_POLL_FACTOR)

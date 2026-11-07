@@ -15,6 +15,8 @@ import com.github.krpkbhdn.ccmanager.github.GhCli
 import com.github.krpkbhdn.ccmanager.github.GhProperties
 import com.github.krpkbhdn.ccmanager.git.ChangeDescriptionService
 import com.github.krpkbhdn.ccmanager.github.PullRequestService
+import com.github.krpkbhdn.ccmanager.gitlab.GlabCli
+import com.github.krpkbhdn.ccmanager.gitlab.MergeRequestService
 import org.springframework.context.ConfigurableApplicationContext
 
 /** Every git service the Git tab talks to; all calls block, so callers stay off the UI thread. */
@@ -30,7 +32,7 @@ class GitBackend(
     val worktrees: GitWorktreeService,
     val watcher: GitWatcher,
     val taskWorktrees: TaskWorktreeService,
-    val github: GitHubPort = GitHubPort.ABSENT,
+    val forge: PullRequestPort = PullRequestPort.ABSENT,
 ) {
     companion object {
         fun from(context: ConfigurableApplicationContext) = GitBackend(
@@ -45,7 +47,11 @@ class GitBackend(
             worktrees = context.getBean(GitWorktreeService::class.java),
             watcher = context.getBean(GitWatcher::class.java),
             taskWorktrees = context.getBean(TaskWorktreeService::class.java),
-            github = GitHubPort.of(context.getBean(GhCli::class.java), context.getBean(PullRequestService::class.java), context.getBean(ChangeDescriptionService::class.java), context.getBean(GhProperties::class.java)),
+            forge = PullRequestPort.of(
+                context.getBean(GhCli::class.java), context.getBean(PullRequestService::class.java),
+                context.getBean(GlabCli::class.java), context.getBean(MergeRequestService::class.java),
+                context.getBean(ChangeDescriptionService::class.java), context.getBean(GhProperties::class.java),
+            ),
         )
     }
 }

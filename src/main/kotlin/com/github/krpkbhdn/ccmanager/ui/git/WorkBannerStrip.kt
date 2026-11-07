@@ -98,8 +98,9 @@ private fun BannerActions(banner: WorkBanner, git: GitState, work: WorkContextAc
         } else if (banner.task && git.mergedInto == null) {
             AppButton("Merge into ${banner.base ?: "base"}", { git.startTaskMerge() }, variant = ButtonVariant.PRIMARY, icon = Icons.Merge, enabled = idle && git.noChangesHint == null, compact = true, tooltip = git.noChangesHint ?: "Merge this branch into its base here, without pushing")
         }
-        if (canCreatePullRequest(git.status?.branch(), git.ghStatus, git.pullRequest, git.hasGithubRemote)) {
-            AppButton("Create PR...", { git.startPullRequest() }, icon = Icons.Push, enabled = idle && git.noChangesHint == null, compact = true, tooltip = git.noChangesHint ?: "Draft a pull request for this branch")
+        if (canCreatePullRequest(git.status?.branch(), git.ghStatus, git.pullRequest, git.forgeRemote)) {
+            val forge = git.forgeRemote!!.forge
+            AppButton("Create ${forge.shortName}...", { git.startPullRequest() }, icon = Icons.Push, enabled = idle && git.noChangesHint == null, compact = true, tooltip = git.noChangesHint ?: "Draft a ${forge.longName} for this branch")
         }
         AppButton("Back to main folder", { work.switchTo(null) }, icon = Icons.Undo, compact = true, tooltip = "Show the project's main folder; this worktree stays")
     }

@@ -143,7 +143,10 @@ class GitState(
     val flat: Boolean get() = host.prefs().flatChanges
     val busy: Boolean get() = job != null
     val summary: GitSummary? get() = status?.let(::summaryOf)
-    val hasGithubRemote: Boolean get() = remotes.any { isGithubRemote(it.pushUrl() ?: it.fetchUrl()) }
+    val pullRequestRemoteName: String get() = pullRequestRemote(status?.upstream(), remotes.map { it.name() })
+
+    /** The forge of the remote `git push` uses; null when it is neither GitHub nor GitLab. */
+    val forgeRemote: ForgeRemote? get() = forgeRemote(remotes.firstOrNull { it.name() == pullRequestRemoteName }?.let { it.pushUrl() ?: it.fetchUrl() })
 
     /** Why publishing or merging has nothing to do, or null when it has something (or that is not known). */
     val noChangesHint: String? get() = task?.baseBranch()?.takeIf { baseChanges == false }?.let { "No changes against $it" }

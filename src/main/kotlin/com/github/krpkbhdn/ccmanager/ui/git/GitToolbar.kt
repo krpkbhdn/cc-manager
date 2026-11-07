@@ -86,9 +86,10 @@ private fun RowScope.ToolbarLeading(git: GitState, work: WorkContextActions, pul
     if (selector) WorkContextSelector(git, work, shrink)
     BranchChip(git, shrink)
     if (status != null) Counters(status.ahead(), status.behind(), status.upstream())
-    pullRequestChip(git.ghStatus, git.pullRequest, git.hasGithubRemote)?.let { CiChip(it) }
-    if (pullRequestHere && canCreatePullRequest(status?.branch(), git.ghStatus, git.pullRequest, git.hasGithubRemote)) {
-        AppButton("Create PR", { git.startPullRequest() }, icon = Icons.Push, enabled = !git.busy && git.dialog == null && git.noChangesHint == null, compact = true, tooltip = git.noChangesHint ?: "Draft a pull request for this branch")
+    pullRequestChip(git.ghStatus, git.pullRequest, git.forgeRemote)?.let { CiChip(it) }
+    if (pullRequestHere && canCreatePullRequest(status?.branch(), git.ghStatus, git.pullRequest, git.forgeRemote)) {
+        val forge = git.forgeRemote!!.forge
+        AppButton("Create ${forge.shortName}", { git.startPullRequest() }, icon = Icons.Push, enabled = !git.busy && git.dialog == null && git.noChangesHint == null, compact = true, tooltip = git.noChangesHint ?: "Draft a ${forge.longName} for this branch")
     }
 }
 

@@ -136,7 +136,7 @@ fun GitState.startTaskMerge() {
     val job = scope.launch(start = CoroutineStart.LAZY) {
         val drafted = gitCall({ fail(PREPARE_FAILED, it) }) {
             val base = draftBase()
-            base to git.github.draft(repo, base, taskText)
+            base to git.forge.draft(repo, base, taskText)
         }
         dialog = drafted?.let { (base, text) -> GitDialog.MergeTask(TaskMergeForm(base, branch, text.title(), defaultMergeTitle(branch, base, text.title()), text.body(), dirty)) }
     }

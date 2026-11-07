@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.ui.git.model
 
+import com.github.krpkbhdn.ccmanager.git.GitMisc
 import com.github.krpkbhdn.ccmanager.github.CheckSummary
 import com.github.krpkbhdn.ccmanager.github.GhAvailability
 import com.github.krpkbhdn.ccmanager.github.PullRequest
@@ -30,15 +31,15 @@ class GitPullRequestOpsTest {
 
     private fun pr(state: PullRequestState = PullRequestState.OPEN, checks: CheckSummary = CheckSummary.PASSING) = PullRequest(7, "https://github.com/o/r/pull/7", state, checks, "main")
 
-    private class FakeGitHub(var availability: GhAvailability, var result: PullRequestLookup) : GitHubPort {
+    private class FakeGitHub(var availability: GhAvailability, var result: PullRequestLookup) : PullRequestPort {
         var views = 0
         override val pollInterval: Duration = Duration.ofMillis(10)
-        override fun availability(directory: Path) = availability
-        override fun lookup(directory: Path, branch: String): PullRequestLookup { views++; return result }
+        override fun availability(directory: Path, remote: ForgeRemote) = availability
+        override fun lookup(directory: Path, remote: ForgeRemote, branch: String): PullRequestLookup { views++; return result }
     }
 
-    private fun open(repo: Path, github: GitHubPort): GitState {
-        val data = SampleRepos.busy().also { it.topLevel = repo }
+    private fun open(repo: Path, github: PullRequestPort, remoteUrl: String = "git@github.com:o/r.git"): GitState {
+        val data = SampleRepos.busy().also { it.topLevel = repo; it.remotes = listOf(GitMisc.Remote("origin", remoteUrl, remoteUrl)) }
         val b = FakeGit(data).backend
         val backend = GitBackend(b.status, b.index, b.branches, b.sync, b.log, b.stashes, b.history, b.conflicts, b.worktrees, b.watcher, b.taskWorktrees, github)
         val git = GitState(1, repo, backend, scope, GitHost({ GitPrefs() }, { }, { kind, _, _ -> toasts += kind }))
@@ -94,6 +95,30 @@ class GitPullRequestOpsTest {
     }
 
     @Test
+    fun `a gitlab remote is asked for its merge request`(@TempDir dir: Path) {
+        Files.writeString(dir.resolve(".git"), "gitdir: elsewhere")
+        val gh = FakeGitHub(GhAvailability.READY, PullRequestLookup.found(pr()))
+        val git = open(dir, gh, "git@gitlab.example.com:g/s/r.git")
+
+        runBlocking { git.refreshPullRequest() }
+
+        assertThat(git.forgeRemote!!.forge).isEqualTo(Forge.GITLAB)
+        assertThat(git.pullRequest!!.number()).isEqualTo(7)
+    }
+
+    @Test
+    fun `an unknown remote is never polled`(@TempDir dir: Path) {
+        Files.writeString(dir.resolve(".git"), "gitdir: elsewhere")
+        val gh = FakeGitHub(GhAvailability.READY, PullRequestLookup.found(pr()))
+        val git = open(dir, gh, "git@example.com:acme/app.git")
+
+        runBlocking { git.refreshPullRequest() }
+
+        assertThat(git.pullRequest).isNull()
+        assertThat(gh.views).isZero()
+    }
+
+    @Test
     fun `the main worktree is never polled`(@TempDir dir: Path) {
         Files.createDirectory(dir.resolve(".git"))
         val gh = FakeGitHub(GhAvailability.READY, PullRequestLookup.found(pr()))
@@ -107,15 +132,27 @@ class GitPullRequestOpsTest {
 
     @Test
     fun `chip texts and tones follow availability and checks`() {
-        assertThat(pullRequestChip(null, null, true)).isNull()
-        assertThat(pullRequestChip(GhAvailability.READY, null, true)).isNull()
-        assertThat(pullRequestChip(GhAvailability.MISSING, null, true)!!.hint).isEqualTo("Install GitHub CLI: https://cli.github.com")
-        assertThat(pullRequestChip(GhAvailability.NOT_AUTHENTICATED, null, true)!!.text).isEqualTo("GitHub CLI not signed in")
-        assertThat(pullRequestChip(GhAvailability.READY, pr(checks = CheckSummary.FAILING), true)!!.tone).isEqualTo(ChipTone.DANGER)
-        assertThat(pullRequestChip(GhAvailability.READY, pr(checks = CheckSummary.PENDING), true)!!.tone).isEqualTo(ChipTone.WARNING)
-        val merged = pullRequestChip(GhAvailability.READY, pr(PullRequestState.MERGED), true)!!
+        val github = ForgeRemote(Forge.GITHUB, "github.com", "o/r")
+        assertThat(pullRequestChip(null, null, github)).isNull()
+        assertThat(pullRequestChip(GhAvailability.READY, null, github)).isNull()
+        assertThat(pullRequestChip(GhAvailability.READY, pr(), null)).isNull()
+        assertThat(pullRequestChip(GhAvailability.MISSING, null, github)!!.hint).isEqualTo("Install GitHub CLI: https://cli.github.com")
+        assertThat(pullRequestChip(GhAvailability.NOT_AUTHENTICATED, null, github)!!.text).isEqualTo("GitHub CLI not signed in")
+        assertThat(pullRequestChip(GhAvailability.READY, pr(checks = CheckSummary.FAILING), github)!!.tone).isEqualTo(ChipTone.DANGER)
+        assertThat(pullRequestChip(GhAvailability.READY, pr(checks = CheckSummary.PENDING), github)!!.tone).isEqualTo(ChipTone.WARNING)
+        val merged = pullRequestChip(GhAvailability.READY, pr(PullRequestState.MERGED), github)!!
         assertThat(merged.text).isEqualTo("PR #7 merged")
         assertThat(merged.tone).isEqualTo(ChipTone.NEUTRAL)
         assertThat(merged.url).isEqualTo("https://github.com/o/r/pull/7")
+    }
+
+    @Test
+    fun `a gitlab chip speaks of merge requests and glab`() {
+        val gitlab = ForgeRemote(Forge.GITLAB, "gitlab.example.com", "https://gitlab.example.com/g/r")
+        assertThat(pullRequestChip(GhAvailability.MISSING, null, gitlab)!!.hint).isEqualTo("Install GitLab CLI: https://gitlab.com/gitlab-org/cli")
+        assertThat(pullRequestChip(GhAvailability.NOT_AUTHENTICATED, null, gitlab)!!.hint).isEqualTo("Run `glab auth login --hostname gitlab.example.com` in a terminal")
+        val chip = pullRequestChip(GhAvailability.READY, pr(checks = CheckSummary.PASSING), gitlab)!!
+        assertThat(chip.text).isEqualTo("MR !7 checks passing")
+        assertThat(chip.hint).isEqualTo("Open merge request !7 on gitlab.example.com")
     }
 }

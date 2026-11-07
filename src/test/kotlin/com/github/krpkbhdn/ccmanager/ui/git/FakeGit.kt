@@ -41,7 +41,7 @@ class FakeRepoData(
     var rows: List<GitLog.Row> = emptyList(),
     val stashes: MutableList<GitMisc.Stash> = mutableListOf(),
     val tags: MutableList<GitMisc.Tag> = mutableListOf(),
-    val remotes: List<GitMisc.Remote> = listOf(GitMisc.Remote("origin", "git@example.com:acme/app.git", "git@example.com:acme/app.git")),
+    var remotes: List<GitMisc.Remote> = listOf(GitMisc.Remote("origin", "git@example.com:acme/app.git", "git@example.com:acme/app.git")),
     var identity: GitMisc.Identity = GitMisc.Identity("Dev User", "dev@acme.dev"),
     var repository: Boolean = true,
     var detailFiles: List<GitDiff.FileDiff> = emptyList(),

@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.ui.git.model
 
+import com.github.krpkbhdn.ccmanager.git.GitMisc
 import com.github.krpkbhdn.ccmanager.github.CheckSummary
 import com.github.krpkbhdn.ccmanager.github.GhAvailability
 import com.github.krpkbhdn.ccmanager.github.PullRequest
@@ -29,14 +30,14 @@ class GitStalePullRequestTest {
     @Test
     fun `checking out another branch drops the pull request of the previous one and the cleanup offer`(@TempDir dir: Path) {
         Files.writeString(dir.resolve(".git"), "gitdir: elsewhere")
-        val data = SampleRepos.busy().also { it.topLevel = dir }
+        val data = SampleRepos.busy().also { it.topLevel = dir; it.remotes = listOf(GitMisc.Remote("origin", "git@github.com:o/r.git", "git@github.com:o/r.git")) }
         val b = FakeGit(data).backend
         val head = data.status().head()
         val merged = PullRequest(7, "u", PullRequestState.MERGED, CheckSummary.NONE, "release", head)
-        val github = object : GitHubPort {
+        val github = object : PullRequestPort {
             override val pollInterval: Duration = Duration.ofMillis(10)
-            override fun availability(directory: Path) = GhAvailability.READY
-            override fun lookup(directory: Path, branch: String) = PullRequestLookup.found(merged)
+            override fun availability(directory: Path, remote: ForgeRemote) = GhAvailability.READY
+            override fun lookup(directory: Path, remote: ForgeRemote, branch: String) = PullRequestLookup.found(merged)
         }
         val backend = GitBackend(b.status, b.index, b.branches, b.sync, b.log, b.stashes, b.history, b.conflicts, b.worktrees, b.watcher, b.taskWorktrees, github)
         val git = GitState(1, dir, backend, scope, GitHost({ GitPrefs() }, { }, { _, _, _ -> }))

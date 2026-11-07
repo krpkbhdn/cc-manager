@@ -22,7 +22,9 @@ import org.junit.jupiter.api.Test
 
 class GitWorktreeCleanupTest {
     private val head = "a".repeat(40)
-    private val plan = CleanupPlan(Path.of("wt"), "feature/x", head, Path.of("main"), listOf("web (x)", "api (x)"))
+    private val github = ForgeRemote(Forge.GITHUB, "github.com", "o/r")
+    private val gitlab = ForgeRemote(Forge.GITLAB, "gitlab.com", "https://gitlab.com/g/r")
+    private val plan = CleanupPlan(Path.of("wt"), "feature/x", head, Path.of("main"), listOf("web (x)", "api (x)"), remote = github)
 
     private fun pr(state: PullRequestState = PullRequestState.MERGED, oid: String = head, base: String = "main") = PullRequest(7, "u", state, CheckSummary.NONE, base, oid)
 
@@ -65,10 +67,10 @@ class GitWorktreeCleanupTest {
                 if (s.deleteFails) throw GitException(GitException.Kind.OTHER, "no such branch", "")
             }
         }
-        val github = object : GitHubPort {
+        val github = object : PullRequestPort {
             override val pollInterval: Duration = Duration.ofSeconds(1)
-            override fun availability(directory: Path) = GhAvailability.READY
-            override fun lookup(directory: Path, branch: String) =
+            override fun availability(directory: Path, remote: ForgeRemote) = GhAvailability.READY
+            override fun lookup(directory: Path, remote: ForgeRemote, branch: String) =
                 if (s.lookupFails) PullRequestLookup.failure() else PullRequestLookup(Optional.ofNullable(s.pullRequest), false)
         }
         return GitBackend(b.status, b.index, branches, b.sync, b.log, b.stashes, b.history, b.conflicts, worktrees, b.watcher, b.taskWorktrees, github)
@@ -154,12 +156,12 @@ class GitWorktreeCleanupTest {
     @Test
     fun `a plan whose commit changed after confirmation is refused`() {
         val s = scene()
-        assertThatThrownBy { backend(s).inspectMergedWorktree(Path.of("wt"), "feature/x", "e".repeat(40)) }.hasMessageContaining("changed after the plan")
+        assertThatThrownBy { backend(s).inspectMergedWorktree(Path.of("wt"), github, "feature/x", "e".repeat(40)) }.hasMessageContaining("changed after the plan")
     }
 
     @Test
     fun `inspection reports head, main folder and ignored files`() {
-        val merged = backend(scene()).inspectMergedWorktree(Path.of("wt"), "feature/x", null)
+        val merged = backend(scene()).inspectMergedWorktree(Path.of("wt"), github, "feature/x", null)
         assertThat(merged.head).isEqualTo(head)
         assertThat(merged.mainPath).isEqualTo(Path.of("main"))
         assertThat(merged.ignored).containsExactly(".env")
@@ -222,8 +224,8 @@ class GitWorktreeCleanupTest {
     @Test
     fun `inspection reports the base that contains the branch and skips gh`() {
         val s = scene { lookupFails = true; ancestor = true }
-        assertThat(backend(s).inspectMergedWorktree(Path.of("wt"), "feature/x", null, listOf("release"), alsoMain = true).mergedInto).isEqualTo("release")
-        assertThat(backend(scene()).inspectMergedWorktree(Path.of("wt"), "feature/x", null, listOf("release"), alsoMain = true).mergedInto).isNull()
+        assertThat(backend(s).inspectMergedWorktree(Path.of("wt"), github, "feature/x", null, listOf("release"), alsoMain = true).mergedInto).isEqualTo("release")
+        assertThat(backend(scene()).inspectMergedWorktree(Path.of("wt"), github, "feature/x", null, listOf("release"), alsoMain = true).mergedInto).isNull()
     }
 
     @Test
@@ -237,5 +239,51 @@ class GitWorktreeCleanupTest {
     fun `confirm names the base for a local merge and the task record`() {
         assertThat(cleanupConfirmText(plan.copy(mergedInto = "develop"))).contains("feature/x is merged into develop.", "the task record of this worktree").doesNotContain("pull request")
         assertThat(cleanupConfirmText(plan)).contains("The pull request of feature/x is merged.")
+    }
+
+    @Test
+    fun `a merged gitlab merge request at the local head allows the cleanup`() {
+        val s = scene()
+        assertThat(cleanup(s, plan.copy(remote = gitlab))).isNull()
+        assertThat(s.data.calls).contains("remove from=main force=false", "delete feature/x force=true")
+    }
+
+    @Test
+    fun `a gitlab merge request at another commit is refused with merge request wording`() {
+        val s = scene { worktreeHead = "d".repeat(40) }
+        assertThatThrownBy { cleanup(s, plan.copy(remote = gitlab)) }.hasMessageContaining("older merge request")
+        assertThat(s.data.calls).isEmpty()
+    }
+
+    @Test
+    fun `a failed glab lookup names glab and aborts`() {
+        val s = scene { lookupFails = true }
+        assertThatThrownBy { cleanup(s, plan.copy(remote = gitlab)) }.hasMessageContaining("Could not check the merge request", "glab")
+        assertThat(s.data.calls).isEmpty()
+    }
+
+    @Test
+    fun `without a known remote and local evidence the cleanup is refused`() {
+        val s = scene()
+        assertThatThrownBy { cleanup(s, plan.copy(remote = null)) }.hasMessageContaining("neither GitHub nor GitLab")
+        assertThat(s.data.calls).isEmpty()
+    }
+
+    @Test
+    fun `a closed but not merged gitlab merge request is refused and nothing is removed`() {
+        val s = scene { pullRequest = pr(PullRequestState.CLOSED) }
+        assertThatThrownBy { cleanup(s, plan.copy(remote = gitlab)) }.hasMessageContaining("merge request of feature/x is not merged")
+        assertThat(s.data.calls).isEmpty()
+    }
+
+    @Test
+    fun `a short head sha prefix matches only the same commit`() {
+        assertThat(mergedCleanupProblem(pr(oid = head.take(12)), "feature/x", head, listOf("main"), forge = Forge.GITLAB)).isNull()
+        assertThat(mergedCleanupProblem(pr(oid = "b" + head.drop(1)), "feature/x", head, listOf("main"), forge = Forge.GITLAB)).contains("merge request")
+    }
+
+    @Test
+    fun `confirm of a gitlab plan says merge request`() {
+        assertThat(cleanupConfirmText(plan.copy(remote = gitlab))).contains("The merge request of feature/x is merged.")
     }
 }

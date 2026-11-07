@@ -48,13 +48,17 @@ class PullRequestServiceTest {
         assertThat(bodyFiles.getFirst()).doesNotExist();
     }
 
+    private static String failure(int exitCode, String stderr) {
+        return PullRequestService.failureMessage("gh pr create", "gh auth login", exitCode, stderr);
+    }
+
     @Test
     void failureHintMapsSignInKeepsPlainLineAndHidesUrlsAndTokens() {
-        assertThat(PullRequestService.failureMessage(1, "To get started with GitHub CLI, please run:  gh auth login")).contains("gh auth login");
-        assertThat(PullRequestService.failureMessage(1, "x" + System.lineSeparator() + "a pull request already exists")).endsWith(": a pull request already exists");
-        assertThat(PullRequestService.failureMessage(1, "see https://github.com/o/r/pull/1")).isEqualTo("gh pr create failed with exit code 1");
-        assertThat(PullRequestService.failureMessage(1, "bad token ghp_abc123")).isEqualTo("gh pr create failed with exit code 1");
-        assertThat(PullRequestService.failureMessage(2, "")).isEqualTo("gh pr create failed with exit code 2");
+        assertThat(failure(1, "To get started with GitHub CLI, please run:  gh auth login")).contains("gh auth login");
+        assertThat(failure(1, "x" + System.lineSeparator() + "a pull request already exists")).endsWith(": a pull request already exists");
+        assertThat(failure(1, "see https://github.com/o/r/pull/1")).isEqualTo("gh pr create failed with exit code 1");
+        assertThat(failure(1, "bad token ghp_abc123")).isEqualTo("gh pr create failed with exit code 1");
+        assertThat(failure(2, "")).isEqualTo("gh pr create failed with exit code 2");
     }
 
     @Test

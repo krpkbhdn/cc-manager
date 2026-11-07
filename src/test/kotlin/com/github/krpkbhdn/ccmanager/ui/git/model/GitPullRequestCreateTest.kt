@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test
 
 class GitPullRequestCreateTest {
     private val form = PullRequestForm("main", "feature/x", "origin", "Add x", "Does x", "o/r")
+    private val github = ForgeRemote(Forge.GITHUB, "github.com", "o/r")
 
     @Test
     fun `base with odd characters is rejected and falls back to main`() {
@@ -31,23 +32,19 @@ class GitPullRequestCreateTest {
     fun `button shows only for a ready gh and no open pull request`() {
         val open = PullRequest(1, "u", PullRequestState.OPEN, CheckSummary.NONE, "main")
         val merged = PullRequest(1, "u", PullRequestState.MERGED, CheckSummary.NONE, "main")
-        assertThat(canCreatePullRequest("f", GhAvailability.READY, null, true)).isTrue()
-        assertThat(canCreatePullRequest("f", GhAvailability.READY, merged, true)).isTrue()
-        assertThat(canCreatePullRequest("f", GhAvailability.READY, open, true)).isFalse()
-        assertThat(canCreatePullRequest("f", GhAvailability.MISSING, null, true)).isFalse()
-        assertThat(canCreatePullRequest("f", GhAvailability.NOT_AUTHENTICATED, null, true)).isFalse()
-        assertThat(canCreatePullRequest("f", null, null, true)).isFalse()
-        assertThat(canCreatePullRequest(null, GhAvailability.READY, null, true)).isFalse()
+        assertThat(canCreatePullRequest("f", GhAvailability.READY, null, github)).isTrue()
+        assertThat(canCreatePullRequest("f", GhAvailability.READY, merged, github)).isTrue()
+        assertThat(canCreatePullRequest("f", GhAvailability.READY, open, github)).isFalse()
+        assertThat(canCreatePullRequest("f", GhAvailability.MISSING, null, github)).isFalse()
+        assertThat(canCreatePullRequest("f", GhAvailability.NOT_AUTHENTICATED, null, github)).isFalse()
+        assertThat(canCreatePullRequest("f", null, null, github)).isFalse()
+        assertThat(canCreatePullRequest(null, GhAvailability.READY, null, github)).isFalse()
     }
 
     @Test
-    fun `pull request and ci chip are hidden without a github remote`() {
-        assertThat(canCreatePullRequest("f", GhAvailability.READY, null, false)).isFalse()
-        assertThat(pullRequestChip(GhAvailability.MISSING, null, false)).isNull()
-        assertThat(isGithubRemote("git@github.com:o/r.git")).isTrue()
-        assertThat(isGithubRemote("https://gitlab.com/o/r.git")).isFalse()
-        assertThat(isGithubRemote("/srv/origin.git")).isFalse()
-        assertThat(isGithubRemote(null)).isFalse()
+    fun `pull request and ci chip are hidden without a known forge remote`() {
+        assertThat(canCreatePullRequest("f", GhAvailability.READY, null, null)).isFalse()
+        assertThat(pullRequestChip(GhAvailability.MISSING, null, null)).isNull()
     }
 
     @Test
@@ -73,14 +70,9 @@ class GitPullRequestCreateTest {
     }
 
     @Test
-    fun `repository comes from https, ssh and scp urls`() {
-        assertThat(githubRepository("https://github.com/o/r.git")).isEqualTo("o/r")
-        assertThat(githubRepository("git@github.com:o/r.git")).isEqualTo("o/r")
-        assertThat(githubRepository("ssh://git@github.com/o/r")).isEqualTo("o/r")
-        assertThat(githubRepository("https://github.com/owner")).isNull()
-        assertThat(isGithubRemote("https://github.com/owner")).isFalse()
-        assertThat(githubRepository("not a url")).isNull()
-        assertThat(githubRepository(null)).isNull()
+    fun `confirm text of a gitlab form names glab`() {
+        val gitlab = form.copy(repo = "https://gitlab.com/g/r", forge = Forge.GITLAB)
+        assertThat(confirmText(gitlab, emptyList(), emptyList())).contains("glab mr create -R https://gitlab.com/g/r --target-branch main --source-branch feature/x")
     }
 
     @Test
@@ -93,27 +85,26 @@ class GitPullRequestCreateTest {
         assertThat(form.copy(head = "main").problem()).isNotNull()
         assertThat(form.copy(head = "main", base = "main").problem()).isNotNull()
         assertThat(form.copy(base = "feature/x").problem()).isEqualTo("Head and base are the same branch")
-        assertThat(form.copy(repo = "").problem()).isNotNull()
         assertThat(form.copy(title = "Fix \"quoted\" bug").problem()).isNull()
     }
 
-    private class RecordingGitHub(val calls: MutableList<String>, val failure: IOException? = null) : GitHubPort {
+    private class RecordingGitHub(val calls: MutableList<String>, val failure: IOException? = null) : PullRequestPort {
         override val pollInterval = java.time.Duration.ofMillis(10)
-        override fun availability(directory: Path) = GhAvailability.READY
-        override fun lookup(directory: Path, branch: String) = com.github.krpkbhdn.ccmanager.github.PullRequestLookup.none()
-        override fun create(directory: Path, draft: PullRequestDraft): String {
+        override fun availability(directory: Path, remote: ForgeRemote) = GhAvailability.READY
+        override fun lookup(directory: Path, remote: ForgeRemote, branch: String) = com.github.krpkbhdn.ccmanager.github.PullRequestLookup.none()
+        override fun create(directory: Path, forge: Forge, draft: PullRequestDraft): String {
             calls += "gh ${draft.repo()} ${draft.base()} ${draft.head()} ${draft.title()}"
             failure?.let { throw it }
             return "https://github.com/o/r/pull/9"
         }
     }
 
-    private fun backend(data: com.github.krpkbhdn.ccmanager.ui.git.FakeRepoData, github: GitHubPort): GitBackend {
+    private fun backend(data: com.github.krpkbhdn.ccmanager.ui.git.FakeRepoData, github: PullRequestPort): GitBackend {
         val b = FakeGit(data).backend
         return GitBackend(b.status, b.index, b.branches, b.sync, b.log, b.stashes, b.history, b.conflicts, b.worktrees, b.watcher, b.taskWorktrees, github)
     }
 
-    private fun publish(data: com.github.krpkbhdn.ccmanager.ui.git.FakeRepoData, gh: GitHubPort, files: List<String>, confirmedHead: String? = data.status().head()): String {
+    private fun publish(data: com.github.krpkbhdn.ccmanager.ui.git.FakeRepoData, gh: PullRequestPort, files: List<String>, confirmedHead: String? = data.status().head()): String {
         data.branch = "feature/x"
         return backend(data, gh).publishPullRequest(Path.of("."), form, files, confirmedHead) {}
     }
