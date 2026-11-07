@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.claude.session;
 
 import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
+import com.github.krpkbhdn.ccmanager.workspace.ChangeListeners;
 import java.time.Clock;
 import java.util.Comparator;
 import java.util.List;
@@ -8,7 +9,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.UnaryOperator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,7 +25,7 @@ public class SessionRegistry {
     private static final Logger log = LoggerFactory.getLogger(SessionRegistry.class);
 
     private final Map<String, SessionState> states = new ConcurrentHashMap<>();
-    private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
+    private final ChangeListeners listeners = new ChangeListeners("Session");
     private final SessionProperties properties;
 
     private final TranscriptService transcripts;
@@ -46,7 +46,7 @@ public class SessionRegistry {
     public String register(long projectId) {
         var ccmSessionId = UUID.randomUUID().toString();
         states.put(ccmSessionId, SessionState.initial(ccmSessionId, projectId, clock.instant()));
-        notifyListeners();
+        listeners.fire();
         return ccmSessionId;
     }
 
@@ -59,7 +59,7 @@ public class SessionRegistry {
     /** The user closed the session: it leaves at once so late hooks of the exiting process raise no status or notification. */
     public void discard(String ccmSessionId) {
         if (states.remove(ccmSessionId) != null) {
-            notifyListeners();
+            listeners.fire();
         }
     }
 
@@ -112,8 +112,7 @@ public class SessionRegistry {
 
     /** @return unsubscribe handle; callback fires (any thread) after any session or status change */
     public Runnable subscribe(Runnable onChange) {
-        listeners.add(onChange);
-        return () -> listeners.remove(onChange);
+        return listeners.add(onChange);
     }
 
     private SessionSnapshot snapshotOf(SessionState state) {
@@ -122,17 +121,7 @@ public class SessionRegistry {
 
     private void update(String ccmSessionId, UnaryOperator<SessionState> change) {
         if (states.computeIfPresent(ccmSessionId, (id, state) -> change.apply(state)) != null) {
-            notifyListeners();
-        }
-    }
-
-    private void notifyListeners() {
-        for (var listener : listeners) {
-            try {
-                listener.run();
-            } catch (RuntimeException e) {
-                log.warn("Session listener failed", e);
-            }
+            listeners.fire();
         }
     }
 }

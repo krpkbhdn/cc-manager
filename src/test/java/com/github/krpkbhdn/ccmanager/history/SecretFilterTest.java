@@ -93,7 +93,8 @@ class SecretFilterTest {
             "x.keystore", "~/.ssh/id_rsa", "~/.ssh/id_ed25519", "id_ecdsa", "id_dsa","id_rsa.pub", "~/.ssh/config", "C:\\Users\\a\\.aws\\config", "cat .netrc",
             ".npmrc", ".pypirc", "aws/credentials", "/p/secrets.yml", "cat ~/.pgpass", "~/.docker/config.json",
             "C:\\\\u\\\\.docker\\\\config.json", "prod.tfvars", "~/.kube/kubeconfig", "service-account-prod.json",
-            ".git-credentials", "{\"command\":\"printenv\"}", "{\"command\":\"env\"}", "{\"command\":\"env | grep X\"}",
+            ".git-credentials", "cat ~/.htpasswd", "client_secret_1.json", "terraform.tfstate", "terraform.tfstate.backup", "cat ~/.kube/config",
+            "{\"command\":\"printenv\"}", "{\"command\":\"env\"}", "{\"command\":\"env | grep X\"}",
             "{\"command\":\"set\"}", "{\"command\":\"set; echo\"}"})
     void detectsSensitiveFiles(String input) {
         assertThat(SecretFilter.touchesSensitiveFile(input)).isTrue();

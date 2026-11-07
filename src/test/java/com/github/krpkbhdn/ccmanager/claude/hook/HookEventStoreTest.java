@@ -45,7 +45,7 @@ class HookEventStoreTest {
                 jdbc.sql(statement).update();
             }
         }
-        store = new HookEventStore(jdbc, JsonMapper.builder().build(), properties(MAX_SCANNED));
+        store = new HookEventStore(jdbc, JsonMapper.builder().build(), properties(MAX_SCANNED), Runnable::run);
     }
 
     private static HookProperties properties(int maxScanned) {
@@ -162,7 +162,7 @@ class HookEventStoreTest {
     @Test
     void pruneKeepsAQuietSessionsRowsWhileABusySessionOverflowsRetention() {
         var roomy = new HookEventStore(jdbc, JsonMapper.builder().build(),
-                new HookProperties(ROOMY_RETENTION, 1024, MAX_TEXT, Duration.ofSeconds(1), 10, MAX_SCANNED));
+                new HookProperties(ROOMY_RETENTION, 1024, MAX_TEXT, Duration.ofSeconds(1), 10, MAX_SCANNED), Runnable::run);
         roomy.save(justNow("quiet", of("UserPromptSubmit", "{\"prompt\":\"quiet\"}")));
         for (var i = 0; i < ROOMY_RETENTION + 100; i++) {
             roomy.save(justNow("s1", of("Stop")));
@@ -180,7 +180,7 @@ class HookEventStoreTest {
     @Test
     void pruneDropsAQuietSessionsRowsOnceTheyAreOlderThanAWeek() {
         var roomy = new HookEventStore(jdbc, JsonMapper.builder().build(),
-                new HookProperties(ROOMY_RETENTION, 1024, MAX_TEXT, Duration.ofSeconds(1), 10, MAX_SCANNED));
+                new HookProperties(ROOMY_RETENTION, 1024, MAX_TEXT, Duration.ofSeconds(1), 10, MAX_SCANNED), Runnable::run);
         var prompt = of("UserPromptSubmit", "{\"prompt\":\"quiet\"}");
         roomy.save(new HookEvent("quiet", prompt.type(), prompt.rawName(), prompt.payload(), prompt.receivedAt()));
         jdbc.sql("UPDATE hook_event SET received_at = ?").param(java.time.Instant.now().minus(Duration.ofDays(30)).toString()).update();
@@ -202,5 +202,25 @@ class HookEventStoreTest {
         store.prune();
 
         assertThat(jdbc.sql("SELECT count(*) FROM hook_event").query(Integer.class).single()).isEqualTo(RETENTION);
+    }
+
+    @Test
+    void saveDoesNotWaitForThePruneAndRetentionHoldsOnceItRuns() {
+        var queued = new java.util.ArrayList<Runnable>();
+        var async = new HookEventStore(jdbc, JsonMapper.builder().build(), properties(MAX_SCANNED), queued::add);
+
+        for (var i = 0; i < 250; i++) {
+            async.save(of("Stop"));
+        }
+
+        assertThat(queued).hasSize(1);
+        assertThat(jdbc.sql("SELECT count(*) FROM hook_event").query(Integer.class).single()).isEqualTo(250);
+        queued.getFirst().run();
+        assertThat(jdbc.sql("SELECT count(*) FROM hook_event").query(Integer.class).single()).isEqualTo(RETENTION);
+        async.save(of("Stop"));
+        for (var i = 0; i < 100; i++) {
+            async.save(of("Stop"));
+        }
+        assertThat(queued).hasSize(2);
     }
 }

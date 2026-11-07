@@ -55,7 +55,7 @@ class GitDiffTool extends GitTool {
     String run(Path repo, JsonNode arguments) {
         var path = optionalText(arguments, "path");
         if (!path.isEmpty()) {
-            requireInside(repo, path);
+            path = requireInside(repo, path);
         }
         var paths = path.isEmpty() ? status.status(repo).changes().stream().map(GitStatus.Change::path).toList() : List.of(path);
         var tooManyFiles = paths.size() > MAX_FILES;
@@ -80,7 +80,7 @@ class GitDiffTool extends GitTool {
     }
 
     /** The .git directory is refused too: its config holds remote URLs and tokens. An untracked path is read straight from disk by git diff --no-index, so it must stay inside the repository, symlinks included. */
-    static void requireInside(Path repo, String path) {
+    static String requireInside(Path repo, String path) {
         try {
             var root = Files.exists(repo) ? repo.toRealPath() : repo.normalize();
             var target = repo.resolve(path).normalize();
@@ -89,6 +89,8 @@ class GitDiffTool extends GitTool {
                     || hasGitSegment(repo.normalize().relativize(target)) || hasGitSegment(root.relativize(real))) {
                 throw new IllegalArgumentException("Path is outside the repository or inside .git: " + path);
             }
+            var relative = Files.exists(target) ? root.relativize(real) : repo.normalize().relativize(target);
+            return relative.toString().replace('\\', '/');
         } catch (IOException e) {
             throw new IllegalArgumentException("Cannot resolve path: " + path);
         }

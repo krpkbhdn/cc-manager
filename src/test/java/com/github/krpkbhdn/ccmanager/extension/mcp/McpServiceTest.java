@@ -17,7 +17,7 @@ class McpServiceTest {
     private static final Path PROJECT = Path.of("/work/project");
     private final RecordingCli cli = new RecordingCli();
     private final McpService service =
-            new McpService(cli, mock(McpConfigReader.class), mock(McpCredentialReader.class), new ExtensionProperties(30, 180, 90, 300));
+            new McpService(cli, mock(McpConfigReader.class), mock(McpCredentialReader.class), new ExtensionProperties(30, 180, 90, 300, 16384));
 
     @Test
     void addPassesTheJsonAsOneArgumentInTheProjectDirectory() {

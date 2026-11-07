@@ -218,18 +218,32 @@ class HookServerTest {
         verifyNoInteractions(mcp);
     }
 
-    @Test
-    void assistantMcpUsesItsOwnSecretAndRoute() throws Exception {
-        when(assistantMcp.handle("{}".getBytes(StandardCharsets.UTF_8))).thenReturn(Optional.of("{\"result\":{}}"));
+    private HttpResponse<String> postWithAuthorization(String url, String authorization) throws Exception {
+        var request = HttpRequest.newBuilder(URI.create(url)).header("Authorization", authorization)
+                .POST(HttpRequest.BodyPublishers.ofString("{}")).build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
 
-        var response = post(server.assistantMcpUrl(), "{}");
+    @Test
+    void assistantMcpAcceptsOnlyItsBearerToken() throws Exception {
+        when(assistantMcp.handle("{}".getBytes(StandardCharsets.UTF_8))).thenReturn(Optional.of("{\"result\":{}}"));
+        var url = server.assistantMcpUrl();
+        var token = server.assistantMcpToken();
+
+        var response = postWithAuthorization(url, "Bearer " + token);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).isEqualTo("{\"result\":{}}");
-        assertThat(server.assistantMcpUrl()).contains("/assistant-mcp/").doesNotContain(server.hookUrl("s").split("/")[4]);
-        assertThat(post(server.assistantMcpUrl() + "x", "{}").statusCode()).isEqualTo(404);
-        assertThat(post(server.mcpUrl("sess-1").replace("/mcp/", "/assistant-mcp/"), "{}").statusCode()).isEqualTo(404);
-        assertThat(post(server.assistantMcpUrl().replaceAll("[^/]+$", ""), "{}").statusCode()).isEqualTo(404);
+        assertThat(url).doesNotContain(token).doesNotContain(server.hookUrl("s").split("/")[4]);
+        assertThat(postWithAuthorization(url, "Bearer " + token + "x").statusCode()).isEqualTo(404);
+        assertThat(postWithAuthorization(url, "Bearer wrong").statusCode()).isEqualTo(404);
+        assertThat(postWithAuthorization(url, token).statusCode()).isEqualTo(404);
+        assertThat(postWithAuthorization(url, "Bearer ").statusCode()).isEqualTo(404);
+        assertThat(post(url, "{}").statusCode()).isEqualTo(404);
+        assertThat(post(url + "/" + token, "{}").statusCode()).isEqualTo(404);
+        assertThat(postWithAuthorization(url + "/" + token, "Bearer " + token).statusCode()).isEqualTo(404);
+        var projectSecret = server.mcpUrl("sess-1").split("/")[4];
+        assertThat(postWithAuthorization(url, "Bearer " + projectSecret).statusCode()).isEqualTo(404);
     }
 
     @Test
@@ -243,7 +257,11 @@ class HookServerTest {
         try {
             var call = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"git_push\",\"arguments\":{}}}";
 
-            var response = post(secured.assistantMcpUrl(), call);
+            var request = HttpRequest.newBuilder(URI.create(secured.assistantMcpUrl()))
+                    .header("Authorization", "Bearer " + secured.assistantMcpToken())
+                    .POST(HttpRequest.BodyPublishers.ofString(call)).build();
+
+            var response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
             assertThat(response.body()).contains("\"isError\":true");
             verify(tool, never()).call(any());

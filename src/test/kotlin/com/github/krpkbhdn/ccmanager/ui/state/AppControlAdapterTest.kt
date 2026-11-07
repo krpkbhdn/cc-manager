@@ -73,7 +73,11 @@ class AppControlAdapterTest {
         val slow = AppControlAdapter(state, scope, Duration.ofMillis(100))
         val finished = java.util.concurrent.atomic.AtomicBoolean()
 
-        slow.onUi { Thread.sleep(150); finished.set(true) }
+        slow.onUi {
+            val pastTimeout = System.nanoTime() + Duration.ofMillis(150).toNanos()
+            com.github.krpkbhdn.ccmanager.ui.await { System.nanoTime() > pastTimeout }
+            finished.set(true)
+        }
 
         assertThat(finished).isTrue()
     }

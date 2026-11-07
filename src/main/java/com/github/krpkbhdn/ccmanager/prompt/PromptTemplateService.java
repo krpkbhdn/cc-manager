@@ -1,12 +1,10 @@
 package com.github.krpkbhdn.ccmanager.prompt;
 
+import com.github.krpkbhdn.ccmanager.workspace.ChangeListeners;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CopyOnWriteArrayList;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
@@ -17,12 +15,11 @@ public class PromptTemplateService {
     public static final int MAX_NAME = 60;
     public static final int MAX_DESCRIPTION = 200;
     public static final int MAX_TEXT = 20_000;
-    private static final Logger log = LoggerFactory.getLogger(PromptTemplateService.class);
     private static final String SELECT = "SELECT id, name, description, text, project_id, default_team_id FROM prompt_template";
     private static final String ORDER = " ORDER BY name COLLATE NOCASE, id";
 
     private final JdbcClient jdbc;
-    private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
+    private final ChangeListeners listeners = new ChangeListeners("Prompt template");
 
     public PromptTemplateService(JdbcClient jdbc) {
         this.jdbc = jdbc;
@@ -47,7 +44,7 @@ public class PromptTemplateService {
         var cleanName = validate(name, description, text, projectId, defaultTeamId);
         var id = jdbc.sql("INSERT INTO prompt_template (name, description, text, project_id, default_team_id) VALUES (?, ?, ?, ?, ?) RETURNING id")
                 .param(cleanName).param(description.strip()).param(text).param(projectId).param(defaultTeamId).query(Long.class).single();
-        fireChanged();
+        listeners.fire();
         return find(id).orElseThrow();
     }
 
@@ -57,20 +54,19 @@ public class PromptTemplateService {
         var cleanName = validate(name, description, text, projectId, defaultTeamId);
         jdbc.sql("UPDATE prompt_template SET name = ?, description = ?, text = ?, project_id = ?, default_team_id = ? WHERE id = ?")
                 .param(cleanName).param(description.strip()).param(text).param(projectId).param(defaultTeamId).param(id).update();
-        fireChanged();
+        listeners.fire();
         return find(id).orElseThrow();
     }
 
     public void delete(long id) {
         if (jdbc.sql("DELETE FROM prompt_template WHERE id = ?").param(id).update() > 0) {
-            fireChanged();
+            listeners.fire();
         }
     }
 
     /** @return unsubscribe handle; callback fires (any thread) after any change made through this service */
     public Runnable subscribe(Runnable onChange) {
-        listeners.add(onChange);
-        return () -> listeners.remove(onChange);
+        return listeners.add(onChange);
     }
 
     private String validate(String name, String description, String text, Long projectId, Long defaultTeamId) {
@@ -113,13 +109,4 @@ public class PromptTemplateService {
         return rs.wasNull() ? null : value;
     }
 
-    private void fireChanged() {
-        for (var listener : listeners) {
-            try {
-                listener.run();
-            } catch (RuntimeException e) {
-                log.warn("Prompt template listener failed", e);
-            }
-        }
-    }
 }

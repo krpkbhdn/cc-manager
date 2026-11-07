@@ -47,7 +47,8 @@ public class TranscriptIndexer {
     private static final String TOOL_ID_SEPARATOR = " ";
     private static final int TRANSCRIPT_DEPTH = 2;
     private static final long BATCH_BYTES = 8L << 20;
-    private static final long MAX_LINE_BYTES = 1L << 30;
+    static final long MAX_LINE_BYTES = 16L << 20;
+    private static final int SKIP_CHUNK_BYTES = 64 * 1024;
     private static final Pattern UUID_NAME = Pattern.compile("[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}");
     private static final Duration SHUTDOWN_WAIT = Duration.ofSeconds(5);
 
@@ -292,13 +293,33 @@ public class TranscriptIndexer {
                     return lines;
                 }
                 if (length >= MAX_LINE_BYTES) {
-                    throw new IllegalStateException("A transcript line is too long to index");
+                    return skipOversizedLine(reader, from, size);
                 }
                 length = Math.min(size - from, Math.min(length * 2, MAX_LINE_BYTES));
             }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    /** Steps over a line too long to index as an empty line of its byte length, or reads nothing while it is unfinished. */
+    private static List<Line> skipOversizedLine(RandomAccessFile reader, long from, long size) throws IOException {
+        var chunk = new byte[SKIP_CHUNK_BYTES];
+        long position = from;
+        reader.seek(position);
+        while (position < size) {
+            int read = reader.read(chunk, 0, (int) Math.min(chunk.length, size - position));
+            if (read < 0) {
+                break;
+            }
+            for (int i = 0; i < read; i++) {
+                if (chunk[i] == '\n') {
+                    return List.of(new Line("", position + i + 1 - from));
+                }
+            }
+            position += read;
+        }
+        return List.of();
     }
 
     private static List<Line> wholeLines(byte[] bytes) {

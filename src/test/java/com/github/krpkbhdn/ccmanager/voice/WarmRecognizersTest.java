@@ -30,7 +30,7 @@ class WarmRecognizersTest {
     private final List<Runnable> idleStops = new CopyOnWriteArrayList<>();
     private final AtomicInteger opened = new AtomicInteger();
     private final AtomicInteger closed = new AtomicInteger();
-    private final WarmRecognizers warm = new WarmRecognizers(scheduler, IDLE);
+    private final WarmRecognizers warm = new WarmRecognizers(scheduler, IDLE, Duration.ofMinutes(2));
 
     @BeforeEach
     void captureIdleStops() {

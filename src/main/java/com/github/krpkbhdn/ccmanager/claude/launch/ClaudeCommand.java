@@ -7,6 +7,7 @@ import com.github.krpkbhdn.ccmanager.team.Team;
 import com.github.krpkbhdn.ccmanager.team.TeamAgentsJson;
 import com.github.krpkbhdn.ccmanager.team.TeamRole;
 import java.nio.file.Path;
+import com.github.krpkbhdn.ccmanager.claude.hook.HookServer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -35,7 +36,7 @@ public final class ClaudeCommand {
     private static final List<String> INHERITED_ENV_TO_DROP = List.of(
             "NO_COLOR", "FORCE_COLOR", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_CHILD_SESSION",
             "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_SESSION_ATTENDED", "CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN", "CLAUDE_CODE_SSE_PORT", "CLAUDE_CODE_EXECPATH", "CLAUDE_PID",
-            "AI_AGENT", "TERMINAL_EMULATOR", "TERM_SESSION_ID");
+            "AI_AGENT", "TERMINAL_EMULATOR", "TERM_SESSION_ID", HookServer.ASSISTANT_TOKEN_ENV);
 
     private ClaudeCommand() {}
 
@@ -142,6 +143,13 @@ public final class ClaudeCommand {
     static Map<String, String> environment(Map<String, String> parent, String ccmSessionId) {
         Map<String, String> env = terminalEnvironment(parent);
         env.put(ENV_SESSION, ccmSessionId);
+        return env;
+    }
+
+    /** Only the Assistant gets the token its mcp file refers to. */
+    static Map<String, String> assistantEnvironment(Map<String, String> parent, String ccmSessionId, String token) {
+        Map<String, String> env = environment(parent, ccmSessionId);
+        env.put(HookServer.ASSISTANT_TOKEN_ENV, token);
         return env;
     }
 

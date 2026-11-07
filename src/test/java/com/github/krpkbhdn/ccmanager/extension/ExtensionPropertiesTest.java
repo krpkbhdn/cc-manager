@@ -15,7 +15,7 @@ class ExtensionPropertiesTest {
 
     @Test
     void acceptsTheDefaults() {
-        assertThatCode(() -> new ExtensionProperties(30, 180, 90, 300)).doesNotThrowAnyException();
+        assertThatCode(() -> new ExtensionProperties(30, 180, 90, 300, 16384)).doesNotThrowAnyException();
     }
 
     @ParameterizedTest(name = "{0} = {2}")
@@ -26,10 +26,10 @@ class ExtensionPropertiesTest {
 
     static Stream<Arguments> invalid() {
         return Stream.of(
-                Arguments.of("queryTimeoutSeconds", (java.util.function.Supplier<ExtensionProperties>) () -> new ExtensionProperties(0, 180, 90, 300), "0"),
-                Arguments.of("networkTimeoutSeconds", (java.util.function.Supplier<ExtensionProperties>) () -> new ExtensionProperties(30, -1, 90, 300), "-1"),
-                Arguments.of("mcpHealthTimeoutSeconds", (java.util.function.Supplier<ExtensionProperties>) () -> new ExtensionProperties(30, 180, 0, 300), "0"),
-                Arguments.of("mcpLoginTimeoutSeconds", (java.util.function.Supplier<ExtensionProperties>) () -> new ExtensionProperties(30, 180, 90, 0), "0"));
+                Arguments.of("queryTimeoutSeconds", (java.util.function.Supplier<ExtensionProperties>) () -> new ExtensionProperties(0, 180, 90, 300, 16384), "0"),
+                Arguments.of("networkTimeoutSeconds", (java.util.function.Supplier<ExtensionProperties>) () -> new ExtensionProperties(30, -1, 90, 300, 16384), "-1"),
+                Arguments.of("mcpHealthTimeoutSeconds", (java.util.function.Supplier<ExtensionProperties>) () -> new ExtensionProperties(30, 180, 0, 300, 16384), "0"),
+                Arguments.of("mcpLoginTimeoutSeconds", (java.util.function.Supplier<ExtensionProperties>) () -> new ExtensionProperties(30, 180, 90, 0, 16384), "0"));
     }
 
     private static String kebab(String camel) {

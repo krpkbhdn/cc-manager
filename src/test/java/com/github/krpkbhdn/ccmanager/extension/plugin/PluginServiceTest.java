@@ -17,7 +17,7 @@ class PluginServiceTest {
 
     private static final Path PROJECT = Path.of("/work/project");
     private final RecordingCli cli = new RecordingCli();
-    private final PluginService service = new PluginService(cli, new ExtensionProperties(30, 180, 90, 300));
+    private final PluginService service = new PluginService(cli, new ExtensionProperties(30, 180, 90, 300, 16384));
 
     @Test
     void detailsRunInTheProjectDirectoryOfTheInstallation() {
@@ -117,7 +117,7 @@ class PluginServiceTest {
     @Test
     void installRepeatsWithoutJsonWhenTheCliDoesNotKnowTheOption() {
         var old = new JsonRejectingCli("error: unknown option '--json'");
-        var oldService = new PluginService(old, new ExtensionProperties(30, 180, 90, 300));
+        var oldService = new PluginService(old, new ExtensionProperties(30, 180, 90, 300, 16384));
 
         var result = oldService.install("a@m", ExtensionScope.USER, null);
 
@@ -129,7 +129,7 @@ class PluginServiceTest {
     @Test
     void addMarketplaceRepeatsWithoutJsonWhenTheCliDoesNotKnowTheOption() {
         var old = new JsonRejectingCli("error: unknown option '--json'");
-        var oldService = new PluginService(old, new ExtensionProperties(30, 180, 90, 300));
+        var oldService = new PluginService(old, new ExtensionProperties(30, 180, 90, 300, 16384));
 
         oldService.addMarketplace("org/repo", ExtensionScope.USER, null);
 
@@ -140,7 +140,7 @@ class PluginServiceTest {
     @Test
     void otherFailuresAreNotRepeated() {
         var failing = new JsonRejectingCli("Plugin \"zzz\" not found");
-        var failingService = new PluginService(failing, new ExtensionProperties(30, 180, 90, 300));
+        var failingService = new PluginService(failing, new ExtensionProperties(30, 180, 90, 300, 16384));
 
         assertThatThrownBy(() -> failingService.install("zzz", ExtensionScope.USER, null))
                 .isInstanceOf(ExtensionException.class)

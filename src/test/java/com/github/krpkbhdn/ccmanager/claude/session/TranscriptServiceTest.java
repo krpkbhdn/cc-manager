@@ -16,7 +16,7 @@ class TranscriptServiceTest {
     Path dir;
 
     private TranscriptService service(Path root) {
-        return new TranscriptService(JsonMapper.builder().build(), root);
+        return new TranscriptService(JsonMapper.builder().build(), root, new TranscriptProperties(300, 1 << 20, 64 * 1024, 512 * 1024));
     }
 
     private static String user(String text) {

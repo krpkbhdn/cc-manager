@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.history;
 
 import com.github.krpkbhdn.ccmanager.claude.hook.SecretPatterns;
+import com.github.krpkbhdn.ccmanager.git.SecretFiles;
 import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -60,7 +61,8 @@ public final class SecretFilter {
                     + "|(?<!\\w)id_(?:rsa|ed25519|ecdsa|dsa)"
                     + "|\\.(?:ssh|aws)[/\\\\]"
                     + "|\\.docker[/\\\\]+config\\.json"
-                    + "|\\.(?:netrc|npmrc|pypirc|pgpass|git-credentials)(?!\\w)"
+                    + "|\\.(?:netrc|npmrc|pypirc|pgpass)(?!\\w)"
+                    + "|(?:" + SecretFiles.CREDENTIAL_NAMES + ")(?![\\w-])"
                     + "|(?<!\\w)credentials"
                     + "|(?<!\\w)secrets\\."
                     + "|kubeconfig"

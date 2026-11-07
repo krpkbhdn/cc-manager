@@ -16,10 +16,13 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalDouble;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.RejectedExecutionHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +35,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class UsageRecorder {
 
+    static final int MAX_QUEUED_WRITES = 1000;
+    private static final Duration DROP_WARNING_INTERVAL = Duration.ofMinutes(1);
     private static final Duration SHUTDOWN_WAIT = Duration.ofSeconds(5);
 
     private static final Logger log = LoggerFactory.getLogger(UsageRecorder.class);
@@ -55,11 +60,24 @@ public class UsageRecorder {
     @Autowired
     public UsageRecorder(SessionRegistry registry, SessionUsageService usage, RateLimitService rateLimits,
             UsageHistoryRepository repository, UsageAlertService alerts, UsageProperties properties) {
-        this(registry, usage, rateLimits, repository, alerts, properties, Executors.newSingleThreadExecutor(task -> {
+        this(registry, usage, rateLimits, repository, alerts, properties, boundedWriter(MAX_QUEUED_WRITES));
+    }
+
+    /** Drops the newest write when full so a stalled database cannot grow memory without limit. */
+    static ThreadPoolExecutor boundedWriter(int capacity) {
+        var lastWarning = new AtomicLong();
+        RejectedExecutionHandler drop = (task, executor) -> {
+            var now = System.nanoTime();
+            var last = lastWarning.get();
+            if ((last == 0 || now - last >= DROP_WARNING_INTERVAL.toNanos()) && lastWarning.compareAndSet(last, now)) {
+                log.warn("Usage write queue is full, dropping samples");
+            }
+        };
+        return new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(capacity), task -> {
             var thread = new Thread(task, "usage-recorder");
             thread.setDaemon(true);
             return thread;
-        }));
+        }, drop);
     }
 
     UsageRecorder(SessionRegistry registry, SessionUsageService usage, RateLimitService rateLimits,

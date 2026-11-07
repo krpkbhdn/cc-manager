@@ -227,8 +227,11 @@ public class GitWatcher {
             if (event.kind() == OVERFLOW) {
                 changed = true;
             } else if (isRelevant(registration.zone(), (Path) event.context())) {
-                changed = true;
-                onCreated(registration, ((Path) key.watchable()).resolve((Path) event.context()), event.kind());
+                var path = ((Path) key.watchable()).resolve((Path) event.context());
+                if (!isDirectoryTimestampNoise(registration.zone(), event.kind(), path)) {
+                    changed = true;
+                }
+                onCreated(registration, path, event.kind());
             }
         }
         if (!key.reset()) {
@@ -238,6 +241,24 @@ public class GitWatcher {
         if (changed) {
             registration.watch().changed();
         }
+    }
+
+    /** Lets tests wait until a new folder is registered instead of sleeping. */
+    boolean isWatching(Path directory) {
+        return registrations.keySet().stream().anyMatch(key -> isSameDirectory((Path) key.watchable(), directory));
+    }
+
+    private static boolean isSameDirectory(Path first, Path second) {
+        try {
+            return Files.isSameFile(first, second);
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /** Windows reports a MODIFY for every ancestor folder of a changed file, even when that file sits in an ignored folder. */
+    private static boolean isDirectoryTimestampNoise(Zone zone, WatchEvent.Kind<?> kind, Path path) {
+        return zone == Zone.TREE && kind == ENTRY_MODIFY && Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS);
     }
 
     private static boolean isRelevant(Zone zone, Path name) {

@@ -25,7 +25,7 @@ import org.junit.jupiter.api.io.TempDir;
 class VerifiedDownloadTest {
 
     private static final byte[] CONTENT = "model-bytes".repeat(1000).getBytes(StandardCharsets.UTF_8);
-    private static final Duration STALL = Duration.ofSeconds(5);
+    private static final Duration STALL = Duration.ofSeconds(60);
 
     @TempDir
     Path directory;

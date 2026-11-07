@@ -9,7 +9,15 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import jakarta.annotation.PreDestroy;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -23,6 +31,7 @@ import tools.jackson.databind.node.ObjectNode;
 @EnableConfigurationProperties(HookProperties.class)
 public class HookEventStore {
 
+    private static final Logger log = LoggerFactory.getLogger(HookEventStore.class);
     private static final int PRUNE_EVERY_INSERTS = 100;
     private static final int OVER_FETCH_FACTOR = 4;
     /** Pruning keeps a session's newest retention / this many rows (at least one), but only rows younger than the max age, so the table stays bounded. */
@@ -37,11 +46,30 @@ public class HookEventStore {
     private final JsonMapper mapper;
     private final HookProperties properties;
     private final AtomicInteger insertsSincePrune = new AtomicInteger();
+    private final AtomicBoolean pruning = new AtomicBoolean();
+    private final Executor pruner;
 
+    @Autowired
     public HookEventStore(JdbcClient jdbc, JsonMapper mapper, HookProperties properties) {
+        this(jdbc, mapper, properties, Executors.newSingleThreadExecutor(task -> {
+            var thread = new Thread(task, "hook-event-prune");
+            thread.setDaemon(true);
+            return thread;
+        }));
+    }
+
+    HookEventStore(JdbcClient jdbc, JsonMapper mapper, HookProperties properties, Executor pruner) {
         this.jdbc = jdbc;
         this.mapper = mapper;
         this.properties = properties;
+        this.pruner = pruner;
+    }
+
+    @PreDestroy
+    void shutdown() {
+        if (pruner instanceof ExecutorService service) {
+            service.shutdownNow();
+        }
     }
 
     public void save(HookEvent event) {
@@ -53,7 +81,26 @@ public class HookEventStore {
                 .update();
         if (insertsSincePrune.incrementAndGet() >= PRUNE_EVERY_INSERTS) {
             insertsSincePrune.set(0);
-            prune();
+            pruneInBackground();
+        }
+    }
+
+    private void pruneInBackground() {
+        if (!pruning.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            pruner.execute(() -> {
+                try {
+                    prune();
+                } catch (RuntimeException e) {
+                    log.warn("Could not prune hook events", e);
+                } finally {
+                    pruning.set(false);
+                }
+            });
+        } catch (RuntimeException e) {
+            pruning.set(false);
         }
     }
 

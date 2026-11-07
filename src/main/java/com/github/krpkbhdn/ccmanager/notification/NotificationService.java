@@ -20,24 +20,26 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Service;
 
 /** Turns session status transitions (WORKING to IDLE, NEEDS_ACTION, errors) into notifications. */
 @Service
+@EnableConfigurationProperties(NotificationProperties.class)
 public class NotificationService {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
-    private static final int HISTORY_LIMIT = 200;
-    private static final Duration DUPLICATE_WINDOW = Duration.ofSeconds(2);
 
     private record Seen(AgentStatus status, AppNotification lastNotification) {}
 
     private final Map<String, Seen> seen = new HashMap<>();
     private final ArrayDeque<AppNotification> history = new ArrayDeque<>();
     private final List<Consumer<AppNotification>> listeners = new CopyOnWriteArrayList<>();
+    private final NotificationProperties properties;
     private final AtomicLong nextId = new AtomicLong(1);
 
-    public NotificationService(SessionRegistry registry) {
+    public NotificationService(SessionRegistry registry, NotificationProperties properties) {
+        this.properties = properties;
         registry.subscribe(() -> onSessionsChanged(registry));
     }
 
@@ -107,16 +109,16 @@ public class NotificationService {
                 session.ccmSessionId(), title, body == null ? "" : body);
     }
 
-    private static boolean duplicate(AppNotification previous, AppNotification candidate) {
+    private boolean duplicate(AppNotification previous, AppNotification candidate) {
         return previous != null
                 && previous.kind() == candidate.kind()
                 && previous.body().equals(candidate.body())
-                && Duration.between(previous.at(), candidate.at()).compareTo(DUPLICATE_WINDOW) < 0;
+                && Duration.between(previous.at(), candidate.at()).compareTo(properties.duplicateWindow()) < 0;
     }
 
     private void remember(AppNotification notification) {
         history.addLast(notification);
-        while (history.size() > HISTORY_LIMIT) {
+        while (history.size() > properties.historyLimit()) {
             history.removeFirst();
         }
     }

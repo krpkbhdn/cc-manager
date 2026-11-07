@@ -291,6 +291,21 @@ class ProposalServiceTest {
     }
 
     @Test
+    void newerProposalWithTheSameIdSurvivesTheOlderOneTimingOut() throws Exception {
+        var shortLived = serviceHolding(Duration.ofMillis(600));
+        var older = holdForApp(shortLived);
+        Thread.sleep(300);
+        var newer = holdForApp(shortLived);
+
+        assertThat(older.get(WAIT_SECONDS, TimeUnit.SECONDS)).isEqualTo(AppDecision.Unanswered.TIMED_OUT);
+
+        assertThat(newer).isNotDone();
+        assertThat(shortLived.pending()).hasSize(1);
+        assertThat(newer.get(WAIT_SECONDS, TimeUnit.SECONDS)).isEqualTo(AppDecision.Unanswered.TIMED_OUT);
+        assertThat(shortLived.pending()).isEmpty();
+    }
+
+    @Test
     void concurrentHoldsNeverExceedTheCap() throws Exception {
         var capped = serviceHolding(Duration.ofSeconds(30), MAX_HELD);
         try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {

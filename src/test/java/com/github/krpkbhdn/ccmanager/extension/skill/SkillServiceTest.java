@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.github.krpkbhdn.ccmanager.extension.ExtensionException;
+import com.github.krpkbhdn.ccmanager.extension.ExtensionProperties;
 import com.github.krpkbhdn.ccmanager.extension.ExtensionScope;
 import com.github.krpkbhdn.ccmanager.extension.plugin.InstalledPlugin;
 import com.github.krpkbhdn.ccmanager.extension.plugin.PluginService;
@@ -33,7 +34,7 @@ class SkillServiceTest {
     private final PluginService plugins = mock(PluginService.class);
 
     private SkillService service() {
-        return new SkillService(new FakeHostEnvironment(HostEnvironment.OperatingSystem.LINUX, home), plugins);
+        return new SkillService(new FakeHostEnvironment(HostEnvironment.OperatingSystem.LINUX, home), plugins, new ExtensionProperties(30, 180, 90, 300, 16384));
     }
 
     private static void skill(Path root, String directory, String content) throws IOException {
@@ -205,7 +206,7 @@ class SkillServiceTest {
         var configDirectory = project.resolve("custom-config");
         var host = new FakeHostEnvironment(HostEnvironment.OperatingSystem.LINUX, home).withEnv("CLAUDE_CONFIG_DIR", configDirectory.toString());
         when(plugins.installed()).thenReturn(List.of());
-        var service = new SkillService(host, plugins);
+        var service = new SkillService(host, plugins, new ExtensionProperties(30, 180, 90, 300, 16384));
 
         var created = service.create(ExtensionScope.USER, null, "mine", "d");
 

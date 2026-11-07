@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -22,18 +23,15 @@ import tools.jackson.databind.json.JsonMapper;
  * directory are read, so a hook payload cannot point the app at an arbitrary file.
  */
 @Component
+@EnableConfigurationProperties(TranscriptProperties.class)
 public class TranscriptService {
-
-    private static final int MAX_ENTRIES = 300;
-    private static final int TAIL_BYTES = 1 << 20;
-    private static final int REFRESH_TAIL_BYTES = 64 * 1024;
-    private static final int WINDOW_BYTES = 512 * 1024;
 
     private static final int TITLE_CACHE_SIZE = 64;
 
     private final JsonMapper mapper;
     private final TranscriptLineParser parser;
     private final Path projectsRoot;
+    private final TranscriptProperties properties;
     private final Map<String, CachedTitle> titleCache = Collections.synchronizedMap(new LinkedHashMap<>(16, 0.75f, true) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, CachedTitle> eldest) {
@@ -42,11 +40,12 @@ public class TranscriptService {
     });
 
     @Autowired
-    public TranscriptService(JsonMapper mapper, HostEnvironment host) {
-        this(mapper, host.claudeConfigDirectory().resolve("projects"));
+    public TranscriptService(JsonMapper mapper, HostEnvironment host, TranscriptProperties properties) {
+        this(mapper, host.claudeConfigDirectory().resolve("projects"), properties);
     }
 
-    public TranscriptService(JsonMapper mapper, Path projectsRoot) {
+    public TranscriptService(JsonMapper mapper, Path projectsRoot, TranscriptProperties properties) {
+        this.properties = properties;
         this.mapper = mapper;
         this.parser = new TranscriptLineParser(mapper);
         this.projectsRoot = projectsRoot;
@@ -56,7 +55,7 @@ public class TranscriptService {
     public List<TranscriptEntry> read(String transcriptPath) {
         var entries = new ArrayList<TranscriptEntry>();
         tail(transcriptPath).forEach(line -> parser.parse(line).ifPresent(parsed -> entries.addAll(parsed.entries())));
-        return List.copyOf(entries.subList(Math.max(0, entries.size() - MAX_ENTRIES), entries.size()));
+        return List.copyOf(entries.subList(Math.max(0, entries.size() - properties.maxEntries()), entries.size()));
     }
 
     /** Entries of the lines within about 512 KB either side of the line starting at [lineOffset] (bytes); {@code index} is the first entry of that line, -1 when none. */
@@ -70,8 +69,8 @@ public class TranscriptService {
             }
             try (var reader = new RandomAccessFile(file.get().toFile(), "r")) {
                 var length = reader.length();
-                var start = Math.max(0, lineOffset - WINDOW_BYTES);
-                var end = Math.min(length, lineOffset + WINDOW_BYTES);
+                var start = Math.max(0, lineOffset - properties.windowBytes());
+                var end = Math.min(length, lineOffset + properties.windowBytes());
                 var bytes = new byte[(int) (end - start)];
                 reader.seek(start);
                 reader.readFully(bytes);
@@ -110,13 +109,13 @@ public class TranscriptService {
         }
         var stamp = stampOf(transcriptPath);
         if (stamp == null) {
-            return readTitles(transcriptPath, TAIL_BYTES).best();
+            return readTitles(transcriptPath, properties.tailBytes()).best();
         }
         var cached = titleCache.get(transcriptPath);
         if (cached != null && cached.stamp().equals(stamp)) {
             return cached.titles().best();
         }
-        var read = readTitles(transcriptPath, cached == null ? TAIL_BYTES : REFRESH_TAIL_BYTES);
+        var read = readTitles(transcriptPath, cached == null ? properties.tailBytes() : properties.refreshTailBytes());
         var titles = cached == null ? read : new Titles(read.custom().or(cached.titles()::custom), read.generated().or(cached.titles()::generated));
         titleCache.put(transcriptPath, new CachedTitle(stamp, titles));
         return titles.best();
@@ -168,7 +167,7 @@ public class TranscriptService {
     }
 
     private List<String> tail(String transcriptPath) {
-        return tail(transcriptPath, TAIL_BYTES);
+        return tail(transcriptPath, properties.tailBytes());
     }
 
     private List<String> tail(String transcriptPath, int tailBytes) {

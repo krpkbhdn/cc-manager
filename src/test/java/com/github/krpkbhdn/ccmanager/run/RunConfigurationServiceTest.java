@@ -158,4 +158,15 @@ class RunConfigurationServiceTest {
         assertThatThrownBy(() -> service.save(projectId, "web", "a", temp.resolve("missing"))).hasMessageContaining("does not exist");
         assertThatThrownBy(() -> service.save(projectId + 99, "web", "a", temp)).hasMessageContaining("project");
     }
+
+    @Test
+    void throwingSubscriberDoesNotStopTheOthers() {
+        var calls = new AtomicInteger();
+        service.subscribe(() -> { throw new IllegalStateException("boom"); });
+        service.subscribe(calls::incrementAndGet);
+
+        service.save(projectId, "web", "a", temp);
+
+        assertThat(calls).hasValue(1);
+    }
 }

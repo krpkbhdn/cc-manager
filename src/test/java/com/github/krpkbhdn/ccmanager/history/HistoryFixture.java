@@ -39,7 +39,7 @@ final class HistoryFixture {
         repository = spy(new TranscriptIndexRepository(jdbc, new TransactionTemplate(new DataSourceTransactionManager(dataSource))));
         var host = mock(HostEnvironment.class);
         when(host.windows()).thenReturn(windowsHost);
-        search = new SessionSearchService(jdbc, repository, host);
+        search = new SessionSearchService(jdbc, repository, host, new SessionHistoryProperties(Duration.ofMinutes(1), 200000, 100));
     }
 
     TranscriptIndexer indexer(int maxEntries) {
@@ -48,12 +48,12 @@ final class HistoryFixture {
 
     TranscriptIndexer indexer(int maxEntries, JsonMapper mapper) {
         return new TranscriptIndexer(projects, mapper, repository,
-                new SessionHistoryProperties(Duration.ofMinutes(1), maxEntries));
+                new SessionHistoryProperties(Duration.ofMinutes(1), maxEntries, 100));
     }
 
     TranscriptIndexer indexer(int maxEntries, long batchBytes) {
         return new TranscriptIndexer(projects, JsonMapper.shared(), repository,
-                new SessionHistoryProperties(Duration.ofMinutes(1), maxEntries), batchBytes);
+                new SessionHistoryProperties(Duration.ofMinutes(1), maxEntries, 100), batchBytes);
     }
 
     static String userLine(String uuid, String cwd, String at, String text) {

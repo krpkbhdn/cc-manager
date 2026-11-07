@@ -209,4 +209,28 @@ class UsageRecorderTest {
                 null, null, Instant.now(), Instant.now(), List.of(), 0, null)));
         registryChanged.run();
     }
+
+    @Test
+    void aFullWriteQueueDropsNewSamplesInsteadOfGrowing() throws Exception {
+        var writer = UsageRecorder.boundedWriter(2);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var ran = new java.util.concurrent.atomic.AtomicInteger();
+        Runnable task = () -> {
+            try {
+                release.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            ran.incrementAndGet();
+        };
+
+        for (var i = 0; i < 10; i++) {
+            writer.execute(task);
+        }
+        release.countDown();
+        writer.shutdown();
+        writer.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS);
+
+        assertThat(ran.get()).isEqualTo(3);
+    }
 }

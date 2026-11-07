@@ -102,10 +102,19 @@ public class HookSettingsWriter {
 
     /**
      * The Assistant session gets only the app server in its mcp file; the project server and the project-session secret stay out of it.
-     * The secret alone reaches only auto-approved tools, every other tool needs the user's Allow in the app.
+     * The file holds only a reference to the token env variable of the Assistant process, so it contains no secret.
+     * The token alone reaches only auto-approved tools, every other tool needs the user's Allow in the app.
      */
     public SessionFiles writeAssistant(String ccmSessionId) {
-        return write(ccmSessionId, mcpConfig(AssistantMcpServer.SERVER_NAME, server.assistantMcpUrl(), Map.of()));
+        var config = mcpConfig(AssistantMcpServer.SERVER_NAME, server.assistantMcpUrl(), Map.of());
+        ((ObjectNode) config.path("mcpServers").path(AssistantMcpServer.SERVER_NAME)).putObject("headers")
+                .put("Authorization", "Bearer ${" + HookServer.ASSISTANT_TOKEN_ENV + "}");
+        return write(ccmSessionId, config);
+    }
+
+    /** Value of {@link HookServer#ASSISTANT_TOKEN_ENV} for the Assistant process. */
+    public String assistantToken() {
+        return server.assistantMcpToken();
     }
 
     private SessionFiles write(String ccmSessionId, ObjectNode mcpConfig) {

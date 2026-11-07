@@ -3,6 +3,7 @@ package com.github.krpkbhdn.ccmanager.run;
 import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeCommand;
 import com.github.krpkbhdn.ccmanager.claude.launch.PtySpawner;
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession;
+import com.github.krpkbhdn.ccmanager.workspace.ChangeListeners;
 import com.github.krpkbhdn.ccmanager.workspace.WindowsArgument;
 import com.github.krpkbhdn.ccmanager.project.ProjectService;
 import com.github.krpkbhdn.ccmanager.workspace.HostEnvironment;
@@ -20,7 +21,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -40,7 +40,7 @@ public class RunService {
     private final RunShell shell;
     private final HostEnvironment host;
     private final Map<Long, ActiveRun> runs = new ConcurrentHashMap<>();
-    private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
+    private final ChangeListeners listeners = new ChangeListeners("Run");
     private final AtomicLong counter = new AtomicLong();
 
     public RunService(RunConfigurationService configurations, ProjectService projects, RunShell shell, HostEnvironment host) {
@@ -67,7 +67,7 @@ public class RunService {
         }
         runs.put(configurationId, new ActiveRun(configurationId, runId, configuration.name(), process, OptionalInt.empty()));
         watchExit(configurationId, runId, process);
-        fireChanged();
+        listeners.fire();
         return new LaunchedSession(runId, configuration.projectId(), configuration.name(), process);
     }
 
@@ -118,8 +118,7 @@ public class RunService {
 
     /** @return unsubscribe handle; callback fires (any thread) when a run starts, exits or is stopped */
     public Runnable subscribe(Runnable onChange) {
-        listeners.add(onChange);
-        return () -> listeners.remove(onChange);
+        return listeners.add(onChange);
     }
 
     @PreDestroy
@@ -157,7 +156,7 @@ public class RunService {
         try {
             int code = process.waitFor();
             runs.computeIfPresent(configurationId, (id, run) -> run.runId().equals(runId) ? run.exited(code) : run);
-            fireChanged();
+            listeners.fire();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -168,17 +167,7 @@ public class RunService {
             if (configurations.find(configurationId).isEmpty()) {
                 stop(configurationId);
                 runs.remove(configurationId);
-                fireChanged();
-            }
-        }
-    }
-
-    private void fireChanged() {
-        for (var listener : listeners) {
-            try {
-                listener.run();
-            } catch (RuntimeException e) {
-                log.warn("Run listener failed", e);
+                listeners.fire();
             }
         }
     }

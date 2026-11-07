@@ -24,7 +24,8 @@ class HookSettingsWriterTest {
     private static final String URL = "http://127.0.0.1:5555/hook/secret/abc-1";
     private static final String STATUS_LINE_URL = "http://127.0.0.1:5555/statusline/secret/abc-1";
     private static final String MCP_URL = "http://127.0.0.1:5555/mcp/secret/abc-1";
-    private static final String APP_MCP_URL = "http://127.0.0.1:5555/assistant-mcp/appsecret";
+    private static final String APP_MCP_URL = "http://127.0.0.1:5555/assistant-mcp";
+    private static final String APP_TOKEN = "apptokenvalue";
     private static final String DEAD_PID = String.valueOf(Integer.MAX_VALUE);
 
     private static final HookProperties HOOK_PROPERTIES = new HookProperties(10, 1024, 500, Duration.ofSeconds(590), 10, 1000);
@@ -166,8 +167,24 @@ class HookSettingsWriterTest {
     }
 
     @Test
+    void assistantMcpFileReferencesTheTokenVariableAndHoldsNoSecret() throws Exception {
+        when(server.assistantMcpUrl()).thenReturn(APP_MCP_URL);
+        when(server.assistantMcpToken()).thenReturn(APP_TOKEN);
+
+        var files = writer.writeAssistant("abc-1");
+
+        var text = Files.readString(files.mcpConfig());
+        var entry = mapper.readTree(text).path("mcpServers").path("cc-manager-app");
+        assertThat(entry.path("url").asString()).isEqualTo(APP_MCP_URL);
+        assertThat(entry.path("headers").path("Authorization").asString()).isEqualTo("Bearer ${CCM_ASSISTANT_TOKEN}");
+        assertThat(text).doesNotContain(APP_TOKEN);
+        assertThat(Files.readString(files.settings())).doesNotContain(APP_TOKEN);
+        assertThat(Files.readString(writer.write("abc-1").mcpConfig())).doesNotContain("headers", "CCM_ASSISTANT_TOKEN");
+    }
+
+    @Test
     void projectSessionsAndTheAssistantBothDenyReadingTheHooksDirectory() throws Exception {
-        when(server.assistantMcpUrl()).thenReturn("http://127.0.0.1:1/assistant-mcp/s");
+        when(server.assistantMcpUrl()).thenReturn(APP_MCP_URL);
         var deny = mapper.readTree(Files.readString(writer.write("abc-1").settings())).path("permissions").path("deny");
         var assistant = mapper.readTree(Files.readString(writer.writeAssistant("abc-1").settings())).path("permissions");
 

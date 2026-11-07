@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.prompt.PromptTemplate
 import com.github.krpkbhdn.ccmanager.team.Team
+import com.github.krpkbhdn.ccmanager.ui.components.CardRow
 import com.github.krpkbhdn.ccmanager.ui.components.AppButton
 import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant
 import com.github.krpkbhdn.ccmanager.ui.components.CountBadge
@@ -73,15 +74,10 @@ fun PromptsScreen(prompts: PromptsState, projects: List<Project>, teams: List<Te
 
 @Composable
 private fun TemplateRow(template: PromptTemplate, prompts: PromptsState, projects: List<Project>, teams: List<Team>, onRun: (PromptTemplate, Project) -> Unit, onChooseProject: () -> Unit) {
-    val shape = RoundedCornerShape(Radius.lg)
     val bound = projects.firstOrNull { it.id == template.projectId }
     val team = teams.firstOrNull { it.id == template.defaultTeamId }
     val details = listOfNotNull(bound?.name ?: ALL_PROJECTS, team?.name).joinToString(" · ")
-    Row(
-        Modifier.fillMaxWidth().background(colors.surface, shape).border(1.dp, colors.border, shape).padding(Spacing.md),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-    ) {
+    CardRow {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             Label(template.name, style = Type.bodyMedium, tooltipWhenTruncated = true)
             if (template.description.isNotBlank()) Label(template.description, style = Type.small, tooltipWhenTruncated = true)

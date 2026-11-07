@@ -18,7 +18,7 @@ class NotificationServiceTest {
     private static final long PROJECT_ID = 9;
 
     private final SessionRegistry registry = new SessionRegistry(new com.github.krpkbhdn.ccmanager.claude.session.SessionProperties(java.time.Duration.ofMinutes(10), java.time.Duration.ofMinutes(10)), mock(TranscriptService.class));
-    private final NotificationService service = new NotificationService(registry);
+    private final NotificationService service = new NotificationService(registry, new NotificationProperties(200, java.time.Duration.ofSeconds(2)));
     private final List<AppNotification> received = new ArrayList<>();
     private String id;
 
@@ -93,7 +93,7 @@ class NotificationServiceTest {
             }
         };
         var shortLived = new SessionRegistry(new SessionProperties(java.time.Duration.ofMinutes(5), java.time.Duration.ofMinutes(10)), mock(TranscriptService.class), clock);
-        var stale = new NotificationService(shortLived);
+        var stale = new NotificationService(shortLived, new NotificationProperties(200, java.time.Duration.ofSeconds(2)));
         var seen = new ArrayList<AppNotification>();
         stale.subscribe(seen::add);
         var sid = shortLived.register(PROJECT_ID);

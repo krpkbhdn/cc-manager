@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.project;
 
 import com.github.krpkbhdn.ccmanager.config.UniqueViolations;
+import com.github.krpkbhdn.ccmanager.workspace.ChangeListeners;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -10,7 +11,6 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CopyOnWriteArrayList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,7 +28,7 @@ public class ProjectService {
 
     private final JdbcClient jdbc;
     private final GroupWorkspace groupWorkspace;
-    private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
+    private final ChangeListeners listeners = new ChangeListeners("Project");
 
     @Autowired
     public ProjectService(JdbcClient jdbc, GroupWorkspace groupWorkspace) {
@@ -111,8 +111,7 @@ public class ProjectService {
 
     /** @return unsubscribe handle; callback fires after any add/rename/remove */
     public Runnable subscribe(Runnable onChange) {
-        listeners.add(onChange);
-        return () -> listeners.remove(onChange);
+        return listeners.add(onChange);
     }
 
     private Optional<Project> findByPath(Path path) {
@@ -142,13 +141,7 @@ public class ProjectService {
     }
 
     void fireChanged() {
-        for (var listener : listeners) {
-            try {
-                listener.run();
-            } catch (RuntimeException e) {
-                log.warn("Project change listener failed", e);
-            }
-        }
+        listeners.fire();
     }
 
     private static Project mapRow(ResultSet rs, int rowNum) throws SQLException {

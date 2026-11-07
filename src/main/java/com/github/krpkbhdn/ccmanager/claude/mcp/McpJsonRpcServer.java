@@ -52,6 +52,9 @@ public abstract class McpJsonRpcServer<T extends McpToolDescriptor> {
         JsonNode request;
         try {
             request = mapper.readTree(body);
+            if (request.isMissingNode()) {
+                return Optional.of(error(null, PARSE_ERROR, "Parse error"));
+            }
         } catch (RuntimeException e) {
             return Optional.of(error(null, PARSE_ERROR, "Parse error"));
         }

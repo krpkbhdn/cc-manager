@@ -34,10 +34,10 @@ class VoicePropertiesTest {
     @Test
     void rejectsZeroPauseAndZeroDownloadStallTimeout() {
         assertThatThrownBy(() -> new VoiceProperties("auto", Duration.ofSeconds(10), Duration.ofSeconds(1), Duration.ZERO,
-                0.01, 0.5, 4, Duration.ofSeconds(30), Duration.ofMinutes(5)))
+                0.01, 0.5, 4, Duration.ofSeconds(30), Duration.ofMinutes(5), Duration.ofMinutes(2), Duration.ofSeconds(60)))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("pause");
         assertThatThrownBy(() -> new VoiceProperties("auto", Duration.ofSeconds(10), Duration.ofSeconds(1), Duration.ofMillis(700),
-                0.01, 0.5, 4, Duration.ZERO, Duration.ofMinutes(5)))
+                0.01, 0.5, 4, Duration.ZERO, Duration.ofMinutes(5), Duration.ofMinutes(2), Duration.ofSeconds(60)))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("downloadStallTimeout");
     }
 
@@ -60,11 +60,11 @@ class VoicePropertiesTest {
 
     private static VoiceProperties withLanguage(String language) {
         return new VoiceProperties(language, Duration.ofSeconds(10), Duration.ofSeconds(1), Duration.ofMillis(700), 0.01, 0.5, 4,
-                Duration.ofSeconds(30), Duration.ofMinutes(5));
+                Duration.ofSeconds(30), Duration.ofMinutes(5), Duration.ofMinutes(2), Duration.ofSeconds(60));
     }
 
     private static VoiceProperties create(int threads, Duration window, Duration tick, double vadThreshold) {
         return new VoiceProperties("auto", window, tick, Duration.ofMillis(700), 0.01, vadThreshold, threads,
-                Duration.ofSeconds(30), Duration.ofMinutes(5));
+                Duration.ofSeconds(30), Duration.ofMinutes(5), Duration.ofMinutes(2), Duration.ofSeconds(60));
     }
 }

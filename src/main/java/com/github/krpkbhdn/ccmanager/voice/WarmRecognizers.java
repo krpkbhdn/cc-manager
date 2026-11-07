@@ -26,7 +26,6 @@ import java.util.function.Supplier;
 final class WarmRecognizers {
 
     private static final String SHUT_DOWN = "Voice input is shut down";
-    private static final Duration OPEN_TIMEOUT = Duration.ofMinutes(2);
 
     record Key(WhisperModel model, String deviceId) {}
 
@@ -73,10 +72,6 @@ final class WarmRecognizers {
     private final Map<Key, Entry> warm = new HashMap<>();
     private final Map<Key, CompletableFuture<Void>> closing = new HashMap<>();
     private boolean closed;
-
-    WarmRecognizers(ScheduledExecutorService scheduler, Duration idleShutdown) {
-        this(scheduler, idleShutdown, OPEN_TIMEOUT);
-    }
 
     WarmRecognizers(ScheduledExecutorService scheduler, Duration idleShutdown, Duration openTimeout) {
         this.scheduler = scheduler;

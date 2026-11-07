@@ -295,6 +295,22 @@ class GitToolsTest {
     }
 
     @Test
+    void diffJudgesAWindowsShortNameAliasByItsRealName(@org.junit.jupiter.api.io.TempDir Path repo) throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("os.name").startsWith("Windows"));
+        var secret = repo.resolve("credentials.json");
+        java.nio.file.Files.writeString(secret, "{}");
+        var process = new ProcessBuilder("cmd", "/c", "for %I in (\"" + secret + "\") do @echo %~sI").redirectErrorStream(true).start();
+        var shortPath = new String(process.getInputStream().readAllBytes()).trim();
+        process.waitFor();
+        org.junit.jupiter.api.Assumptions.assumeTrue(shortPath.toUpperCase().endsWith("~1.JSO"), "8.3 names are disabled: " + shortPath);
+
+        var alias = GitDiffTool.requireInside(repo, Path.of(shortPath).getFileName().toString());
+
+        assertThat(alias).isEqualTo("credentials.json");
+        assertThat(GitDiffTool.looksSecret(alias)).isTrue();
+    }
+
+    @Test
     void diffAllowsAPathThatOnlyLooksLikeGit() {
         when(status.diff(any(), any(), eq(false))).thenReturn(new GitDiff.FileDiff(".gitignore", null, GitDiff.ChangeType.MODIFIED, 0, 0, false, List.of()));
         when(status.diff(any(), any(), eq(true))).thenReturn(new GitDiff.FileDiff(".gitignore", null, GitDiff.ChangeType.MODIFIED, 0, 0, false, List.of()));

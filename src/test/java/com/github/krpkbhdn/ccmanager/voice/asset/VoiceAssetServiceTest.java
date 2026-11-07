@@ -63,7 +63,7 @@ class VoiceAssetServiceTest {
         serve("/evil.zip", EVIL_ZIP);
         server.start();
         var properties = new VoiceProperties("auto", Duration.ofSeconds(10), Duration.ofSeconds(1), Duration.ofSeconds(1),
-                0.01, 0.5, 4, Duration.ofSeconds(5), Duration.ofMinutes(5));
+                0.01, 0.5, 4, Duration.ofSeconds(5), Duration.ofMinutes(5), Duration.ofMinutes(2), Duration.ofSeconds(60));
         service = new VoiceAssetService(new AppProperties(dataDir), new VerifiedDownload(), properties);
     }
 

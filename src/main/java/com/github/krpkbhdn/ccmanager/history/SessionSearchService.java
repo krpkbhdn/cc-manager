@@ -10,27 +10,30 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
 /** Full-text search over the indexed Claude transcripts; a snippet marks matches with char(2) before and char(3) after. */
 @Service
+@EnableConfigurationProperties(SessionHistoryProperties.class)
 public class SessionSearchService {
 
     public record SearchHit(String claudeSessionId, String cwd, String path, String role, Instant at, String entryUuid,
             long lineOffset, String snippet) {}
 
-    private static final int LIMIT = 100;
     private static final int SNIPPET_TOKENS = 16;
 
     private final JdbcClient jdbc;
     private final TranscriptIndexRepository repository;
     private final HostEnvironment host;
+    private final SessionHistoryProperties properties;
 
-    public SessionSearchService(JdbcClient jdbc, TranscriptIndexRepository repository, HostEnvironment host) {
+    public SessionSearchService(JdbcClient jdbc, TranscriptIndexRepository repository, HostEnvironment host, SessionHistoryProperties properties) {
         this.jdbc = jdbc;
         this.repository = repository;
         this.host = host;
+        this.properties = properties;
     }
 
     public List<SearchHit> search(String query, Optional<String> cwdPrefix, Optional<Instant> from, Optional<Instant> to) {
@@ -56,7 +59,7 @@ public class SessionSearchService {
             sql.append(" AND e.at <= ?");
             params.add(instant.toEpochMilli());
         });
-        sql.append(" ORDER BY rank, e.at DESC LIMIT ").append(LIMIT);
+        sql.append(" ORDER BY rank, e.at DESC LIMIT ").append(properties.searchLimit());
         return jdbc.sql(sql.toString()).params(params)
                 .query((rs, row) -> new SearchHit(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4),
                         Instant.ofEpochMilli(rs.getLong(5)), rs.getString(6), rs.getLong(7), rs.getString(8)))

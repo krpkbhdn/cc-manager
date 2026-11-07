@@ -21,7 +21,7 @@ class DictationSessionTest {
     @Test
     void closeWaitsForALastUtteranceThatIsSlowToRecognize() throws Exception {
         var properties = new VoiceProperties("auto", Duration.ofSeconds(10), Duration.ofSeconds(1), Duration.ofMillis(700),
-                0.01, 0.5, 4, Duration.ofSeconds(30), Duration.ofMinutes(5));
+                0.01, 0.5, 4, Duration.ofSeconds(30), Duration.ofMinutes(5), Duration.ofMinutes(2), Duration.ofSeconds(60));
         var executor = Executors.newSingleThreadExecutor();
         var dictation = new Dictation(mock(Recognizer.class), new SpeechGate(0.01), properties, "en",
                 mock(DictationListener.class), executor);
@@ -37,7 +37,7 @@ class DictationSessionTest {
             recognized.set(true);
         });
 
-        var session = new DictationSession(() -> { }, dictation, executor, () -> released.set(recognized.get()));
+        var session = new DictationSession(() -> { }, dictation, executor, () -> released.set(recognized.get()), Duration.ofSeconds(60));
         var closingThread = new AtomicReference<Thread>();
         var closing = CompletableFuture.runAsync(() -> {
             closingThread.set(Thread.currentThread());

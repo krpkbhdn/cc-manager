@@ -150,6 +150,16 @@ class ClaudeCommandTest {
     }
 
     @Test
+    void assistantTokenIsOnlyInTheAssistantEnvironmentAndNeverInherited() {
+        Map<String, String> parent = Map.of("CCM_ASSISTANT_TOKEN", "inherited");
+
+        assertThat(ClaudeCommand.environment(parent, "ccm-1")).doesNotContainKey("CCM_ASSISTANT_TOKEN");
+        assertThat(ClaudeCommand.groupEnvironment(parent, "ccm-1")).doesNotContainKey("CCM_ASSISTANT_TOKEN");
+        assertThat(ClaudeCommand.terminalEnvironment(parent)).doesNotContainKey("CCM_ASSISTANT_TOKEN");
+        assertThat(ClaudeCommand.assistantEnvironment(parent, "ccm-1", "tok")).containsEntry("CCM_ASSISTANT_TOKEN", "tok");
+    }
+
+    @Test
     void environmentDropsVariablesThatBreakClaudeColors() {
         Map<String, String> env = ClaudeCommand.environment(Map.of("NO_COLOR", "1", "CLAUDECODE", "1", "CLAUDE_CODE_CHILD_SESSION", "1", "CLAUDE_CONFIG_DIR", "d"), "ccm-1");
 

@@ -35,7 +35,7 @@ class ProcessTreeTest {
             if (found.isPresent()) {
                 return found.get();
             }
-            Thread.sleep(5);
+            java.util.concurrent.locks.LockSupport.parkNanos(5_000_000L);
         }
         throw new IOException("The child process never appeared");
     }

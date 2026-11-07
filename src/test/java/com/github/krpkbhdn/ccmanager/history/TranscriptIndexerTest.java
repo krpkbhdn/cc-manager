@@ -223,6 +223,22 @@ class TranscriptIndexerTest {
     }
 
     @Test
+    void lineOverTheCapIsSkippedAndTheRestOfTheFileIsIndexed() throws Exception {
+        var file = fixture.transcript("p", "s1");
+        var oversized = "x".repeat((int) TranscriptIndexer.MAX_LINE_BYTES + 1) + "\n";
+        fixture.write(file, userLine("u1", "/w/app", "2026-01-01T10:00:00Z", "first banana") + oversized
+                + userLine("u2", "/w/app", "2026-01-01T10:00:01Z", "second banana"));
+        var indexer = fixture.indexer(1000, 4_096L);
+
+        indexer.scan();
+        indexer.scan();
+        indexer.scan();
+
+        assertThat(hits("banana")).isEqualTo(2);
+        assertThat(fixture.search.indexedEntryCount()).isEqualTo(2);
+    }
+
+    @Test
     void sessionIdPrefersTheUuidFileName() {
         var uuid = "123e4567-e89b-12d3-a456-426614174000";
         fixture.write(fixture.transcript("p", uuid), userLine("u1", "/w/app", "2026-01-01T10:00:00Z", "kiwi"));

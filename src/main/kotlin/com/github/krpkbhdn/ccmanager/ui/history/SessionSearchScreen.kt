@@ -32,6 +32,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.history.SessionSearchService.SearchHit
 import com.github.krpkbhdn.ccmanager.project.Project
+import com.github.krpkbhdn.ccmanager.ui.components.CardRow
 import com.github.krpkbhdn.ccmanager.ui.components.AppButton
 import com.github.krpkbhdn.ccmanager.ui.components.AppTextField
 import com.github.krpkbhdn.ccmanager.ui.components.CountBadge
@@ -134,12 +135,7 @@ private fun HitList(search: SessionSearchState, projects: List<Project>, onResum
 
 @Composable
 private fun HitRow(hit: SearchHit, project: Project?, onOpen: () -> Unit, onResume: (Project, SearchHit) -> Unit) {
-    val shape = RoundedCornerShape(Radius.lg)
-    Row(
-        Modifier.fillMaxWidth().background(colors.surface, shape).border(1.dp, colors.border, shape).padding(Spacing.md),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-    ) {
+    CardRow {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Label(project?.name ?: "$OTHER_PROJECT (${hit.cwd})", Modifier.weight(1f, fill = false), style = Type.bodyMedium, tooltipWhenTruncated = true)

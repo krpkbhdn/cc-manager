@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.extension.skill;
 
 import com.github.krpkbhdn.ccmanager.extension.ExtensionException;
+import com.github.krpkbhdn.ccmanager.extension.ExtensionProperties;
 import com.github.krpkbhdn.ccmanager.extension.ExtensionScope;
 import com.github.krpkbhdn.ccmanager.extension.plugin.InstalledPlugin;
 import com.github.krpkbhdn.ccmanager.extension.plugin.PluginService;
@@ -34,16 +35,17 @@ public class SkillService {
     private static final String CLAUDE_DIRECTORY = ".claude";
     private static final String SKILLS_DIRECTORY = "skills";
     private static final Logger log = LoggerFactory.getLogger(SkillService.class);
-    private static final int FRONTMATTER_LIMIT_BYTES = 16 * 1024;
     private static final int MAX_NAME_LENGTH = 64;
     private static final Pattern KEBAB_CASE = Pattern.compile("[a-z0-9]+(-[a-z0-9]+)*");
 
     private final HostEnvironment host;
     private final PluginService plugins;
+    private final ExtensionProperties properties;
 
-    public SkillService(HostEnvironment host, PluginService plugins) {
+    public SkillService(HostEnvironment host, PluginService plugins, ExtensionProperties properties) {
         this.host = host;
         this.plugins = plugins;
+        this.properties = properties;
     }
 
     /** User skills, plus the project's own and those of plugins active for it when a project directory is given. */
@@ -152,7 +154,7 @@ public class SkillService {
                 .toList();
     }
 
-    private static List<Skill> readDirectory(Path root, ExtensionScope scope, String pluginId) {
+    private List<Skill> readDirectory(Path root, ExtensionScope scope, String pluginId) {
         if (!Files.isDirectory(root)) {
             return List.of();
         }
@@ -167,7 +169,7 @@ public class SkillService {
         }
     }
 
-    private static Optional<Skill> readSkill(Path root, Path directory, ExtensionScope scope, String pluginId) {
+    private Optional<Skill> readSkill(Path root, Path directory, ExtensionScope scope, String pluginId) {
         var file = directory.resolve(SKILL_FILE);
         if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
             return Optional.empty();
@@ -186,9 +188,9 @@ public class SkillService {
         }
     }
 
-    private static String readPrefix(Path file) throws IOException {
+    private String readPrefix(Path file) throws IOException {
         try (var input = Files.newInputStream(file)) {
-            return new String(input.readNBytes(FRONTMATTER_LIMIT_BYTES), StandardCharsets.UTF_8);
+            return new String(input.readNBytes(properties.skillFrontmatterLimitBytes()), StandardCharsets.UTF_8);
         }
     }
 

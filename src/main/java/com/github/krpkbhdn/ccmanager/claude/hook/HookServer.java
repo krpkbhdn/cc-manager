@@ -46,7 +46,10 @@ public class HookServer implements SmartLifecycle {
     private static final String CONTEXT_PATH = "/hook/";
     private static final String STATUS_LINE_CONTEXT_PATH = "/statusline/";
     private static final String MCP_CONTEXT_PATH = "/mcp/";
-    private static final String ASSISTANT_MCP_CONTEXT_PATH = "/assistant-mcp/";
+    private static final String ASSISTANT_MCP_PATH = "/assistant-mcp";
+    private static final String BEARER_PREFIX = "Bearer ";
+    /** Env variable of the Assistant process that carries the bearer token its mcp file refers to. */
+    public static final String ASSISTANT_TOKEN_ENV = "CCM_ASSISTANT_TOKEN";
     private static final int SECRET_BYTES = 32;
     private static final String HMAC_ALGORITHM = "HmacSHA256";
     private static final int OK = 200;
@@ -99,9 +102,14 @@ public class HookServer implements SmartLifecycle {
         return hookUrl(ccmSessionId).replace(CONTEXT_PATH, MCP_CONTEXT_PATH);
     }
 
-    /** URL of the app MCP server of the Assistant session; its own secret, never written into project session files. */
+    /** URL of the app MCP server of the Assistant session; carries no secret, the bearer token is {@link #assistantMcpToken()}. */
     public String assistantMcpUrl() {
-        return "http://127.0.0.1:" + port() + ASSISTANT_MCP_CONTEXT_PATH + new String(assistantSecret, StandardCharsets.US_ASCII);
+        return "http://127.0.0.1:" + port() + ASSISTANT_MCP_PATH;
+    }
+
+    /** The Assistant's own secret; handed to the Assistant process through its environment only, never written to disk. */
+    public String assistantMcpToken() {
+        return new String(assistantSecret, StandardCharsets.US_ASCII);
     }
 
     /** URL a session's statusLine command posts to; same secret, own path because the payload is no hook event. */
@@ -124,7 +132,7 @@ public class HookServer implements SmartLifecycle {
         server.createContext(STATUS_LINE_CONTEXT_PATH, exchange -> serve(exchange, STATUS_LINE_CONTEXT_PATH,
                 (ex, id, body) -> respondToHook(ex, id, body, this::acceptStatusLine)));
         server.createContext(MCP_CONTEXT_PATH, exchange -> serve(exchange, MCP_CONTEXT_PATH, (ex, id, body) -> respondToMcp(ex, bytes -> mcp.handle(id, bytes), body)));
-        server.createContext(ASSISTANT_MCP_CONTEXT_PATH, this::serveAssistantMcp);
+        server.createContext(ASSISTANT_MCP_PATH, this::serveAssistantMcp);
         worker = Executors.newSingleThreadExecutor(Thread.ofPlatform().name("hook-worker").daemon().factory());
         requestExecutor = Executors.newVirtualThreadPerTaskExecutor();
         server.setExecutor(requestExecutor);
@@ -186,8 +194,10 @@ public class HookServer implements SmartLifecycle {
 
     private void serveAssistantMcp(HttpExchange exchange) throws IOException {
         try (exchange) {
-            var candidate = exchange.getRequestURI().getPath().substring(ASSISTANT_MCP_CONTEXT_PATH.length());
-            if (!MessageDigest.isEqual(candidate.getBytes(StandardCharsets.UTF_8), assistantSecret)) {
+            var header = Optional.ofNullable(exchange.getRequestHeaders().getFirst("Authorization")).orElse("");
+            var candidate = header.startsWith(BEARER_PREFIX) ? header.substring(BEARER_PREFIX.length()) : "";
+            if (!ASSISTANT_MCP_PATH.equals(exchange.getRequestURI().getPath())
+                    || !MessageDigest.isEqual(candidate.getBytes(StandardCharsets.UTF_8), assistantSecret)) {
                 exchange.sendResponseHeaders(NOT_FOUND, NO_RESPONSE_BODY);
             } else if (!"POST".equals(exchange.getRequestMethod())) {
                 exchange.sendResponseHeaders(METHOD_NOT_ALLOWED, NO_RESPONSE_BODY);

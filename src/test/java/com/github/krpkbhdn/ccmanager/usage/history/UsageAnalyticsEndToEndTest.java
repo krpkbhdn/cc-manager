@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind;
+import com.github.krpkbhdn.ccmanager.notification.NotificationProperties;
 import com.github.krpkbhdn.ccmanager.notification.NotificationService;
 import com.github.krpkbhdn.ccmanager.usage.RateLimitService;
 import com.github.krpkbhdn.ccmanager.usage.RateLimitSnapshot;
@@ -46,7 +47,7 @@ class UsageAnalyticsEndToEndTest {
         Flyway.configure().dataSource(dataSource).load().migrate();
         repository = new UsageHistoryRepository(JdbcClient.create(dataSource),
                 new TransactionTemplate(new DataSourceTransactionManager(dataSource)));
-        notifications = new NotificationService(registry);
+        notifications = new NotificationService(registry, new NotificationProperties(200, java.time.Duration.ofSeconds(2)));
         when(rateLimits.subscribe(any())).thenAnswer(call -> {
             if (rateLimitChanged == null) {
                 rateLimitChanged = call.getArgument(0);
@@ -74,7 +75,7 @@ class UsageAnalyticsEndToEndTest {
         }
         assertThat(usageAlerts()).isEqualTo(1);
 
-        var restartedNotifications = new NotificationService(registry);
+        var restartedNotifications = new NotificationService(registry, new NotificationProperties(200, java.time.Duration.ofSeconds(2)));
         new UsageAlertService(properties, repository, rateLimits, restartedNotifications).evaluateRateLimits();
         assertThat(restartedNotifications.history()).isEmpty();
     }
