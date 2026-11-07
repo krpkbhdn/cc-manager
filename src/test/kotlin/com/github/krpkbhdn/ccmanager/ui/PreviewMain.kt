@@ -185,9 +185,9 @@ private suspend fun captureTour(capture: Capture, state: AppState, world: Previe
     state.projects.groupDialog = GroupDialogRequest(null)
     capture.take("7d-group-dialog-new")
     state.projects.groupDialog = null
-    state.projects.toggleFolded(PREVIEW_GROUP_ID)
+    state.prefs.toggleGroupFolded(PREVIEW_GROUP_ID)
     capture.take("7e-sidebar-group-folded")
-    state.projects.toggleFolded(PREVIEW_GROUP_ID)
+    state.prefs.toggleGroupFolded(PREVIEW_GROUP_ID)
     state.prefs.toggleSidebar()
     state.prefs.toggleAgents()
     capture.take("8-collapsed")

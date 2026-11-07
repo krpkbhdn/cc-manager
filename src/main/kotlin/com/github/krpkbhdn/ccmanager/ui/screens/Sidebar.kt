@@ -33,6 +33,7 @@ import com.github.krpkbhdn.ccmanager.ui.components.HorizontalRule
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.github.krpkbhdn.ccmanager.ui.components.Label
+import com.github.krpkbhdn.ccmanager.ui.components.MenuEntry
 import com.github.krpkbhdn.ccmanager.ui.components.Pressable
 import com.github.krpkbhdn.ccmanager.ui.components.Shortcut
 import com.github.krpkbhdn.ccmanager.ui.components.ThinScrollbar
@@ -41,6 +42,8 @@ import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.shortcuts.AppShortcut
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.Route
+import com.github.krpkbhdn.ccmanager.ui.state.SidebarSection
+import com.github.krpkbhdn.ccmanager.ui.state.sidebarProjectOrder
 import com.github.krpkbhdn.ccmanager.ui.theme.Motion
 import com.github.krpkbhdn.ccmanager.ui.theme.Radius
 import com.github.krpkbhdn.ccmanager.ui.theme.IconSize
@@ -62,15 +65,13 @@ fun Sidebar(state: AppState, modifier: Modifier = Modifier, forceCollapsed: Bool
             Column(Modifier.padding(horizontal = edge)) {
                 SidebarHeader(collapsed, forceCollapsed, state)
                 NavItem(Icons.Grid, "Overview", state.route == Route.Overview, collapsed, state.live.sessions.size) { state.navigate(Route.Overview) }
-                NavItem(Icons.Layers, "All sessions", state.route == Route.Sessions, collapsed, state.live.sessions.count { it.status == AgentStatus.NEEDS_ACTION }) { state.navigate(Route.Sessions) }
-                NavItem(Icons.Search, "Search sessions", state.route == Route.SessionSearch, collapsed, 0) { state.navigate(Route.SessionSearch) }
-                NavItem(Icons.Gauge, "Usage", state.route == Route.Usage, collapsed, 0) { state.navigate(Route.Usage) }
+                NavItem(Icons.Layers, "Sessions", state.route == Route.Sessions, collapsed, state.live.sessions.count { it.status == AgentStatus.NEEDS_ACTION }) { state.navigate(Route.Sessions) }
                 NavItem(Icons.Sparkles, "Assistant", state.route == Route.Assistant, collapsed, 0) { state.navigate(Route.Assistant) }
-                NavItem(Icons.Message, "Prompt Library", state.route == Route.Prompts, collapsed, 0) { state.navigate(Route.Prompts) }
-                NavItem(Icons.Users, "Teams", state.route == Route.Teams, collapsed, 0) { state.navigate(Route.Teams) }
-                ExtensionsGroup(state, collapsed)
+                HorizontalRule(Modifier.padding(vertical = Spacing.sm, horizontal = Spacing.sm))
+                navSections.forEach { NavSectionGroup(state, it, collapsed) }
             }
             ProjectsSection(state, collapsed, edge, Modifier.weight(1f))
+            HorizontalRule(Modifier.padding(horizontal = edge + Spacing.sm))
             Box(Modifier.padding(start = edge, end = edge, top = Spacing.sm, bottom = Spacing.lg)) {
                 NavItem(Icons.Settings, "Settings", state.settingsDialog.open, collapsed, 0) { state.settingsDialog.show() }
             }
@@ -132,36 +133,39 @@ internal fun NavItem(icon: ImageVector, label: String, selected: Boolean, collap
 @Composable
 private fun ProjectsSection(state: AppState, collapsed: Boolean, edge: Dp, modifier: Modifier) {
     val list: LazyListState = rememberLazyListState()
+    val folded = !collapsed && SidebarSection.PROJECTS.name in state.settings.foldedSections
     Column(modifier) {
         if (!collapsed) {
-            Row(Modifier.fillMaxWidth().padding(start = edge + Spacing.sm, end = edge, top = Spacing.lg, bottom = Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
-                Label("Projects", Modifier.weight(1f), color = colors.textTertiary, style = Type.overline)
+            SectionHeader(SidebarSection.PROJECTS.title, folded, { state.prefs.toggleSectionFolded(SidebarSection.PROJECTS.name) }, Modifier.padding(start = edge, end = edge, top = Spacing.lg)) {
                 CountBadge(state.projects.topLevelCount)
             }
         } else {
             HorizontalRule(Modifier.padding(vertical = Spacing.sm, horizontal = edge + Spacing.sm))
         }
-        Box(Modifier.weight(1f)) {
-            LazyColumn(Modifier.animateContentSize(), list, contentPadding = PaddingValues(start = edge, end = edge + Spacing.xs), verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
-                state.projects.groups.forEach { group ->
-                    val members = state.projects.membersOf(group.id)
-                    val open = collapsed || group.id !in state.projects.foldedGroups
-                    item(key = group.id) {
+        if (!folded) Box(Modifier.weight(1f)) {
+            LazyColumn(Modifier.animateContentSize(), list, contentPadding = PaddingValues(start = edge, end = if (collapsed) edge else edge + Spacing.xs), verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
+                val folded = state.settings.foldedGroups
+                items(sidebarProjectOrder(state.projects.groups, state.projects::membersOf, state.projects.ungrouped, folded), key = { it.id }) { project ->
+                    if (project.group) {
+                        val members = state.projects.membersOf(project.id)
+                        val open = project.id !in folded
                         GroupRow(
-                            group = group,
-                            status = state.live.statusOf(group.id),
+                            group = project,
+                            status = state.live.statusOf(project.id),
                             memberCount = members.size,
                             expanded = open,
-                            selected = state.route == Route.Project(group.id),
+                            selected = state.route == Route.Project(project.id),
                             collapsed = collapsed,
-                            actions = state.groupActions(group),
-                            onToggle = { state.projects.toggleFolded(group.id) },
+                            actions = state.groupActions(project),
+                            onToggle = { state.prefs.toggleGroupFolded(project.id) },
+                            flyout = groupFlyout(state, project, members, open) { state.prefs.toggleGroupFolded(project.id) },
                             modifier = Modifier.animateItem(),
                         )
+                    } else {
+                        val indent = if (project.groupId == null || collapsed) 0.dp else Spacing.lg
+                        SidebarProject(state, project, collapsed, Modifier.animateItem().padding(start = indent))
                     }
-                    if (open) items(members, key = { it.id }) { SidebarProject(state, it, collapsed, Modifier.animateItem().padding(start = if (collapsed) 0.dp else Spacing.lg)) }
                 }
-                items(state.projects.ungrouped, key = { it.id }) { SidebarProject(state, it, collapsed, Modifier.animateItem()) }
                 item(key = "add") { AddProjectRow(collapsed, state::requestAddProject, Modifier.animateItem()) }
                 item(key = "add-group") { AddGroupRow(collapsed, { state.projects.groupDialog = GroupDialogRequest(null) }, Modifier.animateItem()) }
             }
@@ -210,22 +214,32 @@ private fun AddRow(icon: ImageVector, label: String, collapsed: Boolean, onClick
     }
 }
 
-private class ExtensionNav(val icon: ImageVector, val label: String, val route: Route)
-
-private val extensionNavItems = listOf(
-    ExtensionNav(Icons.Plug, "Plugins", Route.Plugins),
-    ExtensionNav(Icons.Server, "MCP servers", Route.Mcp),
-    ExtensionNav(Icons.Book, "Skills", Route.Skills),
-)
+private fun groupFlyout(state: AppState, group: Project, members: List<Project>, open: Boolean, onToggle: () -> Unit): List<MenuEntry> =
+    listOf(MenuEntry(group.name, Icons.FolderOpen) { state.navigate(Route.Project(group.id)) }) +
+        members.map { member -> MenuEntry(member.name, status = state.live.statusOf(member.id)) { state.navigate(Route.Project(member.id)) } } +
+        MenuEntry(if (open) "Collapse group" else "Expand group", if (open) Icons.ChevronDown else Icons.ChevronRight, dividerAbove = true, onSelect = onToggle)
 
 @Composable
-private fun ExtensionsGroup(state: AppState, collapsed: Boolean) {
-    if (collapsed) {
-        HorizontalRule(Modifier.padding(vertical = Spacing.sm, horizontal = Spacing.sm))
-    } else {
-        Label("Extensions", Modifier.padding(start = Spacing.sm, top = Spacing.lg, bottom = Spacing.xs), color = colors.textTertiary, style = Type.overline)
+private fun SectionHeader(title: String, folded: Boolean, onToggle: () -> Unit, modifier: Modifier, trailing: @Composable () -> Unit = {}) {
+    Pressable(onToggle, modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.md)) {
+        Row(Modifier.fillMaxWidth().padding(start = Spacing.sm, end = Spacing.sm, top = Spacing.xs, bottom = Spacing.xs), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+            Glyph(if (folded) Icons.ChevronRight else Icons.ChevronDown, colors.textTertiary)
+            Label(title, Modifier.weight(1f), color = colors.textTertiary, style = Type.overline)
+            trailing()
+        }
     }
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
-        extensionNavItems.forEach { item -> NavItem(item.icon, item.label, state.route == item.route, collapsed, 0) { state.navigate(item.route) } }
+}
+
+@Composable
+private fun NavSectionGroup(state: AppState, nav: NavSection, collapsed: Boolean) {
+    if (collapsed) {
+        val entries = nav.entries.map { entry -> MenuEntry(entry.label, entry.icon) { state.navigate(entry.route) } }
+        HoverFlyout(entries) { NavItem(nav.icon, nav.section.title, nav.entries.any { state.route == it.route }, true, 0) {} }
+        return
+    }
+    val folded = nav.section.name in state.settings.foldedSections
+    SectionHeader(nav.section.title, folded, { state.prefs.toggleSectionFolded(nav.section.name) }, Modifier)
+    if (!folded) Column(verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
+        nav.entries.forEach { entry -> NavItem(entry.icon, entry.label, state.route == entry.route, false, 0) { state.navigate(entry.route) } }
     }
 }

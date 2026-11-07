@@ -67,13 +67,14 @@ private fun Instant.local(): String = timeFormat.format(atZone(ZoneId.systemDefa
 
 /** Full-text search over past Claude conversations, with Open (transcript at the hit), Resume and Copy per result. */
 @Composable
-fun SessionSearchScreen(search: SessionSearchState, projects: List<Project>, onResume: (Project, SearchHit) -> Unit, modifier: Modifier = Modifier) {
+fun SessionSearchScreen(search: SessionSearchState, projects: List<Project>, onResume: (Project, SearchHit) -> Unit, tabs: @Composable () -> Unit, focusRequests: Int, modifier: Modifier = Modifier) {
     val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focus.requestFocus() }
+    LaunchedEffect(focusRequests) { focus.requestFocus() }
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.md), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-            Label("Search sessions", Modifier.weight(1f), style = Type.heading)
+            Label("Sessions", style = Type.heading)
             CountBadge(search.hits.size)
+            Box(Modifier.weight(1f).padding(start = Spacing.sm)) { tabs() }
         }
         HorizontalRule()
         Filters(search, projects, focus)

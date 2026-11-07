@@ -12,6 +12,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
+internal fun <T> Set<T>.toggled(item: T): Set<T> = if (item in this) this - item else this + item
+
 /** The remembered [UiSettings]: held as Compose state, saved off the UI thread, one write at a time. */
 class UiPreferences(
     private val store: UiSettingsStore,
@@ -55,6 +57,16 @@ class UiPreferences(
     }
 
     fun toggleSidebar() = update { it.copy(sidebarCollapsed = !it.sidebarCollapsed) }
+
+    fun toggleSectionFolded(section: String) = update { it.copy(foldedSections = it.foldedSections.toggled(section)) }
+
+    fun toggleGroupFolded(groupId: Long) = update { it.copy(foldedGroups = it.foldedGroups.toggled(groupId)) }
+
+    /** Forgets folded groups that no longer exist among the registered [projectIds]. */
+    fun retainFoldedGroups(projectIds: Set<Long>) {
+        if (settings.foldedGroups.all { it in projectIds }) return
+        update { it.copy(foldedGroups = it.foldedGroups.filterTo(HashSet()) { id -> id in projectIds }) }
+    }
 
     fun setGroupSessionsByProject(group: Boolean) = update { it.copy(groupSessionsByProject = group) }
 

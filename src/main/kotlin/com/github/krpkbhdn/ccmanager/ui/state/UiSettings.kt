@@ -19,6 +19,8 @@ data class WindowBounds(val width: Int, val height: Int, val x: Int? = null, val
 data class UiSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val sidebarCollapsed: Boolean = false,
+    val foldedSections: Set<String> = emptySet(),
+    val foldedGroups: Set<Long> = emptySet(),
     val agentsOpen: Boolean = true,
     val quickBarOpen: Boolean = true,
     val notificationSound: Boolean = true,
@@ -58,6 +60,9 @@ data class UiSettings(
 
 private const val KEY_THEME = "theme"
 private const val KEY_SIDEBAR = "sidebar.collapsed"
+private const val KEY_FOLDED_SECTIONS = "sidebar.foldedSections"
+private const val KEY_FOLDED_GROUPS = "sidebar.foldedGroups"
+private const val LIST_SEPARATOR = ","
 private const val KEY_AGENTS = "agents.open"
 private const val KEY_QUICK_BAR = "quickbar.open"
 private const val KEY_NOTIFICATION_SOUND = "notification.sound"
@@ -79,7 +84,7 @@ private const val KEY_VOICE_INPUT = "voice.input"
 private const val KEY_USAGE_FIVE_HOUR = "usage.fivehour.percent"
 private const val KEY_USAGE_SEVEN_DAY = "usage.sevenday.percent"
 private const val KEY_USAGE_DAILY_BUDGET = "usage.daily.budget"
-private const val KEY_WIDTH ="window.width"
+private const val KEY_WIDTH = "window.width"
 private const val KEY_HEIGHT = "window.height"
 private const val KEY_X = "window.x"
 private const val KEY_Y = "window.y"
@@ -107,6 +112,8 @@ class UiSettingsStore(private val file: Path?) {
         val props = Properties().apply {
             setProperty(KEY_THEME, settings.themeMode.name)
             setProperty(KEY_SIDEBAR, settings.sidebarCollapsed.toString())
+            setProperty(KEY_FOLDED_SECTIONS, settings.foldedSections.joinToString(LIST_SEPARATOR))
+            setProperty(KEY_FOLDED_GROUPS, settings.foldedGroups.joinToString(LIST_SEPARATOR))
             setProperty(KEY_AGENTS, settings.agentsOpen.toString())
             setProperty(KEY_QUICK_BAR, settings.quickBarOpen.toString())
             setProperty(KEY_NOTIFICATION_SOUND, settings.notificationSound.toString())
@@ -149,6 +156,8 @@ class UiSettingsStore(private val file: Path?) {
         return UiSettings(
             themeMode = props.getProperty(KEY_THEME)?.let { name -> ThemeMode.entries.firstOrNull { it.name == name } } ?: defaults.themeMode,
             sidebarCollapsed = props.flag(KEY_SIDEBAR, defaults.sidebarCollapsed),
+            foldedSections = props.items(KEY_FOLDED_SECTIONS).filter { name -> SidebarSection.entries.any { it.name == name } }.toSet(),
+            foldedGroups = props.items(KEY_FOLDED_GROUPS).mapNotNull(String::toLongOrNull).toSet(),
             agentsOpen = props.flag(KEY_AGENTS, defaults.agentsOpen),
             quickBarOpen = props.flag(KEY_QUICK_BAR, defaults.quickBarOpen),
             notificationSound = props.flag(KEY_NOTIFICATION_SOUND, defaults.notificationSound),
@@ -189,6 +198,8 @@ class UiSettingsStore(private val file: Path?) {
         val pull = PullMode.entries.firstOrNull { it.name == props.getProperty(KEY_PULL_MODE) } ?: PullMode.MERGE
         return GitPrefs(views, pull, props.flag(KEY_FLAT_CHANGES, false))
     }
+
+    private fun Properties.items(key: String): List<String> = getProperty(key).orEmpty().split(LIST_SEPARATOR).filter { it.isNotBlank() }
 
     private fun Properties.flag(key: String, default: Boolean): Boolean = getProperty(key)?.toBooleanStrictOrNull() ?: default
 

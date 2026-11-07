@@ -28,7 +28,6 @@ import com.github.krpkbhdn.ccmanager.ui.components.MenuEntry
 import com.github.krpkbhdn.ccmanager.ui.components.PopupMenu
 import com.github.krpkbhdn.ccmanager.ui.components.Pressable
 import com.github.krpkbhdn.ccmanager.ui.components.StatusDot
-import com.github.krpkbhdn.ccmanager.ui.components.WithTooltip
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.GroupDialogRequest
@@ -76,20 +75,22 @@ fun GroupRow(
     collapsed: Boolean,
     actions: GroupActions,
     onToggle: () -> Unit,
+    flyout: List<MenuEntry>,
     modifier: Modifier = Modifier,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    val railClick = rememberRailGroupClick(onToggle, actions.onOpen)
     ContextMenuArea({ groupMenu(actions) }, modifier) {
         Box {
-            WithTooltip(if (collapsed) group.name else null) {
-                Pressable(actions.onOpen, Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.md), base = if (selected) colors.accentSoft else Color.Transparent) { hovered ->
+            RailFlyoutIf(collapsed, flyout) {
+                Pressable(if (collapsed) railClick else actions.onOpen, Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.md), base = if (selected) colors.accentSoft else Color.Transparent) { hovered ->
                     Row(
-                        Modifier.height(groupRowHeight).fillMaxWidth().padding(start = Spacing.xs, end = Spacing.sm),
+                        Modifier.height(groupRowHeight).fillMaxWidth().padding(start = if (collapsed) Spacing.sm else Spacing.xs, end = Spacing.sm),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = if (collapsed) Arrangement.Center else Arrangement.spacedBy(Spacing.sm),
                     ) {
                         if (collapsed) {
-                            Glyph(Icons.Folder, colors.textSecondary, size = IconSize.large)
+                            Glyph(if (expanded) Icons.FolderOpen else Icons.Folder, colors.textSecondary, size = IconSize.large)
                         } else {
                             IconButton(if (expanded) Icons.ChevronDown else Icons.ChevronRight, onToggle, Modifier.size(24.dp), tooltip = if (expanded) "Collapse group" else "Expand group", size = 24.dp)
                             Glyph(if (expanded) Icons.FolderOpen else Icons.Folder, colors.textSecondary, size = IconSize.large)

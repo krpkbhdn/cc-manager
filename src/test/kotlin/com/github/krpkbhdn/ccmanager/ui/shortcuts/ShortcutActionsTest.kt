@@ -86,7 +86,7 @@ class ShortcutActionsTest {
         runBlocking { state.projects.load() }
         val group = state.projects.groups.first()
         val hidden = state.projects.membersOf(group.id)
-        state.projects.toggleFolded(group.id)
+        state.prefs.toggleGroupFolded(group.id)
 
         assertThat(hidden).isNotEmpty()
         assertThat(actions.sidebarOrder().map { it.id }).doesNotContainAnyElementsOf(hidden.map { it.id }).contains(group.id)
