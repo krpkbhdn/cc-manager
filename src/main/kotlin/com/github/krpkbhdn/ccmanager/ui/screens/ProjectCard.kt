@@ -55,7 +55,6 @@ import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import java.time.Instant
 
 private const val MAX_PILLS = 3
-private const val ACTIVITY_LINES = 2
 private val cardMinHeight = 168.dp
 private val menuButtonSize = 24.dp
 private val gitLineHeight = 16.dp

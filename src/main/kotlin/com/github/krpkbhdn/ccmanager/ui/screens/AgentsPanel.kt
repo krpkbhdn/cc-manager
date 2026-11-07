@@ -124,7 +124,7 @@ private fun PanelTitle(title: String, count: Int?, modifier: Modifier = Modifier
 }
 
 @Composable
-private fun SessionCard(session: SessionSnapshot, team: Team?, selected: Boolean, finishedOpen: Boolean, now: () -> Instant, actions: AgentsPanelActions, modifier: Modifier) {
+internal fun SessionCard(session: SessionSnapshot, team: Team?, selected: Boolean, finishedOpen: Boolean, now: () -> Instant, actions: AgentsPanelActions, modifier: Modifier) {
     val shape = RoundedCornerShape(Radius.lg)
     val tint = colors.status(session.status)
     val edge = when {
@@ -139,9 +139,9 @@ private fun SessionCard(session: SessionSnapshot, team: Team?, selected: Boolean
                 Label(sessionName(session), Modifier.weight(1f), style = Type.bodyMedium, tooltipWhenTruncated = true)
                 permissionModeLabel(session.permissionMode)?.let { Chip(it, modeTint(session.permissionMode)) }
             }
-            session.title?.let { Label(it, color = colors.textSecondary, style = Type.small, maxLines = 2) }
+            session.title?.let { Label(it, color = colors.textSecondary, style = Type.small, maxLines = ACTIVITY_LINES, minLines = ACTIVITY_LINES, tooltipWhenTruncated = true) }
             MetaLine(session, now)
-            session.activity?.let { Label(it, color = colors.textSecondary, style = Type.small, maxLines = 2) }
+            Label(session.activity.orEmpty(), color = colors.textSecondary, style = Type.small, maxLines = ACTIVITY_LINES, minLines = ACTIVITY_LINES, tooltipWhenTruncated = true)
             session.error?.let { Label(it, color = colors.danger, style = Type.small, maxLines = 2) }
             if (session.backgroundTasks > 0) Chip(backgroundTasksLabel(session.backgroundTasks), colors.accent)
             if (session.subagents.isNotEmpty()) {

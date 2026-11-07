@@ -56,7 +56,7 @@ import java.time.Instant
 private val avatarSize = 18.dp
 private val statusColumn = 16.dp
 private val rowPadding = Spacing.sm
-private const val ACTIVITY_LINES = 2
+internal const val ACTIVITY_LINES = 2
 private const val SUMMARY_LINES = 3
 
 class SubagentActions(val onOpen: (SubagentSnapshot) -> Unit, val onToggleFinished: () -> Unit)
@@ -155,6 +155,7 @@ private fun LiveLine(agent: SubagentSnapshot, now: () -> Instant, waiting: Boole
         color = if (waiting) colors.danger else colors.textSecondary,
         style = Type.small,
         maxLines = ACTIVITY_LINES,
+        minLines = ACTIVITY_LINES,
         tooltipWhenTruncated = true,
     )
 }
