@@ -10,6 +10,7 @@ import androidx.compose.ui.window.WindowState
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.ThemeMode
 import com.github.krpkbhdn.ccmanager.ui.theme.AppTheme
+import com.github.krpkbhdn.ccmanager.ui.theme.LocalScale
 import java.awt.Dimension
 import org.jetbrains.jewel.window.DecoratedWindow
 
@@ -29,7 +30,8 @@ fun ApplicationScope.MainWindow(
 ) {
     val dark = isDarkTheme(state)
     val content: @Composable FrameWindowScope.() -> Unit = {
-        window.minimumSize = Dimension(MIN_WIDTH, MIN_HEIGHT)
+        val scale = LocalScale.current
+        window.minimumSize = Dimension(scale.scaled(MIN_WIDTH), scale.scaled(MIN_HEIGHT))
         AppFrame(state, windowState)
         extra()
     }

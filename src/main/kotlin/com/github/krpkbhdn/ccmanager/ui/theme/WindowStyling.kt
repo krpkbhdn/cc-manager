@@ -16,7 +16,7 @@ import org.jetbrains.jewel.window.styling.TitleBarMetrics
 import org.jetbrains.jewel.window.styling.TitleBarStyle
 
 val titleBarHeight = 40.dp
-private val windowButtonSize = DpSize(46.dp, titleBarHeight)
+private val windowButtonWidth = 46.dp
 private const val CLOSE_PRESSED_ALPHA = 0.8f
 
 /** The window paints these borders over an opaque base, so a translucent token would wash out against the OS background. */
@@ -25,7 +25,8 @@ private fun AppColors.hairline() = border.compositeOver(sidebar)
 /** Jewel title bar and window-border styling painted from our palette, so the native window controls match the app. */
 @Composable
 fun ComponentStyling.withAppWindow(palette: AppColors): ComponentStyling {
-    val metrics = TitleBarMetrics.defaults(height = titleBarHeight, titlePaneButtonSize = windowButtonSize)
+    val scale = LocalScale.current.ui
+    val metrics = TitleBarMetrics.defaults(height = titleBarHeight * scale, titlePaneButtonSize = DpSize(windowButtonWidth * scale, titleBarHeight * scale))
     val colors = titleBarColors(palette)
     val titleBar = if (palette.dark) TitleBarStyle.dark(colors = colors, metrics = metrics) else TitleBarStyle.light(colors = colors, metrics = metrics)
     val frame = DecoratedWindowColors.light(palette.hairline(), palette.hairline())

@@ -17,7 +17,10 @@ import com.github.krpkbhdn.ccmanager.ui.state.ScreenArea
 import com.github.krpkbhdn.ccmanager.ui.state.ToastItem
 import com.github.krpkbhdn.ccmanager.ui.state.popupOrigin
 import com.github.krpkbhdn.ccmanager.ui.theme.AppTheme
+import com.github.krpkbhdn.ccmanager.ui.theme.LocalScale
+import com.github.krpkbhdn.ccmanager.ui.theme.ScaledDensity
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
+import kotlin.math.roundToInt
 
 private val popupWidth = toastWidth + Spacing.lg * 2
 private val popupSlotHeight = 170.dp
@@ -28,11 +31,17 @@ private val popupSlotHeight = 170.dp
  */
 @Composable
 fun ToastPopups(toasts: List<ToastItem>, area: ScreenArea, dark: Boolean, onOpen: (ToastItem) -> Unit, onDismiss: (Long) -> Unit) {
+    val scale = LocalScale.current
+    val width = scale.scaled(popupWidth.value.roundToInt()).dp
+    val height = scale.scaled(popupSlotHeight.value.roundToInt()).dp
     toasts.forEachIndexed { index, toast ->
         key(toast.id) {
-            val (x, y) = popupOrigin(area, index, popupWidth.value.toInt(), popupSlotHeight.value.toInt(), 0)
-            val state = rememberDialogState(position = WindowPosition(x.dp, y.dp), size = DpSize(popupWidth, popupSlotHeight))
-            SideEffect { state.position = WindowPosition(x.dp, y.dp) }
+            val (x, y) = popupOrigin(area, index, width.value.toInt(), height.value.toInt(), 0)
+            val state = rememberDialogState(position = WindowPosition(x.dp, y.dp), size = DpSize(width, height))
+            SideEffect {
+                state.size = DpSize(width, height)
+                state.position = WindowPosition(x.dp, y.dp)
+            }
             DialogWindow(
                 onCloseRequest = { onDismiss(toast.id) },
                 state = state,
@@ -43,8 +52,10 @@ fun ToastPopups(toasts: List<ToastItem>, area: ScreenArea, dark: Boolean, onOpen
                 alwaysOnTop = true,
             ) {
                 AppTheme(dark) {
-                    Box(Modifier.fillMaxSize().padding(Spacing.lg), contentAlignment = Alignment.BottomEnd) {
-                        Toast(toast, { onOpen(toast) }, { onDismiss(toast.id) })
+                    ScaledDensity {
+                        Box(Modifier.fillMaxSize().padding(Spacing.lg), contentAlignment = Alignment.BottomEnd) {
+                            Toast(toast, { onOpen(toast) }, { onDismiss(toast.id) })
+                        }
                     }
                 }
             }

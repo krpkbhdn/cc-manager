@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.ui.state
 
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartup
+import com.github.krpkbhdn.ccmanager.ui.theme.Scale
 import java.nio.file.Files
 import java.nio.file.Path
 import org.assertj.core.api.Assertions.assertThat
@@ -29,6 +30,29 @@ class UiSettingsStoreTest {
         assertThat(store.load().assistantStartup).isEqualTo(AssistantStartup.AUTO_START)
         Files.writeString(file, "assistant.startup=SOMETIMES\n")
         assertThat(store.load().assistantStartup).isEqualTo(AssistantStartup.ASK)
+    }
+
+    @Test
+    fun `scale round trips, garbage falls back to default and out of range clamps`(@TempDir dir: Path) {
+        val file = dir.resolve("ui.properties")
+        val store = UiSettingsStore(file)
+        store.save(UiSettings(uiScalePercent = 150, fontScalePercent = 115))
+        assertThat(store.load()).extracting({ it.uiScalePercent }, { it.fontScalePercent }).containsExactly(150, 115)
+        Files.writeString(file, "scale.ui.percent=huge\nscale.font.percent=huge\n")
+        assertThat(store.load()).extracting({ it.uiScalePercent }, { it.fontScalePercent })
+            .containsExactly(UiSettings.DEFAULT_SCALE_PERCENT, UiSettings.DEFAULT_SCALE_PERCENT)
+        Files.writeString(file, "scale.ui.percent=5000\nscale.font.percent=5000\n")
+        assertThat(store.load()).extracting({ it.uiScalePercent }, { it.fontScalePercent }).containsExactly(250, 150)
+        Files.writeString(file, "scale.ui.percent=1\nscale.font.percent=1\n")
+        assertThat(store.load()).extracting({ it.uiScalePercent }, { it.fontScalePercent }).containsExactly(70, 70)
+    }
+
+    @Test
+    fun `settings map percents to scale multipliers and scale AWT sizes with rounding`() {
+        val scale = UiSettings(uiScalePercent = 150, fontScalePercent = 85).scale
+        assertThat(scale).isEqualTo(Scale(1.5f, 0.85f))
+        assertThat(scale.scaled(961)).isEqualTo(1442)
+        assertThat(UiSettings().scale.scaled(600)).isEqualTo(600)
     }
 
     @Test
