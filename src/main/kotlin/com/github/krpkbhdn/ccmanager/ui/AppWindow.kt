@@ -38,6 +38,7 @@ import com.github.krpkbhdn.ccmanager.ui.state.Backend
 import com.github.krpkbhdn.ccmanager.ui.state.ScreenArea
 import com.github.krpkbhdn.ccmanager.ui.state.UiSettingsStore
 import com.github.krpkbhdn.ccmanager.ui.state.fitToScreens
+import com.github.krpkbhdn.ccmanager.ui.theme.LocalScale
 import java.awt.Desktop
 import java.awt.GraphicsDevice
 import java.awt.GraphicsEnvironment
@@ -118,7 +119,7 @@ fun ApplicationScope.AppWindow(backend: Backend, onShutdown: () -> Unit, setting
     var windowGeneration by remember { mutableIntStateOf(0) }
     val defaultHandlers = LocalWindowExceptionHandlerFactory.current
     val keepWindowAlive = remember { reportingExceptionHandlers(state, defaultHandlers, WindowRecovery()) { windowGeneration++ } }
-    CompositionLocalProvider(LocalWindowExceptionHandlerFactory provides keepWindowAlive) {
+    CompositionLocalProvider(LocalWindowExceptionHandlerFactory provides keepWindowAlive, LocalScale provides state.settings.scale) {
         key(windowGeneration) {
             MainWindow(state, windowState, WINDOW_TITLE, icon, if (isTraySupported && state.settings.minimizeToTray) ({ hideToTray() }) else quit, visible) {
                 val active = LocalWindowInfo.current.isWindowFocused && visible && !windowState.isMinimized
@@ -134,7 +135,9 @@ fun ApplicationScope.AppWindow(backend: Backend, onShutdown: () -> Unit, setting
             }
         }
     }
-    ToastPopups(state.notifications.popups, primaryScreenArea(), isDarkTheme(state), { state.openToast(it); restore() }, state.notifications::dismissToast)
+    CompositionLocalProvider(LocalScale provides state.settings.scale) {
+        ToastPopups(state.notifications.popups, primaryScreenArea(), isDarkTheme(state), { state.openToast(it); restore() }, state.notifications::dismissToast)
+    }
 }
 
 private fun visibleScreens(): List<ScreenArea> =

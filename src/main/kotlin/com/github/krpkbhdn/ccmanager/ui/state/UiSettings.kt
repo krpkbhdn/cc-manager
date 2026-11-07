@@ -4,6 +4,7 @@ import com.github.krpkbhdn.ccmanager.git.GitMisc.PullMode
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartup
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitPrefs
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
+import com.github.krpkbhdn.ccmanager.ui.theme.Scale
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -29,6 +30,8 @@ data class UiSettings(
     val lastShell: String? = null,
     val groupSessionsByProject: Boolean = false,
     val assistantStartup: AssistantStartup = AssistantStartup.ASK,
+    val uiScalePercent: Int = DEFAULT_SCALE_PERCENT,
+    val fontScalePercent: Int = DEFAULT_SCALE_PERCENT,
     val voiceEnabled: Boolean = false,
     val voiceModel: String = DEFAULT_VOICE_MODEL,
     val voiceDevice: String = DEFAULT_VOICE_DEVICE,
@@ -39,7 +42,13 @@ data class UiSettings(
     val window: WindowBounds = WindowBounds(DEFAULT_WIDTH, DEFAULT_HEIGHT),
     val git: GitPrefs = GitPrefs(),
 ) {
+    val scale: Scale get() = Scale(uiScalePercent / PERCENT, fontScalePercent / PERCENT)
+
     companion object {
+        const val DEFAULT_SCALE_PERCENT = 100
+        val UI_SCALE_RANGE = 70..250
+        val FONT_SCALE_RANGE = 70..150
+        private const val PERCENT = 100f
         const val DEFAULT_WIDTH = 1280
         const val DEFAULT_HEIGHT = 820
         const val DEFAULT_VOICE_MODEL = "base-q5_1"
@@ -61,6 +70,8 @@ private const val KEY_MINIMIZE_TO_TRAY = "window.minimizeToTray"
 private const val KEY_LAST_SHELL = "shell.last"
 private const val KEY_GROUP_SESSIONS = "sessions.group"
 private const val KEY_ASSISTANT_STARTUP = "assistant.startup"
+private const val KEY_UI_SCALE = "scale.ui.percent"
+private const val KEY_FONT_SCALE = "scale.font.percent"
 private const val KEY_VOICE_ENABLED = "voice.enabled"
 private const val KEY_VOICE_MODEL = "voice.model"
 private const val KEY_VOICE_DEVICE = "voice.device"
@@ -107,6 +118,8 @@ class UiSettingsStore(private val file: Path?) {
             settings.lastShell?.let { setProperty(KEY_LAST_SHELL, it) }
             setProperty(KEY_GROUP_SESSIONS, settings.groupSessionsByProject.toString())
             setProperty(KEY_ASSISTANT_STARTUP, settings.assistantStartup.name)
+            setProperty(KEY_UI_SCALE, settings.uiScalePercent.toString())
+            setProperty(KEY_FONT_SCALE, settings.fontScalePercent.toString())
             setProperty(KEY_VOICE_ENABLED, settings.voiceEnabled.toString())
             setProperty(KEY_VOICE_MODEL, settings.voiceModel)
             setProperty(KEY_VOICE_DEVICE, settings.voiceDevice)
@@ -147,6 +160,8 @@ class UiSettingsStore(private val file: Path?) {
             lastShell = props.getProperty(KEY_LAST_SHELL),
             groupSessionsByProject = props.flag(KEY_GROUP_SESSIONS, defaults.groupSessionsByProject),
             assistantStartup = AssistantStartup.entries.firstOrNull { it.name == props.getProperty(KEY_ASSISTANT_STARTUP) } ?: defaults.assistantStartup,
+            uiScalePercent = props.scalePercent(KEY_UI_SCALE, UiSettings.UI_SCALE_RANGE, defaults.uiScalePercent),
+            fontScalePercent = props.scalePercent(KEY_FONT_SCALE, UiSettings.FONT_SCALE_RANGE, defaults.fontScalePercent),
             voiceEnabled = props.flag(KEY_VOICE_ENABLED, defaults.voiceEnabled),
             voiceModel = props.getProperty(KEY_VOICE_MODEL) ?: defaults.voiceModel,
             voiceDevice = props.getProperty(KEY_VOICE_DEVICE) ?: defaults.voiceDevice,
@@ -176,6 +191,9 @@ class UiSettingsStore(private val file: Path?) {
     }
 
     private fun Properties.flag(key: String, default: Boolean): Boolean = getProperty(key)?.toBooleanStrictOrNull() ?: default
+
+    private fun Properties.scalePercent(key: String, range: IntRange, default: Int): Int =
+        getProperty(key)?.toIntOrNull()?.coerceIn(range) ?: default
 
     companion object {
         private const val FILE_NAME = "ui-settings.properties"

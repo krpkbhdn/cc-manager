@@ -86,6 +86,10 @@ class UiPreferences(
 
     fun setThemeMode(mode: ThemeMode) = update { it.copy(themeMode = mode) }
 
+    fun setUiScalePercent(percent: Int) = update { it.copy(uiScalePercent = percent.coerceIn(UiSettings.UI_SCALE_RANGE)) }
+
+    fun setFontScalePercent(percent: Int) = update { it.copy(fontScalePercent = percent.coerceIn(UiSettings.FONT_SCALE_RANGE)) }
+
     /** Flips between light and dark, starting from whatever [systemDark] says when following the system. */
     fun toggleTheme(systemDark: Boolean) {
         val dark = when (settings.themeMode) {

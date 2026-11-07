@@ -16,6 +16,7 @@ import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.WindowState
 import com.github.krpkbhdn.ccmanager.ui.screens.AppRoot
+import com.github.krpkbhdn.ccmanager.ui.theme.ScaledDensity
 import com.github.krpkbhdn.ccmanager.ui.shortcuts.ShortcutActions
 import com.github.krpkbhdn.ccmanager.ui.shortcuts.ShortcutDispatcher
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
@@ -40,8 +41,8 @@ fun FrameWindowScope.AppFrame(state: AppState, windowState: WindowState) {
     PersistWindowBounds(state, windowState)
     Column(Modifier.fillMaxSize()) {
         val frame = this@AppFrame
-        if (frame is DecoratedWindowScope) frame.AppTitleBar(state) else TopBar(state)
-        AppRoot(state, modifier = Modifier.weight(1f))
+        if (frame is DecoratedWindowScope) frame.AppTitleBar(state) else ScaledDensity { TopBar(state) }
+        ScaledDensity { AppRoot(state, modifier = Modifier.weight(1f)) }
     }
 }
 

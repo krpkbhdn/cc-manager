@@ -37,6 +37,8 @@ import androidx.compose.ui.window.rememberDialogState
 import com.github.krpkbhdn.ccmanager.ui.components.HorizontalRule
 import com.github.krpkbhdn.ccmanager.ui.components.VerticalRule
 import com.github.krpkbhdn.ccmanager.ui.drawAppIcon
+import com.github.krpkbhdn.ccmanager.ui.theme.LocalScale
+import com.github.krpkbhdn.ccmanager.ui.theme.ScaledDensity
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -61,6 +63,7 @@ fun FolderPickerDialog(initial: Path?, dataDir: Path, onDismiss: () -> Unit, onP
 @OptIn(FlowPreview::class)
 @Composable
 internal fun FolderPicker(initial: Path?, recents: RecentFolders, windowStore: PickerWindowStore, onDismiss: () -> Unit, onPicked: (Path) -> Unit) {
+    val scale = LocalScale.current
     val scope = rememberCoroutineScope()
     val state = remember { FolderPickerState(initial, scope, recents) }
     val listFocus = remember { FocusRequester() }
@@ -100,15 +103,17 @@ internal fun FolderPicker(initial: Path?, recents: RecentFolders, windowStore: P
         onPicked(chosen)
     }
     DialogWindow(onCloseRequest = onDismiss, state = dialogState, title = DIALOG_TITLE, icon = icon, resizable = true) {
-        window.minimumSize = Dimension(PickerWindowStore.MIN_WIDTH, PickerWindowStore.MIN_HEIGHT)
+        window.minimumSize = Dimension(scale.scaled(PickerWindowStore.MIN_WIDTH), scale.scaled(PickerWindowStore.MIN_HEIGHT))
         LaunchedEffect(Unit) { withFrameNanos { }; listFocus.requestFocus() }
-        Column(Modifier.fillMaxSize().background(colors.surfaceRaised).onKeyEvent { dialogKey(it, state, ::confirm, onDismiss) }) {
-            PickerHeader()
-            HorizontalRule()
-            PickerToolbar(state, listFocus::requestFocus)
-            HorizontalRule()
-            PickerBody(state, rows, listState, listFocus, ::confirm, Modifier.weight(1f))
-            PickerFooter(state, if (listBlocked) (if (state.listing == Listing.Missing) PathCheck.NotFound else PathCheck.Unreadable) else check, onDismiss, ::confirm)
+        ScaledDensity {
+            Column(Modifier.fillMaxSize().background(colors.surfaceRaised).onKeyEvent { dialogKey(it, state, ::confirm, onDismiss) }) {
+                PickerHeader()
+                HorizontalRule()
+                PickerToolbar(state, listFocus::requestFocus)
+                HorizontalRule()
+                PickerBody(state, rows, listState, listFocus, ::confirm, Modifier.weight(1f))
+                PickerFooter(state, if (listBlocked) (if (state.listing == Listing.Missing) PathCheck.NotFound else PathCheck.Unreadable) else check, onDismiss, ::confirm)
+            }
         }
     }
 }
