@@ -111,23 +111,22 @@ public class ExtensionInstaller {
         }
     }
 
-    private static boolean sameInstallation(InstalledPlugin plugin, String id, ExtensionScope scope, Path directory) {
+    public static boolean sameInstallation(InstalledPlugin plugin, String id, ExtensionScope scope, Path directory) {
         return plugin.id().equals(id) && plugin.scope() == scope
                 && (scope == ExtensionScope.USER || Objects.equals(plugin.projectPath(), directory));
     }
 
     private void installSkills(ExtensionSet extensions, ExtensionScope scope, Path directory, List<String> installed, List<String> present,
             List<String> failed) {
-        var source = scope == ExtensionScope.USER ? AuthorProfileLoader.USER_DIRECTORY : AuthorProfileLoader.PROJECT_DIRECTORY;
         for (var skill : extensions.skills()) {
             var label = "skill " + skill.name();
             try {
                 var target = skills.skillDirectory(scope, directory, skill.name());
                 if (Files.exists(target)) {
-                    present.add(Files.isDirectory(target) && sameContent(skill, source, target) ? label
+                    present.add(Files.isDirectory(target) && sameContent(skill, target) ? label
                             : label + " (differs from the bundled version, left unchanged)");
                 } else {
-                    copySkill(skill, source, target);
+                    copySkill(skill, target);
                     installed.add(label);
                 }
             } catch (IOException | RuntimeException e) {
@@ -136,10 +135,10 @@ public class ExtensionInstaller {
         }
     }
 
-    private boolean sameContent(ProfileSkill skill, String source, Path target) throws IOException {
+    private boolean sameContent(ProfileSkill skill, Path target) throws IOException {
         for (var file : skill.files()) {
             var existing = target.resolve(file);
-            try (var in = loader.open(source + "/skills/" + skill.name() + "/" + file)) {
+            try (var in = loader.open(skill.directory() + "/" + file)) {
                 if (!Files.isRegularFile(existing) || !Arrays.equals(in.readAllBytes(), Files.readAllBytes(existing))) {
                     return false;
                 }
@@ -148,13 +147,13 @@ public class ExtensionInstaller {
         return true;
     }
 
-    private void copySkill(ProfileSkill skill, String source, Path target) throws IOException {
+    private void copySkill(ProfileSkill skill, Path target) throws IOException {
         var parent = target.getParent();
         Files.createDirectories(parent);
         var staging = Files.createTempDirectory(parent, "." + skill.name() + "-");
         try {
             for (var file : skill.files()) {
-                try (var in = loader.open(source + "/skills/" + skill.name() + "/" + file)) {
+                try (var in = loader.open(skill.directory() + "/" + file)) {
                     var destination = staging.resolve(file);
                     Files.createDirectories(destination.getParent());
                     Files.copy(in, destination);

@@ -1,31 +1,214 @@
 {
-  "files": ["common/session-prompt.md", "user/session-prompt.md", "user/claude-md-rules.md", "user/settings-fragment.json",
-            "user/skills/jscpd/SKILL.md", "user/skills/dry-refactoring/SKILL.md",
-            "project/session-prompt.md", "project/claude-md-rules.md", "project/jscpd.json", "teams/dev-team.json"],
-  "commonPrompt": "common/session-prompt.md",
-  "userSetup": {
-    "version": 1, "title": "Claude Code user setup",
-    "summary": "Plugin marketplaces, plugins, skills, user CLAUDE.md rules and settings, reviewed by Claude.",
-    "prompt": "user/session-prompt.md",
-    "extensions": {
-      "marketplaces": [
-        {"name": "claude-plugins-official", "source": "anthropics/claude-plugins-official"},
-        {"name": "ponytail", "source": "DietrichGebert/ponytail"},
-        {"name": "claude-code-skills", "source": "alirezarezvani/claude-skills"}],
-      "plugins": ["frontend-design@claude-plugins-official", "context7@claude-plugins-official", "playwright@claude-plugins-official",
-                  "claude-md-management@claude-plugins-official", "code-review@claude-plugins-official",
-                  "code-simplifier@claude-plugins-official", "feature-dev@claude-plugins-official",
-                  "postman@claude-plugins-official", "ponytail@ponytail"],
-      "skills": [{"name": "jscpd", "files": ["SKILL.md"]}, {"name": "dry-refactoring", "files": ["SKILL.md"]}],
-      "mcpServers": []
+  "schemaVersion": 2,
+  "title": "Claude Code Manager author profile",
+  "files": [
+    "user/skills/jscpd/SKILL.md",
+    "user/skills/dry-refactoring/SKILL.md",
+    "teams/dev-team.json"
+  ],
+  "items": [
+    {
+      "id": "marketplace.claude-plugins-official",
+      "area": "CLAUDE_TOOLS",
+      "group": "Marketplaces",
+      "title": "Official Claude plugins",
+      "description": "Anthropic's official plugin marketplace. Needed by anyone who wants the standard Claude Code plugins listed in this catalog.",
+      "kind": "MARKETPLACE",
+      "version": 1,
+      "requires": [],
+      "name": "claude-plugins-official",
+      "source": "anthropics/claude-plugins-official"
+    },
+    {
+      "id": "marketplace.ponytail",
+      "area": "CLAUDE_TOOLS",
+      "group": "Marketplaces",
+      "title": "Ponytail marketplace",
+      "description": "Marketplace that hosts the ponytail plugin. Needed only if you want the minimal-code ponytail mode.",
+      "kind": "MARKETPLACE",
+      "version": 1,
+      "requires": [],
+      "name": "ponytail",
+      "source": "DietrichGebert/ponytail"
+    },
+    {
+      "id": "plugin.frontend-design",
+      "area": "CLAUDE_TOOLS",
+      "group": "Plugins",
+      "title": "Frontend design",
+      "description": "Helps Claude produce distinctive, polished frontend interfaces. Useful for anyone building web UIs.",
+      "kind": "PLUGIN",
+      "version": 1,
+      "requires": [
+        "marketplace.claude-plugins-official"
+      ],
+      "name": "frontend-design@claude-plugins-official"
+    },
+    {
+      "id": "plugin.context7",
+      "area": "CLAUDE_TOOLS",
+      "group": "Plugins",
+      "title": "Context7",
+      "description": "Gives Claude up-to-date library and framework documentation on demand. Useful for anyone working with fast-moving dependencies.",
+      "kind": "PLUGIN",
+      "version": 1,
+      "requires": [
+        "marketplace.claude-plugins-official"
+      ],
+      "name": "context7@claude-plugins-official"
+    },
+    {
+      "id": "plugin.playwright",
+      "area": "CLAUDE_TOOLS",
+      "group": "Plugins",
+      "title": "Playwright",
+      "description": "Lets Claude drive a real browser to test and inspect web pages. Useful for web development and UI verification.",
+      "kind": "PLUGIN",
+      "version": 1,
+      "requires": [
+        "marketplace.claude-plugins-official"
+      ],
+      "name": "playwright@claude-plugins-official"
+    },
+    {
+      "id": "plugin.claude-md-management",
+      "area": "CLAUDE_TOOLS",
+      "group": "Plugins",
+      "title": "CLAUDE.md management",
+      "description": "Audits and improves CLAUDE.md files and captures session learnings into them. Useful for anyone who maintains project instructions.",
+      "kind": "PLUGIN",
+      "version": 1,
+      "requires": [
+        "marketplace.claude-plugins-official"
+      ],
+      "name": "claude-md-management@claude-plugins-official"
+    },
+    {
+      "id": "plugin.code-review",
+      "area": "CLAUDE_TOOLS",
+      "group": "Plugins",
+      "title": "Code review",
+      "description": "Adds a command that reviews a pull request or a change set. Useful for catching problems before merging.",
+      "kind": "PLUGIN",
+      "version": 1,
+      "requires": [
+        "marketplace.claude-plugins-official"
+      ],
+      "name": "code-review@claude-plugins-official"
+    },
+    {
+      "id": "plugin.code-simplifier",
+      "area": "CLAUDE_TOOLS",
+      "group": "Plugins",
+      "title": "Code simplifier",
+      "description": "Simplifies and cleans up recently changed code without changing behavior. Useful after larger edits.",
+      "kind": "PLUGIN",
+      "version": 1,
+      "requires": [
+        "marketplace.claude-plugins-official"
+      ],
+      "name": "code-simplifier@claude-plugins-official"
+    },
+    {
+      "id": "plugin.feature-dev",
+      "area": "CLAUDE_TOOLS",
+      "group": "Plugins",
+      "title": "Feature development",
+      "description": "Guided workflow for building a feature: explore, design, implement, review. Useful for larger changes.",
+      "kind": "PLUGIN",
+      "version": 1,
+      "requires": [
+        "marketplace.claude-plugins-official"
+      ],
+      "name": "feature-dev@claude-plugins-official"
+    },
+    {
+      "id": "plugin.postman",
+      "area": "CLAUDE_TOOLS",
+      "group": "Plugins",
+      "title": "Postman",
+      "description": "Connects Claude to Postman for API collections and requests. Useful for API engineering work.",
+      "kind": "PLUGIN",
+      "version": 1,
+      "requires": [
+        "marketplace.claude-plugins-official"
+      ],
+      "name": "postman@claude-plugins-official"
+    },
+    {
+      "id": "plugin.ponytail",
+      "area": "CLAUDE_TOOLS",
+      "group": "Plugins",
+      "title": "Ponytail",
+      "description": "Switches Claude into a lazy-senior-developer mode that writes the smallest complete change. Useful if you want less code and fewer extras.",
+      "kind": "PLUGIN",
+      "version": 1,
+      "requires": [
+        "marketplace.ponytail"
+      ],
+      "name": "ponytail@ponytail"
+    },
+    {
+      "id": "skill.jscpd",
+      "area": "CLAUDE_TOOLS",
+      "group": "Skills",
+      "title": "jscpd skill",
+      "description": "Teaches Claude to find copy-pasted code with the jscpd tool. Useful for any codebase where duplication matters.",
+      "kind": "SKILL",
+      "version": 1,
+      "requires": [],
+      "name": "jscpd",
+      "path": "user/skills/jscpd"
+    },
+    {
+      "id": "skill.dry-refactoring",
+      "area": "CLAUDE_TOOLS",
+      "group": "Skills",
+      "title": "DRY refactoring skill",
+      "description": "Teaches Claude to remove duplicates found by jscpd without changing behavior. Useful together with the jscpd skill.",
+      "kind": "SKILL",
+      "version": 1,
+      "requires": [
+        "skill.jscpd"
+      ],
+      "name": "dry-refactoring",
+      "path": "user/skills/dry-refactoring"
+    },
+    {
+      "id": "user.settings.attribution",
+      "area": "CLAUDE_CONFIG",
+      "group": "Settings",
+      "title": "No AI attribution",
+      "description": "Empties the commit and pull request attribution in Claude's user settings so commits carry only your git identity. Useful if you do not want AI credit lines in history.",
+      "kind": "SETTINGS",
+      "version": 1,
+      "requires": [],
+      "fragment": {
+        "attribution": {
+          "commit": "",
+          "pr": ""
+        }
+      }
+    },
+    {
+      "id": "team.dev-team",
+      "area": "CLAUDE_CONFIG",
+      "group": "Teams",
+      "title": "Dev team",
+      "description": "The author's agent team: a lead plus specialist roles such as researcher and debater, with a model and effort per role. Useful for splitting larger tasks across subagents.",
+      "kind": "TEAM",
+      "version": 3,
+      "requires": [],
+      "template": "teams/dev-team.json",
+      "name": "Dev team",
+      "changes": {
+        "2": [
+          "Added researcher and debater roles"
+        ],
+        "3": [
+          "Teams snapshot from the author's current setup"
+        ]
+      }
     }
-  },
-  "projectSetup": {
-    "version": 1, "title": "Project setup",
-    "summary": "CLAUDE.md rules, graphify, jscpd, reviewed by Claude against this project.",
-    "prompt": "project/session-prompt.md",
-    "extensions": {"marketplaces": [], "plugins": [], "skills": [], "mcpServers": []}
-  },
-  "teams": {"version": 3, "title": "Agent teams", "summary": "The author's agent teams.", "templates": ["teams/dev-team.json"],
-            "changes": {"2": ["Added researcher and debater roles"], "3": ["Teams snapshot from the author's current setup"]}}
+  ]
 }

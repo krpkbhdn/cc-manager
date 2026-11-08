@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 class AuthorStatusTest {
 
     static Optional<AuthorDecision> decision(AuthorChoice choice, int version) {
-        return Optional.of(new AuthorDecision(AuthorComponent.USER_SETUP, 0, choice, version));
+        return Optional.of(new AuthorDecision("plugin.context7", choice, version));
     }
 
     @Test

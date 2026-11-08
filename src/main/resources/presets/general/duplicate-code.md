@@ -1,0 +1,3 @@
+- Before writing anything new, search for an existing implementation: grep or your code search tool.
+- After a change, run `npx jscpd --reporters ai <changed paths>` (uses `.jscpd.json`). Remove clones you introduced with the `dry-refactoring` skill.
+- Deduplication never changes behaviour.

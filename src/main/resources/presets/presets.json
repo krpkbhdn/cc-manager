@@ -1,0 +1,19 @@
+{
+  "presets": [
+    {
+      "key": "general",
+      "version": 1,
+      "name": "General",
+      "description": "A baseline for most projects: coding rules for Claude plus duplicate-code checking.",
+      "components": [
+        {"kind": "INSTRUCTION", "name": "Duplicate code", "source": "presets/general/duplicate-code.md"},
+        {"kind": "INSTRUCTION", "name": "Clean code", "source": "presets/general/clean-code.md"},
+        {"kind": "INSTRUCTION", "name": "Comments", "source": "presets/general/comments.md"},
+        {"kind": "INSTRUCTION", "name": "Conventions", "source": "presets/general/conventions.md"},
+        {"kind": "SKILL", "name": "jscpd", "source": "author-profile/user/skills/jscpd"},
+        {"kind": "SKILL", "name": "dry-refactoring", "source": "author-profile/user/skills/dry-refactoring"},
+        {"kind": "FILE", "name": ".jscpd.json", "source": "presets/general/jscpd.json", "payload": {"path": ".jscpd.json", "gitignore": ["jscpd-report/"]}}
+      ]
+    }
+  ]
+}

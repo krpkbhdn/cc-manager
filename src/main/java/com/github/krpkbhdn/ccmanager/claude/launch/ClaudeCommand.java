@@ -103,14 +103,6 @@ public final class ClaudeCommand {
         return command;
     }
 
-    /** The author setup session: the staged profile is readable through --add-dir and the first prompt only points at it. */
-    static List<String> setupArguments(Path executable, SessionFiles files, Path pluginDir, String prompt, Path profileDirectory) {
-        List<String> command = base(executable, files);
-        addClaudeManager(command, files, pluginDir);
-        command.addAll(List.of("--add-dir", profileDirectory.toAbsolutePath().toString(), "--", prompt));
-        return command;
-    }
-
     /** The assistant session: the cc-manager-app MCP config (no plugin, there is no project) and a pre-allowed tool list; each variadic flag is followed by another flag. */
     static List<String> assistantArguments(Path executable, SessionFiles files, ModelSelection selection,
             List<String> allowedTools) {

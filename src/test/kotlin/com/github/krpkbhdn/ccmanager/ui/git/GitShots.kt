@@ -12,7 +12,22 @@ import com.github.krpkbhdn.ccmanager.project.ModelSelection
 import com.github.krpkbhdn.ccmanager.ui.PreviewTerminal
 import com.github.krpkbhdn.ccmanager.ui.limitsAt
 import com.github.krpkbhdn.ccmanager.usage.RateLimitSnapshot
+import com.github.krpkbhdn.ccmanager.ui.PreviewAuthorStatuses
 import com.github.krpkbhdn.ccmanager.ui.PreviewWorld
+import com.github.krpkbhdn.ccmanager.ui.PreviewPresets
+import com.github.krpkbhdn.ccmanager.ui.PreviewApply
+import com.github.krpkbhdn.ccmanager.ui.samplePlan
+import com.github.krpkbhdn.ccmanager.ui.seedHeavy
+import com.github.krpkbhdn.ccmanager.ui.seedMany
+import com.github.krpkbhdn.ccmanager.preset.ProjectPresetService
+import com.github.krpkbhdn.ccmanager.ui.presets.ComponentEditor
+import com.github.krpkbhdn.ccmanager.ui.presets.PresetTab
+import com.github.krpkbhdn.ccmanager.ui.presets.PresetsState
+import com.github.krpkbhdn.ccmanager.ui.presets.apply.ApplyPresetState
+import com.github.krpkbhdn.ccmanager.ui.presets.apply.ApplyStep
+import com.github.krpkbhdn.ccmanager.ui.author.CatalogTab
+import com.github.krpkbhdn.ccmanager.ui.settings.SettingsCategory
+import com.github.krpkbhdn.ccmanager.ui.author.CatalogView
 import com.github.krpkbhdn.ccmanager.ui.git.model.ChangeRef
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitDialog
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitState
@@ -169,9 +184,101 @@ private val shots = listOf(
     Shot("proposal-questions-other", prepare = { state, _, _ -> state.openSession("s-agents"); questions(state).apply { goTo(2); toggleOther(2); other[2].edit { replace(0, length, "In the wiki") } } }),
     Shot("proposal-hidden", prepare = { state, _, _ -> state.openSession("s-needs"); waitFor { state.answers.dialog != null }; state.proposals.hide(state.answers.dialog!!) }),
     Shot("proposal-overview", prepare = { state, _, _ -> state.navigate(Route.Overview) }),
+    Shot("author-tools", prepare = { state, _, _ -> openAuthor(state) }),
+    Shot("author-config", prepare = { state, _, _ -> openAuthor(state, CatalogTab.CONFIG) }),
+    Shot("author-installed", prepare = { state, _, _ -> openAuthor(state, mixed = false) }),
+    Shot("author-empty", prepare = { state, _, _ -> openAuthor(state, mixed = false).onlyNew = true }),
+    Shot("author-crowded", prepare = { state, _, _ -> PreviewAuthorStatuses.crowded = true; openAuthor(state) }),
+    Shot("settings-appearance", prepare = { state, _, _ -> state.settingsDialog.show(SettingsCategory.APPEARANCE) }, closing = { it.settingsDialog.close() }),
+    Shot("settings-notifications", prepare = { state, _, _ -> state.settingsDialog.show(SettingsCategory.NOTIFICATIONS) }, closing = { it.settingsDialog.close() }),
+    Shot("settings-voice", prepare = { state, _, _ -> state.settingsDialog.show(SettingsCategory.VOICE) }, closing = { it.settingsDialog.close() }),
+    Shot("settings-about", prepare = { state, _, _ -> state.settingsDialog.show(SettingsCategory.ABOUT) }, closing = { it.settingsDialog.close() }),
+    Shot("author-search", prepare = { state, _, _ -> openAuthor(state).query.edit { replace(0, length, "ponytail") } }),
+    Shot("author-search-crowded", prepare = { state, _, _ -> PreviewAuthorStatuses.crowded = true; openAuthor(state).query.edit { replace(0, length, "review") } }),
+    Shot("author-start-offer", prepare = { state, _, _ -> PreviewAuthorStatuses.mixed = true; state.author.offerAtStart(); waitFor { state.author.catalog != null } }),
+    Shot("author-start-offer-crowded", prepare = { state, _, _ -> PreviewAuthorStatuses.mixed = true; PreviewAuthorStatuses.crowded = true; state.author.offerAtStart(); waitFor { state.author.catalog != null } }),
     Shot("dialog-confirm", prepare = { state, _, _ -> state.confirm = ConfirmRequest("Remove project", "Remove ccm-sandbox from the list? Files on disk are not touched.", "Remove", true) {} }, closing = { it.confirm = null }),
     Shot("dialog-new-skill-close", prepare = { state, _, _ -> openSkills(state); state.extensions.skills.creating = true }, closing = { it.extensions.skills.creating = false }),
+    Shot("presets-general", prepare = { state, _, _ -> openPresets(state) }),
+    Shot("presets-general-skills", prepare = { state, _, _ -> openPresets(state, PresetTab.SKILLS) }),
+    Shot("presets-general-files", prepare = { state, _, _ -> openPresets(state, PresetTab.FILES) }),
+    Shot("presets-general-plugins-empty", prepare = { state, _, _ -> openPresets(state, PresetTab.PLUGINS) }),
+    Shot("presets-general-settings-empty", prepare = { state, _, _ -> openPresets(state, PresetTab.SETTINGS) }),
+    Shot("presets-many", prepare = { state, _, _ -> openPresets(state, seed = { it.seedMany(MANY_PRESETS); null }, expected = MANY_PRESETS + 1) }),
+    Shot("presets-many-search", prepare = { state, _, _ -> openPresets(state, seed = { it.seedMany(MANY_PRESETS); null }, expected = MANY_PRESETS + 1).query.edit { replace(0, length, "spring") } }),
+    Shot("presets-heavy", prepare = { state, _, _ -> openHeavy(state, PresetTab.INSTRUCTIONS) }),
+    Shot("presets-heavy-skills", prepare = { state, _, _ -> openHeavy(state, PresetTab.SKILLS) }),
+    Shot("presets-heavy-plugins", prepare = { state, _, _ -> openHeavy(state, PresetTab.PLUGINS) }),
+    Shot("presets-heavy-mcp", prepare = { state, _, _ -> openHeavy(state, PresetTab.MCP) }),
+    Shot("presets-heavy-agents", prepare = { state, _, _ -> openHeavy(state, PresetTab.AGENTS) }),
+    Shot("presets-heavy-files", prepare = { state, _, _ -> openHeavy(state, PresetTab.FILES) }),
+    Shot("presets-heavy-settings", prepare = { state, _, _ -> openHeavy(state, PresetTab.SETTINGS) }),
+    Shot("presets-dialog-plugins", prepare = { state, _, _ -> openHeavy(state, PresetTab.PLUGINS).let { it.open(ComponentEditor.PLUGINS, it.selected!!.id()) }; waitFor { state.presets.pluginChoices != null } }),
+    Shot("presets-dialog-skill", prepare = { state, _, _ -> openHeavy(state, PresetTab.SKILLS).let { it.open(ComponentEditor.SKILL_ADD, it.selected!!.id()) }; waitFor { state.presets.skillChoices != null } }),
+    Shot("presets-dialog-skill-edit", prepare = { state, _, _ -> openComponent(state, PresetTab.SKILLS, ComponentEditor.SKILL_EDIT) }),
+    Shot("presets-dialog-instruction", prepare = { state, _, _ -> openComponent(state, PresetTab.INSTRUCTIONS, ComponentEditor.INSTRUCTION) }),
+    Shot("presets-dialog-instruction-new", prepare = { state, _, _ -> openHeavy(state, PresetTab.INSTRUCTIONS).let { it.open(ComponentEditor.INSTRUCTION, it.selected!!.id()) } }),
+    Shot("presets-dialog-mcp", prepare = { state, _, _ -> openHeavy(state, PresetTab.MCP).let { it.open(ComponentEditor.MCP, it.selected!!.id()) } }),
+    Shot("presets-dialog-mcp-edit", prepare = { state, _, _ -> openComponent(state, PresetTab.MCP, ComponentEditor.MCP) }),
+    Shot("presets-dialog-agent", prepare = { state, _, _ -> openComponent(state, PresetTab.AGENTS, ComponentEditor.AGENT) }),
+    Shot("presets-dialog-file", prepare = { state, _, _ -> openComponent(state, PresetTab.FILES, ComponentEditor.FILE) }),
+    Shot("presets-dialog-settings", prepare = { state, _, _ -> openComponent(state, PresetTab.SETTINGS, ComponentEditor.SETTINGS) }),
+    Shot("apply-choose", prepare = { state, _, _ -> openApplyChoose(state) }),
+    Shot("apply-review", prepare = { state, _, _ -> openApplyReview(state).toggleExpanded(9L) }),
+    Shot("apply-review-conflict", prepare = { state, _, _ -> PreviewApply.plan = samplePlan().filter { it.componentId() in setOf(2L, 7L, 9L, 10L) }; openApplyReview(state).toggleExpanded(9L) }),
+    Shot("apply-review-long", prepare = { state, _, _ -> openApplyReview(state).toggleExpanded(1L) }),
+    Shot("apply-review-loading", prepare = { state, _, _ -> PreviewApply.planDelayMillis = LOADING_MILLIS; state.applyPreset.open(1, generalId(state)) }),
+    Shot("apply-result", prepare = { state, _, _ -> openApplyReview(state).apply(); waitFor { state.applyPreset.step == ApplyStep.RESULT } }),
+    Shot("apply-offer", prepare = { state, _, _ -> generalId(state); PreviewApply.applied = emptyMap(); state.navigate(Route.Project(2)); waitFor { state.presetOffer.offer != null } }),
 )
+
+private const val MANY_PRESETS = 25
+private const val LOADING_MILLIS = 20_000L
+
+private fun generalId(state: AppState): Long {
+    waitFor { state.presets.presets.isNotEmpty() }
+    return state.presets.presets.first().id()
+}
+
+private fun openApplyChoose(state: AppState) {
+    PreviewPresets.current.seedMany(5)
+    waitFor { state.presets.presets.size >= 6 }
+    PreviewApply.applied = mapOf(state.presets.presets[0].id() to state.presets.presets[0].revision(), state.presets.presets[2].id() to 0)
+    state.applyPreset.open(1)
+    waitFor { state.applyPreset.applied.isNotEmpty() }
+}
+
+private fun openApplyReview(state: AppState): ApplyPresetState {
+    state.applyPreset.open(1, generalId(state))
+    waitFor { state.applyPreset.plan != null }
+    return state.applyPreset
+}
+
+private fun openPresets(state: AppState, tab: PresetTab = PresetTab.INSTRUCTIONS, seed: (ProjectPresetService) -> Long? = { null }, expected: Int = 1): PresetsState {
+    val chosen = seed(PreviewPresets.current)
+    state.settingsDialog.show(SettingsCategory.PRESETS)
+    waitFor { state.presets.presets.size >= expected && (chosen == null || state.presets.find(chosen) != null) }
+    chosen?.let { state.presets.select(state.presets.find(it)!!) }
+    state.presets.tab = tab
+    return state.presets
+}
+
+private fun openHeavy(state: AppState, tab: PresetTab): PresetsState = openPresets(state, tab, seed = { it.seedHeavy().id() }, expected = 2)
+
+private fun openComponent(state: AppState, tab: PresetTab, editor: ComponentEditor): PresetsState {
+    val presets = openHeavy(state, tab)
+    val preset = presets.selected!!
+    presets.open(editor, preset.id(), tab.componentsOf(preset).first())
+    return presets
+}
+
+
+private fun openAuthor(state: AppState, tab: CatalogTab = CatalogTab.TOOLS, mixed: Boolean = true): CatalogView {
+    PreviewAuthorStatuses.mixed = mixed
+    state.author.openManage()
+    waitFor { state.author.catalog != null }
+    return state.author.catalog!!.also { it.tab = tab }
+}
 
 private fun GitState.pushNow() { push(); waitFor { error != null } }
 
@@ -225,6 +332,7 @@ fun main(args: Array<String>) {
 }
 
 private fun render(shot: Shot, dark: Boolean, width: Int, height: Int, out: Path) {
+    PreviewAuthorStatuses.mixed = false; PreviewAuthorStatuses.crowded = false; PreviewApply.reset()
     val data = shot.data()
     val world = PreviewWorld(git = data, rateLimits = shot.limits, selection = shot.selection)
     val scope = CoroutineScope(SupervisorJob() + shotLoop)

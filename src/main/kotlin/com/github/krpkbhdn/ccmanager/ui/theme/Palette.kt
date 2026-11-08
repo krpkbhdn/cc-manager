@@ -164,7 +164,7 @@ object Radius {
 object Alpha {
     const val SOFT = 0.14f
     const val BORDER_TINT = 0.45f
-    const val DISABLED = 0.45f
+    const val DISABLED = 0.55f
     const val PULSE_LOW = 0.4f
     const val HALO = 0.25f
     const val GLOW = 0.5f

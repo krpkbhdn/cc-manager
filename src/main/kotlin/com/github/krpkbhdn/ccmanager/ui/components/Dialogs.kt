@@ -8,6 +8,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -29,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,15 +59,19 @@ import com.github.krpkbhdn.ccmanager.ui.theme.colors
 private val dialogWidth = 420.dp
 private val dialogIconBox = 40.dp
 
+/** False for a dialog shown above another modal that already darkens the window, so the scrim is not doubled. */
+val LocalModalScrim = staticCompositionLocalOf { true }
+
 /**
  * Scrim plus a centred, animated surface; Esc (unless [escapeDismisses] is off) and clicks outside the card call [onDismiss],
- * except while [hasInput] says the form holds typed input: then only the dialog's own Cancel closes it.
+ * except while [hasInput] says the form holds typed input: then only the dialog's own Cancel closes it. A [height] fixes the card height, clamped to the window.
  */
 @Composable
 fun ModalHost(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     width: Dp = dialogWidth,
+    height: Dp? = null,
     takeFocus: Boolean = true,
     escapeDismisses: Boolean = true,
     hasInput: () -> Boolean = { false },
@@ -78,7 +84,7 @@ fun ModalHost(
     val fade by animateFloatAsState(if (shown) 1f else 0f, Motion.base(), label = "scrim")
     BoxWithConstraints(
         modifier.fillMaxSize()
-            .background(colors.scrim.copy(alpha = colors.scrim.alpha * fade))
+            .background(if (LocalModalScrim.current) colors.scrim.copy(alpha = colors.scrim.alpha * fade) else Color.Transparent)
             .onPreviewKeyEvent { event ->
                 (escapeDismisses && event.type == KeyEventType.KeyDown && event.key == Key.Escape).also { if (it) dismissByGesture() }
             }
@@ -87,7 +93,11 @@ fun ModalHost(
         contentAlignment = Alignment.Center,
     ) {
         Box(
-            Modifier.popIn().width(width).heightIn(max = maxHeight - Spacing.lg * 2).card(RoundedCornerShape(Radius.xl), colors.surfaceRaised, raised = true)
+            Modifier.popIn()
+                .width(minOf(width, maxWidth - Spacing.lg * 2))
+                .heightIn(max = maxHeight - Spacing.lg * 2)
+                .then(if (height == null) Modifier else Modifier.height(minOf(height, maxHeight - Spacing.lg * 2)))
+                .card(RoundedCornerShape(Radius.xl), colors.surfaceRaised, raised = true)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
         ) { content() }
     }

@@ -3,7 +3,7 @@ package com.github.krpkbhdn.ccmanager.ui.state
 import java.time.Duration
 import com.github.krpkbhdn.ccmanager.app.AppControlProperties
 import com.github.krpkbhdn.ccmanager.app.AppControlRegistry
-import com.github.krpkbhdn.ccmanager.author.AuthorProfileService
+import com.github.krpkbhdn.ccmanager.author.AuthorCatalogService
 import com.github.krpkbhdn.ccmanager.claude.hook.HookEventStore
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService
 import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgentService
@@ -21,6 +21,9 @@ import com.github.krpkbhdn.ccmanager.usage.UsageProperties
 import com.github.krpkbhdn.ccmanager.usage.history.UsageAlertService
 import com.github.krpkbhdn.ccmanager.usage.history.UsageHistoryRepository
 import com.github.krpkbhdn.ccmanager.usage.history.UsageThresholds
+import com.github.krpkbhdn.ccmanager.preset.PresetApplicationService
+import com.github.krpkbhdn.ccmanager.preset.ProjectPresetService
+import com.github.krpkbhdn.ccmanager.preset.apply.PresetApplyService
 import com.github.krpkbhdn.ccmanager.project.ProjectGroupService
 import com.github.krpkbhdn.ccmanager.project.ProjectService
 import com.github.krpkbhdn.ccmanager.prompt.PromptTemplateService
@@ -71,10 +74,13 @@ class Backend(
     val runs: RunService,
     val shellDetector: ShellDetector,
     val shellLauncher: ShellLauncher,
-    val author: AuthorProfileService,
+    val author: AuthorCatalogService,
     val proposals: ProposalService,
     val promptTemplates: PromptTemplateService,
     val sessionSearch: SessionSearchService,
+    val presets: ProjectPresetService,
+    val presetApply: PresetApplyService,
+    val presetApplications: PresetApplicationService,
     val terminal: TerminalPort = HostTerminalPort,
     val updates: UpdateService? = null,
     val sound: NotificationSoundService? = null,
@@ -113,10 +119,13 @@ class Backend(
             runs = context.getBean(RunService::class.java),
             shellDetector = context.getBean(ShellDetector::class.java),
             shellLauncher = context.getBean(ShellLauncher::class.java),
-            author = context.getBean(AuthorProfileService::class.java),
+            author = context.getBean(AuthorCatalogService::class.java),
             proposals = context.getBean(ProposalService::class.java),
             promptTemplates = context.getBean(PromptTemplateService::class.java),
             sessionSearch = context.getBean(SessionSearchService::class.java),
+            presets = context.getBean(ProjectPresetService::class.java),
+            presetApply = context.getBean(PresetApplyService::class.java),
+            presetApplications = context.getBean(PresetApplicationService::class.java),
             updates = context.getBean(UpdateService::class.java),
             sound = context.getBean(NotificationSoundService::class.java),
             usageHistory = context.getBean(UsageHistoryRepository::class.java),

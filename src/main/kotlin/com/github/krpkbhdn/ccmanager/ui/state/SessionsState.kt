@@ -5,7 +5,6 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateSetOf
 import androidx.compose.runtime.setValue
-import com.github.krpkbhdn.ccmanager.author.SessionHandoff
 import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
@@ -110,10 +109,6 @@ class SessionsState(
         launchSession(projectId, team, onStarted, rememberTeam = true, onNotStarted = onNotStarted) {
             if (team == null) backend.launcher.launchTask(projectId, task) else backend.launcher.launchTeam(projectId, team, task)
         }
-
-    /** Starts the session that finishes the author's setup in [projectId]; [onStarted] runs only when the session really started. */
-    fun launchSetup(projectId: Long, handoff: SessionHandoff, onStarted: () -> Unit) =
-        launchSession(projectId, onStarted = { onStarted() }) { backend.launcher.launchSetup(projectId, handoff.firstMessage(), handoff.profileDirectory()) }
 
     private fun launchSession(projectId: Long, team: Team? = null, onStarted: (String) -> Unit = {}, rememberTeam: Boolean = team != null, show: Boolean = true, onNotStarted: ((String) -> Unit)? = null, directory: Path? = null, start: () -> LaunchedSession) {
         if (launching) return (onNotStarted ?: reportError)(LAUNCH_IN_PROGRESS_MESSAGE)

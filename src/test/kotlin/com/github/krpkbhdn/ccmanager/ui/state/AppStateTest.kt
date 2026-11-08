@@ -3,9 +3,6 @@ package com.github.krpkbhdn.ccmanager.ui.state
 import com.github.krpkbhdn.ccmanager.ui.await
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.github.krpkbhdn.ccmanager.author.AuthorComponent
-import com.github.krpkbhdn.ccmanager.author.AuthorEntry
-import com.github.krpkbhdn.ccmanager.author.AuthorStatus
 import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
@@ -88,17 +85,6 @@ class AppStateTest {
         state.projects.requestRemove(project)
 
         assertThat(state.confirm!!.message).doesNotContain("terminated")
-    }
-
-    @Test
-    fun `opening a project offers its author setup`() {
-        val projectSetup = AuthorEntry(AuthorComponent.PROJECT_SETUP, PROJECT_ID, "Project setup", "summary", 1, 0, AuthorStatus.NOT_INSTALLED, emptyList(), false)
-        `when`(backend.author.entries(PROJECT_ID)).thenReturn(listOf(projectSetup))
-
-        state.navigate(Route.Project(PROJECT_ID))
-
-        await { state.author.offer != null }
-        assertThat(state.author.offer!!.entries).containsExactly(projectSetup)
     }
 
     @Test

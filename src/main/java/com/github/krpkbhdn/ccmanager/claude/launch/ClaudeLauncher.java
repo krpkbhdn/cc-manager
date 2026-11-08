@@ -128,12 +128,6 @@ public class ClaudeLauncher {
                 (files, exe, selection) -> ClaudeCommand.taskArguments(exe, files, plugin.directory(), selection, task));
     }
 
-    /** A session that finishes the author's setup; the prompt points at the staged profile. */
-    public LaunchedSession launchSetup(long projectId, String prompt, Path profileDirectory) {
-        return start(projectId, "claude (author setup)",
-                (files, exe, selection) -> ClaudeCommand.setupArguments(exe, files, plugin.directory(), prompt, profileDirectory));
-    }
-
     /** claude attach ID for a background agent; not for a group, whose variadic --add-dir would swallow the subcommand. */
     public LaunchedSession attach(long projectId, String backgroundSessionId) {
         ClaudeCommand.requireSafeBackgroundId(backgroundSessionId);

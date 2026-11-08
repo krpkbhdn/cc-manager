@@ -18,7 +18,6 @@ import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartupState
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantState
 import com.github.krpkbhdn.ccmanager.ui.assistant.ToolSummary
 import com.github.krpkbhdn.ccmanager.ui.author.AuthorProfileState
-import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.McpState
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitHost
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitState
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
@@ -32,6 +31,9 @@ import com.github.krpkbhdn.ccmanager.ui.queue.QueueState
 import com.github.krpkbhdn.ccmanager.ui.queue.QueuedPrompt
 import com.github.krpkbhdn.ccmanager.ui.run.RunState
 import com.github.krpkbhdn.ccmanager.ui.settings.SettingsState
+import com.github.krpkbhdn.ccmanager.ui.presets.PresetsState
+import com.github.krpkbhdn.ccmanager.ui.presets.apply.ApplyPresetState
+import com.github.krpkbhdn.ccmanager.ui.presets.apply.PresetOfferState
 import com.github.krpkbhdn.ccmanager.ui.teams.TeamsState
 import com.github.krpkbhdn.ccmanager.ui.usage.UsageState
 import com.github.krpkbhdn.ccmanager.ui.voice.VoiceSettingsState
@@ -123,7 +125,7 @@ class AppState(
     )
     val assistantStartup = AssistantStartupState(
         scope, { settings.assistantStartup }, { mode -> prefs.update { it.copy(assistantStartup = mode) } },
-        blocked = { author.dialogOpen || author.startOfferPending || confirm != null },
+        blocked = { author.dialogOpen || author.startOfferPending || confirm != null || applyPreset.isOpen || presetOffer.offer != null },
         startInBackground = assistant::startInBackground, start = assistant::start,
     )
     val queue = QueueState(backend.sessions, backend.terminal, scope, sessions::isAttached, sessions::sendQueued)
@@ -157,15 +159,20 @@ class AppState(
     var trayAvailable by mutableStateOf(false)
     val waitingCount: Int get() = live.sessions.count { it.status == AgentStatus.NEEDS_ACTION }
     val teams = TeamsState(backend.teams, scope, { confirm = it }, notifications::reportError)
+    val presets = PresetsState(backend.presets, backend.plugins, backend.skills, scope, { confirm = it }, notifications::reportError)
+    val applyPreset: ApplyPresetState = ApplyPresetState(backend.presetApply, backend.presetApplications, { presets.presets }, projects::find, scope, notifications::reportError)
+    val presetOffer: PresetOfferState = PresetOfferState(
+        backend.presetApplications, { presets.presets }, projects::find, scope,
+        blocked = ::dialogBlocksOffer,
+        review = { projectId, presetId -> applyPreset.open(projectId, presetId) },
+        reportError = notifications::reportError,
+    )
     val prompts = PromptsState(backend.promptTemplates, scope, { confirm = it }, notifications::reportError, listOf(backend.projects::subscribe, backend.teams::subscribe))
     val sessionSearch = SessionSearchState(backend.sessionSearch, backend.transcripts, scope, { confirm = it }, notifications::reportError)
     val extensions = ExtensionStates(backend, scope, { confirm = it }, notifications, environment)
     val author = AuthorProfileState(
         backend.author, scope,
-        sessionProject = { (route as? Route.Project)?.let { projects.find(it.id) }?.takeIf { !it.group } ?: projects.projects.firstOrNull() },
-        projectOf = projects::find,
-        launchSetup = sessions::launchSetup,
-        mcpOf = { path -> if (path == null) extensions.mcp else McpState(backend.mcp, path, scope, { confirm = it }, notifications::toast) },
+        mcp = extensions.mcp,
         reportError = notifications::reportError,
         toast = notifications::toast,
     )
@@ -210,6 +217,7 @@ class AppState(
         backend.appControl?.let { unsubscribers += it.connect(AppControlAdapter(this, scope, backend.appControlProperties.uiTimeout())) }
         scope.launch { snapshotFlow { environment.sessionUsage }.collect(contextAlerts::rearmBelowCritical) }
         teams.start()
+        presets.start()
         prompts.start()
         sessionSearch.start()
         queue.start()
@@ -239,6 +247,7 @@ class AppState(
     fun dispose() {
         extensions.dispose()
         teams.dispose()
+        presets.dispose()
         prompts.dispose()
         sessionSearch.dispose()
         queue.dispose()
@@ -272,9 +281,12 @@ class AppState(
         sessions.send(ccmSessionId, COMPACT_COMMAND + Keys.ENTER) { contextAlerts.dismiss(ccmSessionId) }
     }
 
+    private fun dialogBlocksOffer(): Boolean = author.dialogOpen || author.startOfferPending || assistantStartup.asking || confirm != null || settingsDialog.open ||
+        applyPreset.isOpen || presetOffer.offer != null || presets.dialog != null || answers.dialog != null || tasks.projectId != null
+
     fun navigate(target: Route) {
         route = target
-        (target as? Route.Project)?.takeIf { projects.find(it.id)?.group != true }?.let { author.offerForProject(it.id) }
+        (target as? Route.Project)?.let { presetOffer.offerFor(it.id) }
         notificationsOpen = false
         usageOpen = false
         contextSessionId = null

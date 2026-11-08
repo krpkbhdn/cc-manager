@@ -1,12 +1,13 @@
 package com.github.krpkbhdn.ccmanager.author.install;
 
+import com.github.krpkbhdn.ccmanager.author.AuthorItem;
 import com.github.krpkbhdn.ccmanager.author.AuthorProfileLoader;
 import com.github.krpkbhdn.ccmanager.team.TeamService;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
-/** Creates the profile's agent teams that do not exist yet and replaces the roles of the ones that do. */
+/** Creates the given TEAM items' agent teams that do not exist yet and replaces the roles of the ones that do. */
 @Service
 public class TeamsInstaller {
 
@@ -18,11 +19,12 @@ public class TeamsInstaller {
         this.loader = loader;
     }
 
-    public InstallOutcome install() {
+    public InstallOutcome install(List<AuthorItem> teamItems) {
         var installed = new ArrayList<String>();
         var failed = new ArrayList<String>();
         var existing = teams.list();
-        for (var template : loader.teamTemplates()) {
+        for (var item : teamItems) {
+            var template = loader.teamTemplate(item.id());
             var label = "team " + template.name();
             try {
                 var current = existing.stream().filter(team -> team.name().equals(template.name())).findFirst();

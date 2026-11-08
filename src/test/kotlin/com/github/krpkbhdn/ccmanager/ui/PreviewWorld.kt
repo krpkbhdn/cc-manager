@@ -77,7 +77,6 @@ import org.mockito.ArgumentMatchers.anyInt
 import org.mockito.ArgumentMatchers.anyLong
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.mock
-import com.github.krpkbhdn.ccmanager.author.AuthorProfileService
 import org.mockito.Mockito.`when`
 
 private fun previewBreakdown() = ContextBreakdown(
@@ -365,7 +364,7 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         `when`(shellLauncher.launch(anyLong(), any())).thenThrow(IllegalStateException("Preview mode: shells cannot be started here."))
         `when`(shellLauncher.launch(anyLong(), any(), any())).thenThrow(IllegalStateException("Preview mode: shells cannot be started here."))
 
-        return Backend(projectService, fakeGroupService(), installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), TranscriptService(JsonMapper.builder().build(), previewTranscriptDir, com.github.krpkbhdn.ccmanager.claude.session.TranscriptProperties(300, 1048576, 65536, 524288)), runConfigurationService(), runService(), shellDetector, shellLauncher, mock(AuthorProfileService::class.java), proposals.service(), mock(PromptTemplateService::class.java), previewSessionSearch(), terminal = terminal, sessionProperties = SessionProperties(Duration.ofMinutes(10), Duration.ofMinutes(10)), contextBreakdown = contextBreakdown, voice = voice.backend)
+        return Backend(projectService, fakeGroupService(), installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), TranscriptService(JsonMapper.builder().build(), previewTranscriptDir, com.github.krpkbhdn.ccmanager.claude.session.TranscriptProperties(300, 1048576, 65536, 524288)), runConfigurationService(), runService(), shellDetector, shellLauncher, previewAuthorCatalog(), proposals.service(), mock(PromptTemplateService::class.java), previewSessionSearch(), previewPresetService(), previewPresetApply(), previewPresetApplications(), terminal = terminal, sessionProperties = SessionProperties(Duration.ofMinutes(10), Duration.ofMinutes(10)), contextBreakdown = contextBreakdown, voice = voice.backend)
     }
 
     private fun installationNow() = if (claudeInstalled) {

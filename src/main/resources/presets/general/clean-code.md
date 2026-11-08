@@ -1,0 +1,8 @@
+- Names say intent; no `*Helper`, `*Manager`, `*Info`, `process()`, `handleData()`. Domain terms stay.
+- No god methods/classes: a method fits on one screen; ~300 lines in a class means split by responsibility.
+- A growing `switch`/`if` chain on a type/kind becomes a strategy (one class per case).
+- Prefer constructor injection and immutability; no `null` collections; optional values only as return types.
+- Tunables live in configuration, never as magic numbers or strings.
+- UI code holds display logic only; work goes in services.
+- No secrets or personal data in logs.
+- YAGNI: no speculative abstractions or "for later" code; delete dead code.
