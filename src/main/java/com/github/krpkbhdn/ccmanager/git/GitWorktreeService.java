@@ -58,7 +58,7 @@ public class GitWorktreeService {
         if (!worktree.isAbsolute()) {
             throw new IllegalArgumentException("Folder must be an absolute path");
         }
-        if (listed(repo).getFirst().path().normalize().equals(worktree.normalize())) {
+        if (sameFolder(listed(repo).getFirst().path(), worktree)) {
             throw new IllegalArgumentException("The main worktree cannot be removed");
         }
         var command = new ArrayList<>(List.of("worktree", "remove"));
@@ -67,6 +67,15 @@ public class GitWorktreeService {
         }
         command.add(worktree.toString());
         git.out(repo, command.toArray(String[]::new));
+    }
+
+    /** Git reports real paths (no 8.3 short names, canonical case), so compare by file identity when both exist. */
+    private static boolean sameFolder(Path a, Path b) {
+        try {
+            return Files.isSameFile(a, b);
+        } catch (java.io.IOException e) {
+            return a.normalize().equals(b.normalize());
+        }
     }
 
     /**

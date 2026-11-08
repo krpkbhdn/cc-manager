@@ -341,7 +341,7 @@ class GitBranchServiceTest {
         var linked = root.resolve("linked");
         sandbox.git("worktree", "add", linked.toString(), "topic");
 
-        assertThat(service.worktreeOf(sandbox.repo, "main")).hasValue(sandbox.repo);
+        assertThat(service.worktreeOf(sandbox.repo, "main").orElseThrow().toRealPath()).isEqualTo(sandbox.repo.toRealPath());
         assertThat(service.worktreeOf(sandbox.repo, "topic").orElseThrow().toRealPath()).isEqualTo(linked.toRealPath());
         assertThat(service.worktreeOf(sandbox.repo, "other")).isEmpty();
     }
