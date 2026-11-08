@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.ui.proposal
 
 import androidx.compose.runtime.Composable
+import com.github.krpkbhdn.ccmanager.ui.await
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.input.key.Key
@@ -31,8 +32,6 @@ import tools.jackson.databind.json.JsonMapper
 
 private const val FRAME_NANOS = 16_000_000L
 private const val SETTLE_FRAMES = 6
-private const val WAIT_MILLIS = 5_000L
-private const val POLL_MILLIS = 20L
 private const val SESSION = "s-agents"
 
 /** The dialog host against a whole AppState with fake services: what hides, replaces or closes a dialog, and where the focus goes. */
@@ -55,10 +54,10 @@ class ProposalDialogHostTest {
     @BeforeEach
     fun open() {
         state = AppState(world.backend(terminal), scope, UiSettingsStore(null)).also { it.updateSettings { s -> s.copy(assistantStartup = AssistantStartup.NEVER) }; it.start() }
-        until { state.live.find(SESSION) != null }
+        await { state.live.find(SESSION) != null }
         state.openSession(SESSION)
         scene = ImageComposeScene(1000, 800, Density(1f)) { host { ProposalDialogHost(state) } }
-        until { state.answers.dialog != null }
+        await { state.answers.dialog != null }
         frames()
     }
 
@@ -72,12 +71,6 @@ class ProposalDialogHostTest {
     private fun host(content: @Composable () -> Unit) = AppTheme(dark = true, content = content)
 
     private fun frames() = repeat(SETTLE_FRAMES) { scene.render(nanos); nanos += FRAME_NANOS }
-
-    private fun until(condition: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + WAIT_MILLIS
-        while (!condition() && System.currentTimeMillis() < deadline) Thread.sleep(POLL_MILLIS)
-        assertThat(condition()).isTrue()
-    }
 
     private fun press(key: Key) {
         scene.sendKeyEvent(KeyEvent(key, KeyEventType.KeyDown))
@@ -108,11 +101,11 @@ class ProposalDialogHostTest {
     @Test
     fun aProposalSettledElsewhereClosesItsDialogAndTheNextPendingOneTakesOver() {
         world.proposals.add(secondProposal())
-        until { state.proposals.of(SESSION).size == 2 }
+        await { state.proposals.of(SESSION).size == 2 }
         focused.clear()
 
         world.proposals.settle("q1")
-        until { state.answers.dialog?.id() == "p2" }
+        await { state.answers.dialog?.id() == "p2" }
         frames()
 
         assertThat(state.proposals.positionOf(state.answers.dialog!!)).isNull()
@@ -123,7 +116,7 @@ class ProposalDialogHostTest {
         focused.clear()
 
         world.proposals.settle("q1")
-        until { state.answers.dialog == null }
+        await { state.answers.dialog == null }
         frames()
 
         assertThat(focused).contains(SESSION)
@@ -137,7 +130,7 @@ class ProposalDialogHostTest {
         assertThat(actions.perform(AppShortcut.TOGGLE_SIDEBAR)).isFalse()
         assertThat(state.settings.sidebarCollapsed).isEqualTo(collapsed)
         world.proposals.settle("q1")
-        until { state.answers.dialog == null }
+        await { state.answers.dialog == null }
 
         assertThat(actions.perform(AppShortcut.TOGGLE_SIDEBAR)).isTrue()
     }

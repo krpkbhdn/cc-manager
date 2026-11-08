@@ -7,6 +7,7 @@ import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.run.RunEntry
 import com.github.krpkbhdn.ccmanager.ui.shortcuts.AppShortcut
+import com.github.krpkbhdn.ccmanager.ui.sessions.SessionsTab
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.GroupDialogRequest
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
@@ -62,7 +63,9 @@ private fun globalActions(state: AppState, systemDark: Boolean): List<PaletteIte
     PaletteItem("add-project", "Add project", PaletteGroup.ACTIONS, "Pick a folder to manage", Icons.FolderPlus, shortcut = AppShortcut.ADD_PROJECT, run = state::requestAddProject),
     PaletteItem("new-group", "New group", PaletteGroup.ACTIONS, "Bundle projects into one workspace", Icons.FolderPlus) { state.projects.groupDialog = GroupDialogRequest(null) },
     PaletteItem("overview", "Go to overview", PaletteGroup.ACTIONS, icon = Icons.Grid, shortcut = AppShortcut.OVERVIEW) { state.navigate(Route.Overview) },
-    PaletteItem("sessions", "All sessions", PaletteGroup.ACTIONS, "Every session of every project", Icons.Layers, shortcut = AppShortcut.ALL_SESSIONS) { state.navigate(Route.Sessions) },
+    PaletteItem("sessions", "Sessions", PaletteGroup.ACTIONS, "Every session of every project", Icons.Layers, shortcut = AppShortcut.ALL_SESSIONS) { state.openSessions(SessionsTab.ACTIVE) },
+    PaletteItem("search-sessions", "Search sessions", PaletteGroup.ACTIONS, "Find text in past conversations", Icons.Search, shortcut = AppShortcut.SEARCH_SESSIONS) { state.openSessions(SessionsTab.HISTORY) },
+    PaletteItem("usage-history", "Show usage history", PaletteGroup.ACTIONS, "Cost per day, project and model", Icons.Gauge) { state.navigate(Route.Usage) },
     PaletteItem("ask-assistant", "Ask assistant", PaletteGroup.ACTIONS, "Send a request to the Assistant", Icons.Sparkles, shortcut = AppShortcut.QUICK_REQUEST) { state.quickRequestOpen = true },
     PaletteItem("assistant", "Assistant", PaletteGroup.ACTIONS, "Ask Claude something unrelated to your projects", Icons.Sparkles, shortcut = AppShortcut.ASSISTANT) { state.navigate(Route.Assistant) },
     PaletteItem("assistant-help", "Assistant help", PaletteGroup.ACTIONS, "Hotkeys and what the Assistant can do", Icons.Book) { state.assistantHelpOpen = true },
@@ -77,6 +80,7 @@ private fun globalActions(state: AppState, systemDark: Boolean): List<PaletteIte
     PaletteItem("notifications", "Show notifications", PaletteGroup.ACTIONS, icon = Icons.Bell, shortcut = AppShortcut.NOTIFICATIONS) { state.notificationsOpen = true },
     PaletteItem("usage", "Show usage", PaletteGroup.ACTIONS, "Limits, context and cost", Icons.Gauge, shortcut = AppShortcut.USAGE) { state.usageOpen = true },
     PaletteItem("toggle-sound", "Toggle notification sound", PaletteGroup.ACTIONS, if (state.settings.notificationSound) "Currently on" else "Currently off", Icons.Bell) { state.prefs.toggleNotificationSound() },
+    PaletteItem("toggle-dnd", "Toggle do not disturb", PaletteGroup.ACTIONS, if (state.settings.doNotDisturb) "Currently on" else "Currently off", Icons.Bell) { state.prefs.toggleDoNotDisturb() },
     PaletteItem("toggle-theme", "Toggle light and dark theme", PaletteGroup.ACTIONS, icon = Icons.Sun, shortcut = AppShortcut.TOGGLE_THEME) { state.prefs.toggleTheme(systemDark) },
     PaletteItem("system-theme", "Use the system theme", PaletteGroup.ACTIONS, icon = Icons.Monitor) { state.prefs.setThemeMode(ThemeMode.SYSTEM) },
     PaletteItem("settings", "Settings", PaletteGroup.ACTIONS, "Theme, notifications, Assistant, updates and more", Icons.Settings, shortcut = AppShortcut.APP_SETTINGS) { state.settingsDialog.show() },

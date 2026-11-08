@@ -35,7 +35,7 @@ class RealWhisperTest {
     private static final int SAMPLE_RATE = 16_000;
     private static final Path DATA_DIR = Path.of("build", "real-whisper").toAbsolutePath();
     private static final VoiceProperties PROPERTIES = new VoiceProperties("en", Duration.ofSeconds(10),
-            Duration.ofSeconds(1), Duration.ofSeconds(1), 0.01, 0.5, 4, Duration.ofSeconds(30), Duration.ofMinutes(5));
+            Duration.ofSeconds(1), Duration.ofSeconds(1), 0.01, 0.5, 4, Duration.ofSeconds(30), Duration.ofMinutes(5), Duration.ofMinutes(2), Duration.ofSeconds(60));
 
     private static NativeRuntime runtime;
     private static Path model;

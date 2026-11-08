@@ -4,6 +4,7 @@ import com.github.krpkbhdn.ccmanager.git.GitException
 import com.github.krpkbhdn.ccmanager.git.GitLog
 import com.github.krpkbhdn.ccmanager.git.GitStatus
 import com.github.krpkbhdn.ccmanager.git.GraphState
+import com.github.krpkbhdn.ccmanager.ui.await
 import com.github.krpkbhdn.ccmanager.ui.git.log.LOG_PAGE_SIZE
 import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.ui.git.FakeGit
@@ -33,14 +34,6 @@ class GitStateTest {
         git.attach()
         await { git.status != null && (!git.status!!.repository() || git.branches.isNotEmpty()) }
         return git to data
-    }
-
-    private fun await(timeoutMillis: Long = 5_000, condition: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + timeoutMillis
-        while (!condition()) {
-            check(System.currentTimeMillis() < deadline) { "condition not met in time" }
-            Thread.sleep(10)
-        }
     }
 
     private fun paths(git: GitState, staged: Boolean) = changeSections(git.status!!.changes()).let { if (staged) it.staged else it.unstaged }.map { it.path() }
@@ -181,11 +174,13 @@ class GitStateTest {
     @Test
     fun `only one mutation runs at a time and progress lines show`() {
         val (git, data) = open()
-        data.progressDelayMillis = 150
+        val gate = java.util.concurrent.CountDownLatch(1)
+        data.progressGate = gate
 
         git.fetch()
-        await { git.job != null }
+        await { git.job?.progress != null }
         git.pull()
+        gate.countDown()
         await { git.job == null && data.calls.any { it == "fetch" } }
 
         assertThat(data.calls.filter { it.startsWith("pull") }).isEmpty()

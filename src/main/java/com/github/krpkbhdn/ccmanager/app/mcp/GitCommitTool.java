@@ -5,7 +5,10 @@ import com.github.krpkbhdn.ccmanager.git.GitMisc.CommitRequest;
 import com.github.krpkbhdn.ccmanager.git.GitStatus.Change;
 import com.github.krpkbhdn.ccmanager.git.GitStatusService;
 import com.github.krpkbhdn.ccmanager.project.ProjectService;
+import com.github.krpkbhdn.ccmanager.git.SecretFiles;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -13,12 +16,10 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 class GitCommitTool extends GitTool {
 
-    private final GitStatusService status;
     private final GitIndexService index;
 
     GitCommitTool(ProjectService projects, GitStatusService status, GitIndexService index, JsonMapper mapper) {
         super(projects, status, mapper);
-        this.status = status;
         this.index = index;
     }
 
@@ -43,10 +44,13 @@ class GitCommitTool extends GitTool {
     @Override
     String run(Path repo, JsonNode arguments) {
         var message = requiredText(arguments, "message");
+        var skipped = List.<String>of();
         if (flag(arguments, "all")) {
-            index.stage(repo, status.status(repo).changes().stream().map(Change::path).toList());
+            var byKind = status.status(repo).changes().stream().map(Change::path).collect(Collectors.partitioningBy(SecretFiles::looksSecret));
+            skipped = byKind.get(true);
+            index.stage(repo, byKind.get(false));
         }
         var hash = index.commit(repo, new CommitRequest(message, false, false, false));
-        return "Committed " + hash;
+        return "Committed " + hash + (skipped.isEmpty() ? "" : "; not staged because they look like secrets: " + String.join(", ", skipped));
     }
 }

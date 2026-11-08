@@ -22,6 +22,7 @@ import com.github.krpkbhdn.ccmanager.ui.git.model.GitDialog
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitState
 import com.github.krpkbhdn.ccmanager.ui.git.model.createWorktree
 import com.github.krpkbhdn.ccmanager.ui.git.model.defaultWorktreePath
+import com.github.krpkbhdn.ccmanager.ui.git.model.ignoredFilesNote
 import com.github.krpkbhdn.ccmanager.ui.git.model.refilledPath
 import com.github.krpkbhdn.ccmanager.ui.git.model.removalNeedsForce
 import com.github.krpkbhdn.ccmanager.ui.git.model.removeWorktree
@@ -88,7 +89,10 @@ fun RemoveWorktreeDialog(git: GitState, dialog: GitDialog.RemoveWorktree, onDism
     val worktree = git.worktrees.firstOrNull { it.path() == dialog.worktree.path() } ?: dialog.worktree
     val needsForce = removalNeedsForce(worktree)
     val running = remember(worktree) { git.host.hasRunningWork(worktree.path()) }
+    val ignoredNote by produceState<String?>(null, worktree.path()) { value = git.guarded("Could not read ignored files") { worktrees.ignoredEntries(worktree.path()) }?.let(::ignoredFilesNote) }
     var discard by remember { mutableStateOf(false) }
+    val hasBranch = worktree.branch().isNotBlank()
+    var deleteBranch by remember(worktree.path()) { mutableStateOf(hasBranch && worktree.merged()) }
     val valid = fresh && (!needsForce || discard) && !git.busy
     ModalHost(onDismiss) {
         DialogBody("Remove worktree", Icons.Trash, colors.danger) {
@@ -96,11 +100,15 @@ fun RemoveWorktreeDialog(git: GitState, dialog: GitDialog.RemoveWorktree, onDism
             if (running) {
                 Label("Its running sessions will be terminated first.", color = colors.danger, style = Type.bodyMedium, maxLines = 2)
             }
+            ignoredNote?.let { Label(it, color = colors.danger, style = Type.bodyMedium, maxLines = REMOVE_MESSAGE_LINES) }
             if (needsForce) {
                 Label("This worktree has uncommitted changes. They will be lost.", color = colors.danger, style = Type.bodyMedium, maxLines = 2)
                 CheckboxRow("Discard the uncommitted changes", discard, { discard = it })
             }
-            DialogActions("Remove", valid, true, { onDismiss(); git.removeWorktree(worktree, needsForce) }, onDismiss)
+            if (hasBranch) {
+                CheckboxRow("Also delete branch", deleteBranch, { deleteBranch = it }, hint = if (worktree.merged()) "The branch is merged." else "Not merged into the main branch as far as git can tell (a squash merge looks like this): its commits may be lost.")
+            }
+            DialogActions("Remove", valid, true, { onDismiss(); git.removeWorktree(worktree, needsForce, deleteBranch) }, onDismiss)
         }
     }
 }

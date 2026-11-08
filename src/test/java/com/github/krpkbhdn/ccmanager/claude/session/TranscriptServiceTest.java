@@ -16,7 +16,7 @@ class TranscriptServiceTest {
     Path dir;
 
     private TranscriptService service(Path root) {
-        return new TranscriptService(JsonMapper.builder().build(), root);
+        return new TranscriptService(JsonMapper.builder().build(), root, new TranscriptProperties(300, 1 << 20, 64 * 1024, 512 * 1024));
     }
 
     private static String user(String text) {
@@ -73,6 +73,18 @@ class TranscriptServiceTest {
     }
 
     @Test
+    void cachedCustomTitleSurvivesAGeneratedOneInTheShortRefreshTail() throws Exception {
+        var file = dir.resolve("renamed.jsonl");
+        Files.writeString(file, "{\"type\":\"custom-title\",\"customTitle\":\"Mine\"}\n" + user("x") + "\n");
+        var service = service(dir);
+        assertThat(service.title(file.toString())).contains("Mine");
+
+        Files.writeString(file, user("y".repeat(1 << 19)) + "\n{\"type\":\"ai-title\",\"aiTitle\":\"Generated\"}\n" + user("z") + "\n");
+
+        assertThat(service.title(file.toString())).contains("Mine");
+    }
+
+    @Test
     void titleStaysWhenALaterGrowthOfTheFilePushesItOutOfTheTail() throws Exception {
         var file = dir.resolve("big.jsonl");
         Files.writeString(file, "{\"type\":\"ai-title\",\"aiTitle\":\"Kept\"}\n" + user("x") + "\n");
@@ -92,6 +104,22 @@ class TranscriptServiceTest {
 
         assertThat(service(projects).read(outside.toString())).isEmpty();
         assertThat(service(projects).read(projects.resolve("../secret.jsonl").toString())).isEmpty();
+    }
+
+    @Test
+    void windowAroundALineOffsetReturnsTheEntryIndexAndStaysInsideProjects() throws Exception {
+        var projects = Files.createDirectory(dir.resolve("projects"));
+        var file = projects.resolve("w.jsonl");
+        var first = user("a") + "\n";
+        Files.writeString(file, first + user("b") + "\n" + user("c") + "\n");
+
+        var window = service(projects).readWindow(file.toString(), first.length());
+
+        assertThat(window.entries()).extracting(TranscriptEntry::text).containsExactly("a", "b", "c");
+        assertThat(window.index()).isEqualTo(1);
+        var outside = dir.resolve("o.jsonl");
+        Files.writeString(outside, first);
+        assertThat(service(projects).readWindow(outside.toString(), 0).entries()).isEmpty();
     }
 
     @Test

@@ -2,6 +2,11 @@ package com.github.krpkbhdn.ccmanager.ui.git.changes
 
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.input.pointer.isShiftPressed
+import androidx.compose.ui.platform.LocalWindowInfo
+import com.github.krpkbhdn.ccmanager.ui.components.Glyph
+import com.github.krpkbhdn.ccmanager.ui.git.model.ReviewStatus
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +20,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -56,7 +62,12 @@ private val barHeight = 8.dp
 private val lineHeight = 20.dp
 private val hunkHeight = 30.dp
 private val pickBox = 13.dp
+private val reviewMarkWidth = 18.dp
+private val reviewMarkIcon = 12.dp
 private const val BAR_GAP = 2
+private const val SELECTED_ALPHA = 0.18f
+internal const val MAX_SHOWN_LINE_LENGTH = 2000
+private const val CUT_MARK = "…"
 
 /** The editable state of one hunk header: how many of its lines are ticked and what the buttons do. */
 internal class HunkControls(
@@ -69,6 +80,9 @@ internal class HunkControls(
 )
 
 internal class LinePick(val checked: Boolean, val onToggle: () -> Unit)
+
+/** The comment side of a line: whether it is selected, the status of a comment on it, and the gutter click (true when Shift is held). */
+internal class LineReview(val selected: Boolean, val status: ReviewStatus?, val onClick: (extend: Boolean) -> Unit)
 
 @Composable
 internal fun DiffFileHeader(file: GitDiff.FileDiff, context: DiffContext) {
@@ -133,7 +147,7 @@ private fun HunkButtons(controls: HunkControls) {
     val anyPicked = controls.selectedCount > 0
     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
         if (anyPicked) {
-            AppButton("$verb selected (${controls.selectedCount})", { controls.actions.onApplyLines(controls.hunk, controls.picked.toSet()); controls.picked.clear() }, variant = ButtonVariant.PRIMARY, compact = true, enabled = !controls.busy)
+            AppButton("$verb selected (${controls.selectedCount})", { controls.actions.onApplyLines(controls.hunk, controls.picked.toSet()) }, variant = ButtonVariant.PRIMARY, compact = true, enabled = !controls.busy)
         } else {
             AppButton("$verb hunk", { controls.actions.onApplyHunk(controls.hunk) }, compact = true, enabled = !controls.busy)
         }
@@ -141,11 +155,13 @@ private fun HunkButtons(controls: HunkControls) {
 }
 
 @Composable
-internal fun DiffLineRow(row: DiffRow, viewport: Dp, horizontal: ScrollState, pick: LinePick?, showPicks: Boolean) {
+internal fun DiffLineRow(row: DiffRow, viewport: Dp, horizontal: ScrollState, pick: LinePick?, showPicks: Boolean, review: LineReview? = null, showReview: Boolean = false) {
     val line = row.line
-    val background = when (line.kind) {
-        GitDiff.LineKind.ADDED -> colors.diffAdded
-        GitDiff.LineKind.REMOVED -> colors.diffRemoved
+    val windowInfo = LocalWindowInfo.current
+    val background = when {
+        review?.selected == true -> colors.accent.copy(alpha = SELECTED_ALPHA)
+        line.kind == GitDiff.LineKind.ADDED -> colors.diffAdded
+        line.kind == GitDiff.LineKind.REMOVED -> colors.diffRemoved
         else -> Color.Transparent
     }
     val stripe = when (line.kind) {
@@ -159,10 +175,13 @@ internal fun DiffLineRow(row: DiffRow, viewport: Dp, horizontal: ScrollState, pi
         Box(Modifier.width(stripeWidth).height(lineHeight).background(stripe))
         Row(Modifier.horizontalScroll(horizontal).widthIn(min = viewport).padding(start = stripeWidth), verticalAlignment = Alignment.CenterVertically) {
             if (showPicks) PickCell(pick)
-            Gutter(line.oldNumber)
-            Gutter(line.newNumber)
+            Row(if (review != null) Modifier.clickable { review.onClick(windowInfo.keyboardModifiers.isShiftPressed) } else Modifier, verticalAlignment = Alignment.CenterVertically) {
+                if (showReview) ReviewMark(review?.status)
+                Gutter(line.oldNumber)
+                Gutter(line.newNumber)
+            }
             Label(lineMarker(line.kind), Modifier.width(markerWidth), color = if (stripe == Color.Transparent) colors.textTertiary else stripe, style = Type.monoBody, align = TextAlign.Center)
-            BasicText(highlighted(line.text, row.highlight, strong), style = Type.monoBody.copy(color = textColor), maxLines = 1, softWrap = false)
+            BasicText(remember(line.text, row.highlight, strong) { highlighted(line.text, row.highlight, strong) }, style =Type.monoBody.copy(color = textColor), maxLines = 1, softWrap = false)
         }
     }
 }
@@ -174,11 +193,21 @@ private fun PickCell(pick: LinePick?) {
     }
 }
 
-private fun highlighted(text: String, range: IntRange?, color: Color): AnnotatedString =
-    buildAnnotatedString {
-        append(text)
-        range?.let { addStyle(SpanStyle(background = color), it.first, it.last + 1) }
+@Composable
+private fun ReviewMark(status: ReviewStatus?) {
+    Box(Modifier.width(reviewMarkWidth).height(lineHeight), contentAlignment = Alignment.Center) {
+        if (status != null) Glyph(Icons.Message, if (status == ReviewStatus.STALE) colors.warning else colors.accent, size = reviewMarkIcon)
     }
+}
+
+/** Longer lines are cut for display only (one minified line would be laid out in every row); the diff data stays whole. */
+internal fun highlighted(text: String, range: IntRange?, color: Color): AnnotatedString {
+    val shown = if (text.length > MAX_SHOWN_LINE_LENGTH) text.take(MAX_SHOWN_LINE_LENGTH) + CUT_MARK else text
+    return buildAnnotatedString {
+        append(shown)
+        range?.let { addStyle(SpanStyle(background = color), it.first.coerceAtMost(shown.length), (it.last + 1).coerceAtMost(shown.length)) }
+    }
+}
 
 @Composable
 private fun Gutter(number: Int?) {

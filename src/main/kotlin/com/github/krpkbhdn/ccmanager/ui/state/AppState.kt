@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.ui.state
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -10,6 +11,7 @@ import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgent
 import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.notification.AppNotification
+import com.github.krpkbhdn.ccmanager.notification.NotificationKind
 import com.github.krpkbhdn.ccmanager.project.Project
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartupState
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantState
@@ -19,14 +21,18 @@ import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.McpState
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitHost
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitState
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
+import com.github.krpkbhdn.ccmanager.ui.history.SessionSearchState
+import com.github.krpkbhdn.ccmanager.ui.sessions.SessionsTab
 import com.github.krpkbhdn.ccmanager.ui.prompts.PromptsState
 import com.github.krpkbhdn.ccmanager.claude.proposal.Proposal
 import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalState
 import com.github.krpkbhdn.ccmanager.ui.proposal.proposalHeadline
 import com.github.krpkbhdn.ccmanager.ui.queue.QueueState
+import com.github.krpkbhdn.ccmanager.ui.queue.QueuedPrompt
 import com.github.krpkbhdn.ccmanager.ui.run.RunState
 import com.github.krpkbhdn.ccmanager.ui.settings.SettingsState
 import com.github.krpkbhdn.ccmanager.ui.teams.TeamsState
+import com.github.krpkbhdn.ccmanager.ui.usage.UsageState
 import com.github.krpkbhdn.ccmanager.ui.voice.VoiceSettingsState
 import com.github.krpkbhdn.ccmanager.ui.voice.voiceSettingsOf
 import java.nio.file.Path
@@ -35,7 +41,9 @@ import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.slf4j.LoggerFactory
 
+private val log = LoggerFactory.getLogger(AppState::class.java)
 private const val TICK_MILLIS = 1_000L
 private const val STALE_REFRESH_TICKS = 30
 private const val UNOPENED_GIT_REFRESH_TICKS = 60
@@ -61,6 +69,10 @@ class AppState(
         private set
     var route by mutableStateOf<Route>(Route.Overview)
         private set
+    var sessionsTab by mutableStateOf(SessionsTab.ACTIVE)
+        private set
+    var searchFocusRequests by mutableIntStateOf(0)
+        private set
     var windowActive by mutableStateOf(true)
     var confirm by mutableStateOf<ConfirmRequest?>(null)
     var notificationsOpen by mutableStateOf(false)
@@ -74,7 +86,7 @@ class AppState(
     val views = mutableStateMapOf<Long, ProjectView>()
     val backgroundAgents = mutableStateMapOf<Long, List<BackgroundAgent>>()
 
-    val prefs = UiPreferences(settingsStore, scope, backend.sound) { notifications.reportError(it) }
+    val prefs = UiPreferences(settingsStore, scope, backend.sound, backend.usageAlerts, backend.usageDefaults) { notifications.reportError(it) }
     val environment = ClaudeEnvironment(backend, scope) { notifications.reportError(it) }
     val projects: ProjectsState = ProjectsState(
         backend, scope,
@@ -84,18 +96,19 @@ class AppState(
         requestConfirm = { confirm = it },
         showProject = { navigate(Route.Project(it)) },
         onRemoved = { if (route == Route.Project(it)) route = Route.Overview },
-        onLoaded = { forgetRemovedProjects(it); gits.loadNew(it) },
+        onLoaded = { forgetRemovedProjects(it); gits.loadNew(it); prefs.retainFoldedGroups(it) },
         reportError = { title, message -> notifications.reportError(title, message) },
         reportActionError = { notifications.reportError(it) },
     )
     val notifications: NotificationsState = NotificationsState({ projects.nameOf(it) }) { windowActive }
     val sessions = SessionsState(
         backend, scope, { live }, { environment.sessionUsage[it] }, { teams.defaultTeamOf(it) },
-        onOpened = { projectId, id -> views[projectId] = viewOf(projectId).openSession(id) },
+        onOpened = ::showSessionTab,
         onClosed = { projectId, id -> views[projectId] = viewOf(projectId).closeSession(id) },
         showProject = { navigate(routeOf(it)) },
         requestConfirm = { confirm = it },
         reportError = notifications::reportError,
+        projectPath = { projects.find(it)?.path },
     )
     val assistant = AssistantState(
         scope, backend.terminal, { live }, backend.dataDir.resolve("assistant"),
@@ -108,6 +121,7 @@ class AppState(
         startInBackground = assistant::startInBackground, start = assistant::start,
     )
     val queue = QueueState(backend.sessions, backend.terminal, scope, sessions::isAttached, sessions::sendQueued)
+    val usage = UsageState(backend.usageHistory, backend.sessionUsage, scope, visible = { route == Route.Usage }, reportError = notifications::reportError)
     val runs = RunState(
         backend.runConfigurations, backend.runs, backend.terminal, scope,
         projectPath = { projects.find(it)?.path },
@@ -126,8 +140,19 @@ class AppState(
     )
     val proposals = ProposalState(backend.proposals, scope, notifications::reportError, focusTerminal = { terminal.focus(it) }, onArrived = ::announceAssistantProposal)
     val answers = ProposalAnswers(proposals, assistant, { route }, ::viewOf, { live }, notifications::toast, ::openSession)
+    val osNotifications = OsNotifications(
+        scope, { settings }, { windowActive },
+        isWaiting = { live.find(it)?.status == AgentStatus.NEEDS_ACTION },
+        proposalOf = { proposals.of(it).firstOrNull() },
+        projectName = { projects.nameOf(it) },
+        show = notifications::popup,
+    )
+    var flashTaskbar: (NotificationKind) -> Unit = {}
+    var trayAvailable by mutableStateOf(false)
+    val waitingCount: Int get() = live.sessions.count { it.status == AgentStatus.NEEDS_ACTION }
     val teams = TeamsState(backend.teams, scope, { confirm = it }, notifications::reportError)
     val prompts = PromptsState(backend.promptTemplates, scope, { confirm = it }, notifications::reportError, listOf(backend.projects::subscribe, backend.teams::subscribe))
+    val sessionSearch = SessionSearchState(backend.sessionSearch, backend.transcripts, scope, { confirm = it }, notifications::reportError)
     val extensions = ExtensionStates(backend, scope, { confirm = it }, notifications, environment)
     val author = AuthorProfileState(
         backend.author, scope,
@@ -144,16 +169,21 @@ class AppState(
     var exitApp: () -> Unit = {}
     val agents = AgentsState(backend.transcripts, scope, { live }, ::showSessionTerminal)
     private val unsubscribers = mutableListOf<Runnable>()
-    val worktrees = WorktreeActions(projects, sessions, { runs.stopRunning(it) }, { live.of(it).isNotEmpty() }, ::navigate)
+    private val refreshingAgents = mutableSetOf<Long>()
+    val worktrees: WorktreeActions = WorktreeActions(projects, sessions, shells, runs, backend.git.taskWorktrees, backend.terminal) { gits }
     val gits = ProjectGits(
         backend.git, scope,
         GitHost(
             { settings.git }, { change -> prefs.update { it.copy(git = change(it.git)) } }, notifications::toast,
-            worktrees::open, worktrees::forget, worktrees::register, worktrees::stopWork, worktrees::hasRunningWork, environment::openDirectory,
+            worktrees::showWorktree, worktrees::forget, worktrees::stopWork, worktrees::hasRunningWork, worktrees::workStopping, environment::openDirectory,
+            backend.runConfigurations::deleteByDirectory, { dir -> backend.runConfigurations.listByDirectory(dir).map { it.name() } },
+            worktrees::forgetStored,
         ),
         projects::find,
+        backend.git.taskWorktrees::forProject,
+        { sessions.sessionDirectories },
     )
-    val tasks = TaskDialogState(sessions, teams, queue, gits::branchOf)
+    val tasks = TaskDialogState(sessions, teams, queue, scope, backend.git.taskWorktrees, notifications::reportError, gits::branchOf, { projectId, sessionId -> gits.branchOf(projectId, sessionId) }, gits::taskRowsChanged)
     private val projectReload = Refresher(scope) { guarded { projects.load() } }
     private val sessionReload = Refresher(scope) { guarded { loadSessions() } }
 
@@ -164,13 +194,21 @@ class AppState(
     fun start() {
         unsubscribers += backend.projects.subscribe { projectReload.request() }
         unsubscribers += backend.sessions.subscribe { sessionReload.request() }
-        unsubscribers += backend.notifications.subscribe { notification -> scope.launch { notifications.receive(notification) } }
+        unsubscribers += backend.notifications.subscribe { notification ->
+            scope.launch {
+                notifications.receive(notification)
+                osNotifications.offer(notification)
+                flashTaskbar(notification.kind)
+            }
+        }
         backend.appControl?.let { unsubscribers += it.connect(AppControlAdapter(this, scope, backend.appControlProperties.uiTimeout())) }
         teams.start()
         prompts.start()
+        sessionSearch.start()
         queue.start()
         author.offerAtStart()
         runs.start()
+        usage.start()
         shells.detect()
         proposals.start()
         update.start()
@@ -195,9 +233,11 @@ class AppState(
         extensions.dispose()
         teams.dispose()
         prompts.dispose()
+        sessionSearch.dispose()
         queue.dispose()
         voice?.let { Thread(it::close, "voice-close").apply { isDaemon = false }.start() }
         runs.dispose()
+        usage.dispose()
         proposals.dispose()
         unsubscribers.forEach { it.run() }
         unsubscribers.clear()
@@ -217,10 +257,24 @@ class AppState(
         modelPickerOpen = false
     }
 
+    fun openSessions(tab: SessionsTab) {
+        sessionsTab = tab
+        if (tab == SessionsTab.HISTORY) searchFocusRequests++
+        navigate(Route.Sessions)
+    }
+
+    fun selectSessionsTab(tab: SessionsTab) {
+        sessionsTab = tab
+    }
+
     fun openSession(ccmSessionId: String) {
         val session = live.find(ccmSessionId) ?: return
-        views[session.projectId] = viewOf(session.projectId).openSession(ccmSessionId)
+        showSessionTab(session.projectId, ccmSessionId)
         navigate(routeOf(session.projectId))
+    }
+
+    private fun showSessionTab(projectId: Long, ccmSessionId: String) {
+        views[projectId] = viewOf(projectId).openSession(ccmSessionId)
     }
 
     private fun routeOf(projectId: Long): Route =
@@ -238,15 +292,23 @@ class AppState(
 
     fun openNotification(target: AppNotification) {
         val session = target.ccmSessionId?.let { live.find(it) }
-        if (session != null) openSession(session.ccmSessionId) else navigate(routeOf(target.projectId))
+        when {
+            target.kind == NotificationKind.USAGE_ALERT -> navigate(Route.Usage)
+            session != null -> openSession(session.ccmSessionId)
+            else -> navigate(routeOf(target.projectId))
+        }
     }
 
     fun openToast(toast: ToastItem) {
         notifications.dismissToast(toast.id)
         val session = toast.ccmSessionId?.let { live.find(it) }
         when {
+            session != null && toast.kind == NotificationKind.NEEDS_ACTION -> answers.answer(session.ccmSessionId)
+            toast.kind == NotificationKind.USAGE_ALERT -> navigate(Route.Usage)
             session != null -> openSession(session.ccmSessionId)
             toast.projectId != null -> navigate(routeOf(toast.projectId))
+            toast.summary && toast.kind == NotificationKind.NEEDS_ACTION -> answers.answerNextWaiting()
+            toast.summary -> navigate(Route.Sessions)
         }
     }
 
@@ -263,7 +325,14 @@ class AppState(
 
     fun refreshBackgroundAgents(projectId: Long) {
         val path: Path = projects.find(projectId)?.path ?: return
-        scope.launch { guarded { backgroundAgents[projectId] = io { backend.backgroundAgents.list(path) } } }
+        if (!refreshingAgents.add(projectId)) return
+        scope.launch {
+            try {
+                guarded { backgroundAgents[projectId] = io { backend.backgroundAgents.list(path) } }
+            } finally {
+                refreshingAgents.remove(projectId)
+            }
+        }
     }
 
     val terminal: TerminalPort get() = backend.terminal
@@ -274,6 +343,7 @@ class AppState(
         try {
             io { backend.hooks.recent(ccmSessionId, ACTIVITY_LIMIT) }
         } catch (e: RuntimeException) {
+            log.warn("Could not read the activity of session {}: {}", ccmSessionId, e.javaClass.simpleName)
             emptyList()
         }
 
@@ -303,14 +373,18 @@ class AppState(
         (listOf(project.id) + projects.membersOf(project.id).map { it.id }).maxOf { backend.sessions.projectStatus(it) }
 
     private suspend fun loadSessions() {
+        val registered = projects.all
         val (sessions, statuses) = io {
-            backend.sessions.sessions() to projects.all.associate { it.id to statusOf(it) }
+            backend.sessions.sessions() to registered.associate { it.id to statusOf(it) }
         }
         val previous = live.sessions.associate { it.ccmSessionId to it.status }
         live = LiveSessions(sessions, statuses)
         agents.prune(sessions.map { it.ccmSessionId })
         notifications.dismissResolvedAttention(previous, sessions)
         projectsBecameIdle(previous, sessions).forEach { gits.refresh(it) }
+        if (gits.anyReviewTurnEnded(previous, sessions) { id -> queue.of(id).map(QueuedPrompt::id) }) {
+            notifications.toast(NotificationKind.INFO, "Agent finished", "Re-check review comments")
+        }
     }
 
     private suspend fun guarded(onError: (String) -> Unit = notifications::reportError, block: suspend () -> Unit) = runGuarded(onError, block)

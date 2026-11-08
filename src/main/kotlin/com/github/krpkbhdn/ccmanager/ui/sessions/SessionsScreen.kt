@@ -2,7 +2,6 @@ package com.github.krpkbhdn.ccmanager.ui.sessions
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +18,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
+import com.github.krpkbhdn.ccmanager.history.SessionSearchService.SearchHit
+import com.github.krpkbhdn.ccmanager.project.Project
+import com.github.krpkbhdn.ccmanager.ui.history.SessionSearchScreen
 import com.github.krpkbhdn.ccmanager.ui.components.CardGrid
 import com.github.krpkbhdn.ccmanager.ui.components.EmptyState
 import com.github.krpkbhdn.ccmanager.ui.components.Segment
@@ -29,9 +31,22 @@ import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.statusLabel
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 
-/** Every session of every project as a card in start order, flat or grouped by project, filtered by status and project. */
+/** Sessions screen: the history search on its tab, otherwise every session of every project as a card in start order, flat or grouped by project, filtered by status and project. */
 @Composable
-fun SessionsScreen(state: AppState, modifier: Modifier = Modifier) {
+fun SessionsScreen(state: AppState, onResume: (Project, SearchHit) -> Unit, modifier: Modifier = Modifier) {
+    when (state.sessionsTab) {
+        SessionsTab.ACTIVE -> ActiveSessions(state, modifier)
+        SessionsTab.HISTORY -> SessionSearchScreen(state.sessionSearch, state.projects.projects, onResume, { SessionsTabs(SessionsTab.HISTORY, state::selectSessionsTab) }, state.searchFocusRequests, modifier)
+    }
+}
+
+@Composable
+fun SessionsTabs(selected: SessionsTab, onSelect: (SessionsTab) -> Unit) {
+    SegmentedControl(SessionsTab.entries.map { Segment(it, it.label) }, selected, onSelect)
+}
+
+@Composable
+private fun ActiveSessions(state: AppState, modifier: Modifier) {
     var selected by remember { mutableStateOf(SessionFilter()) }
     val filter = selected.withMembersFrom(state.projects.all)
     var collapsed by remember { mutableStateOf(emptySet<Long>()) }
@@ -46,6 +61,7 @@ fun SessionsScreen(state: AppState, modifier: Modifier = Modifier) {
             now = { state.now },
             stale = { isStale(session, state.now, state.workingStaleAfter) },
             proposalHeadline = state.proposals.headlineOf(session.ccmSessionId),
+            worktreeBranch = state.gits.worktreeBadgeOf(session.projectId, session.ccmSessionId),
             onOpen = { state.openSession(session.ccmSessionId) },
             onAnswer = { state.answers.answer(session.ccmSessionId) },
             modifier = cardModifier,
@@ -55,7 +71,10 @@ fun SessionsScreen(state: AppState, modifier: Modifier = Modifier) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.weight(1f)) { SectionTitle("All sessions", sessions.size) }
+                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.lg)) {
+                        SectionTitle("Sessions", sessions.size)
+                        SessionsTabs(SessionsTab.ACTIVE, state::selectSessionsTab)
+                    }
                     GroupToggle(grouped, state.prefs::setGroupSessionsByProject)
                 }
                 FilterBar(state, filter) { selected = it }

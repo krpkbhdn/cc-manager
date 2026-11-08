@@ -36,6 +36,7 @@ class PromptsState(
     var dialog by mutableStateOf<PromptDialogState?>(null)
         private set
 
+    private var saving = false
     private val unsubscribers = mutableListOf<Runnable?>()
     private val reload = Refresher(scope) { runGuarded(reportError) { templates = io { service.list() } } }
 
@@ -50,8 +51,6 @@ class PromptsState(
         unsubscribers.clear()
     }
 
-    fun find(id: Long): PromptTemplate? = templates.firstOrNull { it.id == id }
-
     /** Global templates plus the ones bound to [projectId]. */
     fun forProject(projectId: Long): List<PromptTemplate> = templates.filter { it.projectId == null || it.projectId == projectId }
 
@@ -64,13 +63,19 @@ class PromptsState(
     }
 
     fun save(form: PromptDialogState, onError: (String) -> Unit) {
+        if (saving) return
+        saving = true
         scope.launch {
-            runGuarded(onError) {
+            try {
+                runGuarded(onError) {
                 val name = form.name.text.toString()
                 val description = form.description.text.toString()
                 val text = form.text.text.toString()
                 io { form.existing?.let { service.update(it.id, name, description, text, form.projectId, form.teamId) } ?: service.create(name, description, text, form.projectId, form.teamId) }
                 dialog = null
+                }
+            } finally {
+                saving = false
             }
         }
     }

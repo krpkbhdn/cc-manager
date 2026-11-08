@@ -47,6 +47,40 @@ class GitWorktreeServiceTest {
     }
 
     @Test
+    void ignoredEntriesListsIgnoredFilesAndFoldersButNotTrackedOrUntrackedOnes() throws Exception {
+        Files.writeString(sandbox.repo.resolve(".gitignore"), ".env\nbuild/\n");
+        sandbox.commitAll("ignore");
+        service.add(sandbox.repo, "feature", "main", target);
+        Files.writeString(target.resolve(".env"), "SECRET=1");
+        Files.createDirectories(target.resolve("build"));
+        Files.writeString(target.resolve("build/out.txt"), "x");
+        Files.writeString(target.resolve("new.txt"), "x");
+
+        assertThat(service.ignoredEntries(target)).containsExactlyInAnyOrder(".env", "build/");
+    }
+
+    @Test
+    void ignoredEntriesKeepsNamesWithSpacesUnquoted() throws Exception {
+        Files.writeString(sandbox.repo.resolve(".gitignore"), "*.env\n");
+        sandbox.commitAll("ignore");
+        service.add(sandbox.repo, "feature", "main", target);
+        Files.writeString(target.resolve("my secret.env"), "SECRET=1");
+
+        assertThat(service.ignoredEntries(target)).containsExactly("my secret.env");
+    }
+
+    @Test
+    void ignoredEntriesFailsInsteadOfHidingTheWarningWhenGitFails() {
+        assertThatThrownBy(() -> service.ignoredEntries(root))
+                .isInstanceOfSatisfying(GitException.class, e -> assertThat(e.kind()).isEqualTo(Kind.NOT_A_REPOSITORY));
+    }
+
+    @Test
+    void removeRejectsARelativeFolder() {
+        assertThatThrownBy(() -> service.remove(sandbox.repo, Path.of("--force"), true)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void branchWithOwnCommitIsNotMergedAndUntrackedFileMakesItDirty() throws Exception {
         service.add(sandbox.repo, "feature", "main", target);
         Files.writeString(target.resolve("b.txt"), "b");

@@ -17,8 +17,7 @@ class RecentFolders(private val file: Path, private val limit: Int = DEFAULT_LIM
     fun add(path: Path) {
         val updated = (listOf(path) + load().filter { it != path }).take(limit)
         try {
-            Files.createDirectories(file.parent)
-            Files.write(file, updated.map(Path::toString))
+            writeAtomically(file, updated.joinToString("\n", postfix = "\n", transform = Path::toString))
         } catch (_: IOException) {
             // Recents are a convenience; failing to save must never block choosing a folder.
         }

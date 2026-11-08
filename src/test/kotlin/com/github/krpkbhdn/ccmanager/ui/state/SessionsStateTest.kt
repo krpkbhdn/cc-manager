@@ -4,6 +4,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchMode
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
+import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
+import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import com.github.krpkbhdn.ccmanager.team.Team
 import com.github.krpkbhdn.ccmanager.ui.PreviewWorld
 import com.github.krpkbhdn.ccmanager.ui.await
@@ -97,6 +99,93 @@ class SessionsStateTest {
         await { "ccm-second" in opened }
 
         assertThat(state.sessionTeams["ccm-second"]).isSameAs(chosen)
+    }
+
+    @Test
+    fun `launchIn starts the session in the directory and records it for the session`() {
+        val dir = java.nio.file.Path.of("repo-task-x")
+        doReturn(session("ccm-in")).`when`(backend.launcher).launchIn(1, dir, LaunchMode.NEW, null)
+        val state = sessionsState(null)
+
+        state.launchIn(1, dir, LaunchMode.NEW)
+        await { "ccm-in" in opened }
+
+        assertThat(state.sessionDirectories["ccm-in"]).isEqualTo(dir)
+        state.close(1, "ccm-in")
+        assertThat(state.sessionDirectories).isEmpty()
+    }
+
+    @Test
+    fun `launchTaskIn reports a failed start through onNotStarted and records nothing`() {
+        val dir = java.nio.file.Path.of("repo-task-x")
+        org.mockito.Mockito.doThrow(IllegalStateException("boom")).`when`(backend.launcher).launchTaskIn(1, dir, team, "task")
+        val failed = CopyOnWriteArrayList<String>()
+        val state = SessionsState(
+            backend, scope, { error("not used") }, { null }, { null },
+            onOpened = { _, id -> opened += id }, onClosed = { _, _ -> }, showProject = {}, requestConfirm = {}, reportError = { failed += it },
+        )
+        val notStarted = CopyOnWriteArrayList<String>()
+
+        state.launchTaskIn(1, dir, team, "task", onNotStarted = { notStarted += it }) { error("started") }
+        await { notStarted.isNotEmpty() }
+
+        assertThat(state.sessionDirectories).isEmpty()
+        assertThat(notStarted).containsExactly("boom")
+        assertThat(failed).isEmpty()
+    }
+
+    @Test
+    fun `resume records the folder the launcher started in, not the project path`() {
+        val worktree = java.nio.file.Path.of("repo-task-x")
+        val claudeSessionId = "123e4567-e89b-12d3-a456-426614174000"
+        doReturn(LaunchedSession("ccm-resumed", 1, "claude", mock(PtyProcess::class.java), worktree)).`when`(backend.launcher).resume(1, claudeSessionId, worktree, null)
+        val state = SessionsState(
+            backend, scope, { LiveSessions() }, { null }, { null },
+            onOpened = { _, id -> opened += id }, onClosed = { _, _ -> }, showProject = {}, requestConfirm = {}, reportError = { error(it) },
+            projectPath = { java.nio.file.Path.of("repo") },
+        )
+
+        state.resume(1, claudeSessionId, worktree)
+        await { "ccm-resumed" in opened }
+
+        assertThat(state.sessionDirectories["ccm-resumed"]).isEqualTo(worktree)
+    }
+
+    @Test
+    fun `a session that ended by itself does not count as live work in its folder`() {
+        val dir = java.nio.file.Path.of("repo-task-x")
+        doReturn(session("ccm-in")).`when`(backend.launcher).launchIn(1, dir, LaunchMode.NEW, null)
+        var status = AgentStatus.IDLE
+        val snapshot = mock(SessionSnapshot::class.java)
+        `when`(snapshot.ccmSessionId).thenReturn("ccm-in")
+        `when`(snapshot.projectId).thenReturn(1L)
+        `when`(snapshot.status).thenAnswer { status }
+        val state = SessionsState(
+            backend, scope, { LiveSessions(listOf(snapshot)) }, { null }, { null },
+            onOpened = { _, id -> opened += id }, onClosed = { _, _ -> }, showProject = {}, requestConfirm = {}, reportError = { error(it) },
+        )
+        state.launchIn(1, dir, LaunchMode.NEW)
+        await { "ccm-in" in opened }
+
+        assertThat(state.hasLiveIn(dir)).isTrue()
+        status = AgentStatus.OFFLINE
+        assertThat(state.hasLiveIn(dir)).isFalse()
+        assertThat(state.hasLiveIn(java.nio.file.Path.of("elsewhere"))).isFalse()
+    }
+
+    @Test
+    fun `a launch without a directory records the project folder when the project path is known`() {
+        doReturn(session("ccm-plain")).`when`(backend.launcher).launch(1, LaunchMode.NEW)
+        val state = SessionsState(
+            backend, scope, { error("not used") }, { null }, { null },
+            onOpened = { _, id -> opened += id }, onClosed = { _, _ -> }, showProject = {}, requestConfirm = {}, reportError = { error(it) },
+            projectPath = { java.nio.file.Path.of("project") },
+        )
+
+        state.launch(1, LaunchMode.NEW)
+        await { "ccm-plain" in opened }
+
+        assertThat(state.sessionDirectories["ccm-plain"]).isEqualTo(java.nio.file.Path.of("project"))
     }
 
     @Test

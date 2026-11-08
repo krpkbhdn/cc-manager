@@ -253,6 +253,30 @@ class StatusReducerTest {
     }
 
     @Test
+    void silentAgentWaitingForPermissionKeepsTheSessionRedEvenWhenStale() {
+        apply("UserPromptSubmit", "{}");
+        start("a");
+        apply("PermissionRequest", "{\"agent_id\":\"a\",\"tool_name\":\"Bash\"}");
+
+        var later = state.toSnapshot(Instant.now().plus(java.time.Duration.ofHours(1)), java.time.Duration.ofMinutes(10));
+
+        assertThat(later.subagents().get(0).stale()).isTrue();
+        assertThat(later.status()).isEqualTo(AgentStatus.NEEDS_ACTION);
+    }
+
+    @Test
+    void pendingBackgroundIdsOverTheCapKeepTheNewestOnes() {
+        apply("UserPromptSubmit", "{}");
+        for (var i = 0; i < 60; i++) {
+            apply("PostToolUse", ASYNC.formatted("bg" + i));
+        }
+
+        start("bg59");
+
+        assertThat(agent("bg59").background()).isTrue();
+    }
+
+    @Test
     void agentsAreBoundedEvictingFinishedBeforeRunning() {
         apply("UserPromptSubmit", "{}");
         start("keep");

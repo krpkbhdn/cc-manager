@@ -17,6 +17,7 @@ import java.awt.event.KeyEvent.VK_COMMA
 import java.awt.event.KeyEvent.VK_D
 import java.awt.event.KeyEvent.VK_E
 import java.awt.event.KeyEvent.VK_ESCAPE
+import java.awt.event.KeyEvent.VK_F
 import java.awt.event.KeyEvent.VK_F1
 import java.awt.event.KeyEvent.VK_F12
 import java.awt.event.KeyEvent.VK_G
@@ -48,7 +49,8 @@ enum class AppShortcut(val label: String, private val windows: List<KeyChord>, p
     PALETTE("Command palette", listOf(ctrlShift(VK_P), ctrl(VK_K)), listOf(cmd(VK_K), cmdShift(VK_P))),
     ADD_PROJECT("Add project", listOf(ctrlShift(VK_O), ctrl(VK_N)), listOf(cmd(VK_O), cmd(VK_N))),
     NEW_SESSION("New Claude session", listOf(ctrlShift(VK_T)), listOf(cmd(VK_T))),
-    ALL_SESSIONS("All sessions", listOf(ctrlShift(VK_S)), listOf(cmdShift(VK_S))),
+    ALL_SESSIONS("Sessions", listOf(ctrlShift(VK_S)), listOf(cmdShift(VK_S))),
+    SEARCH_SESSIONS("Search sessions", listOf(ctrlShift(VK_F)), listOf(cmdShift(VK_F))),
     ASSISTANT("Assistant", listOf(ctrlShift(VK_I)), listOf(cmdShift(VK_I))),
     QUICK_REQUEST("Ask assistant", listOf(ctrlShift(VK_E)), listOf(cmdShift(VK_E))),
     NEXT_WAITING("Answer next waiting session", listOf(ctrlShift(VK_N)), listOf(cmdShift(VK_N))),

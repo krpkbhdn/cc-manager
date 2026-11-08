@@ -19,10 +19,10 @@ public final class ActivityFormatter {
     private static final Map<String, Function<HookEvent, String>> TOOL_ARGUMENTS = Map.ofEntries(
             Map.entry("Bash", event -> toolInput(event, "command")),
             Map.entry("PowerShell", event -> toolInput(event, "command")),
-            Map.entry("Read", event -> fileName(toolInput(event, "file_path"))),
-            Map.entry("Edit", event -> fileName(toolInput(event, "file_path"))),
-            Map.entry("MultiEdit", event -> fileName(toolInput(event, "file_path"))),
-            Map.entry("Write", event -> fileName(toolInput(event, "file_path"))),
+            Map.entry("Read", ActivityFormatter::filePathName),
+            Map.entry("Edit", ActivityFormatter::filePathName),
+            Map.entry("MultiEdit", ActivityFormatter::filePathName),
+            Map.entry("Write", ActivityFormatter::filePathName),
             Map.entry("NotebookEdit", event -> fileName(toolInput(event, "notebook_path"))),
             Map.entry("Grep", event -> toolInput(event, "pattern")),
             Map.entry("Glob", event -> toolInput(event, "pattern")),
@@ -61,8 +61,19 @@ public final class ActivityFormatter {
     }
 
     public static String truncate(String value, int limit) {
-        var singleLine = value.replaceAll("\\s+", " ").strip();
-        return singleLine.length() <= limit ? singleLine : singleLine.substring(0, limit) + ELLIPSIS;
+        return cut(value.replaceAll("\\s+", " ").strip(), limit);
+    }
+
+    /** Text up to [limit] chars plus an ellipsis, never splitting a surrogate pair. */
+    public static String cut(String text, int limit) {
+        if (text.length() <= limit) {
+            return text;
+        }
+        if (limit <= 0) {
+            return ELLIPSIS;
+        }
+        var end = Character.isHighSurrogate(text.charAt(limit - 1)) ? limit - 1 : limit;
+        return text.substring(0, end) + ELLIPSIS;
     }
 
     /** The tool a PreToolUse starts, as "Bash: ./gradlew test"; file-writing tools included. */
@@ -97,6 +108,10 @@ public final class ActivityFormatter {
 
     private static String toolInput(HookEvent event, String field) {
         return event.payload().path("tool_input").path(field).asString("");
+    }
+
+    private static String filePathName(HookEvent event) {
+        return fileName(toolInput(event, "file_path"));
     }
 
     private static String fileName(String path) {

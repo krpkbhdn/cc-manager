@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.app.mcp;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -64,6 +65,12 @@ class AssistantMcpEndpointTest {
         endpoint = new AssistantMcpEndpoint(List.of(tool, destructive), mapper, proposals, registry);
     }
 
+    @Test
+    void duplicateToolNamesAreRefused() {
+        assertThatThrownBy(() -> new AssistantMcpEndpoint(List.of(tool, tool), mapper, proposals, registry))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("list_projects");
+    }
+
     private String startAssistantSession() {
         var id = registry.register(ClaudeLauncher.ASSISTANT_PROJECT_ID);
         registry.on(new HookEvent(id, HookEventType.PRE_TOOL_USE, "PreToolUse", mapper.readTree("{}"), Instant.now()));
@@ -81,7 +88,7 @@ class AssistantMcpEndpointTest {
     private List<PermissionProposal> awaitPending(int count) throws Exception {
         var deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(WAIT_SECONDS);
         while (proposals.pending().size() < count && System.nanoTime() < deadline) {
-            TimeUnit.MILLISECONDS.sleep(10);
+            TimeUnit.MILLISECONDS.sleep(1);
         }
         assertThat(proposals.pending()).hasSize(count);
         return proposals.pending().stream().map(PermissionProposal.class::cast).toList();

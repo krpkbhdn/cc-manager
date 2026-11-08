@@ -37,10 +37,10 @@ class AuthorSessionPromptTest {
 
     @Test
     void stagesEveryProfileFile() {
-        prompt.prepare(Set.of(AuthorComponent.USER_SETUP), project, List.of());
+        var handoff = prompt.prepare(Set.of(AuthorComponent.USER_SETUP), project, List.of());
 
-        assertThat(prompt.profileDirectory().resolve("user/skills/jscpd/SKILL.md")).isRegularFile();
-        assertThat(prompt.profileDirectory().resolve("project/jscpd.json")).isRegularFile();
+        assertThat(handoff.profileDirectory().resolve("user/skills/jscpd/SKILL.md")).isRegularFile();
+        assertThat(handoff.profileDirectory().resolve("project/jscpd.json")).isRegularFile();
     }
 
     @Test
@@ -48,9 +48,9 @@ class AuthorSessionPromptTest {
         var handoff = prompt.prepare(Set.of(AuthorComponent.USER_SETUP), project, List.of());
 
         assertThat(handoff.firstMessage()).startsWith("Read ").endsWith(" and carry out its instructions.")
-                .contains(prompt.profileDirectory().resolve("session-prompt-").toString())
+                .contains(handoff.profileDirectory().resolve("session-prompt.md").toString())
                 .doesNotContainPattern("[&|<>^%]");
-        assertThat(handoff.profileDirectory()).isEqualTo(prompt.profileDirectory());
+        assertThat(handoff.profileDirectory()).isEqualTo(temp.resolve("data").resolve("author-profile"));
     }
 
     @Test
@@ -89,12 +89,14 @@ class AuthorSessionPromptTest {
     }
 
     @Test
-    void everyPrepareWritesItsOwnPromptFile() throws IOException {
+    void everyPrepareReusesTheSamePromptFile() throws IOException {
         var first = prompt.prepare(Set.of(AuthorComponent.USER_SETUP), project, List.of());
         var second = prompt.prepare(Set.of(AuthorComponent.PROJECT_SETUP), project, List.of());
 
-        assertThat(first.firstMessage()).isNotEqualTo(second.firstMessage());
-        assertThat(promptText(first)).doesNotContain("## Project setup");
-        assertThat(promptText(second)).contains("## Project setup");
+        assertThat(first.firstMessage()).isEqualTo(second.firstMessage());
+        assertThat(promptText(second)).contains("## Project setup").doesNotContain("## User setup");
+        try (var files = Files.list(second.profileDirectory())) {
+            assertThat(files.filter(file -> file.getFileName().toString().startsWith("session-prompt")).count()).isEqualTo(1);
+        }
     }
 }

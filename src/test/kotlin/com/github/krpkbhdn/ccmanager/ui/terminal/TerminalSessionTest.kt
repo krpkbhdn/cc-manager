@@ -4,12 +4,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import com.jediterm.terminal.emulator.mouse.MouseFormat
 import com.jediterm.terminal.emulator.mouse.MouseMode
+import com.jediterm.core.util.TermSize
+import com.jediterm.terminal.TtyConnector
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions
 import org.junit.jupiter.api.Test
 
 private const val ESC = "\u001b"
+
+private const val AWAIT_SECONDS = 10L
 
 class TerminalSessionTest {
     private val connector = ScriptedConnector()
@@ -168,12 +174,23 @@ class TerminalSessionTest {
 
     @Test
     fun resizeReflowsTheBufferAndTellsTheProcess() {
-        session.fit(100, 30)
-        settle(connector, session)
-        Thread.sleep(300)
-        assertThat(session.columns).isEqualTo(100)
-        assertThat(session.rows).isEqualTo(30)
-        assertThat(connector.resizes.last().columns).isEqualTo(100)
+        val reachedProcess = CountDownLatch(1)
+        val observed = object : TtyConnector by connector {
+            override fun resize(termSize: TermSize) {
+                connector.resize(termSize)
+                reachedProcess.countDown()
+            }
+        }
+        val resized = TerminalSession(observed)
+        try {
+            resized.fit(100, 30)
+            assertThat(reachedProcess.await(AWAIT_SECONDS, TimeUnit.SECONDS)).isTrue()
+            assertThat(resized.columns).isEqualTo(100)
+            assertThat(resized.rows).isEqualTo(30)
+            assertThat(connector.resizes.last().columns).isEqualTo(100)
+        } finally {
+            resized.close()
+        }
     }
 
     @Test
@@ -200,9 +217,8 @@ class TerminalSessionTest {
     fun selectionIsClearedWhenScrollbackShrankEvenIfOutputGrewItAgain() {
         play((1..40).joinToString("\r\n") { "row $it" })
         session.select(CellSelection(Cell(0, 2), Cell(4, 2)))
-        val frameBefore = session.frame
         connector.feed("$ESC[3J")
-        while (session.frame == frameBefore) Thread.sleep(10)
+        settle(connector, session)
         play((1..60).joinToString("\r\n") { "again $it" })
         assertThat(session.selection).isNull()
     }
@@ -217,7 +233,8 @@ class TerminalSessionTest {
     @Test
     fun endOfOutputAnnouncesTheEndOfTheSession() {
         connector.close()
-        Thread.sleep(400)
+        session.awaitModel { "[Session ended" in session.screenText() }
+        settle(connector, session)
         assertThat(session.screenText()).contains("[Session ended (exit code 0)]")
     }
 

@@ -25,7 +25,7 @@ import org.junit.jupiter.api.io.TempDir;
 class VerifiedDownloadTest {
 
     private static final byte[] CONTENT = "model-bytes".repeat(1000).getBytes(StandardCharsets.UTF_8);
-    private static final Duration STALL = Duration.ofSeconds(5);
+    private static final Duration STALL = Duration.ofSeconds(60);
 
     @TempDir
     Path directory;
@@ -83,7 +83,7 @@ class VerifiedDownloadTest {
 
     @Test
     void stalledDownloadFailsAndLeavesNoPartialFile() {
-        assertThatThrownBy(() -> download.fetch(url("/stalls"), sha256(CONTENT), directory.resolve("model.bin"), Duration.ofSeconds(2), progress -> { }))
+        assertThatThrownBy(() -> download.fetch(url("/stalls"), sha256(CONTENT), directory.resolve("model.bin"), Duration.ofMillis(300), progress -> { }))
                 .isInstanceOf(IOException.class);
         assertThat(directory).isEmptyDirectory();
     }
@@ -94,7 +94,7 @@ class VerifiedDownloadTest {
         out.write(CONTENT, 0, CONTENT.length / 2);
         out.flush();
         try {
-            release.await();
+            release.await(30, java.util.concurrent.TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }

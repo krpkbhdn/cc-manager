@@ -18,6 +18,8 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ObjectNode;
@@ -29,6 +31,7 @@ import tools.jackson.databind.node.ObjectNode;
 @Component
 class McpConfigReader {
 
+    private static final Logger log = LoggerFactory.getLogger(McpConfigReader.class);
     private static final String SERVERS = "mcpServers";
     private static final String STDIO = "stdio";
     private static final String USER_CONFIG_FILE = ".claude.json";
@@ -57,7 +60,7 @@ class McpConfigReader {
 
     /** User servers, plus local and project ones when a project directory is given. */
     List<McpServerConfig> read(Path projectDirectory) {
-        var userConfig = readFile(userConfigFile());
+        var userConfig = readUserConfig();
         var servers = new ArrayList<>(servers(userConfig, ExtensionScope.USER, McpApproval.NOT_REQUIRED));
         if (projectDirectory != null) {
             var projectEntry = projectEntry(userConfig, projectDirectory);
@@ -75,7 +78,7 @@ class McpConfigReader {
      * that file or the user settings wins, but user-level approvals are name-only and never count. A settings.local.json committed to git is ignored, as a hostile repo could approve itself.
      */
     Set<String> approvedOutsideRepository(Path projectDirectory) {
-        if (!projectEntry(readFile(userConfigFile()), projectDirectory).path(TRUST_ACCEPTED).asBoolean(false)) {
+        if (!projectEntry(readUserConfig(), projectDirectory).path(TRUST_ACCEPTED).asBoolean(false)) {
             return Set.of();
         }
         var local = projectDirectory.resolve(SETTINGS_LOCAL_FILE);
@@ -158,6 +161,17 @@ class McpConfigReader {
         try {
             return readFile(file);
         } catch (RuntimeException e) {
+            return Json.parse("{}");
+        }
+    }
+
+    /** A running claude rewrites ~/.claude.json, so a half-written file is treated as empty instead of failing the call. */
+    private JsonNode readUserConfig() {
+        var file = userConfigFile();
+        try {
+            return readFile(file);
+        } catch (ExtensionException e) {
+            log.warn("{} is unreadable, treated as empty", file.getFileName());
             return Json.parse("{}");
         }
     }

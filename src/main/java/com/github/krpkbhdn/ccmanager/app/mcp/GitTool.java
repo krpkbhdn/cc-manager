@@ -14,7 +14,7 @@ abstract class GitTool implements AssistantMcpTool {
     static final String PROJECT_PROPERTY = "\"project\":{\"type\":\"integer\",\"description\":\"Project id\"}";
 
     private final ProjectService projects;
-    private final GitStatusService status;
+    final GitStatusService status;
     final JsonMapper mapper;
 
     GitTool(ProjectService projects, GitStatusService status, JsonMapper mapper) {
@@ -28,8 +28,7 @@ abstract class GitTool implements AssistantMcpTool {
 
     @Override
     public String call(JsonNode arguments) {
-        var id = arguments.path("project").asLong(0);
-        var project = projects.find(id).orElseThrow(() -> new IllegalArgumentException("Unknown project id: " + id + "; pass the numeric 'project' id"));
+        var project = AssistantTool.requiredProject(projects, arguments);
         try {
             return run(status.topLevel(project.path()), arguments);
         } catch (GitException e) {

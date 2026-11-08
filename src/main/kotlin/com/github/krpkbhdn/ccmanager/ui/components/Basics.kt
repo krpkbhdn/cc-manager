@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.ui.components
 
 import androidx.compose.animation.core.LinearEasing
+import com.github.krpkbhdn.ccmanager.ui.badgeText
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -121,16 +122,15 @@ fun CountBadge(count: Int, modifier: Modifier = Modifier, tint: Color = colors.t
     ) { Label(count.toString(), color = tint, style = Type.numericCaption) }
 }
 
-/** Accent-filled circle with a count, shown inline after a label; "9+" above [MAX_DOT_COUNT]. */
+/** Accent-filled circle with a count, shown inline after a label; "9+" above nine (see [badgeText]). */
 @Composable
 fun CountDot(count: Int, modifier: Modifier = Modifier) {
     Box(modifier.size(dotSize).clip(CircleShape).background(colors.accent), contentAlignment = Alignment.Center) {
-        Label(if (count > MAX_DOT_COUNT) "$MAX_DOT_COUNT+" else count.toString(), color = colors.onAccent, style = Type.numericCaption)
+        Label(badgeText(count), color = colors.onAccent, style = Type.numericCaption)
     }
 }
 
 private val dotSize = 16.dp
-private const val MAX_DOT_COUNT = 9
 
 /** Keycap hint such as "Ctrl" or "K". */
 @Composable

@@ -7,7 +7,7 @@ class SettingsStateTest {
     @Test
     fun `categories keep the order of the category list`() {
         assertThat(SettingsCategory.entries.map { it.label }).containsExactly(
-            "Appearance", "Notifications", "Sessions", "Assistant", "Voice input", "Updates", "Author configuration", "About",
+            "Appearance", "Notifications", "Sessions", "Usage", "Assistant", "Voice input", "Updates", "Author configuration", "About",
         )
     }
 
@@ -15,7 +15,7 @@ class SettingsStateTest {
     fun `stepping stops at both ends of the list`() {
         assertThat(SettingsCategory.APPEARANCE.step(-1)).isEqualTo(SettingsCategory.APPEARANCE)
         assertThat(SettingsCategory.ABOUT.step(1)).isEqualTo(SettingsCategory.ABOUT)
-        assertThat(SettingsCategory.SESSIONS.step(1)).isEqualTo(SettingsCategory.ASSISTANT)
+        assertThat(SettingsCategory.USAGE.step(1)).isEqualTo(SettingsCategory.ASSISTANT)
     }
 
     @Test

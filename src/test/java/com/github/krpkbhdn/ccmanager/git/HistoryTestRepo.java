@@ -17,22 +17,40 @@ final class HistoryTestRepo {
         this.root = root;
     }
 
-    static boolean gitAvailable() {
-        try {
-            return new ProcessBuilder("git", "--version").start().waitFor(10, TimeUnit.SECONDS);
-        } catch (IOException | InterruptedException e) {
-            return false;
+    private static final class GitProbe {
+        static final boolean AVAILABLE = probe();
+
+        private static boolean probe() {
+            try {
+                return new ProcessBuilder("git", "--version").start().waitFor(10, TimeUnit.SECONDS);
+            } catch (IOException | InterruptedException e) {
+                return false;
+            }
         }
+    }
+
+    static boolean gitAvailable() {
+        return GitProbe.AVAILABLE;
     }
 
     static HistoryTestRepo init(Path root) {
         var repo = new HistoryTestRepo(root);
         repo.git("init", "-q", "-b", "main");
-        repo.git("config", "user.name", "Test User");
-        repo.git("config", "user.email", "test@example.com");
-        repo.git("config", "commit.gpgsign", "false");
-        repo.git("config", "tag.gpgsign", "false");
-        repo.git("config", "core.autocrlf", "false");
+        try {
+            Files.writeString(root.resolve(".git").resolve("config"), """
+                    [user]
+                    \tname = Test User
+                    \temail = test@example.com
+                    [commit]
+                    \tgpgsign = false
+                    [tag]
+                    \tgpgsign = false
+                    [core]
+                    \tautocrlf = false
+                    """, java.nio.file.StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
         return repo;
     }
 

@@ -11,6 +11,8 @@ import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 
+private const val JOIN_MILLIS = 10_000L
+
 class TerminalHostTest {
     private fun process(): PtyProcess = mock(PtyProcess::class.java).also {
         `when`(it.inputStream).thenReturn(PipedInputStream())
@@ -29,6 +31,18 @@ class TerminalHostTest {
         verify(process, never()).destroyForcibly()
         assertThat(TerminalHost.sessionOf("ccm-host-same")).isNotNull()
         TerminalHost.close("ccm-host-same")
+    }
+
+    @Test
+    fun `a close that fails does not leave the host closing`() {
+        val process = process()
+        `when`(process.isAlive).thenThrow(IllegalStateException("boom"))
+        TerminalHost.open(LaunchedSession("ccm-host-fail", 1, "claude", process))
+
+        TerminalHost.close("ccm-host-fail")
+
+        Thread.getAllStackTraces().keys.filter { it.name.startsWith("TerminalClose-") }.forEach { it.join(JOIN_MILLIS) }
+        assertThat(TerminalHost.closing()).isFalse()
     }
 
     @Test

@@ -22,6 +22,9 @@ fun GitDialogHost(git: GitState) {
         is GitDialog.CreateWorktree -> CreateWorktreeDialog(git, close)
         is GitDialog.RemoveWorktree -> RemoveWorktreeDialog(git, dialog, close)
         is GitDialog.Confirm -> ConfirmDialog(dialog.request, close)
+        is GitDialog.Drafting -> DraftingDialog(dialog, close)
+        is GitDialog.PullRequest -> PullRequestDialog(git, dialog, close)
+        is GitDialog.MergeTask -> MergeTaskDialog(git, dialog, close)
         is GitDialog.Output -> OutputDialog(dialog, close)
     }
 }

@@ -18,7 +18,7 @@ class NotificationServiceTest {
     private static final long PROJECT_ID = 9;
 
     private final SessionRegistry registry = new SessionRegistry(new com.github.krpkbhdn.ccmanager.claude.session.SessionProperties(java.time.Duration.ofMinutes(10), java.time.Duration.ofMinutes(10)), mock(TranscriptService.class));
-    private final NotificationService service = new NotificationService(registry);
+    private final NotificationService service = new NotificationService(registry, new NotificationProperties(200, java.time.Duration.ofSeconds(2)));
     private final List<AppNotification> received = new ArrayList<>();
     private String id;
 
@@ -31,6 +31,16 @@ class NotificationServiceTest {
     private void fire(String name, String json) {
         var template = of(name, json);
         registry.on(new HookEvent(id, template.type(), name, template.payload(), template.receivedAt()));
+    }
+
+    @Test
+    void postDeliversToSubscriberAndKeepsHistory() {
+        var posted = service.post(NotificationKind.USAGE_ALERT, 0, null, "Usage", "80% of 5h");
+
+        assertThat(received).containsExactly(posted);
+        assertThat(service.history()).containsExactly(posted);
+        assertThat(posted.projectId()).isZero();
+        assertThat(posted.ccmSessionId()).isNull();
     }
 
     @Test
@@ -64,9 +74,26 @@ class NotificationServiceTest {
     }
 
     @Test
-    void goingIdleOnlyBecauseABackgroundAgentWentStaleIsNotFinished() throws Exception {
-        var shortLived = new SessionRegistry(new SessionProperties(java.time.Duration.ofMillis(200), java.time.Duration.ofMinutes(10)), mock(TranscriptService.class));
-        var stale = new NotificationService(shortLived);
+    void goingIdleOnlyBecauseABackgroundAgentWentStaleIsNotFinished() {
+        var skew = new java.util.concurrent.atomic.AtomicReference<>(java.time.Duration.ZERO);
+        var clock = new java.time.Clock() {
+            @Override
+            public java.time.ZoneId getZone() {
+                return java.time.ZoneOffset.UTC;
+            }
+
+            @Override
+            public java.time.Clock withZone(java.time.ZoneId zone) {
+                return this;
+            }
+
+            @Override
+            public java.time.Instant instant() {
+                return java.time.Instant.now().plus(skew.get());
+            }
+        };
+        var shortLived = new SessionRegistry(new SessionProperties(java.time.Duration.ofMinutes(5), java.time.Duration.ofMinutes(10)), mock(TranscriptService.class), clock);
+        var stale = new NotificationService(shortLived, new NotificationProperties(200, java.time.Duration.ofSeconds(2)));
         var seen = new ArrayList<AppNotification>();
         stale.subscribe(seen::add);
         var sid = shortLived.register(PROJECT_ID);
@@ -78,7 +105,7 @@ class NotificationServiceTest {
         }
         assertThat(shortLived.find(sid).orElseThrow().status().name()).isEqualTo("WORKING");
 
-        Thread.sleep(400);
+        skew.set(java.time.Duration.ofMinutes(6));
         var nudge = of("Notification", "{\"notification_type\":\"idle_prompt\"}");
         shortLived.on(new HookEvent(sid, nudge.type(), "Notification", nudge.payload(), java.time.Instant.now()));
 
@@ -96,6 +123,17 @@ class NotificationServiceTest {
             assertThat(notification.kind()).isEqualTo(NotificationKind.NEEDS_ACTION);
             assertThat(notification.body()).isEqualTo("Waiting for permission: Bash");
         });
+    }
+
+    @Test
+    void secondPermissionRequestForAnotherToolRightAfterTheFirstIsAnswered() {
+        fire("UserPromptSubmit", "{}");
+        fire("PermissionRequest", "{\"tool_name\":\"Bash\"}");
+        fire("PostToolUse", "{\"tool_name\":\"Bash\"}");
+        fire("PermissionRequest", "{\"tool_name\":\"Edit\"}");
+
+        assertThat(received).extracting(AppNotification::body)
+                .containsExactly("Waiting for permission: Bash", "Waiting for permission: Edit");
     }
 
     @Test

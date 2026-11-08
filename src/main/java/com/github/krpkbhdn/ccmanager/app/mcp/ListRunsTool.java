@@ -3,13 +3,19 @@ package com.github.krpkbhdn.ccmanager.app.mcp;
 import com.github.krpkbhdn.ccmanager.run.ActiveRun;
 import com.github.krpkbhdn.ccmanager.run.RunConfigurationService;
 import com.github.krpkbhdn.ccmanager.run.RunService;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
 @Component
 class ListRunsTool implements AssistantMcpTool {
+
+    private static final Pattern ASSIGNMENTS = Pattern.compile("^(?:[A-Za-z_]\\w*=(?:\"[^\"]*\"|'[^']*'|\\S*)\\s+)+");
+    private static final Pattern EXECUTABLE = Pattern.compile("\"([^\"]*)\"|'([^']*)'|(\\S+)");
 
     private final RunConfigurationService configurations;
     private final RunService runs;
@@ -45,8 +51,18 @@ class ListRunsTool implements AssistantMcpTool {
         if (list.isEmpty()) {
             return "No run configurations in this project.";
         }
-        return list.stream().map(config -> "- id: %s | name: %s | command: %s | %s".formatted(config.id(), config.name(), config.command(),
+        return list.stream().map(config -> "- id: %s | name: %s | command: %s | %s".formatted(config.id(), config.name(), executable(config.command()),
                 state(runs.current(config.id())))).collect(Collectors.joining("\n"));
+    }
+
+    /** Arguments and leading NAME=value assignments may carry secrets, so only the executable's file name reaches the Assistant transcript. */
+    private static String executable(String command) {
+        var matcher = EXECUTABLE.matcher(ASSIGNMENTS.matcher(command.strip()).replaceFirst(""));
+        var token = "";
+        if (matcher.lookingAt()) {
+            token = IntStream.rangeClosed(1, matcher.groupCount()).mapToObj(matcher::group).filter(Objects::nonNull).findFirst().orElse("");
+        }
+        return token.substring(Math.max(token.lastIndexOf('/'), token.lastIndexOf('\\')) + 1);
     }
 
     private static String state(Optional<ActiveRun> run) {

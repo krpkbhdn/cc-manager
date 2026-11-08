@@ -24,8 +24,8 @@ private val starterLead = RoleDraft(
     "You lead the team. Break the task into small steps, delegate them to your agents and check what they report.", null, null, null, true,
 )
 
-/** The role being created ([index] null) or edited in the dialog. */
-class RoleDialogState(val teamId: Long, val index: Int?, val form: RoleForm)
+/** The role being created ([original] null) or edited in the dialog; the original is found again in the stored roster on save. */
+class RoleDialogState(val teamId: Long, val original: RoleDraft?, val form: RoleForm)
 
 /**
  * Teams the Teams screen lists and the roster of the selected one, plus each project's default team. Every role change
@@ -47,6 +47,7 @@ class TeamsState(
     private var selectedId by mutableStateOf<Long?>(null)
     private var unsubscribe: Runnable? = null
     private val rosterWrites = Mutex()
+    private var creatingTeam = false
 
     val selected: Team? get() = teams.firstOrNull { it.id == selectedId } ?: teams.firstOrNull()
 
@@ -65,7 +66,17 @@ class TeamsState(
         selectedId = team.id
     }
 
-    fun newTeam() = run { selectedId = withContext(Dispatchers.IO) { service.create(NEW_TEAM_NAME, listOf(starterLead)) }.id }
+    fun newTeam() {
+        if (creatingTeam) return
+        creatingTeam = true
+        run {
+            try {
+                selectedId = withContext(Dispatchers.IO) { service.create(NEW_TEAM_NAME, listOf(starterLead)) }.id
+            } finally {
+                creatingTeam = false
+            }
+        }
+    }
 
     fun renameTeam(team: Team, name: String) = run { updateFresh(team, name) { it } }
 
@@ -88,7 +99,7 @@ class TeamsState(
     }
 
     fun editRole(team: Team, role: TeamRole) {
-        dialog = RoleDialogState(team.id, team.roles.indexOf(role), RoleForm(role.draft))
+        dialog = RoleDialogState(team.id, role.draft, RoleForm(role.draft))
     }
 
     fun duplicateRole(team: Team, role: TeamRole) =
@@ -113,7 +124,7 @@ class TeamsState(
         scope.launch {
             try {
                 val saved = state.form.draft()
-                updateFresh(team) { withRole(it, state.index, saved) }
+                updateFresh(team) { withRole(it, state.original, saved) }
                 dialog = null
             } catch (e: CancellationException) {
                 throw e
@@ -134,7 +145,9 @@ class TeamsState(
         dialog = null
     }
 
-    private fun withRole(drafts: List<RoleDraft>, index: Int?, saved: RoleDraft): List<RoleDraft> {
+    private fun withRole(drafts: List<RoleDraft>, original: RoleDraft?, saved: RoleDraft): List<RoleDraft> {
+        val index = original?.let(drafts::indexOf)
+        require(index == null || index >= 0) { "The agent \"${original!!.name()}\" was changed or removed elsewhere. Close the dialog and edit it again." }
         val replaced = if (index == null) drafts + saved else drafts.toMutableList().apply { set(index, saved) }
         return if (saved.lead) replaced.map { if (it === saved) it else it.withLead(false) } else replaced
     }

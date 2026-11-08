@@ -17,7 +17,7 @@ class McpServiceTest {
     private static final Path PROJECT = Path.of("/work/project");
     private final RecordingCli cli = new RecordingCli();
     private final McpService service =
-            new McpService(cli, mock(McpConfigReader.class), mock(McpCredentialReader.class), new ExtensionProperties(30, 180, 90, 300));
+            new McpService(cli, mock(McpConfigReader.class), mock(McpCredentialReader.class), new ExtensionProperties(30, 180, 90, 300, 16384));
 
     @Test
     void addPassesTheJsonAsOneArgumentInTheProjectDirectory() {
@@ -59,6 +59,30 @@ class McpServiceTest {
                     assertThat(e.getMessage()).doesNotContain("SECRET").contains("<config>");
                     assertThat(e.output()).doesNotContain("SECRET");
                 });
+    }
+
+    @Test
+    void failedAddRedactsAnEchoedUrlAndCommandLine() {
+        var json = "{\"type\":\"http\",\"url\":\"https://h/mcp?key=SECRET3\",\"command\":\"npx\",\"args\":[\"srv\",\"--token\",\"SECRET4\"]}";
+        cli.answering(1, "", "bad url https://h/mcp?key=SECRET3 and npx srv --token SECRET4");
+
+        assertThatThrownBy(() -> service.add("s", json, ExtensionScope.USER, null))
+                .isInstanceOfSatisfying(ExtensionException.class, e -> {
+                    assertThat(e.getMessage()).doesNotContain("SECRET3", "SECRET4");
+                    assertThat(e.output()).doesNotContain("SECRET3", "SECRET4");
+                });
+    }
+
+    @Test
+    void addRejectsListSeparatorsInNamesButExistingOnesCanStillBeRemoved() {
+        assertThatThrownBy(() -> service.add("a: b", "{}", ExtensionScope.USER, null)).isInstanceOf(ExtensionException.class);
+        assertThatThrownBy(() -> service.add("a - b", "{}", ExtensionScope.USER, null)).isInstanceOf(ExtensionException.class);
+        assertThat(cli.calls).isEmpty();
+
+        service.remove("a: b", ExtensionScope.USER, null);
+        service.logout("a - b", PROJECT);
+
+        assertThat(cli.calls).hasSize(2);
     }
 
     @Test

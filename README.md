@@ -43,7 +43,7 @@ When any session needs you, it turns red on the Overview and in the status bar; 
 
 **Sessions**
 - **Projects and sessions**: register project folders, start or resume Claude sessions in a real embedded terminal.
-- **Live status**: every session is *idle*, *working* or *needs action*; the status bar, notifications and the "All sessions" board show it at a glance.
+- **Live status**: every session is *idle*, *working* or *needs action*; the status bar, notifications and the "Sessions" screen show it at a glance.
 - **Answer from the app**: questions, plan approvals, tool permissions and MCP forms open as modal dialogs. The terminal dialog stays live, and whichever answers first wins.
 - **Plain shells**: PowerShell, cmd, Git Bash and WSL on Windows, your `$SHELL` elsewhere, as a tab next to Claude.
 
@@ -67,7 +67,7 @@ When any session needs you, it turns red on the Overview and in the status bar; 
 
 | | |
 |---|---|
-| ![All sessions](docs/images/sessions.png)<br/>**All sessions** | ![Git changes](docs/images/git-changes.png)<br/>**Git: changes** |
+| ![Sessions](docs/images/sessions.png)<br/>**Sessions** | ![Git changes](docs/images/git-changes.png)<br/>**Git: changes** |
 | ![Git log](docs/images/git-log.png)<br/>**Git: log** | ![Teams](docs/images/teams.png)<br/>**Agent teams** |
 | ![Usage](docs/images/usage.png)<br/>**Usage** | ![Notifications](docs/images/notifications.png)<br/>**Notifications** |
 
@@ -134,14 +134,6 @@ Installers are written to `build/compose/binaries/main/<format>/`.
 
 The first build needs internet: it downloads Gradle and JBR 25, so it takes a while. Without JBR the app falls back to the plain OS window frame; `-Dccm.nativeFrame=true` forces the native OS frame even on JBR.
 
-### UI preview without Claude (for contributors)
-
-```sh
-./gradlew runPreview                                   # UI with fake services
-./gradlew runPreview --args="--shots --out=build/shots --size=1600x1000"
-./gradlew gitShots --args="--out=build/shots --dark"   # Git tab, rendered offscreen
-```
-
 ## Keyboard shortcuts
 
 <details>
@@ -155,7 +147,7 @@ The table shows Windows and Linux chords. On macOS most of them use `Cmd` or `Cm
 | Shortcut sheet | `F1` or `Ctrl+Shift+/` |
 | Add project | `Ctrl+Shift+O` |
 | New Claude session | `Ctrl+Shift+T` |
-| All sessions | `Ctrl+Shift+S` |
+| Sessions | `Ctrl+Shift+S` |
 | Answer next waiting session | `Ctrl+Shift+N` |
 | Assistant / ask the assistant | `Ctrl+Shift+I` / `Ctrl+Shift+E` |
 | Git tab / commit / push | `Ctrl+Shift+G` / `Ctrl+Shift+K` / `Ctrl+Shift+U` |

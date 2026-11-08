@@ -1,7 +1,7 @@
 package com.github.krpkbhdn.ccmanager.ui.git.model
 
 import com.github.krpkbhdn.ccmanager.git.Worktree
-import java.nio.file.InvalidPathException
+import com.github.krpkbhdn.ccmanager.git.WorktreeNames
 import java.nio.file.Path
 
 fun worktreeTitle(worktree: Worktree): String =
@@ -14,12 +14,10 @@ fun removalNeedsForce(worktree: Worktree): Boolean = worktree.dirty()
 fun refilledPath(current: String, previousSuggestion: String, nextSuggestion: String): String =
     if (current.isBlank() || current == previousSuggestion) nextSuggestion else current
 
-private const val DIRECTORY_INFIX = "-wt-"
-
 /** A sibling of the repository folder named `<repo>-wt-<branch>`; empty when the branch cannot form a valid path. */
 fun defaultWorktreePath(top: Path, branch: String): String =
     try {
-        top.fileName?.let { top.resolveSibling(it.toString() + DIRECTORY_INFIX + branch.replace('/', '-')).toString() }.orEmpty()
-    } catch (e: InvalidPathException) {
+        WorktreeNames.defaultPath(top, branch)
+    } catch (e: IllegalArgumentException) {
         ""
     }

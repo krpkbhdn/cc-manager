@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.extension.plugin;
 
 import com.github.krpkbhdn.ccmanager.extension.ClaudeCli;
+import com.github.krpkbhdn.ccmanager.extension.ExtensionException;
 import com.github.krpkbhdn.ccmanager.extension.ExtensionProperties;
 import com.github.krpkbhdn.ccmanager.extension.ExtensionScope;
 import com.github.krpkbhdn.ccmanager.workspace.CommandRunner;
@@ -145,14 +146,14 @@ public class PluginService {
 
     private static String requireNotOption(String argument) {
         if (argument.startsWith("-")) {
-            throw new IllegalArgumentException("Must not start with '-': " + argument);
+            throw new ExtensionException("Must not start with '-': " + argument);
         }
         return argument;
     }
 
     private static String requireValidId(String argument) {
         if (!PLUGIN_ID.matcher(argument).matches()) {
-            throw new IllegalArgumentException("Invalid plugin id (letters, digits, '_', '.', '@' and '-' only, starting with a letter or digit): " + argument);
+            throw new ExtensionException("Invalid plugin id (letters, digits, '_', '.', '@' and '-' only, starting with a letter or digit): " + argument);
         }
         return argument;
     }

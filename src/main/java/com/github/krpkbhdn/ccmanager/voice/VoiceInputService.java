@@ -55,7 +55,7 @@ public class VoiceInputService {
         this.microphone = microphone;
         this.properties = properties;
         this.opener = opener;
-        this.recognizers = new WarmRecognizers(scheduler, properties.idleShutdown());
+        this.recognizers = new WarmRecognizers(scheduler, properties.idleShutdown(), properties.recognizerOpenTimeout());
     }
 
     public DictationSession start(DictationRequest request, DictationListener listener) {
@@ -65,7 +65,7 @@ public class VoiceInputService {
             var dictation = new Dictation(lease.recognizer(), new SpeechGate(properties.speechRms()), properties,
                     languageOf(request), listener, executor);
             var input = microphone.open(request.input(), dictation::feed);
-            return new DictationSession(input, dictation, executor, lease::release);
+            return new DictationSession(input, dictation, executor, lease::release, properties.flushWait());
         } catch (RuntimeException e) {
             executor.shutdown();
             lease.release();

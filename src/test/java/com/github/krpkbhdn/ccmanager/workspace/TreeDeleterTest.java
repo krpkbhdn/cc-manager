@@ -25,6 +25,18 @@ class TreeDeleterTest {
     }
 
     @Test
+    void aRootGivenUnderAnotherSpellingOfItsNameIsStillDeleted() throws IOException {
+        var root = Files.createDirectories(temp.resolve("MixedCase").resolve("sub"));
+        Files.writeString(root.resolve("f.txt"), "x");
+        var otherSpelling = temp.resolve("mixedcase");
+        assumeTrue(Files.exists(otherSpelling));
+
+        TreeDeleter.delete(otherSpelling);
+
+        assertThat(temp.resolve("MixedCase")).doesNotExist();
+    }
+
+    @Test
     void aLinkIsUnlinkedAndItsTargetKept() throws Exception {
         var target = Files.createDirectories(temp.resolve("target"));
         Files.writeString(target.resolve("keep.txt"), "x");
@@ -35,6 +47,19 @@ class TreeDeleterTest {
 
         assertThat(root).doesNotExist();
         assertThat(target.resolve("keep.txt")).exists();
+    }
+
+    @Test
+    void aRootLinkToASiblingIsUnlinkedAndTheSiblingKept() throws Exception {
+        var keep = Files.createDirectories(temp.resolve("keep"));
+        Files.writeString(keep.resolve("precious.txt"), "x");
+        var root = temp.resolve("wt");
+        link(root, keep);
+
+        TreeDeleter.delete(root);
+
+        assertThat(root).doesNotExist();
+        assertThat(keep.resolve("precious.txt")).exists();
     }
 
     @Test

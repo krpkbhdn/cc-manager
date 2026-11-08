@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -35,12 +36,15 @@ private val minDetailsWidth = 360.dp
 private val maxDetailsWidth = 600.dp
 private const val DETAILS_SHARE = 0.5f
 private const val SKELETON_ROWS = 10
+private const val MAX_LOAD_ATTEMPTS = 2
 
 /** History with graph on the left, the selected commit on the right; pages in as the list scrolls. */
 @Composable
 fun LogView(git: GitState, now: () -> Instant, modifier: Modifier = Modifier) {
     val log = git.log
-    LaunchedEffect(Unit) { if (!log.loaded) log.reload() }
+    val attempts = remember { intArrayOf(0) }
+    // A failed load clears `loaded`; retry when loading ends, but only MAX_LOAD_ATTEMPTS times so a persistent failure cannot loop.
+    LaunchedEffect(log.loading) { if (!log.loaded && !log.loading && attempts[0]++ < MAX_LOAD_ATTEMPTS) log.reload() }
     Column(modifier.fillMaxSize()) {
         LogFilterBar(log.filter, git.branches, log.loading, log::update)
         HorizontalRule()

@@ -31,11 +31,8 @@ abstract class AssistantTool implements AssistantMcpTool {
     }
 
     static Project requiredProject(ProjectService projects, JsonNode arguments) {
-        var id = arguments.path("project");
-        if (!id.canConvertToLong()) {
-            throw new IllegalArgumentException("Argument 'project' must be a numeric project id (see list_projects)");
-        }
-        return projects.find(id.asLong()).orElseThrow(() -> new IllegalArgumentException("Project not found: " + id.asLong()));
+        var id = ToolArguments.requiredId(arguments, "project");
+        return projects.find(id).orElseThrow(() -> new IllegalArgumentException("Project not found: " + id));
     }
 
     static PromptTemplate requiredPrompt(PromptTemplateService prompts, long id) {

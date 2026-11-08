@@ -39,6 +39,40 @@ class McpLogicTest {
     }
 
     @Test
+    fun splitArgumentsTreatsQuotesInsideATokenOrWithoutCloserAsLiterals() {
+        assertThat(splitArguments("don't stop")).containsExactly("don't", "stop")
+        assertThat(splitArguments("it's a test")).containsExactly("it's", "a", "test")
+        assertThat(splitArguments("'unclosed one")).containsExactly("'unclosed", "one")
+    }
+
+    @Test
+    fun splitArgumentsKeepsAQuotedValueAfterEquals() {
+        assertThat(splitArguments("--header=\"X: a b\" KEY='a b' x")).containsExactly("--header=X: a b", "KEY=a b", "x")
+    }
+
+    @Test
+    fun maskDoesNotEatWordsAfterFlagLikeTextThatOnlyContainsAuth() {
+        val text = "pre-auth failed on --author x"
+
+        assertThat(maskSecrets(text)).isEqualTo(text)
+    }
+
+    @Test
+    fun masksAuthAndHeaderFlagValues() {
+        val masked = maskSecrets("local:\n  Args: srv --auth abc123 --header \"Authorization: Bearer x9\"")
+
+        assertThat(masked).doesNotContain("abc123", "x9", "Bearer")
+        assertThat(masked).contains("--auth $MASK", "--header $MASK")
+    }
+
+    @Test
+    fun nameRuleRejectsTheListSeparators() {
+        assertThat(nameProblem("a: b", emptyList())).isNotNull()
+        assertThat(nameProblem("a - b", emptyList())).isNotNull()
+        assertThat(nameProblem("a-b", emptyList())).isNull()
+    }
+
+    @Test
     fun nameRuleMirrorsTheBackend() {
         assertThat(nameProblem("github", emptyList())).isNull()
         assertThat(nameProblem("my server:v1.2", emptyList())).isNull()

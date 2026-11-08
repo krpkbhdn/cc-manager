@@ -45,12 +45,12 @@ class SessionToolsTest {
     }
 
     @Test
-    void listShowsIdProjectStatusAndActivity() {
+    void listShowsIdProjectAndStatusButNotTheActivity() {
         when(sessions.sessions(3)).thenReturn(List.of(snapshot("s1", AgentStatus.WORKING)));
 
         var text = new ListSessionsTool(sessions).call(mapper.createObjectNode().put("project", 3));
 
-        assertThat(text).contains("id: s1 | project: 3 | status: WORKING | activity: Reading");
+        assertThat(text).contains("id: s1 | project: 3 | status: WORKING").doesNotContain("Reading");
     }
 
     @Test

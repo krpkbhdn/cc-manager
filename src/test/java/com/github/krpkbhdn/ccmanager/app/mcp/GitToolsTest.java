@@ -108,6 +108,69 @@ class GitToolsTest {
     }
 
     @Test
+    void commitWithAllDoesNotStageSecretFilesAndSaysSo() {
+        var changes = List.of(new Change("a.txt", null, GitStatus.Kind.NONE, GitStatus.Kind.UNTRACKED),
+                new Change(".env", null, GitStatus.Kind.NONE, GitStatus.Kind.UNTRACKED));
+        when(status.status(REPO)).thenReturn(new GitStatus(true, "main", "abc", false, null, 0, 0, GitStatus.Operation.NONE, 0, null, changes));
+        when(index.commit(eq(REPO), any())).thenReturn("1a2b3c");
+
+        var result = call(new GitCommitTool(projects, status, index, mapper), "{\"project\":7,\"message\":\"msg\",\"all\":true}");
+
+        verify(index).stage(REPO, List.of("a.txt"));
+        assertThat(result).contains("1a2b3c", ".env");
+    }
+
+    @Test
+    void diffOmitsContentOfSecretFiles() {
+        var change = new Change(".env", null, GitStatus.Kind.NONE, GitStatus.Kind.UNTRACKED);
+        when(status.status(REPO)).thenReturn(new GitStatus(true, "main", "abc", false, null, 0, 0, GitStatus.Operation.NONE, 0, null, List.of(change)));
+
+        var result = call(new GitDiffTool(projects, status, mapper), "{\"project\":7}");
+
+        assertThat(result).contains(".env", "omitted");
+        verify(status, never()).diff(any(), any(), anyBoolean());
+    }
+
+    @Test
+    void windowsSpellingsOfASecretFileStillLookSecret() {
+        for (var name : List.of(".env ", ".env.", ".env/", "./.env", "src/../.env", "SRC\\.ENV", "id_rsa. ")) {
+            assertThat(GitDiffTool.looksSecret(name)).as(name).isTrue();
+        }
+        assertThat(GitDiffTool.looksSecret("src/App.java")).isFalse();
+    }
+
+    @Test
+    void commitWithAllAndOnlySecretFilesStagesNothing() {
+        var change = new Change(".env", null, GitStatus.Kind.NONE, GitStatus.Kind.UNTRACKED);
+        when(status.status(REPO)).thenReturn(new GitStatus(true, "main", "abc", false, null, 0, 0, GitStatus.Operation.NONE, 0, null, List.of(change)));
+        when(index.commit(eq(REPO), any())).thenReturn("1a2b3c");
+
+        call(new GitCommitTool(projects, status, index, mapper), "{\"project\":7,\"message\":\"msg\",\"all\":true}");
+
+        verify(index).stage(REPO, List.of());
+    }
+
+    @Test
+    void projectIdAcceptsWholeNumbersAndNumericText() {
+        var tool = new GitStatusTool(projects, status, mapper);
+        when(status.status(REPO)).thenReturn(new GitStatus(true, "main", "abc", false, null, 0, 0, GitStatus.Operation.NONE, 0, null, List.of()));
+
+        call(tool, "{\"project\":7}");
+        call(tool, "{\"project\":\"7\"}");
+
+        verify(status, times(2)).status(REPO);
+    }
+
+    @Test
+    void projectIdRejectsFractionsAndWords() {
+        var tool = new GitStatusTool(projects, status, mapper);
+
+        assertThatThrownBy(() -> call(tool, "{\"project\":7.9}")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> call(tool, "{\"project\":\"abc\"}")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> call(tool, "{\"project\":\"7.9\"}")).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void commitWithoutAllDoesNotStage() {
         call(new GitCommitTool(projects, status, index, mapper), "{\"project\":7,\"message\":\"msg\"}");
 
@@ -229,6 +292,22 @@ class GitToolsTest {
         }
 
         assertThatThrownBy(() -> GitDiffTool.requireInside(repo, "link/config")).hasMessageContaining("inside .git");
+    }
+
+    @Test
+    void diffJudgesAWindowsShortNameAliasByItsRealName(@org.junit.jupiter.api.io.TempDir Path repo) throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("os.name").startsWith("Windows"));
+        var secret = repo.resolve("credentials.json");
+        java.nio.file.Files.writeString(secret, "{}");
+        var process = new ProcessBuilder("cmd", "/c", "for %I in (\"" + secret + "\") do @echo %~sI").redirectErrorStream(true).start();
+        var shortPath = new String(process.getInputStream().readAllBytes()).trim();
+        process.waitFor();
+        org.junit.jupiter.api.Assumptions.assumeTrue(shortPath.toUpperCase().endsWith("~1.JSO"), "8.3 names are disabled: " + shortPath);
+
+        var alias = GitDiffTool.requireInside(repo, Path.of(shortPath).getFileName().toString());
+
+        assertThat(alias).isEqualTo("credentials.json");
+        assertThat(GitDiffTool.looksSecret(alias)).isTrue();
     }
 
     @Test

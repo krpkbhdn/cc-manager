@@ -15,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -22,7 +23,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.ui.components.AppButton
@@ -49,6 +50,7 @@ private fun SettingsCategory.icon(): ImageVector = when (this) {
     SettingsCategory.APPEARANCE -> Icons.Sun
     SettingsCategory.NOTIFICATIONS -> Icons.Bell
     SettingsCategory.SESSIONS -> Icons.Layers
+    SettingsCategory.USAGE -> Icons.Gauge
     SettingsCategory.ASSISTANT -> Icons.Sparkles
     SettingsCategory.VOICE -> Icons.Mic
     SettingsCategory.UPDATES -> Icons.Download
@@ -63,7 +65,7 @@ fun SettingsDialog(app: AppState) {
     BoxWithConstraints {
         ModalHost(state::close, width = minOf(dialogWidth, maxWidth * WINDOW_SHARE)) {
             Column(
-                Modifier.height(maxHeight * WINDOW_SHARE).onPreviewKeyEvent { event ->
+                Modifier.height(maxHeight * WINDOW_SHARE).onKeyEvent { event ->
                     val delta = when (event.key) { Key.DirectionDown -> 1; Key.DirectionUp -> -1; else -> 0 }
                     (delta != 0 && event.type == KeyEventType.KeyDown).also { if (it) state.move(delta) }
                 },
@@ -110,13 +112,14 @@ private fun CategoryRow(category: SettingsCategory, selected: Boolean, onClick: 
 
 @Composable
 private fun CategoryPage(app: AppState, category: SettingsCategory, modifier: Modifier) {
-    val scroll = rememberScrollState()
+    val scroll = key(category) { rememberScrollState() }
     Box(modifier) {
         Column(Modifier.fillMaxWidth().verticalScroll(scroll).padding(Spacing.xl), verticalArrangement = Arrangement.spacedBy(Spacing.xl)) {
             when (category) {
                 SettingsCategory.APPEARANCE -> AppearancePage(app)
                 SettingsCategory.NOTIFICATIONS -> NotificationsPage(app)
                 SettingsCategory.SESSIONS -> SessionsPage(app)
+                SettingsCategory.USAGE -> UsagePage(app)
                 SettingsCategory.ASSISTANT -> AssistantPage(app)
                 SettingsCategory.VOICE -> VoicePage(app)
                 SettingsCategory.UPDATES -> UpdatesPage(app.update)

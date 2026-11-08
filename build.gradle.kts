@@ -10,7 +10,7 @@ plugins {
 }
 
 group = "com.github.krpkbhdn"
-version = "1.3.14"
+version = "1.5.4"
 
 java {
     toolchain {
@@ -39,6 +39,7 @@ dependencies {
     implementation("org.jetbrains.runtime:jbr-api:1.9.0")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
@@ -60,6 +61,7 @@ val claudeFullscreen = mapOf("CLAUDE_CODE_NO_FLICKER" to "1")
 tasks.test {
     environment(claudeFullscreen)
     useJUnitPlatform()
+    maxParallelForks = (Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, 4)
     jvmArgs("--enable-native-access=ALL-UNNAMED", *awtOpens.toTypedArray())
 }
 

@@ -51,6 +51,13 @@ private fun jsonBlock(input: JsonNode) = SummaryBlock("Input", input.toPrettyStr
 
 private fun JsonNode.text(field: String): String = path(field).asString("")
 
+fun proposalKindLabel(proposal: Proposal): String = when (proposal) {
+    is QuestionsProposal -> "Question"
+    is PlanProposal -> "Plan"
+    is PermissionProposal -> "Permission"
+    is FormProposal -> "Form"
+}
+
 /** One line for the overview: what the session waits for. */
 fun proposalHeadline(proposal: Proposal): String = when (proposal) {
     is QuestionsProposal -> proposal.questions().first().text()

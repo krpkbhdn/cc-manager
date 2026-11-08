@@ -17,13 +17,12 @@ class CommitDraft {
     var skipHooks by mutableStateOf(false)
     private var memory = AmendMemory()
 
-    /** Turning amend on loads [lastMessage]; turning it off puts back what was typed before. */
+    /** Turning amend on loads [lastMessage] and stays off without one (no commit to amend); turning it off puts back what was typed before. */
     fun setAmend(on: Boolean, lastMessage: String?) {
-        if (on == amend) return
+        if (on == amend || (on && lastMessage == null)) return
         val (text, next) = memory.onToggle(on, message.text.toString(), lastMessage.orEmpty())
         memory = next
         amend = on
-        if (on && lastMessage == null) return
         message.setTextAndPlaceCursorAtEnd(text)
     }
 

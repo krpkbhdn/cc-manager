@@ -18,7 +18,7 @@ import org.junit.jupiter.api.io.TempDir;
 class GitWatcherTest {
 
     private static final long WAIT_MILLIS = 5000;
-    private static final long QUIET_MILLIS = 800;
+    private static final long QUIET_MILLIS = 300;
     private static final boolean WINDOWS = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
 
     private static final GitProperties PROPERTIES = watcherProperties();
@@ -49,14 +49,15 @@ class GitWatcherTest {
             if (condition.getAsBoolean()) {
                 return true;
             }
-            sleep(25);
+            sleep(3);
         }
         return condition.getAsBoolean();
     }
 
+    /** Quiet window for "nothing must happen" assertions; registration is synchronous, so no warm-up is needed. */
     private static void sleep(long millis) {
         try {
-            Thread.sleep(millis);
+            new java.util.concurrent.CountDownLatch(1).await(millis, java.util.concurrent.TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -76,7 +77,6 @@ class GitWatcherTest {
     void aCommitNotifiesThroughRefsAndHead() {
         var calls = new AtomicInteger();
         watcher.subscribe(repo.root(), calls::incrementAndGet);
-        sleep(200);
 
         repo.git("commit", "-q", "--allow-empty", "-m", "empty");
 
@@ -87,11 +87,11 @@ class GitWatcherTest {
     void aNewBranchInANestedRefsDirectoryNotifies() {
         var calls = new AtomicInteger();
         watcher.subscribe(repo.root(), calls::incrementAndGet);
-        sleep(200);
 
         repo.git("branch", "feature/deep/er");
-        calls.set(0);
+        assertThat(eventually(() -> watcher.isWatching(repo.root().resolve(".git/refs/heads/feature/deep")))).isTrue();
         sleep(QUIET_MILLIS);
+        calls.set(0);
         repo.git("branch", "feature/deep/other");
 
         assertThat(eventually(() -> calls.get() >= 1)).isTrue();
@@ -103,7 +103,6 @@ class GitWatcherTest {
         repo.git("worktree", "add", "-q", "-b", "linked", worktree.toString());
         var calls = new AtomicInteger();
         watcher.subscribe(worktree, calls::incrementAndGet);
-        sleep(200);
 
         repo.git("branch", "created-in-the-main-checkout");
 
@@ -143,7 +142,6 @@ class GitWatcherTest {
         repo.write("node_modules/pkg/index.js", "1");
         var calls = new AtomicInteger();
         watcher.subscribe(repo.root(), calls::incrementAndGet);
-        sleep(200);
 
         repo.write("node_modules/pkg/index.js", "2");
         repo.write("build/out.class", "2");
@@ -181,6 +179,57 @@ class GitWatcherTest {
     }
 
     @Test
+    void subscribingDoesNotHoldTheWatcherLockWhileGitResolvesTheRepository() throws Exception {
+        var started = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var slowGit = new GitRunner(PROPERTIES) {
+            @Override
+            public Result tryRun(Path repository, String... args) {
+                started.countDown();
+                try {
+                    release.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                return super.tryRun(repository, args);
+            }
+        };
+        var slowWatcher = new GitWatcher(slowGit);
+        var subscribing = java.util.concurrent.CompletableFuture.runAsync(() -> slowWatcher.subscribe(repo.root(), () -> {}));
+        assertThat(started.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+
+        var closing = java.util.concurrent.CompletableFuture.runAsync(slowWatcher::close);
+
+        try {
+            closing.get(2, java.util.concurrent.TimeUnit.SECONDS);
+        } finally {
+            release.countDown();
+            subscribing.get(10, java.util.concurrent.TimeUnit.SECONDS);
+            slowWatcher.close();
+        }
+    }
+
+    @Test
+    void aSecondSubscriptionForTheSameRootDoesNotSpawnRevParseAgain() {
+        var spawns = new AtomicInteger();
+        var countingWatcher = new GitWatcher(new GitRunner(PROPERTIES) {
+            @Override
+            public Result tryRun(Path repository, String... args) {
+                spawns.incrementAndGet();
+                return super.tryRun(repository, args);
+            }
+        });
+        try {
+            countingWatcher.subscribe(repo.root(), () -> {});
+            countingWatcher.subscribe(repo.root(), () -> {});
+
+            assertThat(spawns.get()).isEqualTo(1);
+        } finally {
+            countingWatcher.close();
+        }
+    }
+
+    @Test
     void resubscribingAfterTheLastSubscriberLeftWorksAgain() {
         watcher.subscribe(repo.root(), () -> {}).run();
 
@@ -203,7 +252,6 @@ class GitWatcherTest {
         repo.write("src/main/deep/a.txt", "1");
         var calls = new AtomicInteger();
         watcher.subscribe(repo.root(), calls::incrementAndGet);
-        sleep(200);
 
         Files.move(repo.root().resolve("src/main"), repo.root().resolve("src/moved"));
         assertThat(repo.root().resolve("src/moved/deep/a.txt")).exists();
@@ -218,10 +266,9 @@ class GitWatcherTest {
         assumeTrue(WINDOWS);
         var calls = new AtomicInteger();
         watcher.subscribe(repo.root(), calls::incrementAndGet);
-        sleep(200);
         var deep = repo.root().resolve(".git/refs/heads/user/x");
         Files.createDirectories(deep);
-        sleep(QUIET_MILLIS);
+        assertThat(eventually(() -> watcher.isWatching(deep))).isTrue();
         var before = calls.get();
 
         Files.writeString(deep.resolve("y"), "0000000000000000000000000000000000000000\n");
@@ -235,7 +282,6 @@ class GitWatcherTest {
         repo.write("module/build/out.txt", "0");
         var calls = new AtomicInteger();
         watcher.subscribe(repo.root(), calls::incrementAndGet);
-        sleep(200);
         var before = calls.get();
 
         repo.write("module/build/out.txt", "1");
@@ -252,7 +298,6 @@ class GitWatcherTest {
         }
         var calls = new AtomicInteger();
         watcher.subscribe(huge, calls::incrementAndGet);
-        sleep(200);
 
         Files.writeString(huge.resolve("d5").resolve("nested.txt"), "1");
         sleep(QUIET_MILLIS);

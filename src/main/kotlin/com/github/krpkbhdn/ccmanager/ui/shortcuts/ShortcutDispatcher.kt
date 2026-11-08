@@ -15,28 +15,32 @@ class ShortcutDispatcher(
     private val terminalFocused: () -> Boolean,
     private val perform: (AppShortcut) -> Boolean,
 ) : KeyEventDispatcher {
-    private val handledKeys = mutableSetOf<Int>()
+    private val handledKeys = mutableMapOf<Int, KeyChord>()
+    private var lastPressHandled = false
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (KeyboardFocusManager.getCurrentKeyboardFocusManager().activeWindow !== window) {
             handledKeys.clear()
+            lastPressHandled = false
             return false
         }
         val swallow = when (event.id) {
-            KeyEvent.KEY_PRESSED -> pressHandled(event)
-            KeyEvent.KEY_TYPED -> handledKeys.isNotEmpty() && (event.isControlDown || event.isAltDown || event.isMetaDown)
-            KeyEvent.KEY_RELEASED -> handledKeys.remove(event.keyCode)
+            KeyEvent.KEY_PRESSED -> pressHandled(event).also { lastPressHandled = it }
+            KeyEvent.KEY_TYPED -> lastPressHandled && (event.isControlDown || event.isAltDown || event.isMetaDown)
+            KeyEvent.KEY_RELEASED -> handledKeys.remove(event.keyCode) != null
             else -> false
         }
         if (swallow) event.consume()
         return swallow
     }
 
+    /** Auto-repeat of a handled chord is swallowed, but a repeat with other modifiers (Shift released first) is a new chord. */
     private fun pressHandled(event: KeyEvent): Boolean {
-        if (event.keyCode in handledKeys) return true
-        val shortcut = ShortcutResolver.resolve(KeyChord.of(event), mac, terminalFocused()) ?: return false
+        val chord = KeyChord.of(event)
+        if (handledKeys[event.keyCode] == chord) return true
+        val shortcut = ShortcutResolver.resolve(chord, mac, terminalFocused()) ?: return false
         if (!perform(shortcut)) return false
-        handledKeys += event.keyCode
+        handledKeys[event.keyCode] = chord
         return true
     }
 

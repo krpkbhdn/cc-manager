@@ -49,13 +49,14 @@ private const val TASK_HINT = "Claude starts one lead session in the project wit
 /** Templates offered in the dialog, the one to apply at once, and the values their placeholders get. */
 class TaskTemplates(val available: List<PromptTemplate>, val initialId: Long?, val values: PlaceholderValues)
 
-class StartTaskActions(val onStart: (team: Team?, task: String, makeDefault: Boolean) -> Unit, val onDismiss: () -> Unit)
+class StartTaskActions(val onStart: (team: Team?, task: String, makeDefault: Boolean, isolated: Boolean) -> Unit, val onDismiss: () -> Unit)
 
 /** Pick a team (or none), describe the task, and see which roles the lead will have; Ctrl+Enter starts it. */
 @Composable
-fun StartTaskDialog(project: Project, teams: TeamsState, templates: TaskTemplates, actions: StartTaskActions) {
+fun StartTaskDialog(project: Project, teams: TeamsState, templates: TaskTemplates, actions: StartTaskActions, canIsolate: Boolean) {
     var selected by remember { mutableStateOf(teams.defaultTeamOf(project.id)?.id) }
     var makeDefault by remember { mutableStateOf(false) }
+    var isolated by remember { mutableStateOf(false) }
     val task = rememberTextFieldState()
     val focus = remember { FocusRequester() }
     var picking by remember { mutableStateOf(false) }
@@ -68,7 +69,7 @@ fun StartTaskDialog(project: Project, teams: TeamsState, templates: TaskTemplate
         templates.available.firstOrNull { it.id == templates.initialId }?.let(apply)
     }
     val team = selected?.let(teams::find)
-    val start = { if (task.text.isNotBlank()) actions.onStart(team, task.text.toString().trim(), team != null && makeDefault) }
+    val start = { if (task.text.isNotBlank()) actions.onStart(team, task.text.toString().trim(), team != null && makeDefault, canIsolate && isolated) }
     ModalHost(actions.onDismiss, width = dialogWidth, takeFocus = false, hasInput = { task.text.isNotEmpty() }) {
         DialogBody("Start task in ${project.name}", Icons.Users, colors.accent) {
             Label("Team", color = colors.textSecondary, style = Type.smallMedium)
@@ -81,6 +82,7 @@ fun StartTaskDialog(project: Project, teams: TeamsState, templates: TaskTemplate
             VoiceTextArea(task, Modifier.fillMaxWidth(), placeholder = "Describe what to do", focusRequester = focus, onSubmit = start)
             Label(if (team != null) TASK_HINT else NO_TEAM_TASK_HINT, color = colors.textTertiary, style = Type.caption, maxLines = 2)
             if (team != null) DefaultTeamToggle(makeDefault) { makeDefault = it }
+            if (canIsolate) IsolatedToggle(isolated) { isolated = it }
             DialogActions("Start task", task.text.isNotBlank(), false, start, actions.onDismiss)
         }
     }
@@ -111,6 +113,15 @@ private fun RolesPreview(team: Team) {
                 RoleChip(role, slot)
             }
         }
+    }
+}
+
+@Composable
+private fun IsolatedToggle(checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        AppCheckbox(checked, onChange)
+        Label("Isolated worktree", color = colors.textSecondary, style = Type.small)
+        Label("Runs on a new branch task/<name> in its own folder", color = colors.textTertiary, style = Type.caption)
     }
 }
 

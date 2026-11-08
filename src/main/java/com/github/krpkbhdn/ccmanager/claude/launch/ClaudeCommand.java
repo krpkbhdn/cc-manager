@@ -7,10 +7,12 @@ import com.github.krpkbhdn.ccmanager.team.Team;
 import com.github.krpkbhdn.ccmanager.team.TeamAgentsJson;
 import com.github.krpkbhdn.ccmanager.team.TeamRole;
 import java.nio.file.Path;
+import com.github.krpkbhdn.ccmanager.claude.hook.HookServer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -34,7 +36,7 @@ public final class ClaudeCommand {
     private static final List<String> INHERITED_ENV_TO_DROP = List.of(
             "NO_COLOR", "FORCE_COLOR", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_CHILD_SESSION",
             "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_SESSION_ATTENDED", "CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN", "CLAUDE_CODE_SSE_PORT", "CLAUDE_CODE_EXECPATH", "CLAUDE_PID",
-            "AI_AGENT", "TERMINAL_EMULATOR", "TERM_SESSION_ID");
+            "AI_AGENT", "TERMINAL_EMULATOR", "TERM_SESSION_ID", HookServer.ASSISTANT_TOKEN_ENV);
 
     private ClaudeCommand() {}
 
@@ -54,6 +56,32 @@ public final class ClaudeCommand {
         addTeam(command, team);
         addModeFlag(command, mode);
         return command;
+    }
+
+    /** Resumes one conversation by id; the id comes from a transcript file, so it must be a canonical UUID. [team] may be null. */
+    static List<String> resumeArguments(Path executable, SessionFiles files, Path pluginDir, String claudeSessionId,
+            ModelSelection selection, Team team) {
+        String id = canonicalUuid(claudeSessionId);
+        List<String> command = base(executable, files);
+        addClaudeManager(command, files, pluginDir);
+        command.addAll((team == null ? selection : selection.orElse(leadSelection(team))).arguments());
+        if (team != null) {
+            addTeam(command, team);
+        }
+        command.addAll(List.of("--resume", id));
+        return command;
+    }
+
+    static String canonicalUuid(String value) {
+        try {
+            String id = UUID.fromString(value).toString();
+            if (id.equalsIgnoreCase(value)) {
+                return id;
+            }
+        } catch (IllegalArgumentException | NullPointerException ignored) {
+            // rethrown below with one message
+        }
+        throw new IllegalArgumentException("Invalid Claude session id");
     }
 
     /** The lead runs with its role's model and effort, the other roles as --agents, and the task as the first prompt (after "--" so it is never read as a flag). */
@@ -97,10 +125,15 @@ public final class ClaudeCommand {
         return toolNames.stream().map(name -> AssistantMcpServer.TOOL_NAME_PREFIX + name).collect(Collectors.joining(","));
     }
 
-    static List<String> attachArguments(Path executable, SessionFiles files, String backgroundSessionId) {
-        if (!SAFE_ID.matcher(backgroundSessionId).matches()) {
+    static String requireSafeBackgroundId(String backgroundSessionId) {
+        if (backgroundSessionId == null || !SAFE_ID.matcher(backgroundSessionId).matches()) {
             throw new IllegalArgumentException("Invalid background session id");
         }
+        return backgroundSessionId;
+    }
+
+    static List<String> attachArguments(Path executable, SessionFiles files, String backgroundSessionId) {
+        requireSafeBackgroundId(backgroundSessionId);
         List<String> command = base(executable, files);
         command.add("attach");
         command.add(backgroundSessionId);
@@ -110,6 +143,13 @@ public final class ClaudeCommand {
     static Map<String, String> environment(Map<String, String> parent, String ccmSessionId) {
         Map<String, String> env = terminalEnvironment(parent);
         env.put(ENV_SESSION, ccmSessionId);
+        return env;
+    }
+
+    /** Only the Assistant gets the token its mcp file refers to. */
+    static Map<String, String> assistantEnvironment(Map<String, String> parent, String ccmSessionId, String token) {
+        Map<String, String> env = environment(parent, ccmSessionId);
+        env.put(HookServer.ASSISTANT_TOKEN_ENV, token);
         return env;
     }
 
@@ -144,7 +184,11 @@ public final class ClaudeCommand {
         };
     }
 
+    /** [team] may be null, then the label is that of {@link #label(LaunchMode)}. */
     static String label(LaunchMode mode, Team team) {
+        if (team == null) {
+            return label(mode);
+        }
         return switch (mode) {
             case NEW -> "claude (" + team.name() + ")";
             case CONTINUE -> "claude (continue, " + team.name() + ")";

@@ -38,7 +38,7 @@ fun GroupDialog(request: GroupDialogRequest, projects: ProjectsState) {
     var error by remember { mutableStateOf<String?>(null) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
-    LaunchedEffect(name.text.toString(), chosen.size) { error = null }
+    LaunchedEffect(name.text.toString(), chosen.toSet()) { error = null }
     val valid = name.text.isNotBlank() && chosen.isNotEmpty()
     val close = { projects.groupDialog = null }
     val save = { if (valid) projects.saveGroup(group, name.text.toString(), chosen.toList()) { error = it } }

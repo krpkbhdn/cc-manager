@@ -10,13 +10,16 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 
+private const val POLLS_BEFORE_ASSERTING = 3
+
 class AssistantStartupTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var mode = AssistantStartup.ASK
     @Volatile private var blocked = false
+    private val blockedReads = AtomicInteger()
     private val background = AtomicInteger()
     private val foreground = AtomicInteger()
-    private val state = AssistantStartupState(scope, { mode }, { mode = it }, { blocked }, { background.incrementAndGet() }, { foreground.incrementAndGet() }, pollMillis = 10)
+    private val state = AssistantStartupState(scope, { mode }, { mode = it }, { blockedReads.incrementAndGet(); blocked }, { background.incrementAndGet() }, { foreground.incrementAndGet() }, pollMillis = 10)
 
     @AfterEach
     fun stop() = scope.cancel()
@@ -42,13 +45,12 @@ class AssistantStartupTest {
     fun `asking waits for other dialogs and happens once per run`() {
         blocked = true
         state.atStart(true)
-        Thread.sleep(60)
+        await { blockedReads.get() >= POLLS_BEFORE_ASSERTING }
         assertThat(state.asking).isFalse()
         blocked = false
         await { state.asking }
         state.dismiss()
         state.atStart(true)
-        Thread.sleep(60)
         assertThat(state.asking).isFalse()
     }
 

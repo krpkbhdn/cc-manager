@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.notification;
 
+import static com.github.krpkbhdn.ccmanager.config.PropertyRules.*;
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
@@ -10,4 +11,11 @@ public record NotificationSoundProperties(
         @DefaultValue("true") boolean enabled,
         @DefaultValue("0.9") double volume,
         @DefaultValue("1s") Duration minInterval,
-        @DefaultValue("500ms") Duration lineTail) {}
+        @DefaultValue("500ms") Duration lineTail) {
+
+    public NotificationSoundProperties {
+        inRange("cc-manager.notification-sound.volume", volume, 0.0, 1.0);
+        nonNegative("cc-manager.notification-sound.min-interval", minInterval);
+        nonNegative("cc-manager.notification-sound.line-tail", lineTail);
+    }
+}

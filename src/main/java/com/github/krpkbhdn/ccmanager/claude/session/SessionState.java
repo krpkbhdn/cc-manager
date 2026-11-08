@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -86,7 +87,7 @@ record SessionState(
         void markBackground(String agentId) {
             var agent = subagents.get(agentId);
             if (agent == null) {
-                var ids = new java.util.HashSet<>(backgroundAgentIds);
+                var ids = new LinkedHashSet<>(backgroundAgentIds);
                 ids.add(agentId);
                 backgroundAgentIds = ids;
                 return;
@@ -97,7 +98,7 @@ record SessionState(
         }
 
         boolean takeBackground(String agentId) {
-            var ids = new java.util.HashSet<>(backgroundAgentIds);
+            var ids = new LinkedHashSet<>(backgroundAgentIds);
             var known = ids.remove(agentId);
             backgroundAgentIds = ids;
             return known;
@@ -135,13 +136,13 @@ record SessionState(
         return status(Instant.EPOCH, Duration.ZERO);
     }
 
-    /** Agents silent for [staleAfter] (zero or less: never) neither keep the session working nor ask for the user. */
+    /** Agents silent for [staleAfter] (zero: never) no longer keep the session WORKING, but one waiting for the user keeps it NEEDS_ACTION. */
     AgentStatus status(Instant now, Duration staleAfter) {
-        var agents = subagents.values().stream().map(agent -> agent.withStale(now, staleAfter)).filter(agent -> agent.running() && !agent.stale()).toList();
-        if (needsAction || agents.stream().anyMatch(agent -> agent.state() == SubagentState.NEEDS_ACTION)) {
+        var running = subagents.values().stream().map(agent -> agent.withStale(now, staleAfter)).filter(SubagentSnapshot::running).toList();
+        if (needsAction || running.stream().anyMatch(agent -> agent.state() == SubagentState.NEEDS_ACTION)) {
             return AgentStatus.NEEDS_ACTION;
         }
-        return turnOpen || compacting || !agents.isEmpty() ? AgentStatus.WORKING : AgentStatus.IDLE;
+        return turnOpen || compacting || running.stream().anyMatch(agent -> !agent.stale()) ? AgentStatus.WORKING : AgentStatus.IDLE;
     }
 
     SessionSnapshot toSnapshot() {
@@ -156,7 +157,13 @@ record SessionState(
     }
 
     private static Set<String> boundedIds(Set<String> ids) {
-        return ids.size() <= MAX_SUBAGENTS ? Set.copyOf(ids) : Set.of();
+        var copy = new LinkedHashSet<>(ids);
+        var iterator = copy.iterator();
+        while (copy.size() > MAX_SUBAGENTS) {
+            iterator.next();
+            iterator.remove();
+        }
+        return Collections.unmodifiableSet(copy);
     }
 
     /** Over the cap the oldest finished agents go first, then the oldest running ones. */

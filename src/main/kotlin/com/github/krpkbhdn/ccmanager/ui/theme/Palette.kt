@@ -56,6 +56,7 @@ class AppColors(
         NotificationKind.FINISHED -> success
         NotificationKind.NEEDS_ACTION -> danger
         NotificationKind.ERROR -> danger
+        NotificationKind.USAGE_ALERT -> danger
         NotificationKind.INFO -> accent
     }
 }

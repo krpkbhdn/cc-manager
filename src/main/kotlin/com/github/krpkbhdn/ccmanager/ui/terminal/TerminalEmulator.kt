@@ -44,6 +44,10 @@ internal class TerminalEmulator(
     private val discardedLines = AtomicInteger()
     private var connectorResize: ScheduledFuture<*>? = null
 
+    // input goes through its own thread: a write blocks while the process does not drain stdin and must not stall frames or resizes
+    private val writer = ScheduledThreadPoolExecutor(1) { task -> Thread(task, "TerminalWriter-${connector.name}").apply { isDaemon = true } }
+        .apply { setKeepAliveTime(WORKER_IDLE_SECONDS, TimeUnit.SECONDS); allowCoreThreadTimeOut(true) }
+
     val modes = ScreenModes(::invalidate)
     val buffer: TerminalTextBuffer
     val terminal: JediTerminal
@@ -70,7 +74,7 @@ internal class TerminalEmulator(
 
     fun write(bytes: ByteArray) {
         if (bytes.isEmpty()) return
-        runCatching { worker.execute { writeNow(bytes) } }
+        runCatching { writer.execute { writeNow(bytes) } }
     }
 
     fun resize(columns: Int, rows: Int) {
@@ -78,13 +82,14 @@ internal class TerminalEmulator(
             worker.execute {
                 terminal.resize(TermSize(columns, rows), RequestOrigin.User)
                 connectorResize?.cancel(false)
-                connectorResize = worker.schedule({ connector.resize(TermSize(columns, rows)) }, CONNECTOR_RESIZE_MILLIS, TimeUnit.MILLISECONDS)
+                connectorResize = writer.schedule({ connector.resize(TermSize(columns, rows)) }, CONNECTOR_RESIZE_MILLIS, TimeUnit.MILLISECONDS)
             }
         }
     }
 
     fun close() {
         worker.shutdownNow()
+        writer.shutdownNow()
         runCatching { connector.close() }
     }
 

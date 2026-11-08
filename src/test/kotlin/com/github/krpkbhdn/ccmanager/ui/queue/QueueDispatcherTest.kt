@@ -81,6 +81,16 @@ class QueueDispatcherTest {
     }
 
     @Test
+    fun anInterruptOfAPermissionPromptHoldsTheQueuedPromptUntilAnotherIsAdded() {
+        finishATurn()
+        observe(AgentStatus.NEEDS_ACTION)
+        assertThat(observe(AgentStatus.IDLE, interrupted = true)).isEqualTo(QueueDecision.WAIT)
+        assertThat(observe(AgentStatus.IDLE, interrupted = true)).isEqualTo(QueueDecision.WAIT)
+        dispatcher.promptAdded("s")
+        assertThat(observe(AgentStatus.IDLE)).isEqualTo(QueueDecision.SEND)
+    }
+
+    @Test
     fun doesNotSendWhileWorkingOrNeedingAction() {
         finishATurn()
         assertThat(observe(AgentStatus.WORKING)).isEqualTo(QueueDecision.WAIT)

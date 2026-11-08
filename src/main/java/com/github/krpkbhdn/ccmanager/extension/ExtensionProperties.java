@@ -1,16 +1,18 @@
 package com.github.krpkbhdn.ccmanager.extension;
 
+import static com.github.krpkbhdn.ccmanager.config.PropertyRules.*;
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
-/** Timeouts of the claude plugin/mcp commands: local queries, commands that download, the MCP health check and the wait for a browser sign-in. */
+/** Timeouts of the claude plugin/mcp commands: local queries, commands that download, the MCP health check and the wait for a browser sign-in, plus how many bytes of a SKILL.md are read for its frontmatter. */
 @ConfigurationProperties("cc-manager.extension")
 public record ExtensionProperties(
         @DefaultValue("30") int queryTimeoutSeconds,
         @DefaultValue("180") int networkTimeoutSeconds,
         @DefaultValue("90") int mcpHealthTimeoutSeconds,
-        @DefaultValue("300") int mcpLoginTimeoutSeconds) {
+        @DefaultValue("300") int mcpLoginTimeoutSeconds,
+        @DefaultValue("16384") int skillFrontmatterLimitBytes) {
 
     public Duration queryTimeout() {
         return Duration.ofSeconds(queryTimeoutSeconds);
@@ -26,5 +28,13 @@ public record ExtensionProperties(
 
     public Duration mcpLoginTimeout() {
         return Duration.ofSeconds(mcpLoginTimeoutSeconds);
+    }
+
+    public ExtensionProperties {
+        positive("cc-manager.extension.query-timeout-seconds", queryTimeoutSeconds);
+        positive("cc-manager.extension.network-timeout-seconds", networkTimeoutSeconds);
+        positive("cc-manager.extension.mcp-health-timeout-seconds", mcpHealthTimeoutSeconds);
+        positive("cc-manager.extension.mcp-login-timeout-seconds", mcpLoginTimeoutSeconds);
+        positive("cc-manager.extension.skill-frontmatter-limit-bytes", skillFrontmatterLimitBytes);
     }
 }

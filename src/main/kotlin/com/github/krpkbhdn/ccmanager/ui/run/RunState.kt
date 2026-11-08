@@ -8,6 +8,7 @@ import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
 import com.github.krpkbhdn.ccmanager.run.RunConfiguration
 import com.github.krpkbhdn.ccmanager.run.RunConfigurationService
 import com.github.krpkbhdn.ccmanager.run.RunService
+import com.github.krpkbhdn.ccmanager.ui.git.model.sameFolder
 import com.github.krpkbhdn.ccmanager.ui.state.ConfirmRequest
 import com.github.krpkbhdn.ccmanager.ui.state.Refresher
 import com.github.krpkbhdn.ccmanager.ui.state.TerminalPort
@@ -101,6 +102,12 @@ class RunState(
             }
         }
     }
+
+    /** Runs of any tracked project whose configuration runs in [directory]. */
+    fun runningIn(directory: Path): List<RunEntry> =
+        entries.values.flatten().filter { it.running && sameFolder(it.configuration.directory(), directory) }
+
+    fun stopRunningIn(directory: Path) = runningIn(directory).forEach { stop(it.id) }
 
     fun stopRunning(projectId: Long) = entriesOf(projectId).filter { it.running }.forEach { stop(it.id) }
 

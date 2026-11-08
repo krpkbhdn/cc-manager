@@ -115,4 +115,15 @@ class PromptTemplateServiceTest {
         service.create("b", "", "t", null, null);
         assertThat(calls).hasValue(2);
     }
+
+    @Test
+    void throwingSubscriberDoesNotStopTheOthers() {
+        var calls = new AtomicInteger();
+        service.subscribe(() -> { throw new IllegalStateException("boom"); });
+        service.subscribe(calls::incrementAndGet);
+
+        service.create("a", "", "t", null, null);
+
+        assertThat(calls).hasValue(1);
+    }
 }

@@ -52,7 +52,7 @@ fun RoleDialog(team: Team, dialog: RoleDialogState, teams: TeamsState) {
     LaunchedEffect(Unit) { focus.requestFocus() }
     LaunchedEffect(form.name.text.toString()) { saveError = null }
     val save = { if (form.error == null) teams.saveRole(dialog) { saveError = it } }
-    val existing = dialog.index?.let { team.roles.getOrNull(it) }
+    val existing = dialog.original?.let { original -> team.roles.firstOrNull { it.draft == original } }
     ModalHost(teams::requestCloseDialog, width = dialogWidth, takeFocus = false) {
         BoxWithConstraints {
             Column(Modifier.heightIn(max = maxHeight * HEIGHT_SHARE)) {

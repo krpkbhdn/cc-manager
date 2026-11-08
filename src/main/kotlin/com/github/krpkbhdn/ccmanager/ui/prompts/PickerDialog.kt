@@ -49,7 +49,8 @@ internal fun <T> PickerDialog(
     onDismiss: () -> Unit,
     card: @Composable (item: T, selected: Boolean, onHover: () -> Unit) -> Unit,
 ) {
-    var selected by remember { mutableIntStateOf(0) }
+    var selectedIndex by remember { mutableIntStateOf(0) }
+    val selected = selectedIndex.coerceAtMost(items.lastIndex.coerceAtLeast(0))
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
     ModalHost(onDismiss, width = dialogWidth, takeFocus = false) {
@@ -58,8 +59,8 @@ internal fun <T> PickerDialog(
                 Modifier.fillMaxWidth().focusRequester(focus).focusable().onPreviewKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     when (event.key) {
-                        Key.DirectionDown -> { selected = movedSelection(selected, 1, items.size); true }
-                        Key.DirectionUp -> { selected = movedSelection(selected, -1, items.size); true }
+                        Key.DirectionDown -> { selectedIndex = movedSelection(selected, 1, items.size); true }
+                        Key.DirectionUp -> { selectedIndex = movedSelection(selected, -1, items.size); true }
                         Key.Enter, Key.NumPadEnter -> { items.getOrNull(selected)?.let(onChoose); true }
                         else -> false
                     }
@@ -67,7 +68,7 @@ internal fun <T> PickerDialog(
                 verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 if (items.isEmpty()) Label(emptyHint, color = colors.textTertiary, maxLines = 2)
-                items.forEachIndexed { index, item -> card(item, index == selected) { selected = index } }
+                items.forEachIndexed { index, item -> card(item, index == selected) { selectedIndex = index } }
                 if (items.isNotEmpty()) Label(KEYS_HINT, color = colors.textTertiary, style = Type.caption)
             }
         }

@@ -85,7 +85,7 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
     )
 
     private fun onEmulatorFrame() {
-        val history = scrollbackLines
+        val history = buffer.withLock { scrollbackLines }
         if (history < knownHistory) historyShrank.set(true)
         pendingGrowth.addAndGet(history - knownHistory + emulator.takeDiscardedLines())
         knownHistory = history
@@ -103,7 +103,9 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
         if (grown < 0) {
             selection = null
         } else {
-            selection = selection?.let { CellSelection(it.anchor.copy(line = it.anchor.line - grown), it.head.copy(line = it.head.line - grown)) }
+            selection = selection
+                ?.let { CellSelection(it.anchor.copy(line = it.anchor.line - grown), it.head.copy(line = it.head.line - grown)) }
+                ?.takeIf { it.start.line >= -scrollbackLines }
             if (scrollTarget > 0f) shiftScroll(grown.toFloat())
         }
         scrollTarget = scrollTarget.coerceIn(0f, scrollbackLines.toFloat())

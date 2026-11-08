@@ -16,7 +16,9 @@ public record VoiceProperties(
         @DefaultValue("0.5") double vadThreshold,
         @DefaultValue("4") int threads,
         @DefaultValue("30s") Duration downloadStallTimeout,
-        @DefaultValue("5m") Duration idleShutdown) {
+        @DefaultValue("5m") Duration idleShutdown,
+        @DefaultValue("2m") Duration recognizerOpenTimeout,
+        @DefaultValue("60s") Duration flushWait) {
 
     public VoiceProperties {
         require(LanguageCode.isKnown(language), "language must be \"auto\" or a whisper code such as en, uk, de, got: " + language);
@@ -24,7 +26,10 @@ public record VoiceProperties(
         require(positive(window), "window must be positive");
         require(positive(tick), "tick must be positive");
         require(tick.compareTo(window) <= 0, "tick must not exceed window");
-        require(!pause.isNegative(), "pause must not be negative");
+        require(positive(pause), "pause must be positive");
+        require(positive(downloadStallTimeout), "downloadStallTimeout must be positive");
+        require(positive(recognizerOpenTimeout), "recognizerOpenTimeout must be positive");
+        require(positive(flushWait), "flushWait must be positive");
         require(!idleShutdown.isNegative(), "idleShutdown must not be negative");
         require(vadThreshold > 0 && vadThreshold <= 1, "vadThreshold must be in (0, 1]");
         require(speechRms >= 0, "speechRms must not be negative");

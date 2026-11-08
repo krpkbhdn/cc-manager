@@ -27,6 +27,16 @@ class ClaudeCommandTest {
     private static final int WINDOWS_COMMAND_LINE_LIMIT = 32_767;
 
     @Test
+    void resumeArgumentsPassTheSessionIdAndRejectAnInvalidOne() {
+        String id = "123e4567-e89b-12d3-a456-426614174000";
+        assertThat(ClaudeCommand.resumeArguments(EXE, FILES, PLUGIN, id, ModelSelection.DEFAULT, null)).endsWith("--resume", id);
+        assertThatThrownBy(() -> ClaudeCommand.resumeArguments(EXE, FILES, PLUGIN, "1-1-1-1-1", ModelSelection.DEFAULT, null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ClaudeCommand.resumeArguments(EXE, FILES, PLUGIN, "--x", ModelSelection.DEFAULT, null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void newSessionHasSettingsMcpConfigAndPlugin() {
         assertThat(ClaudeCommand.launchArguments(EXE, FILES, PLUGIN, LaunchMode.NEW, ModelSelection.DEFAULT))
                 .containsExactly(EXE.toString(), "--settings", SETTINGS.toString(), "--mcp-config", MCP.toString(), "--plugin-dir", PLUGIN.toString());
@@ -95,6 +105,15 @@ class ClaudeCommandTest {
     }
 
     @Test
+    void multiLineTaskWithQuotesAndBackticksStaysOneQuotedArgument() {
+        var task = "Fix:\n1. \"a\" `b`\n";
+        var command = ClaudeCommand.taskArguments(EXE, FILES, PLUGIN, ModelSelection.DEFAULT, task);
+
+        assertThat(command).endsWith("--", task);
+        assertThat(WindowsArgument.quote(task)).isEqualTo("\"Fix:\n1. \\\"a\\\" `b`\n\"");
+    }
+
+    @Test
     void taskWithoutTeamAndDefaultSelectionHasOnlyTheTask() {
         assertThat(ClaudeCommand.taskArguments(EXE, FILES, PLUGIN, ModelSelection.DEFAULT, "t"))
                 .doesNotContain("--model", "--effort", "--agents").endsWith("--", "t");
@@ -128,6 +147,16 @@ class ClaudeCommandTest {
                 .containsEntry("TERM", "xterm-256color")
                 .containsEntry("COLORTERM", "truecolor")
                 .containsEntry("CCM_SESSION", "ccm-1");
+    }
+
+    @Test
+    void assistantTokenIsOnlyInTheAssistantEnvironmentAndNeverInherited() {
+        Map<String, String> parent = Map.of("CCM_ASSISTANT_TOKEN", "inherited");
+
+        assertThat(ClaudeCommand.environment(parent, "ccm-1")).doesNotContainKey("CCM_ASSISTANT_TOKEN");
+        assertThat(ClaudeCommand.groupEnvironment(parent, "ccm-1")).doesNotContainKey("CCM_ASSISTANT_TOKEN");
+        assertThat(ClaudeCommand.terminalEnvironment(parent)).doesNotContainKey("CCM_ASSISTANT_TOKEN");
+        assertThat(ClaudeCommand.assistantEnvironment(parent, "ccm-1", "tok")).containsEntry("CCM_ASSISTANT_TOKEN", "tok");
     }
 
     @Test

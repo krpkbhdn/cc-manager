@@ -1,25 +1,34 @@
 package com.github.krpkbhdn.ccmanager.config;
 
+import com.zaxxer.hikari.HikariDataSource;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import javax.sql.DataSource;
-import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/** SQLite in WAL mode: readers do not block the writer; busy_timeout covers writer contention. */
+/**
+ * SQLite in WAL mode: readers do not block the writer. Transactions start with BEGIN IMMEDIATE so a read-then-write
+ * transaction never fails on a lock upgrade (busy_timeout does not cover it); writers queue on busy_timeout instead.
+ */
 @Configuration
-@EnableConfigurationProperties(AppProperties.class)
+@EnableConfigurationProperties({AppProperties.class, DatabaseProperties.class})
 class DatabaseConfiguration {
 
-    private static final String PRAGMAS = "?journal_mode=WAL&foreign_keys=on&busy_timeout=5000";
-
     @Bean
-    DataSource dataSource(AppProperties properties) throws IOException {
+    DataSource dataSource(AppProperties properties, DatabaseProperties database) throws IOException {
         Files.createDirectories(properties.dataDir());
-        return DataSourceBuilder.create()
-                .url("jdbc:sqlite:" + properties.dataDir().resolve("cc-manager.db") + PRAGMAS)
-                .build();
+        return create(properties.dataDir().resolve("cc-manager.db"), database);
+    }
+
+    static HikariDataSource create(Path file, DatabaseProperties database) {
+        var source = new HikariDataSource();
+        source.setJdbcUrl("jdbc:sqlite:" + file + "?journal_mode=WAL&synchronous=NORMAL&foreign_keys=on&transaction_mode=IMMEDIATE"
+                + "&busy_timeout=" + database.busyTimeout().toMillis());
+        source.setMaximumPoolSize(database.maxConnections());
+        source.setMinimumIdle(1);
+        return source;
     }
 }

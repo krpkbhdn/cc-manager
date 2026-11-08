@@ -11,8 +11,11 @@ class PromptQueues {
 
     fun of(ccmSessionId: String): List<QueuedPrompt> = queues[ccmSessionId].orEmpty()
 
-    fun add(ccmSessionId: String, text: String) {
-        queues[ccmSessionId] = of(ccmSessionId) + QueuedPrompt(nextId++, text)
+    /** Returns the id of the new prompt. */
+    fun add(ccmSessionId: String, text: String): Long {
+        val prompt = QueuedPrompt(nextId++, text)
+        queues[ccmSessionId] = of(ccmSessionId) + prompt
+        return prompt.id
     }
 
     fun remove(ccmSessionId: String, promptId: Long) = set(ccmSessionId, of(ccmSessionId).filter { it.id != promptId })

@@ -51,6 +51,15 @@ class SessionCommandWriterTest {
     }
 
     @Test
+    fun enterIsNotPressedAndTheTypedTextIsClearedWhenAKeyWasTypedDuringThePause() = runBlocking {
+        var draft = false
+        val typing = SessionCommandWriter(terminal) { draft = true }
+
+        assertThat(typing.run("s1", "queued", clearDraft = false, draftExists = { draft })).isFalse()
+        assertThat(events).containsExactly("s1:queued", "s1:")
+    }
+
+    @Test
     fun nothingIsTypedAndFalseIsReturnedWithoutATerminal() = runBlocking {
         val closed = object : TerminalPort by terminal {
             override fun hasTerminal(ccmSessionId: String) = false

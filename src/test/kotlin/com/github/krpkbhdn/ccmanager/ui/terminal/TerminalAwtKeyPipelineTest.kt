@@ -1,8 +1,13 @@
 package com.github.krpkbhdn.ccmanager.ui.terminal
 
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.ComposePanel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
+import com.github.krpkbhdn.ccmanager.ui.await
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeFalse
@@ -16,12 +21,15 @@ import java.awt.datatransfer.Transferable
 import java.awt.KeyboardFocusManager
 import java.awt.event.InputEvent
 import java.awt.event.KeyEvent
+import java.beans.PropertyChangeListener
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import javax.swing.JFrame
 import javax.swing.SwingUtilities
 
 private const val ESC = "\u001b"
-private const val FOCUS_WAIT_MILLIS = 5_000L
-private const val POLL_MILLIS = 50L
+private const val FOCUS_WAIT_SECONDS = 5L
+private const val MILLIS_PER_SECOND = 1_000L
 
 /**
  * Real AWT events dispatched straight to the component of an in-process Compose panel (no OS-level input), so the
@@ -35,6 +43,10 @@ class TerminalAwtKeyPipelineTest {
     @BeforeEach
     fun open() {
         assumeFalse(GraphicsEnvironment.isHeadless())
+        val focusManager = KeyboardFocusManager.getCurrentKeyboardFocusManager()
+        val awtFocused = CountDownLatch(1)
+        val listener = PropertyChangeListener { if (focusManager.focusOwner != null) awtFocused.countDown() }
+        focusManager.addPropertyChangeListener("focusOwner", listener)
         SwingUtilities.invokeAndWait {
             frame = JFrame().apply {
                 val panel = ComposePanel()
@@ -44,8 +56,14 @@ class TerminalAwtKeyPipelineTest {
                 isVisible = true
             }
         }
-        val deadline = System.currentTimeMillis() + FOCUS_WAIT_MILLIS
-        while ((!session.focused || KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner == null) && System.currentTimeMillis() < deadline) Thread.sleep(POLL_MILLIS)
+        try {
+            if (focusManager.focusOwner != null) awtFocused.countDown()
+            awtFocused.await(FOCUS_WAIT_SECONDS, TimeUnit.SECONDS)
+            runBlocking { withTimeoutOrNull(FOCUS_WAIT_SECONDS * MILLIS_PER_SECOND) { snapshotFlow { session.focused }.first { it } } }
+            await { connector.resizes.isNotEmpty() }
+        } finally {
+            focusManager.removePropertyChangeListener("focusOwner", listener)
+        }
     }
 
     @AfterEach
@@ -68,6 +86,12 @@ class TerminalAwtKeyPipelineTest {
         return connector.written.joinToString("") { String(it, Charsets.ISO_8859_1) }
     }
 
+    /** The emulator hands bytes to the connector on its own thread, so wait for them instead of for a quiet screen. */
+    private fun writtenAtLeast(expected: String): String {
+        await { connector.writtenText().length >= expected.length }
+        return written()
+    }
+
     @Test
     fun layoutCharactersAndSpecialKeysBecomeTheRightBytes() {
         assumeFalse(!session.focused)
@@ -85,7 +109,7 @@ class TerminalAwtKeyPipelineTest {
         typed('\uD83D')
         typed('\uDE00')
         val expected = "Ñ\u0097a\u0003${ESC}b${ESC}p$ESC\r$ESC[A$ESC[Z@" + String("😀".toByteArray(), Charsets.ISO_8859_1)
-        assertThat(written()).isEqualTo(expected)
+        assertThat(writtenAtLeast(expected)).isEqualTo(expected)
     }
 
     private val clipboard = Toolkit.getDefaultToolkit().systemClipboard
@@ -105,6 +129,7 @@ class TerminalAwtKeyPipelineTest {
         connector.feed("hello")
         settle(connector, session)
         session.select(CellSelection(Cell(0, 0), Cell(4, 0)))
+        assertThat(session.selection).describedAs("selection kept after the initial layout").isNotNull()
     }
 
     private fun ctrl(code: Int, char: Char, extra: Int = 0) = pressed(code, char, InputEvent.CTRL_DOWN_MASK or extra)
@@ -135,7 +160,7 @@ class TerminalAwtKeyPipelineTest {
         assumeFalse(!session.focused)
         clipboard.setContents(StringSelection("pasted"), null)
         ctrl(KeyEvent.VK_V, '\u0016')
-        assertThat(written()).isEqualTo("pasted")
+        assertThat(writtenAtLeast("pasted")).isEqualTo("pasted")
     }
 
     @Test

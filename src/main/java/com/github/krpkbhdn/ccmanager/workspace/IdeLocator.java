@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class IdeLocator {
 
-    private static final Pattern VERSION_PART = Pattern.compile("\\d+");
+    private static final Pattern VERSION_PART = Pattern.compile("\\d{1,9}");
     private static final String WINDOWS_DEFAULT_PROGRAM_FILES = "C:\\Program Files";
     private static final String INSTALL_DIRECTORY_PREFIX = "IntelliJ IDEA";
     private static final List<String> PATH_LAUNCHERS = List.of("idea", "idea64", "idea.cmd", "idea64.exe", "idea.sh");
@@ -82,7 +82,7 @@ public class IdeLocator {
         return value == null || value.isBlank() ? fallback : Path.of(value);
     }
 
-    /** Numeric parts of the directory name ("IntelliJ IDEA 2025.2.3" -> 2025.2.3) packed for comparison. */
+    /** Numeric parts of the directory name ("IntelliJ IDEA 2025.2.3" -> 2025.2.3) packed for comparison; a longer digit run (a build timestamp) is split so it cannot overflow. */
     private static List<Integer> versionOf(Path directory) {
         return VERSION_PART.matcher(directory.getFileName().toString()).results()
                 .map(match -> Integer.parseInt(match.group()))

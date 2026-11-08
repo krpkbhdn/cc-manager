@@ -34,11 +34,11 @@ final class McpListParser {
 
     private static McpStatus status(String text) {
         var lower = text.toLowerCase(Locale.ROOT);
-        if (lower.contains("auth")) {
-            return McpStatus.NEEDS_AUTHENTICATION;
-        }
         if (lower.contains("fail") || lower.contains("error")) {
             return McpStatus.FAILED;
+        }
+        if (lower.contains("auth")) {
+            return McpStatus.NEEDS_AUTHENTICATION;
         }
         if (lower.startsWith("connected")) {
             return McpStatus.CONNECTED;
