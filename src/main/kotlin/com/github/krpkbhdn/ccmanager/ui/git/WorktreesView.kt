@@ -63,7 +63,7 @@ private fun WorktreeRow(git: GitState, work: WorkContextActions, worktree: Workt
     val context = work.contexts.firstOrNull { sameFolder(it.directory, worktree.path()) }
     Row(Modifier.fillMaxWidth().height(rowHeight).padding(horizontal = Spacing.md), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
         Glyph(Icons.FolderTree, colors.accent, size = IconSize.large)
-        Label(worktreeTitle(worktree), Modifier.widthIn(max = titleWidth).weight(1f, fill = false), color = colors.textPrimary, style = Type.monoMedium, tooltipWhenTruncated = true)
+        Label(worktreeTitle(worktree), Modifier.widthIn(max = titleWidth), color = colors.textPrimary, style = Type.monoMedium, tooltipWhenTruncated = true)
         Label(worktree.path().toString(), Modifier.weight(1f), color = colors.textSecondary, style = Type.monoSmall, tooltipWhenTruncated = true)
         if (worktree.main()) Chip("main", colors.textSecondary)
         context?.task?.let { WithTooltip(it.task()) { Chip("task", colors.accent) } }

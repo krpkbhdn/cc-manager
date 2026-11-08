@@ -50,7 +50,7 @@ fun LogRowView(row: GitLog.Row, previous: GitLog.Row?, laneCount: Int, laneWidth
     Pressable(onClick, Modifier.fillMaxWidth(), RoundedCornerShape(Radius.sm), base = if (selected) colors.accentSoft else Color.Transparent) {
         Row(Modifier.height(LogRowHeight).padding(end = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
             GraphCell(row, previous, laneCount, laneWidth, LogRowHeight)
-            RefChips(commit.refs(), laneColor, Modifier.weight(1f, fill = false).widthIn(max = chipsMaxWidth).padding(end = Spacing.sm), limit = if (columns.date) WIDE_CHIP_LIMIT else NARROW_CHIP_LIMIT)
+            RefChips(commit.refs(), laneColor, Modifier.widthIn(max = chipsMaxWidth).padding(end = Spacing.sm), limit = if (columns.date) WIDE_CHIP_LIMIT else NARROW_CHIP_LIMIT)
             Label(commit.subject(), Modifier.weight(1f), color = colors.textPrimary, style = Type.small, tooltipWhenTruncated = true)
             if (columns.author) Label(commit.authorName(), Modifier.width(authorWidth).padding(start = Spacing.sm), color = colors.textSecondary, style = Type.small)
             if (columns.date) WithTooltip(absoluteDate(commit.authorDate())) {

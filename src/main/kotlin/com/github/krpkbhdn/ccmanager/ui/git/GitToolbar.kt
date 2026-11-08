@@ -71,8 +71,7 @@ fun GitToolbar(git: GitState, work: WorkContextActions, pullRequestHere: Boolean
             }
         } else {
             Row(padding, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                left()
-                Box(Modifier.weight(1f))
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) { left() }
                 right()
             }
         }
