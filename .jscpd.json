@@ -6,7 +6,6 @@
   "ignore": [
     "**/build/**",
     "**/.gradle/**",
-    "**/graphify-out/**",
     "**/jscpd-report/**"
   ],
   "ignorePattern": [

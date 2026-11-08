@@ -1,12 +1,3 @@
-## graphify
-
-This project has a graphify knowledge graph at graphify-out/ (built with `/graphify`).
-
-Rules:
-- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
-- For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep
-- After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)
-
 ## Project
 
 Claude Code Manager — a cross-platform (Windows/Linux/macOS) **desktop** app that runs and manages many local Claude Code sessions from one place: projects, agents, notifications, approving or rejecting agent proposals. Think "AgentRoom, but better".
@@ -77,7 +68,7 @@ The `compose.desktop` block points `javaHome` at the Java 25 toolchain; without 
 
 ## Duplicate code
 
-- Before writing anything new, search for an existing implementation: `graphify query "<what you need>"` first, then grep.
+- Before writing anything new, search for an existing implementation with grep.
 - After a change, run `npx jscpd --reporters ai <changed paths>` (uses `.jscpd.json`). Remove clones you introduced with the `dry-refactoring` skill.
 - Deduplication never changes behaviour.
 

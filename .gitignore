@@ -42,8 +42,6 @@ build/
 
 ### Claude / tooling ###
 .claude/settings.local.json
-graphify-out/
-.graphify_python
 jscpd-report/
 .claude/worktrees/
 
