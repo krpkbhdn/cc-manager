@@ -251,4 +251,26 @@ class SessionsStateTest {
         assertThat(sent).isEmpty()
         assertThat(errors).singleElement().asString().contains("unsent text")
     }
+
+    @Test
+    fun `send calls onSent after the command is typed and submitted`() {
+        val sent = CopyOnWriteArrayList<String>()
+        val sentCallbacks = java.util.concurrent.atomic.AtomicInteger()
+        val recordingTerminal = object : TerminalPort by terminal {
+            override fun send(ccmSessionId: String, text: String) { sent += text }
+        }
+        val idle = com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot(
+            "s1", 1, "claude", com.github.krpkbhdn.ccmanager.claude.session.AgentStatus.IDLE, "", "default", null, null,
+            java.time.Instant.EPOCH, java.time.Instant.EPOCH, emptyList(), 0, null,
+        )
+        val state = SessionsState(
+            PreviewWorld().backend(recordingTerminal), scope, { LiveSessions(listOf(idle)) }, { null }, { null },
+            onOpened = { _, _ -> }, onClosed = { _, _ -> }, showProject = {}, requestConfirm = {}, reportError = { error(it) },
+        )
+
+        state.send("s1", "/compact" + Keys.ENTER) { sentCallbacks.incrementAndGet() }
+        await { sentCallbacks.get() == 1 }
+
+        assertThat(sent).containsExactly("/compact", Keys.ENTER)
+    }
 }

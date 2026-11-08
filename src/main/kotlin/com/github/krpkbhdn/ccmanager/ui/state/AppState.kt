@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import com.github.krpkbhdn.ccmanager.claude.hook.ActivityEntry
 import com.github.krpkbhdn.ccmanager.claude.install.LoginState
 import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgent
@@ -48,6 +49,7 @@ private const val TICK_MILLIS = 1_000L
 private const val STALE_REFRESH_TICKS = 30
 private const val UNOPENED_GIT_REFRESH_TICKS = 60
 private const val ACTIVITY_LIMIT = 300
+private const val COMPACT_COMMAND = "/compact"
 
 /**
  * Single subscription point to the backend: re-reads snapshots on change callbacks (any thread) and exposes
@@ -77,6 +79,8 @@ class AppState(
     var confirm by mutableStateOf<ConfirmRequest?>(null)
     var notificationsOpen by mutableStateOf(false)
     var usageOpen by mutableStateOf(false)
+    var contextSessionId by mutableStateOf<String?>(null)
+    var contextShowDetails by mutableStateOf(false)
     var modelPickerOpen by mutableStateOf(false)
     var quickRequestOpen by mutableStateOf(false)
     var assistantHelpOpen by mutableStateOf(false)
@@ -110,6 +114,8 @@ class AppState(
         reportError = notifications::reportError,
         projectPath = { projects.find(it)?.path },
     )
+    val contextBreakdown = ContextBreakdownState({ target, force -> backend.contextBreakdown.measure(target.directory, target.claudeSessionId, force) }, scope, ::contextTargetOf)
+    val contextAlerts = ContextAlerts()
     val assistant = AssistantState(
         scope, backend.terminal, { live }, backend.dataDir.resolve("assistant"),
         launch = { sessions.launchAssistant(it) }, show = { navigate(Route.Assistant) }, enqueue = { id, text -> queue.add(id, text) }, requestConfirm = { confirm = it },
@@ -202,6 +208,7 @@ class AppState(
             }
         }
         backend.appControl?.let { unsubscribers += it.connect(AppControlAdapter(this, scope, backend.appControlProperties.uiTimeout())) }
+        scope.launch { snapshotFlow { environment.sessionUsage }.collect(contextAlerts::rearmBelowCritical) }
         teams.start()
         prompts.start()
         sessionSearch.start()
@@ -249,11 +256,29 @@ class AppState(
         }
     }
 
+    private fun contextTargetOf(ccmSessionId: String): ContextTarget? {
+        val session = live.find(ccmSessionId) ?: return null
+        val directory = sessions.sessionDirectories[ccmSessionId] ?: projects.find(session.projectId())?.path ?: return null
+        return ContextTarget(directory, session.claudeSessionId())
+    }
+
+    /** /compact is a model call that rewrites the conversation, so it is confirmed first. */
+    fun requestCompactContext(ccmSessionId: String) {
+        confirm = ConfirmRequest("Compact this session?", "Types /compact into the session. Claude summarises the conversation, which uses the model.", "Compact", destructive = false) { compactContext(ccmSessionId) }
+    }
+
+    /** Types /compact into the session; refused with the usual reason while it is busy. */
+    fun compactContext(ccmSessionId: String) {
+        sessions.send(ccmSessionId, COMPACT_COMMAND + Keys.ENTER) { contextAlerts.dismiss(ccmSessionId) }
+    }
+
     fun navigate(target: Route) {
         route = target
         (target as? Route.Project)?.takeIf { projects.find(it.id)?.group != true }?.let { author.offerForProject(it.id) }
         notificationsOpen = false
         usageOpen = false
+        contextSessionId = null
+        contextShowDetails = false
         modelPickerOpen = false
     }
 

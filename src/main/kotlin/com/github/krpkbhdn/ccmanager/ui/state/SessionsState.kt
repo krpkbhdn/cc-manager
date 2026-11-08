@@ -222,13 +222,13 @@ class SessionsState(
         scope.launch { guarded { io { backend.terminal.close(ccmSessionId) } } }
     }
 
-    fun send(ccmSessionId: String, keys: String) {
+    fun send(ccmSessionId: String, keys: String, onSent: () -> Unit = {}) {
         if (keys.endsWith(Keys.ENTER)) commandBlockedReason(live().find(ccmSessionId), isAttached(ccmSessionId))?.let { return reportError(it) }
         if (keys.endsWith(Keys.ENTER) && backend.terminal.draftMayExist(ccmSessionId)) return reportError(DRAFT_MESSAGE_SEND)
         scope.launch {
             guarded {
                 val sent = if (keys.endsWith(Keys.ENTER)) commandWriter.run(ccmSessionId, keys.removeSuffix(Keys.ENTER), clearDraft = false) { backend.terminal.draftMayExist(ccmSessionId) } else { backend.terminal.send(ccmSessionId, keys); true }
-                if (!sent) reportError(BUSY_MESSAGE)
+                if (sent) onSent() else reportError(BUSY_MESSAGE)
             }
         }
     }

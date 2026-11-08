@@ -58,6 +58,7 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
             AppShortcut.PROJECT_SETTINGS -> handled { state.extensions.openProjectSettings(project) }
             AppShortcut.RUN -> state.runs.selectedOf(project.id)?.takeIf { !it.directoryMissing }?.let { entry -> handled { state.runs.run(entry.id) } } ?: false
             AppShortcut.ACTIVITY_TAB -> handled { state.select(project.id, ProjectTab.Activity) }
+            AppShortcut.CONTEXT_USAGE -> session != null && handled { state.contextSessionId = session }
             AppShortcut.FOCUS_TERMINAL -> session != null && handled { state.terminal.focus(session) }
             else -> false
         }
@@ -90,7 +91,7 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
 
     private fun overlayOpen() = state.paletteOpen || state.shortcutsOpen || state.notificationsOpen || state.usageOpen
 
-    private fun modalOpen() = state.answers.dialog != null || state.quickRequestOpen || state.assistantHelpOpen || state.assistantStartup.asking || state.confirm != null || state.projects.renaming != null || state.projects.groupDialog != null || state.projects.pickerOpen || state.extensions.projectSettings != null || state.settingsDialog.open ||
+    private fun modalOpen() = state.answers.dialog != null || state.contextSessionId != null || state.quickRequestOpen || state.assistantHelpOpen || state.assistantStartup.asking || state.confirm != null || state.projects.renaming != null || state.projects.groupDialog != null || state.projects.pickerOpen || state.extensions.projectSettings != null || state.settingsDialog.open ||
         state.tasks.projectId != null || state.tasks.quickStartProjectId != null || state.tasks.queuePickTarget != null ||state.runs.dialog != null || state.teams.dialog != null || state.agents.log != null || state.extensions.plugins.pending != null || state.extensions.mcp.adding || state.extensions.skills.creating || state.author.offer != null || state.author.manage != null || state.author.report != null ||
         currentProject()?.let { state.gits.of(it.id)?.dialog } != null
 

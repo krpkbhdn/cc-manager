@@ -111,6 +111,14 @@ private fun launchActions(state: AppState, project: Project, here: String) = lis
     PaletteItem("resume", "Resume a session", PaletteGroup.ACTIONS, here, Icons.Rewind) { state.sessions.launch(project.id, LaunchMode.RESUME_PICKER) },
 )
 
+private fun contextActions(state: AppState, project: Project, here: String): List<PaletteItem> {
+    val tab = state.viewOf(project.id).selected as? ProjectTab.Session ?: return emptyList()
+    return listOf(
+        PaletteItem("context-usage", "Show context usage", PaletteGroup.ACTIONS, "$here: how full the context window is", Icons.Gauge, shortcut = AppShortcut.CONTEXT_USAGE) { state.contextSessionId = tab.ccmSessionId },
+        PaletteItem("compact-context", "Compact context", PaletteGroup.ACTIONS, "$here: types /compact into the session", Icons.Zap) { state.requestCompactContext(tab.ccmSessionId) },
+    )
+}
+
 private fun projectOnlyActions(state: AppState, project: Project, here: String): List<PaletteItem> {
     return shellActions(state, project.id, here) + listOfNotNull(
         PaletteItem("open-folder", "Open folder", PaletteGroup.ACTIONS, here, Icons.FolderOpen) { state.environment.openFolder(project) },
@@ -121,6 +129,7 @@ private fun projectOnlyActions(state: AppState, project: Project, here: String):
         PaletteItem("show-run", "Show run console", PaletteGroup.ACTIONS, here, Icons.SquareTerminal) { state.select(project.id, ProjectTab.Run) },
         PaletteItem("show-activity", "Show activity", PaletteGroup.ACTIONS, here, Icons.Activity, shortcut = AppShortcut.ACTIVITY_TAB) { state.select(project.id, ProjectTab.Activity) },
         PaletteItem("toggle-agents", "Toggle agents panel", PaletteGroup.ACTIONS, here, Icons.PanelRightClose, shortcut = AppShortcut.TOGGLE_AGENTS, run = state.prefs::toggleAgents),
+        *contextActions(state, project, here).toTypedArray(),
         state.viewOf(project.id).focusedSession?.let { state.live.find(it) }?.let { session ->
             PaletteItem("switch-model", "Switch model", PaletteGroup.ACTIONS, "$here, opens Claude's picker (Alt+P)", Icons.Cpu) { state.sessions.openClaudeModelPicker(session) }
         },

@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -64,6 +65,7 @@ import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartupDialog
 import com.github.krpkbhdn.ccmanager.ui.assistant.QuickRequestDialog
 import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalDialogHost
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
+import com.github.krpkbhdn.ccmanager.ui.state.contextUsageView
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantScreen
 import com.github.krpkbhdn.ccmanager.ui.sessions.SessionsScreen
 import com.github.krpkbhdn.ccmanager.ui.state.usageWindowDetails
@@ -132,6 +134,10 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
             state.author.manage?.let { open -> AuthorConfigurationDialog(open, open.projectId?.let { state.projects.find(it)?.name }, state.author) }
             state.author.report?.let { AuthorReportPanel(it, state.author::closeReport) }
             ProposalDialogHost(state)
+            state.contextSessionId?.let { id ->
+                LaunchedEffect(id) { state.contextBreakdown.load(id, false) }
+                ContextUsageDialog(contextUsageView(state.environment.sessionUsage[id]), state.contextBreakdown.loadOf(id), state.contextBreakdown.isLoading(id), state.now, { state.contextBreakdown.load(id, true) }, state.contextShowDetails, { state.contextShowDetails = it }) { state.contextSessionId = null; state.contextShowDetails = false }
+            }
             if (state.quickRequestOpen) QuickRequestDialog({ state.assistant.request(it); state.quickRequestOpen = false }, { state.quickRequestOpen = false })
             if (state.assistantStartup.asking) AssistantStartupDialog(state.assistantStartup)
             if (state.assistantHelpOpen) AssistantHelpDialog(state.assistantTools) { state.assistantHelpOpen = false }

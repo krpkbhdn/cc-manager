@@ -36,6 +36,7 @@ import com.github.krpkbhdn.ccmanager.ui.git.model.GitBackend
 import com.github.krpkbhdn.ccmanager.usage.RateLimitService
 import com.github.krpkbhdn.ccmanager.update.UpdateService
 import com.github.krpkbhdn.ccmanager.usage.SessionUsageService
+import com.github.krpkbhdn.ccmanager.usage.context.ContextBreakdownService
 import com.github.krpkbhdn.ccmanager.ui.voice.VoiceBackend
 import com.github.krpkbhdn.ccmanager.voice.VoiceInputService
 import com.github.krpkbhdn.ccmanager.voice.asset.VoiceAssetService
@@ -82,6 +83,7 @@ class Backend(
     val usageDefaults: UsageThresholds = UsageThresholds(0, 0, 0.0),
     val dataDir: Path = Path.of(System.getProperty("user.home"), ".cc-manager"),
     val sessionProperties: SessionProperties,
+    val contextBreakdown: ContextBreakdownService,
     val appControl: AppControlRegistry? = null,
     val appControlProperties: AppControlProperties = AppControlProperties(Duration.ofSeconds(10), 20_000),
     val assistantTools: List<AssistantMcpTool> = emptyList(),
@@ -122,6 +124,7 @@ class Backend(
             usageDefaults = context.getBean(UsageProperties::class.java).let { UsageThresholds(it.fiveHourPercent(), it.sevenDayPercent(), it.dailyBudgetUsd()) },
             dataDir = context.getBean(AppProperties::class.java).dataDir(),
             sessionProperties = context.getBean(SessionProperties::class.java),
+            contextBreakdown = context.getBean(ContextBreakdownService::class.java),
             appControl = context.getBean(AppControlRegistry::class.java),
             appControlProperties = context.getBean(AppControlProperties::class.java),
             assistantTools = context.getBeansOfType(AssistantMcpTool::class.java).values.toList(),

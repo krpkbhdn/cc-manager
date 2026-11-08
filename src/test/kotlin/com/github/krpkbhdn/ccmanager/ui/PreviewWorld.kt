@@ -22,6 +22,12 @@ import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry
+import com.github.krpkbhdn.ccmanager.usage.ContextWindow
+import com.github.krpkbhdn.ccmanager.usage.context.ContextBreakdown
+import com.github.krpkbhdn.ccmanager.usage.context.ContextBreakdown.Category
+import com.github.krpkbhdn.ccmanager.usage.context.ContextBreakdown.Item
+import com.github.krpkbhdn.ccmanager.usage.context.ContextBreakdownResult
+import com.github.krpkbhdn.ccmanager.usage.context.ContextBreakdownService
 import com.github.krpkbhdn.ccmanager.usage.RateLimitService
 import com.github.krpkbhdn.ccmanager.usage.RateLimitSnapshot
 import com.github.krpkbhdn.ccmanager.usage.RateLimitWindow
@@ -66,12 +72,27 @@ import java.util.function.Consumer
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import org.jetbrains.jewel.ui.component.Text
 import org.mockito.ArgumentMatchers.any
+import org.mockito.ArgumentMatchers.anyBoolean
 import org.mockito.ArgumentMatchers.anyInt
 import org.mockito.ArgumentMatchers.anyLong
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.mock
 import com.github.krpkbhdn.ccmanager.author.AuthorProfileService
 import org.mockito.Mockito.`when`
+
+private fun previewBreakdown() = ContextBreakdown(
+    "claude-opus-4-7", 148_000, 200_000,
+    listOf(
+        Category("System prompt", 3_800, 1.9), Category("System tools", 9_200, 4.6), Category("MCP tools", 14_600, 7.3),
+        Category("Custom agents", 2_400, 1.2), Category("Memory files", 12_300, 6.2), Category("Skills", 8_300, 4.2),
+        Category("Messages", 97_400, 48.7), Category("Free space", 52_000, 26.0),
+    ),
+    listOf(Item("C:/Users/dev/.claude/CLAUDE.md", "User", 4_900, false), Item("C:/work/app/CLAUDE.md", "Project", 7_400, false)),
+    listOf(Item("mcp__playwright__browser_click", "playwright", 333, false), Item("mcp__playwright__browser_evaluate", "playwright", 320, false), Item("mcp__docs__query", "docs", 779, false)),
+    listOf(Item("reviewer", "Project", 2_400, false)),
+    listOf(Item("dry-refactoring", "Plugin", 1_900, false), Item("graphify", "User", 6_400, false)),
+    false, Instant.now(), listOf(), "",
+)
 
 private fun ago(seconds: Long): Instant = Instant.now().minusSeconds(seconds)
 
@@ -118,9 +139,12 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
     val proposals = PreviewProposals()
     val voice = PreviewVoice()
     val sessionUsage = mapOf(
-        "s-working" to SessionUsage("s-working", "Opus 4.7", "xhigh", 62.0, 4.38, 2_400_000L, Instant.now()),
-        "s-needs" to SessionUsage("s-needs", "Sonnet 5.5", "medium", 18.5, 0.42, 1_200_000L, Instant.now()),
-        "s-idle" to SessionUsage("s-idle", "Opus 4.7", null, 91.0, 12.07, 5_000_000L, Instant.now()),
+        "s-working" to SessionUsage("s-working", "Opus 4.7", "xhigh", 62.0, 4.38, 2_400_000L, Instant.now(),
+            ContextWindow(200_000L, 3_000L, 9_000L, 112_000L, 1_850L, 640_000L, 48_000L)),
+        "s-needs" to SessionUsage("s-needs", "Sonnet 5.5", "medium", 18.5, 0.42, 1_200_000L, Instant.now(),
+            ContextWindow(200_000L, null, null, null, null, 120_000L, 9_000L)),
+        "s-idle" to SessionUsage("s-idle", "Opus 4.7", null, 91.0, 12.07, 5_000_000L, Instant.now(),
+            ContextWindow(200_000L, 2_000L, 14_000L, 166_000L, 2_400L, 1_900_000L, 160_000L)),
     )
     @Volatile var claudeInstalled = true
     private val changeListeners = mutableListOf<Runnable>()
@@ -332,13 +356,16 @@ class PreviewWorld(many: Boolean = false, empty: Boolean = false, val git: FakeR
         `when`(usage.all()).thenAnswer { sessionUsage }
         `when`(usage.subscribe(any())).thenAnswer { Runnable { } }
 
+        val contextBreakdown = mock(ContextBreakdownService::class.java)
+        `when`(contextBreakdown.measure(any(), any(), anyBoolean())).thenAnswer { ContextBreakdownResult.success(previewBreakdown()) }
+
         val shellDetector = mock(ShellDetector::class.java)
         `when`(shellDetector.detect()).thenReturn(listOf(ShellProfile("PowerShell", Path.of("pwsh.exe"), emptyList()), ShellProfile("Git Bash", Path.of("bash.exe"), listOf("--login", "-i"))))
         val shellLauncher = mock(ShellLauncher::class.java)
         `when`(shellLauncher.launch(anyLong(), any())).thenThrow(IllegalStateException("Preview mode: shells cannot be started here."))
         `when`(shellLauncher.launch(anyLong(), any(), any())).thenThrow(IllegalStateException("Preview mode: shells cannot be started here."))
 
-        return Backend(projectService, fakeGroupService(), installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), TranscriptService(JsonMapper.builder().build(), previewTranscriptDir, com.github.krpkbhdn.ccmanager.claude.session.TranscriptProperties(300, 1048576, 65536, 524288)), runConfigurationService(), runService(), shellDetector, shellLauncher, mock(AuthorProfileService::class.java), proposals.service(), mock(PromptTemplateService::class.java), previewSessionSearch(), terminal = terminal, sessionProperties = SessionProperties(Duration.ofMinutes(10), Duration.ofMinutes(10)), voice = voice.backend)
+        return Backend(projectService, fakeGroupService(), installation, registry, notificationService, launcher, background, hooks, mock(DirectoryOpener::class.java), ide, FakeGit(git).backend, limits, usage, previewTeamService(), FakePlugins(), fakeMcp.service, FakeSkills(), TranscriptService(JsonMapper.builder().build(), previewTranscriptDir, com.github.krpkbhdn.ccmanager.claude.session.TranscriptProperties(300, 1048576, 65536, 524288)), runConfigurationService(), runService(), shellDetector, shellLauncher, mock(AuthorProfileService::class.java), proposals.service(), mock(PromptTemplateService::class.java), previewSessionSearch(), terminal = terminal, sessionProperties = SessionProperties(Duration.ofMinutes(10), Duration.ofMinutes(10)), contextBreakdown = contextBreakdown, voice = voice.backend)
     }
 
     private fun installationNow() = if (claudeInstalled) {

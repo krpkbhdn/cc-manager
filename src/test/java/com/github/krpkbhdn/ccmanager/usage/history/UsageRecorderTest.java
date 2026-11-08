@@ -194,7 +194,7 @@ class UsageRecorderTest {
     }
 
     private void reportsCost(double cost) {
-        var report = new SessionUsage("ccm-1", "opus", "high", 10.0, cost, null, Instant.now());
+        var report = new SessionUsage("ccm-1", "opus", "high", 10.0, cost, null, Instant.now(), null);
         when(usage.of("ccm-1")).thenReturn(Optional.of(report));
         when(usage.all()).thenReturn(Map.of("ccm-1", report));
         usageChanged.run();

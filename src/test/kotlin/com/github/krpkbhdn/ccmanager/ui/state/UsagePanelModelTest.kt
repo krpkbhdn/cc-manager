@@ -41,7 +41,7 @@ class UsagePanelModelTest {
     @Test
     fun sessionRowsPreferReportedModelAndFormatCostAndContext() {
         val session = SessionSnapshot("s1", 1, "c1", AgentStatus.IDLE, "", "default", "claude-opus-4-7", null, now, now, emptyList(), 0, null)
-        val usage = mapOf("s1" to SessionUsage("s1", "Opus 4.7", "high", 41.6, 1.5, 1000L, now))
+        val usage = mapOf("s1" to SessionUsage("s1", "Opus 4.7", "high", 41.6, 1.5, 1000L, now, null))
 
         val row = sessionUsageRows(listOf(session), usage) { "proj" }.single()
 

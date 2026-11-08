@@ -72,7 +72,7 @@ public final class ClaudeCommand {
         return command;
     }
 
-    static String canonicalUuid(String value) {
+    public static String canonicalUuid(String value) {
         try {
             String id = UUID.fromString(value).toString();
             if (id.equalsIgnoreCase(value)) {
