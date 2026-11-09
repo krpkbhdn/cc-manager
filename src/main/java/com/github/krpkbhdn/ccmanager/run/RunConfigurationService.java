@@ -8,6 +8,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -34,6 +35,10 @@ public class RunConfigurationService {
 
     public Optional<RunConfiguration> find(long id) {
         return jdbc.sql(SELECT + " WHERE id = ?").param(id).query(RunConfigurationService::mapRow).optional();
+    }
+
+    public Set<Long> existingIds() {
+        return Set.copyOf(jdbc.sql("SELECT id FROM run_configuration").query(Long.class).list());
     }
 
     /**

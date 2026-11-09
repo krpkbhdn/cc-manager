@@ -48,7 +48,7 @@ class HookServerTest {
     @BeforeEach
     void setUp() {
         server = new HookServer(store, publisher, JsonMapper.builder().build(),
-                new HookProperties(10, MAX_BODY, 500, Duration.ofSeconds(5), 10, 1000), mcp, assistantMcp, proposals);
+                new HookProperties(10, MAX_BODY, 500, Duration.ofSeconds(5), 10, 1000, 1000), mcp, assistantMcp, proposals);
         server.start();
     }
 
@@ -58,8 +58,14 @@ class HookServerTest {
         client.close();
     }
 
+    /** Posts with the credential of the session named by the last path segment of the url. */
     private HttpResponse<String> post(String url, String body) throws Exception {
-        var request = HttpRequest.newBuilder(URI.create(url)).POST(HttpRequest.BodyPublishers.ofString(body)).build();
+        return postWithAuthorization(url, body, "Bearer " + server.sessionToken(url.substring(url.lastIndexOf('/') + 1)));
+    }
+
+    private HttpResponse<String> postWithAuthorization(String url, String body, String authorization) throws Exception {
+        var request = HttpRequest.newBuilder(URI.create(url)).header("Authorization", authorization)
+                .POST(HttpRequest.BodyPublishers.ofString(body)).build();
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
@@ -74,7 +80,92 @@ class HookServerTest {
         assertThat(captor.getValue().ccmSessionId()).isEqualTo("sess-1");
         assertThat(captor.getValue().type()).isEqualTo(HookEventType.STOP);
         assertThat(captor.getValue().text("session_id")).isEqualTo("c1");
-        verify(store).save(captor.getValue());
+        verify(store, timeout(VERIFY_TIMEOUT_MS)).save(captor.getValue());
+    }
+
+    @Test
+    void eventIsPublishedWhileStoringIsStillBlocked() throws Exception {
+        var release = new java.util.concurrent.CountDownLatch(1);
+        org.mockito.Mockito.doAnswer(call -> {
+            release.await();
+            return null;
+        }).when(store).save(any(HookEvent.class));
+
+        post(server.hookUrl("sess-1"), "{\"hook_event_name\":\"Stop\"}");
+
+        verify(publisher, timeout(VERIFY_TIMEOUT_MS)).publishEvent(any(HookEvent.class));
+        release.countDown();
+    }
+
+    @Test
+    void anOversizedBodyStillReachesStatusHandlingByItsEventName() throws Exception {
+        var padding = "x".repeat(MAX_BODY * 2);
+
+        post(server.hookUrl("sess-1"), "{\"hook_event_name\":\"Stop\",\"session_id\":\"c1\",\"tool_input\":\"" + padding + "\"}");
+
+        var captor = ArgumentCaptor.forClass(HookEvent.class);
+        verify(publisher, timeout(VERIFY_TIMEOUT_MS)).publishEvent(captor.capture());
+        assertThat(captor.getValue().type()).isEqualTo(HookEventType.STOP);
+    }
+
+    @Test
+    void anOversizedDecisionRequestIsNeitherHeldNorPublishedAndTheTerminalStaysInCharge() throws Exception {
+        var padding = "x".repeat(MAX_BODY * 2);
+
+        var response = post(server.hookUrl("sess-1"), "{\"hook_event_name\":\"PermissionRequest\",\"tool_input\":\"" + padding + "\"}");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isEmpty();
+        verifyNoInteractions(proposals);
+        verify(publisher, never()).publishEvent(any(HookEvent.class));
+    }
+
+    @Test
+    void anOversizedBodyWhoseEventNameLiesBeyondTheCapIsDroppedWithoutFailing() throws Exception {
+        var padding = "x".repeat(MAX_BODY * 2);
+
+        var response = post(server.hookUrl("sess-1"), "{\"tool_input\":\"" + padding + "\",\"hook_event_name\":\"Stop\"}");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        verify(publisher, never()).publishEvent(any(HookEvent.class));
+    }
+
+    @Test
+    void stopFlushesQueuedEventsToTheStoreInArrivalOrder() throws Exception {
+        for (var i = 0; i < 5; i++) {
+            post(server.hookUrl("sess-1"), "{\"hook_event_name\":\"Stop\",\"session_id\":\"c" + i + "\"}");
+        }
+
+        server.stop();
+
+        var captor = ArgumentCaptor.forClass(HookEvent.class);
+        verify(store, org.mockito.Mockito.times(5)).save(captor.capture());
+        assertThat(captor.getAllValues()).extracting(event -> event.text("session_id")).containsExactly("c0", "c1", "c2", "c3", "c4");
+    }
+
+    @Test
+    void callsBeyondTheQueueBoundAreDroppedWhileTheWorkerIsStuck() throws Exception {
+        var bounded = new HookServer(store, publisher, JsonMapper.builder().build(),
+                new HookProperties(10, MAX_BODY, 500, Duration.ofSeconds(5), 10, 1000, 2), mcp, assistantMcp, proposals);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        org.mockito.Mockito.doAnswer(call -> {
+            release.await();
+            return null;
+        }).when(publisher).publishEvent(any(HookEvent.class));
+        bounded.start();
+        try {
+            for (var i = 0; i < 6; i++) {
+                assertThat(postWithAuthorization(bounded.hookUrl("sess-1"), "{\"hook_event_name\":\"Stop\"}",
+                        "Bearer " + bounded.sessionToken("sess-1")).statusCode()).isEqualTo(200);
+            }
+            release.countDown();
+
+            verify(publisher, timeout(VERIFY_TIMEOUT_MS).atLeast(3)).publishEvent(any(HookEvent.class));
+            org.mockito.Mockito.verify(publisher, org.mockito.Mockito.atMost(4)).publishEvent(any(HookEvent.class));
+        } finally {
+            release.countDown();
+            bounded.stop();
+        }
     }
 
     @Test
@@ -82,7 +173,7 @@ class HookServerTest {
         var decision = new CompletableFuture<Optional<String>>();
         when(proposals.hold(org.mockito.ArgumentMatchers.any(HookEvent.class))).thenReturn(decision);
         var response = client.sendAsync(HttpRequest.newBuilder(URI.create(server.hookUrl("sess-1")))
-                .POST(HttpRequest.BodyPublishers.ofString("{\"hook_event_name\":\"PermissionRequest\",\"tool_name\":\"Bash\"}")).build(),
+                .header("Authorization", "Bearer " + server.sessionToken("sess-1")).POST(HttpRequest.BodyPublishers.ofString("{\"hook_event_name\":\"PermissionRequest\",\"tool_name\":\"Bash\"}")).build(),
                 HttpResponse.BodyHandlers.ofString());
 
         var captor = ArgumentCaptor.forClass(HookEvent.class);
@@ -142,20 +233,27 @@ class HookServerTest {
 
     @Test
     void credentialOfOneSessionDoesNotAuthorizeAnother() throws Exception {
-        var otherSessionUrl = server.hookUrl("sess-2");
-        var stolen = server.hookUrl("sess-1").replace("sess-1", "sess-2");
+        var stolen = "Bearer " + server.sessionToken("sess-1");
 
-        assertThat(server.hookUrl("sess-1")).isNotEqualTo(otherSessionUrl.replace("sess-2", "sess-1"));
-        assertThat(post(stolen, "{\"hook_event_name\":\"Stop\"}").statusCode()).isEqualTo(404);
-        assertThat(post(server.mcpUrl("sess-1").replace("sess-1", "sess-2"), "{}").statusCode()).isEqualTo(404);
-        assertThat(post(otherSessionUrl, "{\"hook_event_name\":\"Stop\"}").statusCode()).isEqualTo(200);
+        assertThat(server.sessionToken("sess-1")).isNotEqualTo(server.sessionToken("sess-2"));
+        assertThat(postWithAuthorization(server.hookUrl("sess-2"), "{\"hook_event_name\":\"Stop\"}", stolen).statusCode()).isEqualTo(404);
+        assertThat(postWithAuthorization(server.statusLineUrl("sess-2"), "{}", stolen).statusCode()).isEqualTo(404);
+        assertThat(postWithAuthorization(server.mcpUrl("sess-2"), "{}", stolen).statusCode()).isEqualTo(404);
+        assertThat(post(server.hookUrl("sess-2"), "{\"hook_event_name\":\"Stop\"}").statusCode()).isEqualTo(200);
     }
 
     @Test
-    void rejectsWrongSecretWithNotFound() throws Exception {
-        var url = server.hookUrl("sess-1").replace("/hook/", "/hook/wrong");
+    void rejectsMissingWrongOrUrlSecretWithNotFound() throws Exception {
+        var url = server.hookUrl("sess-1");
+        var token = server.sessionToken("sess-1");
+        var body = "{\"hook_event_name\":\"Stop\"}";
 
-        assertThat(post(url, "{\"hook_event_name\":\"Stop\"}").statusCode()).isEqualTo(404);
+        assertThat(postWithAuthorization(url, body, "Bearer wrong").statusCode()).isEqualTo(404);
+        assertThat(postWithAuthorization(url, body, token).statusCode()).isEqualTo(404);
+        assertThat(postWithAuthorization(url, body, "Bearer ").statusCode()).isEqualTo(404);
+        assertThat(client.send(HttpRequest.newBuilder(URI.create(url)).POST(HttpRequest.BodyPublishers.ofString(body)).build(),
+                HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(404);
+        assertThat(postWithAuthorization(url.replace("/hook/", "/hook/" + token + "/"), body, "Bearer " + token).statusCode()).isEqualTo(404);
         verifyNoInteractions(publisher);
     }
 
@@ -170,20 +268,9 @@ class HookServerTest {
     }
 
     @Test
-    void oversizedBodyIsDroppedButAnsweredOk() throws Exception {
-        var big = "{\"hook_event_name\":\"Stop\",\"pad\":\"" + "x".repeat(MAX_BODY) + "\"}";
-
-        assertThat(post(server.hookUrl("sess-1"), big).statusCode()).isEqualTo(200);
-        post(server.hookUrl("sess-1"), "{\"hook_event_name\":\"PreCompact\"}");
-
-        var captor = ArgumentCaptor.forClass(HookEvent.class);
-        verify(publisher, timeout(VERIFY_TIMEOUT_MS)).publishEvent(captor.capture());
-        assertThat(captor.getValue().type()).isEqualTo(HookEventType.PRE_COMPACT);
-    }
-
-    @Test
     void getRequestIsRejected() throws Exception {
-        var request = HttpRequest.newBuilder(URI.create(server.hookUrl("sess-1"))).GET().build();
+        var request = HttpRequest.newBuilder(URI.create(server.hookUrl("sess-1")))
+                .header("Authorization", "Bearer " + server.sessionToken("sess-1")).GET().build();
 
         assertThat(client.send(request, HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(405);
     }
@@ -211,17 +298,16 @@ class HookServerTest {
 
     @Test
     void mcpRejectsWrongSecretGetAndOversizedBody() throws Exception {
-        assertThat(post(server.mcpUrl("sess-1").replace("/mcp/", "/mcp/wrong"), "{}").statusCode()).isEqualTo(404);
-        var get = HttpRequest.newBuilder(URI.create(server.mcpUrl("sess-1"))).GET().build();
+        assertThat(postWithAuthorization(server.mcpUrl("sess-1"), "{}", "Bearer wrong").statusCode()).isEqualTo(404);
+        var get = HttpRequest.newBuilder(URI.create(server.mcpUrl("sess-1")))
+                .header("Authorization", "Bearer " + server.sessionToken("sess-1")).GET().build();
         assertThat(client.send(get, HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(405);
         assertThat(post(server.mcpUrl("sess-1"), "x".repeat(MAX_BODY + 1)).statusCode()).isEqualTo(413);
         verifyNoInteractions(mcp);
     }
 
     private HttpResponse<String> postWithAuthorization(String url, String authorization) throws Exception {
-        var request = HttpRequest.newBuilder(URI.create(url)).header("Authorization", authorization)
-                .POST(HttpRequest.BodyPublishers.ofString("{}")).build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
+        return postWithAuthorization(url, "{}", authorization);
     }
 
     @Test
@@ -234,7 +320,7 @@ class HookServerTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).isEqualTo("{\"result\":{}}");
-        assertThat(url).doesNotContain(token).doesNotContain(server.hookUrl("s").split("/")[4]);
+        assertThat(url).doesNotContain(token);
         assertThat(postWithAuthorization(url, "Bearer " + token + "x").statusCode()).isEqualTo(404);
         assertThat(postWithAuthorization(url, "Bearer wrong").statusCode()).isEqualTo(404);
         assertThat(postWithAuthorization(url, token).statusCode()).isEqualTo(404);
@@ -242,7 +328,7 @@ class HookServerTest {
         assertThat(post(url, "{}").statusCode()).isEqualTo(404);
         assertThat(post(url + "/" + token, "{}").statusCode()).isEqualTo(404);
         assertThat(postWithAuthorization(url + "/" + token, "Bearer " + token).statusCode()).isEqualTo(404);
-        var projectSecret = server.mcpUrl("sess-1").split("/")[4];
+        var projectSecret = server.sessionToken("sess-1");
         assertThat(postWithAuthorization(url, "Bearer " + projectSecret).statusCode()).isEqualTo(404);
     }
 
@@ -252,7 +338,7 @@ class HookServerTest {
         when(tool.name()).thenReturn("git_push");
         var real = new AssistantMcpEndpoint(List.of(tool), JsonMapper.builder().build(), proposals, mock(SessionRegistry.class));
         var secured = new HookServer(store, publisher, JsonMapper.builder().build(),
-                new HookProperties(10, MAX_BODY, 500, Duration.ofSeconds(5), 10, 1000), mcp, real, proposals);
+                new HookProperties(10, MAX_BODY, 500, Duration.ofSeconds(5), 10, 1000, 1000), mcp, real, proposals);
         secured.start();
         try {
             var call = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"git_push\",\"arguments\":{}}}";
@@ -284,9 +370,7 @@ class HookServerTest {
 
     @Test
     void statusLineRejectsWrongSecret() throws Exception {
-        var url = server.statusLineUrl("sess-1").replace("/statusline/", "/statusline/wrong");
-
-        assertThat(post(url, "{}").statusCode()).isEqualTo(404);
+        assertThat(postWithAuthorization(server.statusLineUrl("sess-1"), "{}", "Bearer wrong").statusCode()).isEqualTo(404);
         verifyNoInteractions(publisher);
     }
 

@@ -3,6 +3,7 @@ package com.github.krpkbhdn.ccmanager.history;
 import com.github.krpkbhdn.ccmanager.claude.session.TranscriptEntry.Kind;
 import com.github.krpkbhdn.ccmanager.claude.session.TranscriptLineParser;
 import com.github.krpkbhdn.ccmanager.history.TranscriptIndexRepository.IndexedFile;
+import com.github.krpkbhdn.ccmanager.security.SecretFilter;
 import com.github.krpkbhdn.ccmanager.history.TranscriptIndexRepository.NewEntry;
 import com.github.krpkbhdn.ccmanager.history.TranscriptIndexRepository.Progress;
 import com.github.krpkbhdn.ccmanager.workspace.HostEnvironment;
@@ -17,6 +18,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -119,12 +121,15 @@ public class TranscriptIndexer {
     public void scan() {
         try {
             var files = transcriptFiles();
-            files.forEach(this::indexQuietly);
+            var root = realRoot();
+            files.forEach(file -> indexQuietly(file, root));
             if (Files.isDirectory(projectsRoot)) {
                 var paths = files.stream().map(Path::toString).collect(Collectors.toSet());
-                repository.inWriteTransaction(() -> repository.removeFilesExcept(paths));
+                if (repository.anyFileExcept(paths)) {
+                    repository.inWriteTransaction(() -> repository.removeFilesExcept(paths));
+                }
             }
-            repository.inWriteTransaction(this::evictOverLimit);
+            evictOverLimit();
         } catch (RuntimeException | Error e) {
             log.error("Transcript scan failed: {}", e.getClass().getSimpleName());
         }
@@ -138,15 +143,18 @@ public class TranscriptIndexer {
             return files.filter(path -> path.getFileName().toString().endsWith(TRANSCRIPT_SUFFIX))
                     .filter(path -> path.getNameCount() - projectsRoot.getNameCount() == TRANSCRIPT_DEPTH)
                     .filter(Files::isRegularFile)
+                    .map(path -> new StampedFile(path, modifiedMillisOrZero(path)))
+                    .sorted(Comparator.comparingLong(StampedFile::modifiedMillis).reversed())
+                    .map(StampedFile::path)
                     .toList();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
-    private void indexQuietly(Path file) {
+    private void indexQuietly(Path file, Path root) {
         try {
-            if (insideProjects(file)) {
+            if (insideProjects(file, root)) {
                 boolean more;
                 do {
                     more = indexBatch(file);
@@ -157,9 +165,17 @@ public class TranscriptIndexer {
         }
     }
 
-    private boolean insideProjects(Path file) {
+    private Path realRoot() {
         try {
-            return file.toRealPath().startsWith(projectsRoot.toRealPath());
+            return projectsRoot.toRealPath();
+        } catch (IOException e) {
+            return projectsRoot;
+        }
+    }
+
+    private static boolean insideProjects(Path file, Path realRoot) {
+        try {
+            return file.toRealPath().startsWith(realRoot);
         } catch (IOException e) {
             return false;
         }
@@ -237,20 +253,33 @@ public class TranscriptIndexer {
         return current;
     }
 
-    /** Trims the oldest files' oldest entries down to the limit, so one huge growing file loses only its excess. */
+    /**
+     * Trims the oldest files' oldest entries down to the limit, so one huge growing file loses only its excess. Each
+     * chunk is its own write transaction, so other writers are never blocked for long.
+     */
     private void evictOverLimit() {
         var excess = repository.totalEntries() - properties.maxEntries();
-        if (excess <= 0) {
-            return;
-        }
-        for (var file : repository.filesWithEntriesOldestFirst()) {
-            var count = Math.min(excess, file.entryCount());
-            repository.evictOldestEntries(file.id(), count);
-            excess -= count;
-            if (excess <= 0) {
+        while (excess > 0) {
+            var chunk = Math.min(excess, properties.evictChunk());
+            var evicted = repository.inWriteTransaction(() -> evictOldest(chunk));
+            if (evicted == 0) {
                 return;
             }
+            excess -= evicted;
         }
+    }
+
+    private long evictOldest(long wanted) {
+        var left = wanted;
+        for (var file : repository.filesWithEntriesOldestFirst()) {
+            var count = Math.min(left, file.entryCount());
+            repository.evictOldestEntries(file.id(), count);
+            left -= count;
+            if (left <= 0) {
+                break;
+            }
+        }
+        return wanted - left;
     }
 
     private static String role(Kind kind) {
@@ -347,6 +376,18 @@ public class TranscriptIndexer {
             return Files.getLastModifiedTime(file).toMillis();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        }
+    }
+
+    /** The modification time read once, so a file being written cannot change its place while sorting. */
+    private record StampedFile(Path path, long modifiedMillis) {
+    }
+
+    private static long modifiedMillisOrZero(Path file) {
+        try {
+            return modifiedMillis(file);
+        } catch (UncheckedIOException e) {
+            return 0;
         }
     }
 

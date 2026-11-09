@@ -153,6 +153,16 @@ class ContextBreakdownServiceTest {
     }
 
     @Test
+    void failureWithoutAMessageStillGivesAReason() {
+        when(claude.execute(any(), any(), anyList())).thenThrow(new IllegalStateException());
+
+        var result = service.measure(DIRECTORY, ID, false);
+
+        assertThat(result.succeeded()).isFalse();
+        assertThat(result.failure()).contains("IllegalStateException");
+    }
+
+    @Test
     void turnsANonZeroExitAndUnparsableOutputIntoFailures() {
         when(claude.execute(any(), any(), anyList())).thenReturn(new CommandRunner.Result(1, "", "boom", false));
         assertThat(service.measure(DIRECTORY, ID, false).failure()).contains("code 1");

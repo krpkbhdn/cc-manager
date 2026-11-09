@@ -18,11 +18,15 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import tools.jackson.core.JsonToken;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
@@ -50,6 +54,8 @@ public class HookServer implements SmartLifecycle {
     private static final String BEARER_PREFIX = "Bearer ";
     /** Env variable of the Assistant process that carries the bearer token its mcp file refers to. */
     public static final String ASSISTANT_TOKEN_ENV = "CCM_ASSISTANT_TOKEN";
+    /** Env variable of a session's claude process that carries its bearer token; the settings and mcp files refer to it. */
+    public static final String SESSION_TOKEN_ENV = "CCM_HOOK_TOKEN";
     private static final int SECRET_BYTES = 32;
     private static final String HMAC_ALGORITHM = "HmacSHA256";
     private static final int OK = 200;
@@ -58,8 +64,9 @@ public class HookServer implements SmartLifecycle {
     private static final int METHOD_NOT_ALLOWED = 405;
     private static final int NO_RESPONSE_BODY = -1;
     private static final int PAYLOAD_TOO_LARGE = 413;
-    private static final int PATH_PARTS = 2;
+    private static final String EVENT_NAME_FIELD = "hook_event_name";
     private static final Duration EXECUTOR_STOP_WAIT = Duration.ofSeconds(2);
+    private static final Duration WARN_INTERVAL = Duration.ofSeconds(30);
 
     private final HookEventStore store;
     private final ApplicationEventPublisher publisher;
@@ -68,9 +75,12 @@ public class HookServer implements SmartLifecycle {
     private final McpEndpoint mcp;
     private final AssistantMcpServer assistantMcp;
     private final DecisionHolder proposals;
+    private final AtomicLong droppedCalls = new AtomicLong();
+    private final AtomicLong oversizedWarnNanos = new AtomicLong(System.nanoTime() - WARN_INTERVAL.toNanos());
     private final byte[] secret = secret();
     private final byte[] assistantSecret = secret();
     private volatile ExecutorService worker;
+    private volatile ExecutorService persister;
     private HttpServer server;
     private ExecutorService requestExecutor;
 
@@ -92,12 +102,17 @@ public class HookServer implements SmartLifecycle {
         return server.getAddress().getPort();
     }
 
-    /** URL a hook of the given ccm session posts to; contains that session's credential. */
+    /** URL a hook of the given ccm session posts to; it holds no secret, the credential is {@link #sessionToken(String)} sent as a bearer token. */
     public String hookUrl(String ccmSessionId) {
-        return "http://127.0.0.1:" + port() + CONTEXT_PATH + new String(credential(ccmSessionId), StandardCharsets.US_ASCII) + "/" + ccmSessionId;
+        return "http://127.0.0.1:" + port() + CONTEXT_PATH + ccmSessionId;
     }
 
-    /** URL of the MCP server a session talks to; same secret, own path because it answers instead of just accepting. */
+    /** The session's credential; handed to its claude process through {@link #SESSION_TOKEN_ENV} only, never written to disk. */
+    public String sessionToken(String ccmSessionId) {
+        return new String(credential(ccmSessionId), StandardCharsets.US_ASCII);
+    }
+
+    /** URL of the MCP server a session talks to; same bearer token, own path because it answers instead of just accepting. */
     public String mcpUrl(String ccmSessionId) {
         return hookUrl(ccmSessionId).replace(CONTEXT_PATH, MCP_CONTEXT_PATH);
     }
@@ -133,7 +148,8 @@ public class HookServer implements SmartLifecycle {
                 (ex, id, body) -> respondToHook(ex, id, body, this::acceptStatusLine)));
         server.createContext(MCP_CONTEXT_PATH, exchange -> serve(exchange, MCP_CONTEXT_PATH, (ex, id, body) -> respondToMcp(ex, bytes -> mcp.handle(id, bytes), body)));
         server.createContext(ASSISTANT_MCP_PATH, this::serveAssistantMcp);
-        worker = Executors.newSingleThreadExecutor(Thread.ofPlatform().name("hook-worker").daemon().factory());
+        worker = boundedExecutor("hook-worker");
+        persister = boundedExecutor("hook-persister");
         requestExecutor = Executors.newVirtualThreadPerTaskExecutor();
         server.setExecutor(requestExecutor);
         server.start();
@@ -145,18 +161,28 @@ public class HookServer implements SmartLifecycle {
         HttpServer stopping;
         ExecutorService requests;
         ExecutorService work;
+        ExecutorService persist;
         synchronized (this) {
             stopping = server;
             requests = requestExecutor;
             work = worker;
+            persist = persister;
             server = null;
         }
         if (stopping != null) {
             stopping.stop(0);
             proposals.releaseAll();
+            // bounded drain: each queue gets EXECUTOR_STOP_WAIT to flush, then shutdownNow drops the rest
             awaitTermination(requests);
             awaitTermination(work);
+            awaitTermination(persist);
         }
+    }
+
+    /** One thread and a bounded queue: a stalled consumer makes the newest work fail with RejectedExecutionException instead of growing memory. */
+    private ExecutorService boundedExecutor(String name) {
+        return new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(properties.maxQueuedCalls()),
+                Thread.ofPlatform().name(name).daemon().factory());
     }
 
     private static void awaitTermination(ExecutorService executor) {
@@ -179,7 +205,7 @@ public class HookServer implements SmartLifecycle {
     private void serve(HttpExchange exchange, String contextPath, BodyResponder responder) throws IOException {
         try (exchange) {
             var ccmSessionId = authorizedSessionId(exchange, contextPath);
-            log.debug("{} {}<secret>/{} accept={} mcp-session-id={}", exchange.getRequestMethod(), contextPath,
+            log.debug("{} {}{} accept={} mcp-session-id={}", exchange.getRequestMethod(), contextPath,
                     ccmSessionId.orElse("?"), exchange.getRequestHeaders().getFirst("Accept"),
                     exchange.getRequestHeaders().getFirst("Mcp-Session-Id"));
             if (ccmSessionId.isEmpty()) {
@@ -194,10 +220,8 @@ public class HookServer implements SmartLifecycle {
 
     private void serveAssistantMcp(HttpExchange exchange) throws IOException {
         try (exchange) {
-            var header = Optional.ofNullable(exchange.getRequestHeaders().getFirst("Authorization")).orElse("");
-            var candidate = header.startsWith(BEARER_PREFIX) ? header.substring(BEARER_PREFIX.length()) : "";
             if (!ASSISTANT_MCP_PATH.equals(exchange.getRequestURI().getPath())
-                    || !MessageDigest.isEqual(candidate.getBytes(StandardCharsets.UTF_8), assistantSecret)) {
+                    || !MessageDigest.isEqual(bearerOf(exchange).getBytes(StandardCharsets.UTF_8), assistantSecret)) {
                 exchange.sendResponseHeaders(NOT_FOUND, NO_RESPONSE_BODY);
             } else if (!"POST".equals(exchange.getRequestMethod())) {
                 exchange.sendResponseHeaders(METHOD_NOT_ALLOWED, NO_RESPONSE_BODY);
@@ -211,7 +235,7 @@ public class HookServer implements SmartLifecycle {
     private void respondToHook(HttpExchange exchange, String ccmSessionId, byte[] body, BodyConsumer consumer) throws IOException {
         var receivedAt = Instant.now();
         var payload = parseObject(ccmSessionId, body);
-        if (payload.filter(this::asksForDecision).isPresent()) {
+        if (body.length <= properties.maxBodyBytes() && payload.filter(this::asksForDecision).isPresent()) {
             respondWithDecision(exchange, holdForDecision(ccmSessionId, payload.get(), receivedAt));
             return;
         }
@@ -219,7 +243,7 @@ public class HookServer implements SmartLifecycle {
         try {
             payload.ifPresent(parsed -> worker.execute(() -> consume(ccmSessionId, parsed, receivedAt, consumer)));
         } catch (RejectedExecutionException e) {
-            log.debug("Dropped hook call for session {}: server is stopping", ccmSessionId);
+            dropped("hook call", ccmSessionId);
         }
     }
 
@@ -254,13 +278,14 @@ public class HookServer implements SmartLifecycle {
             try {
                 proposals.hold(acceptHook(ccmSessionId, payload, receivedAt)).whenComplete((output, error) -> decision.complete(output == null ? Optional.empty() : output));
             } catch (RuntimeException e) {
-                log.debug("Could not hold hook call for session {}: {}", ccmSessionId, e.toString());
+                log.warn("Could not hold hook call for session {}: {}", ccmSessionId, e.toString());
                 decision.complete(Optional.empty());
             }
         };
         try {
             worker.execute(hold);
         } catch (RejectedExecutionException e) {
+            dropped("held hook call", ccmSessionId);
             decision.complete(Optional.empty());
         }
         return decision;
@@ -276,16 +301,21 @@ public class HookServer implements SmartLifecycle {
         }
     }
 
-    /** The session id of a request whose path carries the right secret, otherwise empty. */
+    /** The session id in the path of a request whose bearer token is that session's credential, otherwise empty. */
     private Optional<String> authorizedSessionId(HttpExchange exchange, String contextPath) {
-        var parts = exchange.getRequestURI().getPath().substring(contextPath.length()).split("/", -1);
-        return parts.length == PATH_PARTS && credentialMatches(parts[0], parts[1]) ? Optional.of(parts[1]) : Optional.empty();
+        var ccmSessionId = exchange.getRequestURI().getPath().substring(contextPath.length());
+        return !ccmSessionId.isEmpty() && !ccmSessionId.contains("/") && credentialMatches(bearerOf(exchange), ccmSessionId)
+                ? Optional.of(ccmSessionId) : Optional.empty();
+    }
+
+    private static String bearerOf(HttpExchange exchange) {
+        var header = Optional.ofNullable(exchange.getRequestHeaders().getFirst("Authorization")).orElse("");
+        return header.startsWith(BEARER_PREFIX) ? header.substring(BEARER_PREFIX.length()) : "";
     }
 
     private Optional<JsonNode> parseObject(String ccmSessionId, byte[] body) {
         if (body.length > properties.maxBodyBytes()) {
-            log.debug("Dropped oversized hook body for session {}", ccmSessionId);
-            return Optional.empty();
+            return salvageEventName(ccmSessionId, body);
         }
         try {
             JsonNode payload = mapper.readTree(body);
@@ -296,11 +326,58 @@ public class HookServer implements SmartLifecycle {
         }
     }
 
+    /**
+     * The body is cut at the cap, so it is no valid JSON; a field before the cut still tells which event it was, so statuses keep working.
+     * A decision event is dropped instead (the terminal dialog stays in charge): its truncated stub would leave NEEDS_ACTION without a proposal.
+     */
+    private Optional<JsonNode> salvageEventName(String ccmSessionId, byte[] truncatedBody) {
+        var name = readEventName(truncatedBody);
+        if (name.isEmpty() || HookEventType.of(name.get()).awaitsDecision()) {
+            warnRarely(oversizedWarnNanos, "Dropped an oversized hook body of session {} ({})", ccmSessionId,
+                    name.isEmpty() ? "event name not before the cap" : "it asks for a decision");
+            return Optional.empty();
+        }
+        warnRarely(oversizedWarnNanos, "Oversized hook body of session {}: only its event name is kept ({})", ccmSessionId, name.get());
+        return Optional.of(mapper.createObjectNode().put(EVENT_NAME_FIELD, name.get()));
+    }
+
+    private Optional<String> readEventName(byte[] truncatedBody) {
+        try (var parser = mapper.createParser(truncatedBody)) {
+            if (parser.nextToken() == JsonToken.START_OBJECT) {
+                while (parser.nextToken() == JsonToken.PROPERTY_NAME) {
+                    var field = parser.currentName();
+                    if (parser.nextToken() == JsonToken.VALUE_STRING && EVENT_NAME_FIELD.equals(field)) {
+                        return Optional.of(parser.getString());
+                    }
+                    parser.skipChildren();
+                }
+            }
+        } catch (RuntimeException e) {
+            log.debug("Oversized hook body ends inside a field: {}", e.toString());
+        }
+        return Optional.empty();
+    }
+
+    /** A session producing many oversized bodies must not flood the log. */
+    private static void warnRarely(AtomicLong lastNanos, String message, Object first, Object second) {
+        var now = System.nanoTime();
+        var last = lastNanos.get();
+        if (now - last >= WARN_INTERVAL.toNanos() && lastNanos.compareAndSet(last, now)) {
+            log.warn(message + " (repeats are logged at debug)", first, second);
+        } else {
+            log.debug(message, first, second);
+        }
+    }
+
+    private void dropped(String what, String id) {
+        log.warn("Dropped {} {}: queue is full or the server is stopping ({} dropped so far)", what, id, droppedCalls.incrementAndGet());
+    }
+
     private void consume(String ccmSessionId, JsonNode payload, Instant receivedAt, BodyConsumer consumer) {
         try {
             consumer.accept(ccmSessionId, payload, receivedAt);
         } catch (RuntimeException e) {
-            log.debug("Ignored unusable hook call for session {}: {}", ccmSessionId, e.toString());
+            log.warn("Failed to handle hook call for session {}: {}", ccmSessionId, e.toString());
         }
     }
 
@@ -308,9 +385,18 @@ public class HookServer implements SmartLifecycle {
         var rawName = payload.path("hook_event_name").asString("");
         var event = new HookEvent(ccmSessionId, HookEventType.of(rawName), rawName, payload, receivedAt);
         log.debug("Hook event {} for session {}", rawName, ccmSessionId);
-        persist(event);
         publisher.publishEvent(event);
+        persistLater(event);
         return event;
+    }
+
+    /** Stored after publishing, on its own thread, so a locked database never delays statuses or proposal dialogs. */
+    private void persistLater(HookEvent event) {
+        try {
+            persister.execute(() -> persist(event));
+        } catch (RejectedExecutionException e) {
+            dropped("event write", event.rawName());
+        }
     }
 
     private void acceptStatusLine(String ccmSessionId, JsonNode payload, Instant receivedAt) {

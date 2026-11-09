@@ -44,7 +44,7 @@ class AssistantMcpEndpointTest {
     private AssistantMcpEndpoint endpoint;
 
     private ProposalService proposalsHolding(Duration hold) {
-        return new ProposalService(registry, new HookProperties(10, 1024, 500, hold, 1000, 1000));
+        return new ProposalService(registry, new HookProperties(10, 1024, 500, hold, 1000, 1000, 1000));
     }
 
     @BeforeEach
@@ -58,6 +58,7 @@ class AssistantMcpEndpointTest {
         when(destructive.description()).thenReturn("Pushes.");
         when(destructive.inputSchema()).thenReturn("{\"type\":\"object\"}");
         when(destructive.call(any())).thenReturn("pushed");
+        when(destructive.approvalInput(any())).thenCallRealMethod();
         rebuildEndpoint();
     }
 
@@ -132,6 +133,19 @@ class AssistantMcpEndpointTest {
         var response = send("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"set_run_configuration\"}}");
 
         assertThat(response.path("error").path("message").asString()).startsWith("Unknown tool");
+    }
+
+    @Test
+    void refusedApprovalInputBecomesAToolErrorWithoutAProposalOrRun() {
+        startAssistantSession();
+        when(destructive.approvalInput(any())).thenThrow(new IllegalArgumentException("The plan is too large"));
+
+        var result = send(CALL_PUSH).path("result");
+
+        assertThat(result.path("isError").asBoolean()).isTrue();
+        assertThat(textOf(result)).contains("too large");
+        assertThat(proposals.pending()).isEmpty();
+        verify(destructive, never()).call(any());
     }
 
     @Test

@@ -27,8 +27,7 @@ class MarketplaceApplier implements PresetComponentApplier {
     public PlannedChange plan(PresetComponent component, Path projectDir) {
         var known = plugins.marketplaces().stream().map(Marketplace::name).anyMatch(component.name()::equals);
         return known ? PlannedChange.of(component, ChangeAction.PRESENT, "Marketplace already added")
-                : PlannedChange.of(component, ChangeAction.INSTALL, "Add the marketplace " + McpTargetRedaction.redact(source(component)))
-                        .withPreview(source(component));
+                : PlannedChange.of(component, ChangeAction.INSTALL, "Add the marketplace " + McpTargetRedaction.redact(source(component)));
     }
 
     @Override

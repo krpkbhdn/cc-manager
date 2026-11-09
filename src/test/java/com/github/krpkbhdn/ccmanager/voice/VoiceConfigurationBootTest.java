@@ -9,14 +9,26 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 
-class VoiceConfigurationBootTest {
+public class VoiceConfigurationBootTest {
 
     @Test
     void contextCreatesVoiceBeans(@TempDir Path dataDir) {
+        var headless = System.getProperty("java.awt.headless");
         try (var context = new SpringApplicationBuilder(CcManagerApplication.class).web(WebApplicationType.NONE)
                 .headless(true).run("--cc-manager.data-dir=" + dataDir.toAbsolutePath())) {
             assertThat(context.getBean(VoiceProperties.class).threads()).isPositive();
             assertThat(context.getBean(VoiceInputService.class)).isNotNull();
+        } finally {
+            restoreHeadless(headless);
+        }
+    }
+
+    /** Spring sets the JVM-wide property, which would make later AWT tests in this fork headless. */
+    public static void restoreHeadless(String previous) {
+        if (previous == null) {
+            System.clearProperty("java.awt.headless");
+        } else {
+            System.setProperty("java.awt.headless", previous);
         }
     }
 }

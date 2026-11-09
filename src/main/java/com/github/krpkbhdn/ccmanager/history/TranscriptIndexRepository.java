@@ -131,14 +131,21 @@ public class TranscriptIndexRepository {
         return List.of(path, prefix.codePointCount(0, prefix.length()), prefix);
     }
 
+    public boolean anyFileExcept(Set<String> existingPaths) {
+        return !idsExcept(existingPaths).isEmpty();
+    }
+
     /** Forgets every file whose transcript is not in {@code existingPaths} any more, with its entries. */
     public void removeFilesExcept(Set<String> existingPaths) {
-        var gone = jdbc.sql("SELECT id, path FROM transcript_file").query((rs, row) -> Map.entry(rs.getLong(1), rs.getString(2)))
-                .list().stream().filter(file -> !existingPaths.contains(file.getValue())).map(Map.Entry::getKey).toList();
-        for (var fileId : gone) {
+        for (var fileId : idsExcept(existingPaths)) {
             deleteEntries(fileId);
             jdbc.sql("DELETE FROM transcript_file WHERE id = ?").param(fileId).update();
         }
+    }
+
+    private List<Long> idsExcept(Set<String> existingPaths) {
+        return jdbc.sql("SELECT id, path FROM transcript_file").query((rs, row) -> Map.entry(rs.getLong(1), rs.getString(2)))
+                .list().stream().filter(file -> !existingPaths.contains(file.getValue())).map(Map.Entry::getKey).toList();
     }
 
     private void deleteEntries(long fileId) {

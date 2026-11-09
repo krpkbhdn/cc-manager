@@ -33,8 +33,7 @@ public class HookSettingsWriter {
     private static final String FILE_SUFFIX = ".json";
     private static final String MCP_SUFFIX = ".mcp.json";
     private static final String LIST_RUN_CONFIGURATIONS_TOOL = "list_run_configurations";
-    private static final String HOOK_CURL = "hook";
-    private static final String STATUS_LINE_CURL = "status";
+    private static final String BEARER_FROM_ENV = "Bearer $" + HookServer.SESSION_TOKEN_ENV;
     private static final Pattern SAFE_ID = Pattern.compile("[A-Za-z0-9-]+");
     private static final int HOOK_TIMEOUT_SECONDS = 5;
     /** These calls are held until the user answers; the hook timeout is HookProperties.decisionHold plus this margin. */
@@ -51,13 +50,15 @@ public class HookSettingsWriter {
     private final JsonMapper mapper;
     private final boolean windows;
     private final int decisionTimeoutSeconds;
+    private final CurlSupport curl;
 
     @Autowired
-    public HookSettingsWriter(HookServer server, AppProperties properties, JsonMapper mapper, HookProperties hookProperties) {
-        this(server, properties, mapper, hookProperties, System.getProperty("os.name").toLowerCase().startsWith("windows"));
+    public HookSettingsWriter(HookServer server, AppProperties properties, JsonMapper mapper, HookProperties hookProperties, CurlSupport curl) {
+        this(server, properties, mapper, hookProperties, curl, System.getProperty("os.name").toLowerCase().startsWith("windows"));
     }
 
-    HookSettingsWriter(HookServer server, AppProperties properties, JsonMapper mapper, HookProperties hookProperties, boolean windows) {
+    HookSettingsWriter(HookServer server, AppProperties properties, JsonMapper mapper, HookProperties hookProperties, CurlSupport curl, boolean windows) {
+        this.curl = curl;
         this.server = server;
         this.decisionTimeoutSeconds = (int) hookProperties.decisionHold().toSeconds() + DECISION_TIMEOUT_MARGIN_SECONDS;
         this.hooksRoot = properties.dataDir().resolve(HOOKS_DIR);
@@ -97,7 +98,7 @@ public class HookSettingsWriter {
 
     /** [extraServers] join the MCP config; the app's own server name stays reserved. */
     public SessionFiles write(String ccmSessionId, Map<String, JsonNode> extraServers) {
-        return write(ccmSessionId, mcpConfig(McpEndpoint.SERVER_NAME, server.mcpUrl(ccmSessionId), extraServers));
+        return write(ccmSessionId, mcpConfig(McpEndpoint.SERVER_NAME, server.mcpUrl(ccmSessionId), HookServer.SESSION_TOKEN_ENV, extraServers));
     }
 
     /**
@@ -106,10 +107,12 @@ public class HookSettingsWriter {
      * The token alone reaches only auto-approved tools, every other tool needs the user's Allow in the app.
      */
     public SessionFiles writeAssistant(String ccmSessionId) {
-        var config = mcpConfig(AssistantMcpServer.SERVER_NAME, server.assistantMcpUrl(), Map.of());
-        ((ObjectNode) config.path("mcpServers").path(AssistantMcpServer.SERVER_NAME)).putObject("headers")
-                .put("Authorization", "Bearer ${" + HookServer.ASSISTANT_TOKEN_ENV + "}");
-        return write(ccmSessionId, config);
+        return write(ccmSessionId, mcpConfig(AssistantMcpServer.SERVER_NAME, server.assistantMcpUrl(), HookServer.ASSISTANT_TOKEN_ENV, Map.of()));
+    }
+
+    /** Value of {@link HookServer#SESSION_TOKEN_ENV} for the process of every session whose files this writer wrote. */
+    public String sessionToken(String ccmSessionId) {
+        return server.sessionToken(ccmSessionId);
     }
 
     /** Value of {@link HookServer#ASSISTANT_TOKEN_ENV} for the Assistant process. */
@@ -122,10 +125,6 @@ public class HookSettingsWriter {
         var mcpFile = mcpFileOf(ccmSessionId);
         try {
             restrictToOwner(Files.createDirectories(hooksDir), "rwx------");
-            if (!windows) {
-                writeCurlConfig(ccmSessionId, HOOK_CURL, server.hookUrl(ccmSessionId));
-                writeCurlConfig(ccmSessionId, STATUS_LINE_CURL, server.statusLineUrl(ccmSessionId));
-            }
             writeOwnerOnly(file, mapper.writeValueAsString(settings(ccmSessionId)));
             writeOwnerOnly(mcpFile, mapper.writeValueAsString(mcpConfig));
         } catch (IOException e) {
@@ -134,12 +133,7 @@ public class HookSettingsWriter {
         return new SessionFiles(file, mcpFile);
     }
 
-    /** curl reads the secret URL from this file, so it never shows in a process list. Not used on Windows, see curlArgs. */
-    private void writeCurlConfig(String ccmSessionId, String kind, String url) throws IOException {
-        writeOwnerOnly(curlConfigOf(ccmSessionId, kind), "url = \"" + url + "\"\n");
-    }
-
-    /** The hook credentials sit in these files; the group and others must not read them, not even for an instant. Created with the permissions where POSIX exists. */
+    /** The files name the session and its MCP endpoint; the group and others must not read them. Created with the permissions where POSIX exists. */
     private static void writeOwnerOnly(Path file, String content) throws IOException {
         var posix = file.getFileSystem().supportedFileAttributeViews().contains("posix");
         var temp = posix
@@ -168,8 +162,6 @@ public class HookSettingsWriter {
         try {
             Files.deleteIfExists(fileOf(ccmSessionId));
             Files.deleteIfExists(mcpFileOf(ccmSessionId));
-            Files.deleteIfExists(curlConfigOf(ccmSessionId, HOOK_CURL));
-            Files.deleteIfExists(curlConfigOf(ccmSessionId, STATUS_LINE_CURL));
         } catch (IOException e) {
             throw new UncheckedIOException("Cannot delete hook settings of " + ccmSessionId, e);
         }
@@ -199,10 +191,11 @@ public class HookSettingsWriter {
     }
 
     /** Only the read-only list tool is pre-approved; set and delete change a command the user later runs, so Claude asks first. */
-    private ObjectNode mcpConfig(String serverName, String url, Map<String, JsonNode> extraServers) {
+    private ObjectNode mcpConfig(String serverName, String url, String tokenEnv, Map<String, JsonNode> extraServers) {
         var config = mapper.createObjectNode();
         var servers = config.putObject("mcpServers");
-        servers.putObject(serverName).put("type", "http").put("url", url);
+        var own = servers.putObject(serverName).put("type", "http").put("url", url);
+        own.putObject("headers").put("Authorization", "Bearer ${" + tokenEnv + "}");
         extraServers.forEach((name, definition) -> servers.putIfAbsent(name, definition.deepCopy()));
         return config;
     }
@@ -214,15 +207,18 @@ public class HookSettingsWriter {
         return httpHandler(server.hookUrl(ccmSessionId), type.awaitsDecision() ? decisionTimeoutSeconds : HOOK_TIMEOUT_SECONDS);
     }
 
+    /** The bearer token comes from the claude process environment; an unlisted variable would resolve to empty. */
     private ObjectNode httpHandler(String url, int timeoutSeconds) {
-        return mapper.createObjectNode().put("type", "http").put("url", url).put("timeout", timeoutSeconds);
+        var handler = mapper.createObjectNode().put("type", "http").put("url", url).put("timeout", timeoutSeconds);
+        handler.putObject("headers").put("Authorization", BEARER_FROM_ENV);
+        handler.putArray("allowedEnvVars").add(HookServer.SESSION_TOKEN_ENV);
+        return handler;
     }
 
     /** SessionStart does not accept http handlers; async so a stalled curl can never delay startup. */
     private ObjectNode curlHandler(String ccmSessionId) {
-        var handler = mapper.createObjectNode().put("type", "command").put("command", curlExecutable());
-        curlArgs(HOOK_CURL, ccmSessionId, server.hookUrl(ccmSessionId)).forEach(handler.putArray("args")::add);
-        return handler.put("async", true).put("timeout", HOOK_TIMEOUT_SECONDS);
+        return mapper.createObjectNode().put("type", "command").put("command", curlCommand(server.hookUrl(ccmSessionId)))
+                .put("async", true).put("timeout", HOOK_TIMEOUT_SECONDS);
     }
 
     /**
@@ -230,32 +226,28 @@ public class HookSettingsWriter {
      * and prints nothing, so the status line stays empty. shortcut: a user's own statusLine is replaced in our sessions, chain it when asked.
      */
     private ObjectNode statusLine(String ccmSessionId) {
-        var quoted = curlArgs(STATUS_LINE_CURL, ccmSessionId, server.statusLineUrl(ccmSessionId)).stream()
-                .map(arg -> windows ? "\"" + arg + "\"" : singleQuoted(arg)).toList();
-        var command = curlExecutable() + " " + String.join(" ", quoted);
-        return mapper.createObjectNode().put("type", "command").put("command", command);
+        return mapper.createObjectNode().put("type", "command").put("command", curlCommand(server.statusLineUrl(ccmSessionId)));
     }
 
-    /** On Windows the URL stays an argument: Git Bash's mingw curl cannot open a -K path with non-ANSI characters such as a Cyrillic user folder. */
-    private List<String> curlArgs(String kind, String ccmSessionId, String url) {
-        var common = List.of("-s", "-m", String.valueOf(CURL_MAX_SECONDS), "-X", "POST", "-H", "Content-Type: application/json", "--data-binary", "@-");
-        var args = new ArrayList<String>();
-        if (windows) {
-            args.addAll(common);
-            args.add(url);
-        } else {
-            args.addAll(List.of("-K", curlConfigOf(ccmSessionId, kind).toString()));
-            args.addAll(common);
-        }
-        return args;
+    /**
+     * One shell string valid in sh, Git Bash and PowerShell. curl 8.3+ reads the token from its own environment, so the argument
+     * holds only the variable name and an unset variable makes curl fail instead of sending an empty header. Older or unknown
+     * curl: the shell expands $CCM_HOOK_TOKEN into curl's argv (readable by other local processes, empty under PowerShell).
+     */
+    private String curlCommand(String url) {
+        var executable = windows ? "curl.exe" : "curl";
+        var tokenArguments = curl.expandsEnvironment(executable)
+                ? List.of("--variable", "%" + HookServer.SESSION_TOKEN_ENV, "--expand-header", quoted("Authorization: Bearer {{" + HookServer.SESSION_TOKEN_ENV + "}}"))
+                : List.of("-H", "\"Authorization: " + BEARER_FROM_ENV + "\"");
+        var arguments = new ArrayList<>(List.of(executable, "-s", "-m", String.valueOf(CURL_MAX_SECONDS), "-X", "POST",
+                "-H", quoted("Content-Type: application/json")));
+        arguments.addAll(tokenArguments);
+        arguments.addAll(List.of("--data-binary", quoted("@-"), quoted(url)));
+        return String.join(" ", arguments);
     }
 
-    private String curlExecutable() {
-        return windows ? "curl.exe" : "curl";
-    }
-
-    private Path curlConfigOf(String ccmSessionId, String kind) {
-        return hooksDir.resolve(fileOf(ccmSessionId).getFileName() + "." + kind + ".curl");
+    private String quoted(String arg) {
+        return windows ? "\"" + arg + "\"" : singleQuoted(arg);
     }
 
     private Path mcpFileOf(String ccmSessionId) {

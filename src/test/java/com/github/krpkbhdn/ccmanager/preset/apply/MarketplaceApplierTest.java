@@ -33,9 +33,9 @@ class MarketplaceApplierTest {
     }
 
     @Test
-    void planPreviewKeepsTheFullSourceForTheApplyReview() {
+    void planHasNoRawSourcePreview() {
         when(plugins.marketplaces()).thenReturn(List.of());
 
-        assertThat(applier.plan(component(), Path.of(".")).preview()).isEqualTo(SOURCE);
+        assertThat(applier.plan(component(), Path.of(".")).preview()).isNull();
     }
 }

@@ -10,7 +10,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import java.nio.file.Path;
@@ -39,6 +39,50 @@ class TranscriptIndexerTest {
 
     long hits(String query) {
         return fixture.search.search(query, ANY_PROJECT, Optional.empty(), Optional.empty()).size();
+    }
+
+    @Test
+    void newestTranscriptIsIndexedFirst() throws Exception {
+        var older = fixture.transcript("p", "older");
+        var newer = fixture.transcript("p", "newer");
+        fixture.write(older, userLine("u1", "/w/app", "2026-01-01T10:00:00Z", "one"));
+        fixture.write(newer, userLine("u2", "/w/app", "2026-01-01T10:00:00Z", "two"));
+        java.nio.file.Files.setLastModifiedTime(older, java.nio.file.attribute.FileTime.fromMillis(1_000_000));
+        java.nio.file.Files.setLastModifiedTime(newer, java.nio.file.attribute.FileTime.fromMillis(2_000_000));
+
+        fixture.indexer(1000).scan();
+
+        var order = org.mockito.Mockito.inOrder(fixture.repository);
+        order.verify(fixture.repository).findFile(newer.toString());
+        order.verify(fixture.repository).findFile(older.toString());
+    }
+
+    @Test
+    void transcriptsWhoseModificationTimeChangesDuringTheScanAreAllIndexed() throws Exception {
+        for (int i = 0; i < 200; i++) {
+            fixture.write(fixture.transcript("p", "s" + i), userLine("u" + i, "/w/app", "2026-01-01T10:00:00Z", "grape " + i));
+        }
+        var running = new AtomicBoolean(true);
+        var toucher = new Thread(() -> {
+            var random = new java.util.Random(1);
+            while (running.get()) {
+                try {
+                    java.nio.file.Files.setLastModifiedTime(fixture.transcript("p", "s" + random.nextInt(200)),
+                            java.nio.file.attribute.FileTime.fromMillis(random.nextInt(1_000_000)));
+                } catch (java.io.IOException e) {
+                    return;
+                }
+            }
+        });
+        toucher.start();
+        try {
+            fixture.indexer(1000).scan();
+        } finally {
+            running.set(false);
+            toucher.join();
+        }
+
+        assertThat(fixture.search.indexedEntryCount()).isEqualTo(200);
     }
 
     @Test
@@ -115,6 +159,24 @@ class TranscriptIndexerTest {
     }
 
     @Test
+    void evictionInChunksKeepsTheNewestEntriesAndCountsConsistent() {
+        var text = new StringBuilder();
+        for (int i = 0; i < 25; i++) {
+            text.append(userLine("u" + i, "/w/app", "2026-01-01T10:%02d:00Z".formatted(i), "chunkword n" + i));
+        }
+        fixture.write(fixture.transcript("p", "s1"), text.toString());
+
+        fixture.indexerEvictingIn(10, 4).scan();
+
+        assertThat(fixture.search.indexedEntryCount()).isEqualTo(10);
+        assertThat(fixture.jdbc.sql("SELECT COUNT(*) FROM transcript_entry_fts").query(Long.class).single()).isEqualTo(10);
+        assertThat(fixture.jdbc.sql("SELECT COUNT(*) FROM transcript_entry_ref").query(Long.class).single()).isEqualTo(10);
+        assertThat(hits("n24")).isEqualTo(1);
+        assertThat(hits("n14")).isZero();
+        assertThat(hits("n15")).isEqualTo(1);
+    }
+
+    @Test
     void unchangedTranscriptsTakeNoWriteTransactionPerFile() {
         for (var name : java.util.List.of("a", "b", "c")) {
             fixture.write(fixture.transcript("p", name), userLine("u" + name, "/w/app", "2026-01-01T10:00:00Z", "apple"));
@@ -125,7 +187,7 @@ class TranscriptIndexerTest {
 
         indexer.scan();
 
-        verify(fixture.repository, times(2)).inWriteTransaction(ArgumentMatchers.<Supplier<Object>>any());
+        verify(fixture.repository, never()).inWriteTransaction(ArgumentMatchers.<Supplier<Object>>any());
     }
 
     @Test

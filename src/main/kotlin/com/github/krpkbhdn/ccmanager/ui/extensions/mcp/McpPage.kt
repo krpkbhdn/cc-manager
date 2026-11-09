@@ -42,6 +42,10 @@ fun McpPage(context: ExtensionContext, state: McpState, modifier: Modifier = Mod
         Column(Modifier.fillMaxSize()) {
             McpToolbar(state, groups.size)
             (state.failure ?: state.loadFailure)?.let { ExtensionFailureStrip(it, onDismiss = { if (state.failure != null) state.failure = null else state.loadFailure = null }) }
+            if (declaresProjectStdio(state.servers)) Row(Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                Glyph(Icons.CircleAlert, colors.warning)
+                Label("This project's .mcp.json runs local programs. Check health only for projects you trust.", color = colors.textSecondary, style = Type.small, maxLines = 2)
+            }
             Box(Modifier.weight(1f)) {
                 ListWithDetail(selected?.let { { McpDetailPane(it, state) } }) {
                     when {

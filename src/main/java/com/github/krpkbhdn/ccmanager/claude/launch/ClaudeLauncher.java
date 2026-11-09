@@ -179,10 +179,11 @@ public class ClaudeLauncher {
             if (group) {
                 ClaudeCommand.addDirectories(command, memberPaths);
             }
+            String sessionToken = hookSettings.sessionToken(ccmSessionId);
             Map<String, String> environment = projectId == ASSISTANT_PROJECT_ID
-                    ? ClaudeCommand.assistantEnvironment(System.getenv(), ccmSessionId, hookSettings.assistantToken())
-                    : group ? ClaudeCommand.groupEnvironment(System.getenv(), ccmSessionId)
-                    : ClaudeCommand.environment(System.getenv(), ccmSessionId);
+                    ? ClaudeCommand.assistantEnvironment(System.getenv(), ccmSessionId, sessionToken, hookSettings.assistantToken())
+                    : group ? ClaudeCommand.groupEnvironment(System.getenv(), ccmSessionId, sessionToken)
+                    : ClaudeCommand.environment(System.getenv(), ccmSessionId, sessionToken);
             process = PtySpawner.spawn(command, directory, environment);
             watchExit(ccmSessionId, process);
             return new LaunchedSession(ccmSessionId, projectId, label, process, directory);

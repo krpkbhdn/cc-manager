@@ -70,6 +70,7 @@ private fun Instant.local(): String = timeFormat.format(atZone(ZoneId.systemDefa
 fun SessionSearchScreen(search: SessionSearchState, projects: List<Project>, onResume: (Project, SearchHit) -> Unit, tabs: @Composable () -> Unit, focusRequests: Int, modifier: Modifier = Modifier) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(focusRequests) { focus.requestFocus() }
+    LaunchedEffect(search) { search.watchIndexedEntries() }
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.md), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             Label("Sessions", style = Type.heading)

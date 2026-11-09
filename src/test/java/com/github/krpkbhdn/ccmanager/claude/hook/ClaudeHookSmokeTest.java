@@ -37,17 +37,17 @@ class ClaudeHookSmokeTest {
         assumeTrue(claudeVersion() != null, "claude is not on PATH");
         var mapper = JsonMapper.builder().build();
         var events = new CopyOnWriteArrayList<HookEvent>();
-        var hookProperties = new HookProperties(100, 1_048_576, 500, java.time.Duration.ofSeconds(1), 10, 1000);
+        var hookProperties = new HookProperties(100, 1_048_576, 500, java.time.Duration.ofSeconds(1), 10, 1000, 1000);
         var server = new HookServer(mock(HookEventStore.class), event -> events.add((HookEvent) event), mapper,
                 hookProperties,
                 mock(com.github.krpkbhdn.ccmanager.claude.mcp.McpEndpoint.class), mock(com.github.krpkbhdn.ccmanager.app.mcp.AssistantMcpEndpoint.class),
                 mock(com.github.krpkbhdn.ccmanager.claude.proposal.ProposalService.class));
         server.start();
         try {
-            var settings = new HookSettingsWriter(server, new AppProperties(workDir.resolve("data")), mapper, hookProperties).write(CCM_ID).settings();
+            var settings = new HookSettingsWriter(server, new AppProperties(workDir.resolve("data")), mapper, hookProperties, new CurlSupport()).write(CCM_ID).settings();
             writeProjectHook();
 
-            var output = runClaude(settings);
+            var output = runClaude(settings, server.sessionToken(CCM_ID));
 
             report(events, output);
             assertThat(events).extracting(HookEvent::type)
@@ -65,12 +65,13 @@ class ClaudeHookSmokeTest {
                 """.formatted(PROJECT_HOOK_MARKER));
     }
 
-    private String runClaude(Path settings) throws Exception {
-        var process = new ProcessBuilder("claude", "-p", prompt(), "--model", "haiku",
+    private String runClaude(Path settings, String sessionToken) throws Exception {
+        var builder = new ProcessBuilder("claude", "-p", prompt(), "--model", "haiku",
                 "--settings", settings.toString())
                 .directory(workDir.toFile())
-                .redirectErrorStream(true)
-                .start();
+                .redirectErrorStream(true);
+        builder.environment().put(HookServer.SESSION_TOKEN_ENV, sessionToken);
+        var process = builder.start();
         process.getOutputStream().close();
         var output = new String(process.getInputStream().readAllBytes());
         assertThat(process.waitFor(CLAUDE_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();

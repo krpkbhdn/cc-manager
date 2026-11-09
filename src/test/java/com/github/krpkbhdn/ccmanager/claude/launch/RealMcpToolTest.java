@@ -49,7 +49,8 @@ class RealMcpToolTest {
             command.addAll(List.of("-p", "--model", "haiku", "--", "Call the cc-manager MCP tool set_run_configuration with name 'probe', "
                     + "command 'echo hi', directory '" + projectDir.toAbsolutePath() + "'. "
                     + "Then list your available skills whose name starts with cc-manager and print them."));
-            var environment = ClaudeCommand.environment(System.getenv(), ccmSessionId);
+            var environment = ClaudeCommand.environment(System.getenv(), ccmSessionId,
+                    context.getBean(HookSettingsWriter.class).sessionToken(ccmSessionId));
             var builder = new ProcessBuilder(command).directory(projectDir.toFile()).redirectErrorStream(true);
             builder.environment().clear();
             builder.environment().putAll(environment);

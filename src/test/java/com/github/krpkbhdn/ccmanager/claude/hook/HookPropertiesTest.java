@@ -15,7 +15,7 @@ class HookPropertiesTest {
 
     @Test
     void acceptsTheDefaults() {
-        assertThatCode(() -> new HookProperties(50000, 1024, 500, Duration.ofSeconds(590), 50, 2000)).doesNotThrowAnyException();
+        assertThatCode(() -> new HookProperties(50000, 1024, 500, Duration.ofSeconds(590), 50, 2000, 1000)).doesNotThrowAnyException();
     }
 
     @ParameterizedTest(name = "{0} = {2}")
@@ -26,13 +26,13 @@ class HookPropertiesTest {
 
     static Stream<Arguments> invalid() {
         return Stream.of(
-                Arguments.of("retention", (java.util.function.Supplier<HookProperties>) () -> new HookProperties(0, 1024, 500, Duration.ofSeconds(590), 50, 2000), "0"),
-                Arguments.of("retention", (java.util.function.Supplier<HookProperties>) () -> new HookProperties(-1, 1024, 500, Duration.ofSeconds(590), 50, 2000), "-1"),
-                Arguments.of("maxBodyBytes", (java.util.function.Supplier<HookProperties>) () -> new HookProperties(50000, 0, 500, Duration.ofSeconds(590), 50, 2000), "0"),
-                Arguments.of("maxStoredTextLength", (java.util.function.Supplier<HookProperties>) () -> new HookProperties(50000, 1024, 0, Duration.ofSeconds(590), 50, 2000), "0"),
-                Arguments.of("decisionHold", (java.util.function.Supplier<HookProperties>) () -> new HookProperties(50000, 1024, 500, Duration.ZERO, 50, 2000), "Duration.ZERO"),
-                Arguments.of("maxHeldProposals", (java.util.function.Supplier<HookProperties>) () -> new HookProperties(50000, 1024, 500, Duration.ofSeconds(590), -1, 2000), "-1"),
-                Arguments.of("maxScannedEvents", (java.util.function.Supplier<HookProperties>) () -> new HookProperties(50000, 1024, 500, Duration.ofSeconds(590), 50, 0), "0"));
+                Arguments.of("retention", (java.util.function.Supplier<HookProperties>) () -> new HookProperties(0, 1024, 500, Duration.ofSeconds(590), 50, 2000, 1000), "0"),
+                Arguments.of("retention", (java.util.function.Supplier<HookProperties>) () -> new HookProperties(-1, 1024, 500, Duration.ofSeconds(590), 50, 2000, 1000), "-1"),
+                Arguments.of("maxBodyBytes", (java.util.function.Supplier<HookProperties>) () -> new HookProperties(50000, 0, 500, Duration.ofSeconds(590), 50, 2000, 1000), "0"),
+                Arguments.of("maxStoredTextLength", (java.util.function.Supplier<HookProperties>) () -> new HookProperties(50000, 1024, 0, Duration.ofSeconds(590), 50, 2000, 1000), "0"),
+                Arguments.of("decisionHold", (java.util.function.Supplier<HookProperties>) () -> new HookProperties(50000, 1024, 500, Duration.ZERO, 50, 2000, 1000), "Duration.ZERO"),
+                Arguments.of("maxHeldProposals", (java.util.function.Supplier<HookProperties>) () -> new HookProperties(50000, 1024, 500, Duration.ofSeconds(590), -1, 2000, 1000), "-1"),
+                Arguments.of("maxScannedEvents", (java.util.function.Supplier<HookProperties>) () -> new HookProperties(50000, 1024, 500, Duration.ofSeconds(590), 50, 0, 1000), "0"));
     }
 
     private static String kebab(String camel) {

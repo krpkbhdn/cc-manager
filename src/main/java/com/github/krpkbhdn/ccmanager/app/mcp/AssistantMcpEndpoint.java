@@ -73,7 +73,7 @@ public class AssistantMcpEndpoint extends McpJsonRpcServer<AssistantMcpTool> imp
         var assistant = sessions.sessions(ClaudeLauncher.ASSISTANT_PROJECT_ID).stream()
                 .filter(session -> session.status() != AgentStatus.OFFLINE).findFirst()
                 .map(SessionSnapshot::ccmSessionId).orElseThrow(() -> new IllegalStateException(NO_ASSISTANT));
-        var proposal = new PermissionProposal(UUID.randomUUID().toString(), assistant, Instant.now(), MAIN_AGENT, TOOL_NAME_PREFIX + tool.name(), arguments, List.of());
+        var proposal = new PermissionProposal(UUID.randomUUID().toString(), assistant, Instant.now(), MAIN_AGENT, TOOL_NAME_PREFIX + tool.name(), tool.approvalInput(arguments), arguments, List.of());
         var message = switch (proposals.holdForApp(proposal).join()) {
             case AppDecision.Answered answered when answered.answer() instanceof PermissionAllow -> null;
             case AppDecision.Answered ignored -> DENIED;

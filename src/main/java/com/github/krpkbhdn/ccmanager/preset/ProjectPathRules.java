@@ -21,7 +21,7 @@ public final class ProjectPathRules {
         if (segment.endsWith(".") || segment.endsWith(" ")) {
             throw new IllegalArgumentException("A path segment must not end with a dot or a space: " + fullPath);
         }
-        if (segment.equalsIgnoreCase(".git")) {
+        if (segment.equalsIgnoreCase(".git") || segment.equalsIgnoreCase("GIT~1")) {
             throw new IllegalArgumentException("Nothing under .git can be written: " + fullPath);
         }
     }

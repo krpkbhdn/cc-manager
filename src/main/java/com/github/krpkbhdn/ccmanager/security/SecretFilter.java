@@ -1,7 +1,5 @@
-package com.github.krpkbhdn.ccmanager.history;
+package com.github.krpkbhdn.ccmanager.security;
 
-import com.github.krpkbhdn.ccmanager.claude.hook.SecretPatterns;
-import com.github.krpkbhdn.ccmanager.git.SecretFiles;
 import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -15,15 +13,17 @@ public final class SecretFilter {
     private static final List<Pattern> TOKEN_LIKE = List.of(
             Pattern.compile("-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)"),
             Pattern.compile("eyJ[\\w-]+\\.[\\w-]+\\.[\\w-]+"),
-            Pattern.compile("sk-[A-Za-z0-9_-]{16,}"),
-            Pattern.compile("(?:ghp|gho)_[A-Za-z0-9]{20,}"),
+            Pattern.compile("(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{16,}"),
+            Pattern.compile("gh[pousr]_[A-Za-z0-9]{20,}"),
             Pattern.compile("github_pat_[A-Za-z0-9_]{20,}"),
-            Pattern.compile("xox[abp]-[A-Za-z0-9-]{10,}"),
-            Pattern.compile("AKIA[0-9A-Z]{16}"),
+            Pattern.compile("xox[abprs]-[A-Za-z0-9-]{10,}"),
+            Pattern.compile("(?:AKIA|ASIA)[0-9A-Z]{16}"),
             Pattern.compile("AIza[\\w-]{35}"),
             Pattern.compile("[sr]k_(?:live|test)_[A-Za-z0-9]{16,}"),
             Pattern.compile("glpat-[\\w-]{20,}"),
-            Pattern.compile("npm_[A-Za-z0-9]{36}"));
+            Pattern.compile("npm_[A-Za-z0-9]{36}"),
+            Pattern.compile("hf_[A-Za-z0-9]{30,}"),
+            Pattern.compile("(?<![A-Za-z0-9])SG\\.[\\w-]{16,}\\.[\\w-]{16,}"));
 
     private static final int NAME_AFFIX_MAX = 40;
 
@@ -45,9 +45,11 @@ public final class SecretFilter {
 
     private static final Pattern MYSQL_ATTACHED_PASSWORD = Pattern.compile("(\\bmysql\\w*\\b[^\\r\\n|;&]*?\\s-p)(?=\\S)\\S+");
 
+    private static final Pattern CURL_USER = Pattern.compile("(\\bcurl\\b[^\\r\\n|;&]*?\\s(?:-u|--user)[\\s=]+)" + QUOTED_OR_BARE);
+
     private static final Pattern URL_CREDENTIALS = Pattern.compile("(?<=://)[^\\s:/@]+:[^\\s@/]+@");
 
-    private static final Pattern AUTHORIZATION_HEADER = Pattern.compile("(?i)(authorization\\s*[:=]\\s*(?:basic|bearer)\\s+)\\S+");
+    private static final Pattern AUTHORIZATION_HEADER = Pattern.compile("(?i)(authorization\\s*[:=]\\s*(?:[a-z][\\w-]*\\s+)?)\\S+");
 
     private static final Pattern HEX_BLOB = Pattern.compile("\\b[0-9a-fA-F]{32,}\\b");
 
@@ -62,7 +64,7 @@ public final class SecretFilter {
                     + "|\\.(?:ssh|aws)[/\\\\]"
                     + "|\\.docker[/\\\\]+config\\.json"
                     + "|\\.(?:netrc|npmrc|pypirc|pgpass)(?!\\w)"
-                    + "|(?:" + SecretFiles.CREDENTIAL_NAMES + ")(?![\\w-])"
+                    + "|(?:" + SecretPatterns.CREDENTIAL_NAMES + ")(?![\\w-])"
                     + "|(?<!\\w)credentials"
                     + "|(?<!\\w)secrets\\."
                     + "|kubeconfig"
@@ -73,19 +75,40 @@ public final class SecretFilter {
     private SecretFilter() {
     }
 
+    /** Full masking for text that is searched later (transcripts). */
     public static String mask(String text) {
+        return mask(text, true);
+    }
+
+    /**
+     * Hook text is short commands and paths: git SHAs, hex digests and space-separated flags such as --max-tokens 4096 stay readable.
+     * Every key: value or key=value whose key contains token, secret, password, api key or credential is masked, so max_tokens=4096 becomes max_tokens=[redacted];
+     * a password phrase is masked only up to its first word.
+     */
+    public static String maskCommandText(String text) {
+        return mask(text, false);
+    }
+
+    private static String mask(String text, boolean strict) {
         var masked = JSON_KEY.matcher(text).replaceAll("$1" + REDACTED);
         masked = SecretPatterns.KEY_VALUE.matcher(masked).replaceAll("$1" + REDACTED);
-        masked = PASSWORD_PHRASE.matcher(masked).replaceAll("$1");
+        if (strict) {
+            masked = PASSWORD_PHRASE.matcher(masked).replaceAll("$1");
+        }
         masked = PASSWORD_FLAG.matcher(masked).replaceAll("$1" + REDACTED);
         masked = MYSQL_ATTACHED_PASSWORD.matcher(masked).replaceAll("$1" + REDACTED);
+        masked = CURL_USER.matcher(masked).replaceAll("$1" + REDACTED);
         for (Pattern pattern : TOKEN_LIKE) {
             masked = pattern.matcher(masked).replaceAll(REDACTED);
         }
-        masked = ASSIGNMENT.matcher(masked).replaceAll(REDACTED);
+        if (strict) {
+            masked = ASSIGNMENT.matcher(masked).replaceAll(REDACTED);
+        }
         masked = URL_CREDENTIALS.matcher(masked).replaceAll(REDACTED + "@");
         masked = AUTHORIZATION_HEADER.matcher(masked).replaceAll("$1" + REDACTED);
-        masked = HEX_BLOB.matcher(masked).replaceAll(REDACTED);
+        if (strict) {
+            masked = HEX_BLOB.matcher(masked).replaceAll(REDACTED);
+        }
         return LONG_BLOB.matcher(masked).replaceAll(blob -> looksLikeSecret(blob.group()) ? REDACTED : blob.group());
     }
 

@@ -37,9 +37,13 @@ sealed interface RawDetails {
 const val ADD_SERVER_KEY = "mcp:add"
 private const val LOAD_FAILURE_TITLE = "Could not read MCP servers"
 
+/** A shared project config can start arbitrary programs when health is checked, so stdio servers in it deserve a warning. */
+fun declaresProjectStdio(servers: List<McpServerConfig>) =
+    servers.any { it.scope() == ExtensionScope.PROJECT && it.transport() == "stdio" }
+
 /**
- * MCP servers of one project (or of the user when [projectPath] is null). The list loads at once; the slow health check
- * runs after it in the background. Server details may hold secrets: they stay in memory and are never logged.
+ * MCP servers of one project (or of the user when [projectPath] is null). The list loads at once; the health check is
+ * slow and starts the project's stdio servers, so it runs only on request. Server details may hold secrets: they stay in memory and are never logged.
  */
 class McpState(
     private val service: McpService,
@@ -83,7 +87,7 @@ class McpState(
         if (!loaded && !loading) refresh()
     }
 
-    fun refresh(withHealth: Boolean = true) {
+    fun refresh(withHealth: Boolean = false) {
         loading = true
         val seen = mutations.epoch
         scope.launch {
@@ -172,7 +176,7 @@ class McpState(
     /** Forgets the stale status of [name] so it shows as checking, then re-checks health, which also re-reads the stored sign-ins. */
     private fun recheck(name: String) {
         health = health.filterNot { it.name == name }
-        checkHealth()
+        if (healthCheck != HealthCheck.IDLE) checkHealth()
     }
 
     fun loadDetails(entry: McpEntry) {
@@ -194,7 +198,7 @@ class McpState(
             adding = false
             selected = mcpKey(target, name)
             notify(NotificationKind.FINISHED, "Added $name", "Available to new sessions, ${target.label()} scope.")
-            checkHealth()
+            if (healthCheck != HealthCheck.IDLE) checkHealth()
         }
     }
 

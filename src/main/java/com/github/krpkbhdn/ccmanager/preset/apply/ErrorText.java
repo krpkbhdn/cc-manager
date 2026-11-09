@@ -1,6 +1,6 @@
 package com.github.krpkbhdn.ccmanager.preset.apply;
 
-import com.github.krpkbhdn.ccmanager.claude.hook.SecretPatterns;
+import com.github.krpkbhdn.ccmanager.security.SecretPatterns;
 import com.github.krpkbhdn.ccmanager.extension.mcp.McpTargetRedaction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;

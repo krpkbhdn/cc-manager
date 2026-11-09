@@ -2,7 +2,6 @@ package com.github.krpkbhdn.ccmanager.usage.context;
 
 import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeCommand;
 import com.github.krpkbhdn.ccmanager.extension.ClaudeCli;
-import com.github.krpkbhdn.ccmanager.extension.ExtensionException;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
@@ -111,9 +110,9 @@ public class ContextBreakdownService {
                     .map(breakdown -> breakdown.withApproximateMessages(claudeSessionId == null))
                     .map(ContextBreakdownResult::success)
                     .orElseGet(() -> ContextBreakdownResult.failed("claude " + CONTEXT_COMMAND + " printed no context breakdown"));
-        } catch (ExtensionException | IllegalStateException e) {
-            log.warn("Context breakdown failed: {}", e.getMessage());
-            return ContextBreakdownResult.failed(e.getMessage());
+        } catch (RuntimeException e) {
+            log.warn("Context breakdown failed", e);
+            return ContextBreakdownResult.failed(e.getMessage() != null ? e.getMessage() : e.toString());
         }
     }
 

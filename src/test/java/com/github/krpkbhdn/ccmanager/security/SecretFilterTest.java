@@ -1,4 +1,4 @@
-package com.github.krpkbhdn.ccmanager.history;
+package com.github.krpkbhdn.ccmanager.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -17,6 +17,14 @@ class SecretFilterTest {
             "sk-abcdefghijklmnopqrstuv",
             "ghp_abcdefghijklmnopqrstuvwx",
             "gho_abcdefghijklmnopqrstuvwx",
+            "ghs_abcdefghijklmnopqrstuvwx",
+            "ghu_abcdefghijklmnopqrstuvwx",
+            "ghr_abcdefghijklmnopqrstuvwx",
+            "xoxr-1234567890-abcdef",
+            "xoxs-1234567890-abcdef",
+            "ASIAABCDEFGHIJKLMNOP",
+            "hf_abcdefghijklmnopqrstuvwxyzABCD",
+            "SG.abcdefghijklmnop.qrstuvwxyzABCDEFG",
             "github_pat_abcdefghijklmnopqrstuv",
             "xoxb-1234567890-abcdef",
             "AKIAABCDEFGHIJKLMNOP",
@@ -104,5 +112,41 @@ class SecretFilterTest {
     @ValueSource(strings = {"cat .environment", "src/Main.java", "the keyboard", "environment.txt", "ls -la", "{\"command\":\"env FOO=1 make\"}", "{\"command\":\"settings\"}"})
     void ignoresOrdinaryInput(String input) {
         assertThat(SecretFilter.touchesSensitiveFile(input)).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"src/task-runner-configuration/Foo.java", "MSG.abcdefghijklmnop.qrstuvwxyzABCDEFG", "git show 0123456789abcdef0123456789abcdef01234567"})
+    void commandTextKeepsLookalikesThatAreNoSecrets(String text) {
+        assertThat(SecretFilter.maskCommandText(text)).isEqualTo(text);
+    }
+
+    @Test
+    void commandTextKeepsKeyNamesButStillMasksSecretShapes() {
+        assertThat(SecretFilter.maskCommandText("run --max-tokens 4096 max_tokens=4096")).startsWith("run --max-tokens 4096 max_tokens=");
+        assertThat(SecretFilter.maskCommandText("x sk-abcdefghijklmnopqrstuv y")).isEqualTo("x [redacted] y");
+        assertThat(SecretFilter.maskCommandText("a SG.abcdefghijklmnop.qrstuvwxyzABCDEFG")).isEqualTo("a [redacted]");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Authorization: token abc123def", "Authorization: ApiKey abc123def", "authorization=Basic abc123def", "Authorization: abc123def"})
+    void anyAuthorizationSchemeIsMasked(String header) {
+        assertThat(SecretFilter.maskCommandText(header)).doesNotContain("abc123def").endsWith("[redacted]");
+    }
+
+    @Test
+    void commandTextMasksAPasswordPhraseOnlyUpToItsFirstWord() {
+        assertThat(SecretFilter.maskCommandText("password: hunter2 # staging\n{\"a\":1}")).isEqualTo("password: [redacted] # staging\n{\"a\":1}");
+        assertThat(SecretFilter.mask("password: hunter2 and more")).doesNotContain("and more");
+    }
+
+    @Test
+    void commandTextMasksKeyValuesWhoseKeyContainsTokenSoMaxTokensValueIsHidden() {
+        assertThat(SecretFilter.maskCommandText("max_tokens=4096")).isEqualTo("max_tokens=[redacted]");
+        assertThat(SecretFilter.maskCommandText("--max-tokens 4096")).isEqualTo("--max-tokens 4096");
+    }
+
+    @Test
+    void aKeyPrefixInsideAWordIsNotMasked() {
+        assertThat(SecretFilter.mask("task-runner-configuration-abc")).isEqualTo("task-runner-configuration-abc");
     }
 }

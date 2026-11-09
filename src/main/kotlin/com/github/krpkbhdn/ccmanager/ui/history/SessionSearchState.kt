@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 
 private const val DEBOUNCE_MILLIS = 250L
-private const val COUNTER_REFRESH_MILLIS = 15_000L
+private const val INDEX_REFRESH_MILLIS = 30_000L
 
 /** A transcript opened at a search hit; [window] is null while it loads. */
 class OpenedTranscript(val hit: SearchHit, val window: TranscriptService.Window?)
@@ -36,7 +36,6 @@ class SessionSearchState(
     private val requestConfirm: (ConfirmRequest) -> Unit,
     private val reportError: (String) -> Unit,
     private val now: () -> Instant = Instant::now,
-    private val refreshMillis: Long = COUNTER_REFRESH_MILLIS,
 ) {
     val query = TextFieldState()
     var project by mutableStateOf<Project?>(null)
@@ -53,30 +52,19 @@ class SessionSearchState(
         private set
 
     private var job: Job? = null
-    private var counterJob: Job? = null
     private var searchSequence = 0
     private var counterFailing = false
 
-    /** The entry counter is refreshed on a timer, so a search does not pay for a SUM over the index. */
+    /** The entry counter is read at start, after each completed search or clear, and by [watchIndexedEntries] only while the screen is open. */
     @OptIn(FlowPreview::class)
     fun start() {
-        startCounter()
+        scope.launch { refreshIndexedEntries() }
         job = scope.launch {
             snapshotFlow { Triple(query.text.toString().trim(), project, period) }.debounce(DEBOUNCE_MILLIS).collectLatest { (text, project, period) -> search(text, project, period) }
         }
     }
 
-    private fun startCounter() {
-        counterJob = scope.launch {
-            while (true) {
-                refreshIndexedEntries()
-                delay(refreshMillis)
-            }
-        }
-    }
-
     fun dispose() {
-        counterJob?.cancel()
         job?.cancel()
     }
 
@@ -95,6 +83,15 @@ class SessionSearchState(
             }
         } finally {
             if (request == searchSequence) searching = false
+        }
+        refreshIndexedEntries()
+    }
+
+    /** Keeps the entry counter moving while the screen is composed (the indexer keeps running); the screen's effect ends it on leaving. */
+    suspend fun watchIndexedEntries() {
+        while (true) {
+            refreshIndexedEntries()
+            delay(INDEX_REFRESH_MILLIS)
         }
     }
 

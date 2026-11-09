@@ -235,11 +235,15 @@ class AppState(
         scope.launch { guarded { notifications.restore(io { backend.notifications.history() }) } }
         scope.launch {
             var ticks = 0
+            var wasActive = windowActive
             while (true) {
                 delay(TICK_MILLIS)
                 now = Instant.now()
                 if (++ticks % STALE_REFRESH_TICKS == 0) sessionReload.request()
-                if (ticks % UNOPENED_GIT_REFRESH_TICKS == 0) gits.reloadUnopened((route as? Route.Project)?.id)
+                val active = windowActive
+                val refocused = active && !wasActive
+                wasActive = active
+                if (active && (refocused || ticks % UNOPENED_GIT_REFRESH_TICKS == 0)) gits.reloadUnopened((route as? Route.Project)?.id, afterRunningSweep = refocused)
             }
         }
     }

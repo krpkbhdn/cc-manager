@@ -42,10 +42,9 @@ public class SessionSearchService {
             return List.of();
         }
         var sql = new StringBuilder("""
-                SELECT f.claude_session_id, f.cwd, f.path, e.role, e.at, e.entry_uuid, e.line_offset,
-                    snippet(transcript_entry_fts, 0, char(2), char(3), '...', %d)
+                SELECT e.rowid AS id, e.file_id AS file_id, e.rank AS score, e.at AS at
                 FROM transcript_entry_fts e JOIN transcript_file f ON f.id = e.file_id
-                WHERE transcript_entry_fts MATCH ?""".formatted(SNIPPET_TOKENS));
+                WHERE transcript_entry_fts MATCH ?""");
         var params = new ArrayList<Object>(List.of(match));
         cwdPrefix.ifPresent(path -> {
             sql.append(" AND ").append(TranscriptIndexRepository.projectCondition("f.cwd", ignoresPathCase()));
@@ -59,8 +58,17 @@ public class SessionSearchService {
             sql.append(" AND e.at <= ?");
             params.add(instant.toEpochMilli());
         });
-        sql.append(" ORDER BY rank, e.at DESC LIMIT ").append(properties.searchLimit());
-        return jdbc.sql(sql.toString()).params(params)
+        sql.append(" ORDER BY e.rank, e.at DESC, e.rowid LIMIT ").append(properties.searchLimit());
+        // snippet() runs only for the limited rows: the inner query ranks, the outer one decorates
+        var outer = """
+                WITH top AS (%s)
+                SELECT f.claude_session_id, f.cwd, f.path, e.role, e.at, e.entry_uuid, e.line_offset,
+                    snippet(transcript_entry_fts, 0, char(2), char(3), '...', %d)
+                FROM top JOIN transcript_entry_fts e ON e.rowid = top.id JOIN transcript_file f ON f.id = top.file_id
+                WHERE transcript_entry_fts MATCH ?
+                ORDER BY top.score, top.at DESC, top.id""".formatted(sql, SNIPPET_TOKENS);
+        params.add(match);
+        return jdbc.sql(outer).params(params)
                 .query((rs, row) -> new SearchHit(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4),
                         Instant.ofEpochMilli(rs.getLong(5)), rs.getString(6), rs.getLong(7), rs.getString(8)))
                 .list();

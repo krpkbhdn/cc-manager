@@ -68,9 +68,9 @@ class ClaudeCommandTest {
 
     @Test
     void groupEnvironmentLoadsTheClaudeMdOfAddedDirectories() {
-        assertThat(ClaudeCommand.groupEnvironment(Map.of(), "ccm-1")).containsEntry("CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD", "1")
+        assertThat(ClaudeCommand.groupEnvironment(Map.of(), "ccm-1", "t")).containsEntry("CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD", "1")
                 .containsEntry("CCM_SESSION", "ccm-1");
-        assertThat(ClaudeCommand.environment(Map.of(), "ccm-1")).doesNotContainKey("CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD");
+        assertThat(ClaudeCommand.environment(Map.of(), "ccm-1", "t")).doesNotContainKey("CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD");
     }
 
     @Test
@@ -132,9 +132,9 @@ class ClaudeCommandTest {
 
     @Test
     void environmentKeepsParentAndAddsTerminalVariables() {
-        Map<String, String> env = ClaudeCommand.environment(Map.of("PATH", "x", "TERM", "dumb"), "ccm-1");
+        Map<String, String> env = ClaudeCommand.environment(Map.of("PATH", "x", "TERM", "dumb"), "ccm-1", "tok");
 
-        assertThat(env).containsEntry("PATH", "x")
+        assertThat(env).containsEntry("PATH", "x").containsEntry("CCM_HOOK_TOKEN", "tok")
                 .containsEntry("TERM", "xterm-256color")
                 .containsEntry("COLORTERM", "truecolor")
                 .containsEntry("CCM_SESSION", "ccm-1");
@@ -144,15 +144,27 @@ class ClaudeCommandTest {
     void assistantTokenIsOnlyInTheAssistantEnvironmentAndNeverInherited() {
         Map<String, String> parent = Map.of("CCM_ASSISTANT_TOKEN", "inherited");
 
-        assertThat(ClaudeCommand.environment(parent, "ccm-1")).doesNotContainKey("CCM_ASSISTANT_TOKEN");
-        assertThat(ClaudeCommand.groupEnvironment(parent, "ccm-1")).doesNotContainKey("CCM_ASSISTANT_TOKEN");
+        assertThat(ClaudeCommand.environment(parent, "ccm-1", "t")).doesNotContainKey("CCM_ASSISTANT_TOKEN");
+        assertThat(ClaudeCommand.groupEnvironment(parent, "ccm-1", "t")).doesNotContainKey("CCM_ASSISTANT_TOKEN");
         assertThat(ClaudeCommand.terminalEnvironment(parent)).doesNotContainKey("CCM_ASSISTANT_TOKEN");
-        assertThat(ClaudeCommand.assistantEnvironment(parent, "ccm-1", "tok")).containsEntry("CCM_ASSISTANT_TOKEN", "tok");
+        assertThat(ClaudeCommand.assistantEnvironment(parent, "ccm-1", "t", "tok")).containsEntry("CCM_ASSISTANT_TOKEN", "tok")
+                .containsEntry("CCM_HOOK_TOKEN", "t");
+    }
+
+    @Test
+    void everyLaunchEnvironmentCarriesTheSessionTokenAndShellsNeverInheritIt() {
+        Map<String, String> parent = Map.of("CCM_HOOK_TOKEN", "other-session");
+
+        assertThat(ClaudeCommand.environment(Map.of(), "ccm-1", "t")).containsEntry("CCM_HOOK_TOKEN", "t");
+        assertThat(ClaudeCommand.groupEnvironment(Map.of(), "ccm-1", "t")).containsEntry("CCM_HOOK_TOKEN", "t");
+        assertThat(ClaudeCommand.assistantEnvironment(Map.of(), "ccm-1", "t", "a")).containsEntry("CCM_HOOK_TOKEN", "t");
+        assertThat(ClaudeCommand.environment(parent, "ccm-1", "t")).containsEntry("CCM_HOOK_TOKEN", "t");
+        assertThat(ClaudeCommand.terminalEnvironment(parent)).doesNotContainKey("CCM_HOOK_TOKEN");
     }
 
     @Test
     void environmentDropsVariablesThatBreakClaudeColors() {
-        Map<String, String> env = ClaudeCommand.environment(Map.of("NO_COLOR", "1", "CLAUDECODE", "1", "CLAUDE_CODE_CHILD_SESSION", "1", "CLAUDE_CONFIG_DIR", "d"), "ccm-1");
+        Map<String, String> env = ClaudeCommand.environment(Map.of("NO_COLOR", "1", "CLAUDECODE", "1", "CLAUDE_CODE_CHILD_SESSION", "1", "CLAUDE_CONFIG_DIR", "d"), "ccm-1", "t");
 
         assertThat(env).doesNotContainKeys("NO_COLOR", "CLAUDECODE", "CLAUDE_CODE_CHILD_SESSION").containsEntry("CLAUDE_CONFIG_DIR", "d");
     }

@@ -3,6 +3,7 @@ package com.github.krpkbhdn.ccmanager.claude.hook;
 import com.github.krpkbhdn.ccmanager.claude.event.HookEventType;
 import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
 import com.github.krpkbhdn.ccmanager.claude.event.ActivityFormatter;
+import com.github.krpkbhdn.ccmanager.security.SecretFilter;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -34,6 +35,9 @@ public class HookEventStore {
     private static final Logger log = LoggerFactory.getLogger(HookEventStore.class);
     private static final int PRUNE_EVERY_INSERTS = 100;
     private static final int OVER_FETCH_FACTOR = 4;
+    /** Text is masked on this much more than is kept, so a secret straddling the kept limit is seen whole, while a huge body cannot stall the regexes. */
+    private static final int MASK_LOOKAHEAD = 512;
+    private static final String PARTIAL_TAIL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/_=.-";
     /** Pruning keeps a session's newest retention / this many rows (at least one), but only rows younger than the max age, so the table stays bounded. */
     private static final int SESSION_FLOOR_DIVISOR = 100;
     private static final Duration SESSION_FLOOR_MAX_AGE = Duration.ofDays(7);
@@ -173,7 +177,7 @@ public class HookEventStore {
 
     private JsonNode truncated(JsonNode node) {
         if (node.isString()) {
-            return mapper.getNodeFactory().stringNode(SecretPatterns.KEY_VALUE.matcher(cut(node.asString())).replaceAll("$1[redacted]"));
+            return mapper.getNodeFactory().stringNode(maskedAndCut(node.asString()));
         }
         if (node.isObject()) {
             ObjectNode copy = mapper.createObjectNode();
@@ -188,10 +192,25 @@ public class HookEventStore {
         return node;
     }
 
-    private String cut(String value) {
-        return value.length() <= properties.maxStoredTextLength()
-                ? value
-                : value.substring(0, properties.maxStoredTextLength());
+    /** A cut can split a secret the mask never saw whole, so after any cut the unfinished last token is dropped too. */
+    private String maskedAndCut(String value) {
+        var window = cut(value, properties.maxStoredTextLength() + MASK_LOOKAHEAD);
+        var masked = SecretFilter.maskCommandText(window);
+        var kept = cut(masked, properties.maxStoredTextLength());
+        var truncated = window.length() < value.length() || masked.length() > kept.length();
+        return truncated ? withoutPartialTail(kept) : kept;
+    }
+
+    private static String withoutPartialTail(String text) {
+        var end = text.length();
+        while (end > 0 && PARTIAL_TAIL.indexOf(text.charAt(end - 1)) >= 0) {
+            end--;
+        }
+        return text.substring(0, end);
+    }
+
+    private static String cut(String value, int limit) {
+        return value.length() <= limit ? value : value.substring(0, limit);
     }
 
     private static String nullIfEmpty(String value) {
