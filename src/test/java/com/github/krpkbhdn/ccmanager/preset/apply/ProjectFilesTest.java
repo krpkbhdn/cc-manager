@@ -16,6 +16,28 @@ class ProjectFilesTest {
     Path project;
 
     @Test
+    void readRefusesDirectoriesAndOversizedFiles() throws IOException {
+        var big = project.resolve("big.txt");
+        try (var out = Files.newOutputStream(big)) {
+            out.write(new byte[(int) ProjectFiles.MAX_READ_BYTES + 1]);
+        }
+        Files.createDirectory(project.resolve("dir"));
+        assertThatThrownBy(() -> ProjectFiles.read(big)).isInstanceOf(IOException.class);
+        assertThatThrownBy(() -> ProjectFiles.read(project.resolve("dir"))).isInstanceOf(IOException.class);
+        assertThat(ProjectFiles.read(project.resolve("missing"))).isEmpty();
+    }
+
+    @Test
+    void replaceIfUnchangedRefusesAFileEditedSinceItWasRead() throws IOException {
+        var file = project.resolve("CLAUDE.md");
+        Files.writeString(file, "mine");
+        assertThatThrownBy(() -> ProjectFiles.replaceIfUnchanged(file, "older", "new")).isInstanceOf(IOException.class);
+        assertThat(Files.readString(file)).isEqualTo("mine");
+        ProjectFiles.replaceIfUnchanged(file, "mine", "new");
+        assertThat(Files.readString(file)).isEqualTo("new");
+    }
+
+    @Test
     void ordinaryPathResolvesInsideTheProject() {
         assertThat(ProjectFiles.resolve(project, "a/b.txt")).isEqualTo(project.toAbsolutePath().normalize().resolve("a/b.txt"));
     }

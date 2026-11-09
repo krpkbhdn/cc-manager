@@ -124,6 +124,17 @@ class ReviewImageStoreTest {
     }
 
     @Test
+    void dropsDataAppendedAfterTheImage() throws IOException {
+        Path png = image("poly.png", "png", 8, 8);
+        Files.write(png, "SECRET-TRAILER".getBytes(), java.nio.file.StandardOpenOption.APPEND);
+        Path out = temp.resolve("out");
+
+        store.store(out, List.of(new SubmittedImage(png, null)));
+
+        assertThat(new String(Files.readAllBytes(out.resolve("image-1.png")), java.nio.charset.StandardCharsets.ISO_8859_1)).doesNotContain("SECRET-TRAILER");
+    }
+
+    @Test
     void rejectsMissingFile() {
         assertThatThrownBy(() -> store.store(temp.resolve("out"), List.of(new SubmittedImage(temp.resolve("nope.png"), ""))))
                 .isInstanceOf(IllegalArgumentException.class).hasMessage("image 1: file does not exist");

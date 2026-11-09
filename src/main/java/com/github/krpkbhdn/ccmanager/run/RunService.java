@@ -55,14 +55,14 @@ public class RunService {
     /** Restarts the configuration when it is already running.
      * @throws IllegalStateException with a user-readable message (configuration or directory gone, spawn failed) */
     public LaunchedSession start(long configurationId) {
+        findRunnable(configurationId);
         synchronized (startLocks.computeIfAbsent(configurationId, id -> new Object())) {
+            stopAndAwaitExit(configurationId);
             return startLocked(configurationId);
         }
     }
 
     private LaunchedSession startLocked(long configurationId) {
-        findRunnable(configurationId);
-        stopAndAwaitExit(configurationId);
         var configuration = findRunnable(configurationId);
         var runId = "run-" + configurationId + "-" + counter.incrementAndGet();
         PtyProcess process;

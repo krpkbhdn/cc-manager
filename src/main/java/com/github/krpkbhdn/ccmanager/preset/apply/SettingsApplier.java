@@ -33,8 +33,14 @@ class SettingsApplier implements PresetComponentApplier {
             return result.conflicts().isEmpty() ? PlannedChange.of(component, ChangeAction.PRESENT, "Settings already contain these values")
                     : PlannedChange.of(component, ChangeAction.CONFLICT, "Every key differs from the current value: " + String.join(", ", result.conflicts()));
         }
+        var preview = MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(fragment);
+        var executable = CodeExecutingPaths.executableSettingsKeys(fragment);
+        if (!executable.isEmpty()) {
+            return PlannedChange.of(component, ChangeAction.NEEDS_CONFIRMATION, "Warning: runs code or changes permissions for everyone using the project ("
+                    + String.join(", ", executable) + "), add it to " + SETTINGS + " yourself after reviewing it").withPreview(preview);
+        }
         var action = Files.exists(file) ? ChangeAction.UPDATE : ChangeAction.CREATE;
-        return PlannedChange.of(component, action, "Merge into " + SETTINGS + skipped).withPreview(MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(fragment));
+        return PlannedChange.of(component, action, "Merge into " + SETTINGS + skipped).withPreview(preview);
     }
 
     @Override

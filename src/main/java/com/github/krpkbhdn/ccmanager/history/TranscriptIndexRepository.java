@@ -1,6 +1,8 @@
 package com.github.krpkbhdn.ccmanager.history;
 
 import java.io.File;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -111,8 +113,17 @@ public class TranscriptIndexRepository {
      * {@code lineEnd} (empty when unknown) so lines written before now are not indexed again.
      */
     public void evictProject(String path, boolean ignoreCase, Function<String, OptionalLong> lineEnd) {
-        var files = jdbc.sql("SELECT id, path FROM transcript_file WHERE " + projectCondition("cwd", ignoreCase))
-                .params(projectParams(path, path + File.separator)).query((rs, row) -> Map.entry(rs.getLong(1), rs.getString(2))).list();
+        var files = new ArrayList<>(jdbc.sql("SELECT id, path FROM transcript_file WHERE " + projectCondition("cwd", ignoreCase))
+                .params(projectParams(path, path + File.separator)).query((rs, row) -> Map.entry(rs.getLong(1), rs.getString(2))).list());
+        // shortcut: a cwd-less transcript is matched by its exact claude directory only, subfolder projects are not reachable
+        var directory = path.replaceAll("[^A-Za-z0-9]", "-");
+        jdbc.sql("SELECT id, path FROM transcript_file WHERE COALESCE(cwd, '') = ''")
+                .query((rs, row) -> Map.entry(rs.getLong(1), rs.getString(2))).list().stream()
+                .filter(file -> {
+                    var parent = Path.of(file.getValue()).getParent();
+                    var name = parent == null ? "" : parent.getFileName().toString();
+                    return ignoreCase ? name.equalsIgnoreCase(directory) : name.equals(directory);
+                }).forEach(files::add);
         var ends = files.stream().collect(Collectors.toMap(Map.Entry::getKey, file -> lineEnd.apply(file.getValue())));
         inWriteTransaction(() -> ends.forEach((fileId, end) -> {
             deleteEntries(fileId);

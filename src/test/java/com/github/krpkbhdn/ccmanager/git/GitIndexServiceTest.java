@@ -98,6 +98,44 @@ class GitIndexServiceTest {
     }
 
     @Test
+    void discardRemovesMoreUntrackedFilesThanFitOnOneCommandLine() {
+        prepareWithCommit();
+        sandbox.write("a.txt", "changed\n");
+        var names = new ArrayList<String>();
+        for (var i = 0; i < GitIndexService.MAX_PATHS_ON_COMMAND_LINE * 2 + 20; i++) {
+            names.add("u" + i + ".txt");
+            sandbox.write("u" + i + ".txt", "x\n");
+        }
+
+        service.discard(sandbox.repo, names);
+
+        assertThat(names).noneMatch(name -> Files.exists(sandbox.repo.resolve(name)));
+        assertThat(sandbox.read("a.txt")).isEqualTo("changed\n");
+    }
+
+    @Test
+    void discardKeepsIgnoredFilesInsideAnUntrackedDirectory() {
+        prepareWithCommit();
+        sandbox.write(".gitignore", ".env\n");
+        sandbox.commitAll("ignore");
+        sandbox.write("newdir/f.txt", "y\n");
+        sandbox.write("newdir/.env", "SECRET=1\n");
+
+        service.discard(sandbox.repo, List.of("newdir"));
+
+        assertThat(sandbox.repo.resolve("newdir/f.txt")).doesNotExist();
+        assertThat(sandbox.repo.resolve("newdir/.env")).exists();
+    }
+
+    @Test
+    void discardRefusesGitDirectoryAliasesWithTrailingDotOrSpace() {
+        prepareWithCommit();
+
+        assertThatThrownBy(() -> service.discard(sandbox.repo, List.of(".git."))).isInstanceOf(GitException.class);
+        assertThatThrownBy(() -> service.discard(sandbox.repo, List.of("x/.GIT "))).isInstanceOf(GitException.class);
+    }
+
+    @Test
     void discardRefusesPathsOutsideTheRepositoryAndGitDirectory() throws IOException {
         prepareWithCommit();
         var outside = Files.writeString(root.resolve("outside.txt"), "precious");

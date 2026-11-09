@@ -222,12 +222,13 @@ public class ReviewService {
     /** @return how many reviews were removed */
     public int deleteOlderThan(Instant cutoff) {
         var ids = jdbc.sql("SELECT id FROM review WHERE created_at < ?").param(SQLITE_TIMESTAMP.format(cutoff)).query(Long.class).list();
-        ids.forEach(id -> {
-            jdbc.sql("DELETE FROM review WHERE id = ?").param(id).update();
-            deleteFolder(directoryOf(id));
-        });
-        if (!ids.isEmpty()) {
-            listeners.fire();
+        try {
+            transaction.executeWithoutResult(status -> ids.forEach(id -> jdbc.sql("DELETE FROM review WHERE id = ?").param(id).update()));
+            ids.forEach(id -> deleteFolder(directoryOf(id)));
+        } finally {
+            if (!ids.isEmpty()) {
+                listeners.fire();
+            }
         }
         return ids.size();
     }

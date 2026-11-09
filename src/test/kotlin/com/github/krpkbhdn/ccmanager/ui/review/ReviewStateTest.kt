@@ -171,6 +171,16 @@ class ReviewStateTest {
 
         state.dispose()
 
+        verify(service, timeout(2000)).saveMarks(7, listOf(mark))
+    }
+
+    @Test
+    fun `awaiting the final flush returns only after the marks are saved`() {
+        state.addMark(7, mark)
+
+        state.dispose()
+        state.awaitFinalFlush()
+
         verify(service).saveMarks(7, listOf(mark))
     }
 
@@ -180,10 +190,11 @@ class ReviewStateTest {
         state.addMark(7, mark)
 
         state.dispose()
+        await { errors.isNotEmpty() }
         assertThat(errors).containsExactly("disk full")
         state.dispose()
 
-        verify(service, times(2)).saveMarks(7, listOf(mark))
+        verify(service, timeout(2000).times(2)).saveMarks(7, listOf(mark))
     }
 
     @Test
@@ -193,11 +204,13 @@ class ReviewStateTest {
         state.addMark(7, mark)
 
         state.dispose()
+        verify(service, timeout(2000).atLeastOnce()).marks(7)
+        Thread.sleep(200)
         verify(service, never()).saveMarks(anyLong(), anyList())
 
         readable.set(true)
         state.dispose()
-        verify(service).saveMarks(7, listOf(mark))
+        verify(service, timeout(2000)).saveMarks(7, listOf(mark))
     }
 
     @Test

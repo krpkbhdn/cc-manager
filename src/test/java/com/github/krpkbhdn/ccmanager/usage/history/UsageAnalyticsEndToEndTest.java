@@ -55,7 +55,7 @@ class UsageAnalyticsEndToEndTest {
             return (Runnable) () -> { };
         });
         var alerts = new UsageAlertService(properties, repository, rateLimits, notifications);
-        recorder = new UsageRecorder(registry, usage, rateLimits, repository, alerts, properties, Runnable::run);
+        recorder = new UsageRecorder(registry, usage, rateLimits, repository, alerts, properties, Runnable::run, java.time.Clock.systemUTC());
     }
 
     private void fiveHour(double percent) {

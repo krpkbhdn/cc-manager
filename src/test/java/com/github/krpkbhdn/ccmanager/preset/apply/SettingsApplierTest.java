@@ -9,6 +9,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -46,17 +48,34 @@ class SettingsApplierTest {
 
     @Test
     void existingKeysArePreservedWhenTheFragmentIsMerged() throws Exception {
-        existing("{\"theme\":\"dark\",\"env\":{\"A\":\"1\"}}");
-        var component = settings("{\"env\":{\"B\":\"2\"},\"model\":\"opus\"}");
+        existing("{\"theme\":\"dark\",\"attribution\":{\"A\":\"1\"}}");
+        var component = settings("{\"attribution\":{\"B\":\"2\"},\"model\":\"opus\"}");
 
         assertThat(applier.plan(component, dir).action()).isEqualTo(ChangeAction.UPDATE);
         applier.apply(component, dir);
 
         var json = written();
         assertThat(json.path("theme").asString()).isEqualTo("dark");
-        assertThat(json.path("env").path("A").asString()).isEqualTo("1");
-        assertThat(json.path("env").path("B").asString()).isEqualTo("2");
+        assertThat(json.path("attribution").path("A").asString()).isEqualTo("1");
+        assertThat(json.path("attribution").path("B").asString()).isEqualTo("2");
         assertThat(json.path("model").asString()).isEqualTo("opus");
+    }
+
+    @Test
+    void fragmentWithCodeRunningKeysNeedsConfirmation() throws Exception {
+        var change = applier.plan(settings("{\"hooks\":{\"Stop\":[]},\"model\":\"opus\"}"), dir);
+
+        assertThat(change.action()).isEqualTo(ChangeAction.NEEDS_CONFIRMATION);
+        assertThat(change.detail()).contains("hooks").doesNotContain("model");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"fileSuggestion", "enabledMcpjsonServers", "disableAllHooks", "allowedMcpServers"})
+    void trustAndCommandKeysNeedConfirmation(String key) throws Exception {
+        var change = applier.plan(settings("{\"" + key + "\":{},\"model\":\"opus\"}"), dir);
+
+        assertThat(change.action()).isEqualTo(ChangeAction.NEEDS_CONFIRMATION);
+        assertThat(change.detail()).contains(key);
     }
 
     @Test

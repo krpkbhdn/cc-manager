@@ -53,7 +53,7 @@ class UsageRecorderTest {
             return (Runnable) () -> { };
         });
         var properties = new UsageProperties(Duration.ofDays(90), Duration.ofHours(6), 80, 80, 0, Duration.ofMinutes(5));
-        new UsageRecorder(registry, usage, rateLimits, repository, alerts, properties, Runnable::run);
+        new UsageRecorder(registry, usage, rateLimits, repository, alerts, properties, Runnable::run, java.time.Clock.systemUTC());
         when(repository.lastCost("claude-1")).thenReturn(OptionalDouble.of(1.0));
     }
 
@@ -132,10 +132,52 @@ class UsageRecorderTest {
     }
 
     @Test
+    void endedSessionLeavesNoCostBaselineWhenTheFinalWriteRunsLater() {
+        var queue = new java.util.ArrayDeque<Runnable>();
+        var properties = new UsageProperties(Duration.ofDays(90), Duration.ofHours(6), 80, 80, 0, Duration.ofMinutes(5));
+        new UsageRecorder(registry, usage, rateLimits, repository, alerts, properties, queue::add, java.time.Clock.systemUTC());
+        live(AgentStatus.WORKING);
+        reportsCost(2.0);
+        when(registry.sessions()).thenReturn(List.of());
+        registryChanged.run();
+        queue.forEach(Runnable::run);
+        queue.clear();
+
+        live(AgentStatus.WORKING);
+        reportsCost(5.0);
+        live(AgentStatus.IDLE);
+        queue.forEach(Runnable::run);
+
+        var sample = ArgumentCaptor.forClass(UsageSample.class);
+        verify(repository, times(2)).insertSample(sample.capture());
+        assertThat(sample.getAllValues().get(1).costDelta()).isEqualTo(4.0);
+    }
+
+    @Test
+    void rejectedRateLimitWriteIsRetriedOnTheNextChange() {
+        var rejecting = new java.util.concurrent.atomic.AtomicBoolean(true);
+        java.util.concurrent.Executor writer = task -> {
+            if (rejecting.get()) {
+                throw new java.util.concurrent.RejectedExecutionException("full");
+            }
+            task.run();
+        };
+        var properties = new UsageProperties(Duration.ofDays(90), Duration.ofHours(6), 80, 80, 0, Duration.ofMinutes(5));
+        new UsageRecorder(registry, usage, rateLimits, repository, alerts, properties, writer, java.time.Clock.systemUTC());
+        var start = Instant.parse("2030-01-01T10:00:00Z");
+
+        rateLimitAt(50, start);
+        rejecting.set(false);
+        rateLimitAt(50, start.plusSeconds(10));
+
+        verify(repository, times(1)).insertRateLimit(any());
+    }
+
+    @Test
     void shutdownDrainsQueuedSamplesBeforeExit() throws Exception {
         var executor = java.util.concurrent.Executors.newSingleThreadExecutor();
         var properties = new UsageProperties(Duration.ofDays(90), Duration.ofHours(6), 80, 80, 0, Duration.ofMinutes(5));
-        var recorder = new UsageRecorder(registry, usage, rateLimits, repository, alerts, properties, executor);
+        var recorder = new UsageRecorder(registry, usage, rateLimits, repository, alerts, properties, executor, java.time.Clock.systemUTC());
         var done = new java.util.concurrent.atomic.AtomicBoolean();
         executor.execute(() -> {
             try {
@@ -225,7 +267,11 @@ class UsageRecorderTest {
         };
 
         for (var i = 0; i < 10; i++) {
-            writer.execute(task);
+            try {
+                writer.execute(task);
+            } catch (java.util.concurrent.RejectedExecutionException expected) {
+                // the full queue reports the drop to the caller
+            }
         }
         release.countDown();
         writer.shutdown();

@@ -12,6 +12,7 @@ import java.util.List;
 final class RepositoryPaths {
 
     private static final String GIT_DIRECTORY = ".git";
+    private static final String GIT_SHORT_NAME = "GIT~1";
 
     private RepositoryPaths() {}
 
@@ -50,7 +51,8 @@ final class RepositoryPaths {
 
     private static boolean containsGitSegment(Path normalized) {
         for (var segment : normalized) {
-            if (GIT_DIRECTORY.equalsIgnoreCase(segment.toString())) {
+            var name = segment.toString().replaceAll("[. ]+$", "");
+            if (GIT_DIRECTORY.equalsIgnoreCase(name) || GIT_SHORT_NAME.equalsIgnoreCase(name)) {
                 return true;
             }
         }

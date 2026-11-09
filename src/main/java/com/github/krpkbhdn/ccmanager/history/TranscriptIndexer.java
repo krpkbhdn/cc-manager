@@ -47,6 +47,7 @@ public class TranscriptIndexer {
     private static final Logger log = LoggerFactory.getLogger(TranscriptIndexer.class);
     private static final String TRANSCRIPT_SUFFIX = ".jsonl";
     private static final String TOOL_ID_SEPARATOR = " ";
+    private static final String ALL_RESULTS_SENSITIVE = "*";
     private static final int TRANSCRIPT_DEPTH = 2;
     static final long MAX_LINE_BYTES = 16L << 20;
     private static final int SKIP_CHUNK_BYTES = 64 * 1024;
@@ -199,10 +200,11 @@ public class TranscriptIndexer {
             pass = indexLine(line.text(), offset, pass, entries);
             offset += line.byteLength();
         }
-        // oldest ids go first, so a duplicate result of a recent secret read stays skipped
+        // fails closed: past the cap the ids are forgotten, so every later tool result of the file is skipped
         var ids = pass.sensitiveToolIds();
-        while (ids.size() > properties.maxSensitiveToolIds()) {
-            ids.remove(ids.iterator().next());
+        if (ids.size() > properties.maxSensitiveToolIds()) {
+            ids.clear();
+            ids.add(ALL_RESULTS_SENSITIVE);
         }
         var sessionId = UUID_NAME.matcher(stem(file)).matches() ? "" : pass.sessionId();
         var finalOffset = offset;
@@ -235,7 +237,8 @@ public class TranscriptIndexer {
                 current = current.withSensitive(entry.toolUseId());
                 continue;
             }
-            if (entry.kind() == Kind.TOOL_RESULT && current.sensitiveToolIds().contains(entry.toolUseId())) {
+            if (entry.kind() == Kind.TOOL_RESULT && (current.sensitiveToolIds().contains(entry.toolUseId())
+                    || current.sensitiveToolIds().contains(ALL_RESULTS_SENSITIVE))) {
                 continue;
             }
             var masked = SecretFilter.mask(entry.text());

@@ -2,8 +2,6 @@ package com.github.krpkbhdn.ccmanager.git;
 
 import com.github.krpkbhdn.ccmanager.git.GitException.Kind;
 import com.github.krpkbhdn.ccmanager.git.GitMisc.CommitRequest;
-import com.github.krpkbhdn.ccmanager.workspace.TreeDeleter;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -43,14 +41,14 @@ public class GitIndexService {
         withPaths(repo, paths, hasCommits(repo) ? List.of("restore", "--staged") : List.of("rm", "--cached", "-r", "-f", "-q"));
     }
 
-    /** Throws away worktree changes of the paths (tracked: restore from index; untracked: delete). Irreversible. */
+    /** Throws away worktree changes of the paths (tracked: restore from index; untracked: git clean, ignored files stay). Irreversible. */
     public void discard(Path repo, List<String> paths) {
         var valid = RepositoryPaths.validate(paths);
         var tracked = trackedFiles(repo, valid);
         var untracked = valid.stream().filter(path -> !isTracked(tracked, path)).toList();
         var targets = untracked.stream().map(path -> RepositoryPaths.resolveInside(repo, path)).toList();
         targets.forEach(GitIndexService::rejectNestedRepository);
-        targets.forEach(GitIndexService::delete);
+        cleanInChunks(repo, untracked);
         withPaths(repo, valid.stream().filter(path -> isTracked(tracked, path)).toList(), List.of("restore", "--worktree"));
     }
 
@@ -125,6 +123,14 @@ public class GitIndexService {
         return tracked.contains(path) || tracked.stream().anyMatch(name -> name.startsWith(path + "/"));
     }
 
+    /** git clean has no --pathspec-from-file, so long lists go in command-line chunks. */
+    private void cleanInChunks(Path repo, List<String> paths) {
+        for (var start = 0; start < paths.size(); start += MAX_PATHS_ON_COMMAND_LINE) {
+            var chunk = paths.subList(start, Math.min(paths.size(), start + MAX_PATHS_ON_COMMAND_LINE));
+            withPaths(repo, chunk, List.of("clean", "-f", "-d"));
+        }
+    }
+
     private void withPaths(Path repo, List<String> paths, List<String> command) {
         if (!paths.isEmpty()) {
             runWithPaths(repo, RepositoryPaths.validate(paths), command);
@@ -148,17 +154,6 @@ public class GitIndexService {
     private static void rejectNestedRepository(Path target) {
         if (Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS) && Files.exists(target.resolve(GIT_DIRECTORY), LinkOption.NOFOLLOW_LINKS)) {
             throw new GitException(Kind.OTHER, "'" + target.getFileName() + "' is a nested repository; delete it by hand", "");
-        }
-    }
-
-    private static void delete(Path target) {
-        if (!Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
-            return;
-        }
-        try {
-            TreeDeleter.delete(target);
-        } catch (IOException e) {
-            throw new GitException(Kind.OTHER, "Cannot delete " + target + ": " + e.getMessage(), "");
         }
     }
 }

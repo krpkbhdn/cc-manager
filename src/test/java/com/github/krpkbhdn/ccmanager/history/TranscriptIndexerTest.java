@@ -318,7 +318,7 @@ class TranscriptIndexerTest {
     }
 
     @Test
-    void sensitiveToolIdsOverTheCapEvictTheOldest() {
+    void sensitiveToolIdsOverTheCapFailClosedToAllResults() {
         fixture.write(fixture.transcript("p", "s1"),
                 toolCallLine("a1", "/w/app", "2026-01-01T10:00:00Z", "t1", "{\"file_path\":\"/w/app/.env\"}")
                         + toolCallLine("a2", "/w/app", "2026-01-01T10:00:01Z", "t2", "{\"file_path\":\"/w/app/.env\"}")
@@ -327,7 +327,7 @@ class TranscriptIndexerTest {
         fixture.indexerKeepingToolIds(1000, 2).scan();
 
         var ids = fixture.jdbc.sql("SELECT sensitive_tool_ids FROM transcript_file").query(String.class).single();
-        assertThat(ids).isEqualTo("t2 t3");
+        assertThat(ids).isEqualTo("*");
     }
 
     @Test

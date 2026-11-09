@@ -180,6 +180,31 @@ class RunServiceTest {
     }
 
     @Test
+    void secondConcurrentStartWaitsForTheFirstRunToExitBeforeSpawning() throws Exception {
+        var configuration = configurations.save(projectId, "long", LONG_COMMAND, temp);
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var service = serviceWhoseLookupOf(configuration.id(), entered, release);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            var first = pool.submit(() -> service.start(configuration.id()));
+            assertThat(entered.await(TIMEOUT.toSeconds(), TimeUnit.SECONDS)).isTrue();
+            var second = pool.submit(() -> service.start(configuration.id()));
+            release.countDown();
+
+            var firstRun = first.get(TIMEOUT.toSeconds(), TimeUnit.SECONDS);
+            var secondRun = second.get(TIMEOUT.toSeconds(), TimeUnit.SECONDS);
+
+            assertThat(firstRun.process().isAlive()).isFalse();
+            assertThat(secondRun.process().isAlive()).isTrue();
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+            service.stopAll();
+        }
+    }
+
+    @Test
     void concurrentStartsOfTheSameConfigurationAreSerialised() throws Exception {
         var configuration = configurations.save(projectId, "same", "exit 0", temp);
         var entered = new CountDownLatch(1);
@@ -203,12 +228,12 @@ class RunServiceTest {
         }
     }
 
-    /** A service whose first lookup of the configuration waits for {@code release}, so a start can be held inside its lock. */
+    /** A service whose second lookup (the one inside the start lock) waits for {@code release}, so a start can be held inside its lock. */
     private RunService serviceWhoseLookupOf(long configurationId, CountDownLatch entered, CountDownLatch release) {
         var spied = org.mockito.Mockito.spy(configurations);
-        var first = new java.util.concurrent.atomic.AtomicBoolean(true);
+        var lookups = new java.util.concurrent.atomic.AtomicInteger();
         org.mockito.Mockito.doAnswer(invocation -> {
-            if (first.compareAndSet(true, false)) {
+            if (lookups.incrementAndGet() == 2) {
                 entered.countDown();
                 release.await(TIMEOUT.toSeconds(), TimeUnit.SECONDS);
             }

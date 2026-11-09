@@ -39,6 +39,7 @@ public class GitRunner {
     private static final Set<String> NETWORK = Set.of("fetch", "pull", "push", "ls-remote", "clone");
     private static final Set<String> WRITES = Set.of("checkout", "switch", "restore", "reset", "merge", "rebase", "cherry-pick", "revert",
             "stash", "commit", "add", "rm", "apply", "am", "clean", "pull", "worktree");
+    private static final Set<String> HOOK_RUNNING = Set.of("checkout", "switch", "merge", "rebase", "cherry-pick", "revert", "commit", "am");
     private static final ExecutorService PIPES = Executors.newVirtualThreadPerTaskExecutor();
     private static final List<String> BASE_COMMAND =
             List.of("git", "-c", "core.quotepath=false", "-c", "color.ui=never", "-c", "core.fsmonitor=false",
@@ -138,7 +139,7 @@ public class GitRunner {
         try {
             return collect(process, timeout, progress, stdin, args);
         } catch (InterruptedException e) {
-            if (WRITES.contains(GitFailure.subcommand(args))) {
+            if (runsHooks(args)) {
                 finishWrite(process, timeout);
             } else {
                 ProcessTree.kill(process);
@@ -148,7 +149,7 @@ public class GitRunner {
         }
     }
 
-    /** A write is never killed on interrupt (index.lock, half-switched tree): it runs to its end, so "Interrupted" never hides a running commit. */
+    /** A hook-running command is not killed on interrupt (index.lock, half-switched tree): it runs to its end, so "Interrupted" never hides a running commit. */
     private static void finishWrite(Process process, Duration timeout) {
         try {
             if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
@@ -165,7 +166,9 @@ public class GitRunner {
         var stdoutTruncated = CommandRunner.drain(process.getInputStream(), stdout);
         var readers = CompletableFuture.allOf(stdoutTruncated, async(() -> readLines(process.getErrorStream(), progress, stderr, CommandRunner.MAX_OUTPUT_BYTES)));
         var stdinWritten = async(() -> writeAndClose(process, stdin));
-        if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+        if (runsHooks(args)) {
+            process.waitFor();
+        } else if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
             ProcessTree.kill(process);
             throw new GitException(Kind.TIMEOUT, "git " + GitFailure.subcommand(args) + " timed out", "");
         }
@@ -174,7 +177,12 @@ public class GitRunner {
         return new Result(process.exitValue(), stdout.toString(StandardCharsets.UTF_8), stderr.toString(), stdoutTruncated.getNow(false));
     }
 
-    /** Writing commands get the long timeout: killing one mid-way leaves index.lock and a half-switched tree. */
+    /** Commands that run user hooks are never killed at the timeout (index.lock, half-switched tree); network and read commands are. */
+    static boolean runsHooks(List<String> args) {
+        return HOOK_RUNNING.contains(GitFailure.subcommand(args));
+    }
+
+    /** Writing commands get the long timeout. */
     Duration timeoutFor(List<String> args) {
         return WRITES.contains(GitFailure.subcommand(args)) ? properties.syncTimeout() : properties.commandTimeout();
     }

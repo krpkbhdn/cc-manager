@@ -57,7 +57,7 @@ class FileApplier implements PresetComponentApplier {
                 text.append(eol);
             }
             missingLines.forEach(line -> text.append(line).append(eol));
-            ProjectFiles.replace(gitignore, text.toString());
+            ProjectFiles.replaceIfUnchanged(gitignore, existing, text.toString());
         }
         return ComponentOutcome.of(component, OutcomeStatus.APPLIED, "File written");
     }

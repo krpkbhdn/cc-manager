@@ -125,11 +125,12 @@ public class RunConfigurationService {
 
     /** Deletes what [listByDirectory] returns, e.g. after its worktree was removed. */
     public void deleteByDirectory(Path directory) {
-        var found = listByDirectory(directory);
-        found.forEach(configuration -> jdbc.sql("DELETE FROM run_configuration WHERE id = ?").param(configuration.id()).update());
-        if (!found.isEmpty()) {
-            listeners.fire();
+        var ids = listByDirectory(directory).stream().map(RunConfiguration::id).toList();
+        if (ids.isEmpty()) {
+            return;
         }
+        jdbc.sql("DELETE FROM run_configuration WHERE id IN (:ids)").param("ids", ids).update();
+        listeners.fire();
     }
 
     /** @return unsubscribe handle; callback fires (any thread) after any change to run configurations */

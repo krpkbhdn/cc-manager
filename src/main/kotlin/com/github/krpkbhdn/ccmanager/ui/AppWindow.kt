@@ -88,6 +88,7 @@ fun ApplicationScope.AppWindow(backend: Backend, onShutdown: () -> Unit, setting
             thread(name = "AppShutdown") {
                 try {
                     disposeState()
+                    state.reviews.awaitFinalFlush()
                     TerminalHost.closeAll()
                     onShutdown()
                 } finally {

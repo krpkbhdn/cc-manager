@@ -12,6 +12,8 @@ import java.nio.file.StandardOpenOption;
 /** File access inside a project folder. Relative paths come from user input, so every one is checked here again before it is touched. */
 final class ProjectFiles {
 
+    static final long MAX_READ_BYTES = 2L * 1024 * 1024;
+
     enum State { MISSING, IDENTICAL, DIFFERENT }
 
     private ProjectFiles() {}
@@ -49,8 +51,23 @@ final class ProjectFiles {
         return target;
     }
 
+    /** @return the file text, or "" when it is missing; fails for anything but a regular file up to {@link #MAX_READ_BYTES} */
     static String read(Path file) throws IOException {
-        return Files.exists(file) ? Files.readString(file, StandardCharsets.UTF_8) : "";
+        if (!Files.exists(file)) {
+            return "";
+        }
+        if (!Files.isRegularFile(file) || Files.size(file) > MAX_READ_BYTES) {
+            throw new IOException(file.getFileName() + " is not a regular file or is larger than " + MAX_READ_BYTES + " bytes");
+        }
+        return Files.readString(file, StandardCharsets.UTF_8);
+    }
+
+    /** Like {@link #replace} but fails when the file no longer holds {@code expected}, so an edit made since it was read is not lost. */
+    static void replaceIfUnchanged(Path file, String expected, String content) throws IOException {
+        if (!read(file).equals(expected)) {
+            throw new IOException(file.getFileName() + " was changed since it was checked, nothing was written");
+        }
+        replace(file, content);
     }
 
     static State compare(Path file, String content) throws IOException {

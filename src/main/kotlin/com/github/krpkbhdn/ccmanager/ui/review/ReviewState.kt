@@ -29,10 +29,10 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import org.jetbrains.skia.FilterMipmap
 import org.jetbrains.skia.FilterMode
 import org.jetbrains.skia.Image
@@ -45,10 +45,10 @@ data class SessionChoice(val ccmSessionId: String, val label: String)
 data class SendTarget(val review: Review, val candidates: List<SessionChoice>)
 
 private const val SAVE_DEBOUNCE_MILLIS = 400L
+private const val FINAL_FLUSH_TIMEOUT_MILLIS = 2000L
 private const val FULL_CACHE_SIZE = 3
 private const val THUMBNAIL_CACHE_SIZE = 40
 private const val THUMBNAIL_MAX_SIDE = 256f
-private const val DISPOSE_FLUSH_TIMEOUT_MILLIS = 2000L
 private const val START_FAILED = "Could not start a session"
 
 /**
@@ -90,6 +90,7 @@ class ReviewState(
     private val writeLock = Mutex()
     private val watchedProjects = ConcurrentHashMap.newKeySet<Long>()
     private var unsubscribe: Runnable? = null
+    @Volatile private var finalFlush: Job? = null
     private val reload = Refresher(scope) {
         watchedProjects.toList().forEach { projectId ->
             runGuarded(reportError) {
@@ -106,13 +107,18 @@ class ReviewState(
         reload.request()
     }
 
-    /** Writes pending marks before the window goes away; waits at most [DISPOSE_FLUSH_TIMEOUT_MILLIS]. */
+    /** Writes pending marks on an IO scope that outlives [scope], so the UI thread never waits for it. */
     fun dispose() {
         unsubscribe?.run()
         unsubscribe = null
         reload.close()
-        val finalFlush = CoroutineScope(Dispatchers.IO).launch { runGuarded(reportError) { flush() } }
-        runBlocking { withTimeoutOrNull(DISPOSE_FLUSH_TIMEOUT_MILLIS) { finalFlush.join() } }
+        finalFlush = CoroutineScope(Dispatchers.IO).launch { runGuarded(reportError) { flush() } }
+    }
+
+    /** For the shutdown thread only: waits (bounded) for the flush started by [dispose], so the database is still open for it. */
+    fun awaitFinalFlush() {
+        val job = finalFlush ?: return
+        runBlocking { withTimeoutOrNull(FINAL_FLUSH_TIMEOUT_MILLIS) { job.join() } }
     }
 
     fun reviews(projectId: Long): List<Review> {
@@ -151,8 +157,11 @@ class ReviewState(
     fun images(reviewId: Long): List<ReviewImage> {
         imagesByReview[reviewId]?.let { return it }
         if (loadingImages.add(reviewId)) scope.launch {
-            runGuarded(reportError) { imagesByReview[reviewId] = io { service.images(reviewId) } }
-            loadingImages.remove(reviewId)
+            try {
+                runGuarded(reportError) { imagesByReview[reviewId] = io { service.images(reviewId) } }
+            } finally {
+                loadingImages.remove(reviewId)
+            }
         }
         return emptyList()
     }
@@ -164,7 +173,7 @@ class ReviewState(
 
     fun cannotShow(image: ReviewImage): Boolean = fullImages.failed(image.id)
 
-    private fun decode(image: ReviewImage): ImageBitmap = Image.makeFromEncoded(Files.readAllBytes(service.imagePath(image))).toComposeImageBitmap()
+    private fun decode(image: ReviewImage): ImageBitmap = Image.makeFromEncoded(Files.readAllBytes(service.imagePath(image))).use { it.toComposeImageBitmap() }
 
     private fun decodeThumbnail(image: ReviewImage): ImageBitmap {
         val full = Image.makeFromEncoded(Files.readAllBytes(service.imagePath(image)))
@@ -175,7 +184,7 @@ class ReviewState(
             Surface.makeRasterN32Premul(width, height).use { surface ->
                 val source = Rect.makeWH(full.width.toFloat(), full.height.toFloat())
                 surface.canvas.drawImageRect(full, source, Rect.makeWH(width.toFloat(), height.toFloat()), FilterMipmap(FilterMode.LINEAR, MipmapMode.LINEAR), null, true)
-                return surface.makeImageSnapshot().toComposeImageBitmap()
+                return surface.makeImageSnapshot().use { it.toComposeImageBitmap() }
             }
         } finally {
             full.close()

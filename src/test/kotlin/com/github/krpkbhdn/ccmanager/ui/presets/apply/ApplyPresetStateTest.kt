@@ -61,7 +61,7 @@ class ApplyPresetStateTest {
 
         assertThat(state.pickingProject).isFalse()
         assertThat(state.step).isEqualTo(ApplyStep.REVIEW)
-        await { state.plan != null }
+        await { state.plan != null && state.selection.isNotEmpty() }
         assertThat(state.selection).isEqualTo(defaultSelection(state.plan!!))
     }
 

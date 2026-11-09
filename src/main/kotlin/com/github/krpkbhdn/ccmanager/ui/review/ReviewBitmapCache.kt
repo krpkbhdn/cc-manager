@@ -9,6 +9,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
+internal const val MAX_FAILURES = 200
+
 /** Decoded pictures, at most [limit] kept (oldest dropped); a picture that failed once is not decoded again. */
 internal class BitmapCache(private val scope: CoroutineScope, private val limit: Int, private val decoder: (ReviewImage) -> ImageBitmap) {
     private val store = mutableStateMapOf<Long, ImageBitmap>()
@@ -22,7 +24,7 @@ internal class BitmapCache(private val scope: CoroutineScope, private val limit:
         if (loading.add(image.id)) scope.launch {
             try {
                 val decoded = decodeOrNull(image)
-                if (decoded != null) put(image.id, decoded) else failures[image.id] = true
+                if (decoded != null) put(image.id, decoded) else fail(image.id)
             } finally {
                 loading.remove(image.id)
             }
@@ -31,6 +33,13 @@ internal class BitmapCache(private val scope: CoroutineScope, private val limit:
     }
 
     fun failed(id: Long): Boolean = failures.containsKey(id)
+
+    /** shortcut: past [MAX_FAILURES] all remembered failures are forgotten (a bad picture is retried once), no per-entry age. */
+    @Synchronized
+    private fun fail(id: Long) {
+        if (failures.size >= MAX_FAILURES) failures.clear()
+        failures[id] = true
+    }
 
     @Synchronized
     fun drop(id: Long) {

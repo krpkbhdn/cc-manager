@@ -2,10 +2,10 @@ package com.github.krpkbhdn.ccmanager.app.mcp;
 
 import com.github.krpkbhdn.ccmanager.preset.PresetComponent;
 import com.github.krpkbhdn.ccmanager.preset.ProjectPresetService;
+import com.github.krpkbhdn.ccmanager.preset.apply.CodeExecutingPaths;
 import com.github.krpkbhdn.ccmanager.preset.apply.PresetApplyService;
 import com.github.krpkbhdn.ccmanager.project.ProjectService;
 import com.github.krpkbhdn.ccmanager.preset.PresetComponentKind;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -19,9 +19,6 @@ class ApplyPresetTool extends PresetTool {
 
     private static final int MAX_PLAN_CHARS = 100_000;
     private static final String MASKED = "<hidden>";
-    private static final Set<String> EXECUTABLE_SETTINGS = Set.of("hooks", "statusLine", "apiKeyHelper", "env", "permissions",
-            "awsAuthRefresh", "awsCredentialExport", "otelHeadersHelper", "enableAllProjectMcpServers", "enabledPlugins",
-            "extraKnownMarketplaces", "sandbox");
 
     private final PresetApplyService apply;
     private final ProjectService projects;
@@ -103,12 +100,7 @@ class ApplyPresetTool extends PresetTool {
         if (component.kind() != PresetComponentKind.SETTINGS) {
             return Optional.empty();
         }
-        var found = new ArrayList<String>();
-        component.payload().path("fragment").propertyNames().forEach(key -> {
-            if (EXECUTABLE_SETTINGS.contains(key)) {
-                found.add(key);
-            }
-        });
+        var found = CodeExecutingPaths.executableSettingsKeys(component.payload().path("fragment"));
         return found.isEmpty() ? Optional.empty() : Optional.of(String.join(", ", found));
     }
 

@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.review;
 
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -109,6 +110,7 @@ public class ReviewImageStore {
             restrictToOwner(staging, FILE_PERMISSIONS);
             String extension = detectExtension(staging, prefix);
             int[] size = readSize(staging, prefix);
+            reencode(staging, extension, prefix);
             String fileName = "image-" + number + "." + extension;
             Files.move(staging, directory.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
             created.add(directory.resolve(fileName));
@@ -154,6 +156,24 @@ public class ReviewImageStore {
             return "jpg";
         }
         throw new IllegalArgumentException(prefix + "not a PNG or JPEG image");
+    }
+
+    /** Drops anything appended to the image (polyglot files): only the decoded pixels are kept. */
+    private void reencode(Path file, String extension, String prefix) throws IOException {
+        BufferedImage pixels = ImageIO.read(file.toFile());
+        if (pixels == null) {
+            throw new IllegalArgumentException(prefix + "image cannot be decoded");
+        }
+        Path clean = file.resolveSibling(file.getFileName() + ".clean");
+        try {
+            if (!ImageIO.write(pixels, "jpg".equals(extension) ? "jpeg" : extension, clean.toFile())) {
+                throw new IllegalArgumentException(prefix + "image cannot be decoded");
+            }
+            restrictToOwner(clean, FILE_PERMISSIONS);
+            Files.move(clean, file, StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            Files.deleteIfExists(clean);
+        }
     }
 
     private static boolean startsWith(byte[] data, byte[] magic) {

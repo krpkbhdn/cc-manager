@@ -26,9 +26,11 @@ class InstructionApplier implements PresetComponentApplier {
 
     @Override
     public ComponentOutcome apply(PresetComponent component, Path projectDir) throws IOException {
-        var plan = sectionPlan(component, projectDir);
+        var file = ProjectFiles.resolve(projectDir, CLAUDE_MD);
+        var seen = ProjectFiles.read(file);
+        var plan = ClaudeMdSections.plan(seen, component.name(), markdown(component));
         if (plan.text() != null) {
-            ProjectFiles.replace(ProjectFiles.resolve(projectDir, CLAUDE_MD), plan.text());
+            ProjectFiles.replaceIfUnchanged(file, seen, plan.text());
         } else if (plan.action() == ChangeAction.CONFLICT) {
             return ComponentOutcome.of(component, OutcomeStatus.SKIPPED, plan.detail());
         }
