@@ -155,7 +155,7 @@ class HookServerTest {
         bounded.start();
         try {
             for (var i = 0; i < 6; i++) {
-                assertThat(postWithAuthorization(bounded.hookUrl("sess-1"), "{\"hook_event_name\":\"Stop\"}",
+                assertThat(postWithAuthorization(bounded.hookUrl("sess-1"), "{\"hook_event_name\":\"PreToolUse\"}",
                         "Bearer " + bounded.sessionToken("sess-1")).statusCode()).isEqualTo(200);
             }
             release.countDown();
@@ -166,6 +166,60 @@ class HookServerTest {
             release.countDown();
             bounded.stop();
         }
+    }
+
+    @Test
+    void aStatusEndingEventWaitsForRoomAndStaysBehindQueuedEventsOfItsSession() throws Exception {
+        var bounded = boundedServer();
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var names = new java.util.concurrent.CopyOnWriteArrayList<String>();
+        org.mockito.Mockito.doAnswer(call -> {
+            names.add(call.<HookEvent>getArgument(0).text("hook_event_name"));
+            release.await();
+            return null;
+        }).when(publisher).publishEvent(any(HookEvent.class));
+        bounded.start();
+        try {
+            for (var name : new String[] {"PreToolUse", "PreToolUse", "PreToolUse", "PreToolUse", "Stop"}) {
+                assertThat(postWithAuthorization(bounded.hookUrl("sess-1"), "{\"hook_event_name\":\"" + name + "\"}",
+                        "Bearer " + bounded.sessionToken("sess-1")).statusCode()).isEqualTo(200);
+            }
+            release.countDown();
+
+            org.awaitility.Awaitility.await().atMost(Duration.ofMillis(VERIFY_TIMEOUT_MS)).until(() -> names.contains("Stop"));
+            assertThat(names.getLast()).isEqualTo("Stop");
+        } finally {
+            release.countDown();
+            bounded.stop();
+        }
+    }
+
+    @Test
+    void nothingRunsAfterStopEvenForAStatusEndingEventStillWaitingForRoom() throws Exception {
+        var bounded = boundedServer();
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var names = new java.util.concurrent.CopyOnWriteArrayList<String>();
+        org.mockito.Mockito.doAnswer(call -> {
+            names.add(call.<HookEvent>getArgument(0).text("hook_event_name"));
+            release.await();
+            return null;
+        }).when(publisher).publishEvent(any(HookEvent.class));
+        bounded.start();
+        for (var name : new String[] {"PreToolUse", "PreToolUse", "PreToolUse", "PreToolUse", "Stop"}) {
+            postWithAuthorization(bounded.hookUrl("sess-1"), "{\"hook_event_name\":\"" + name + "\"}",
+                    "Bearer " + bounded.sessionToken("sess-1"));
+        }
+
+        bounded.stop();
+        release.countDown();
+        Thread.sleep(300);
+
+        assertThat(names).doesNotContain("Stop");
+    }
+
+    private HookServer boundedServer() {
+        return new HookServer(store, publisher, JsonMapper.builder().build(),
+                new HookProperties(10, MAX_BODY, 500, Duration.ofSeconds(5), 10, 1000, 2), mcp, assistantMcp, proposals);
     }
 
     @Test

@@ -10,6 +10,8 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
 
 class FileApplierTest {
@@ -38,6 +40,19 @@ class FileApplierTest {
         applier.apply(component, dir);
 
         assertThat(Files.readString(dir.resolve("docs/a.txt"))).isEqualTo("hello");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {".mcp.json", ".claude/settings.json", ".Claude\\settings.local.json", ".claude/hooks/x.sh",
+            ".vscode/tasks.json", ".github/workflows/ci.yml", ".husky/pre-commit", "./.githooks/pre-push", "sub/.mcp.json",
+            ".claude/./settings.json", ".claude//settings.json", ".github/./workflows/x.yml", ".//.mcp.json", "./.mcp.json",
+            ".devcontainer/devcontainer.json", ".gitlab-ci.yml", ".circleci/config.yml",
+            "CLAUDE~1/SETTIN~1.JSO"})
+    void codeExecutingPathsNeedConfirmationAndAreNeverWritten(String risky) throws Exception {
+        var component = file(risky, "x");
+        assertThat(applier.plan(component, dir).action()).isEqualTo(ChangeAction.NEEDS_CONFIRMATION);
+        assertThatThrownBy(() -> applier.apply(component, dir)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(dir.resolve(risky.replace('\\', '/'))).doesNotExist();
     }
 
     @Test

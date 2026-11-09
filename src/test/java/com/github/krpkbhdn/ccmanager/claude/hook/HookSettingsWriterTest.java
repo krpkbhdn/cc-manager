@@ -14,6 +14,7 @@ import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -138,14 +139,16 @@ class HookSettingsWriterTest {
     }
 
     @Test
-    void anOldOrUnknownCurlFallsBackToTheShellExpandingTheVariable() throws Exception {
+    void anOldOrUnknownCurlGetsNoCurlCommandSoTheTokenNeverReachesArguments() throws Exception {
         var oldWriter = new HookSettingsWriter(server, new AppProperties(dataDir), mapper, HOOK_PROPERTIES, OLD_CURL, false);
         var unknownWriter = new HookSettingsWriter(server, new AppProperties(dataDir), mapper, HOOK_PROPERTIES, new CurlSupport(executable -> ""), false);
-        var expected = "curl -s -m 3 -X POST -H 'Content-Type: application/json' -H \"Authorization: Bearer $CCM_HOOK_TOKEN\" "
-                + "--data-binary '@-' '" + STATUS_LINE_URL + "'";
 
-        assertThat(mapper.readTree(Files.readString(oldWriter.write("abc-1").settings())).path("statusLine").path("command").asString()).isEqualTo(expected);
-        assertThat(mapper.readTree(Files.readString(unknownWriter.write("abc-1").settings())).path("statusLine").path("command").asString()).isEqualTo(expected);
+        for (var json : List.of(oldWriter, unknownWriter)) {
+            var settings = mapper.readTree(Files.readString(json.write("abc-1").settings()));
+            assertThat(settings.has("statusLine")).isFalse();
+            assertThat(settings.path("hooks").has("SessionStart")).isFalse();
+            assertThat(settings.toString()).doesNotContain("curl");
+        }
     }
 
     @Test

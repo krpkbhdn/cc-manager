@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.preset;
 
+import com.github.krpkbhdn.ccmanager.config.NameRules;
 import com.github.krpkbhdn.ccmanager.workspace.ChangeListeners;
 import jakarta.annotation.PostConstruct;
 import java.sql.ResultSet;
@@ -290,13 +291,7 @@ public class ProjectPresetService {
     }
 
     private String validate(String name, String description) {
-        var cleanName = name == null ? "" : name.strip();
-        if (cleanName.isEmpty()) {
-            throw new IllegalArgumentException("The name must not be empty.");
-        }
-        if (cleanName.length() > MAX_NAME) {
-            throw new IllegalArgumentException("The name is longer than " + MAX_NAME + " characters.");
-        }
+        var cleanName = NameRules.requireName(name, MAX_NAME);
         if (description == null) {
             throw new IllegalArgumentException("The description must not be missing.");
         }

@@ -148,6 +148,26 @@ class SessionSearchServiceTest {
     }
 
     @Test
+    void clearKeepsClearedLinesForgottenWhenTheFileEndsMidLine() {
+        var app = sep("/w/app");
+        var file = fixture.transcript("a", "s1");
+        var partial = userLine("u2", app, "2026-01-01T10:01:00Z", "needle partial");
+        fixture.write(file, userLine("u1", app, "2026-01-01T10:00:00Z", "needle before") + partial.substring(0, partial.length() - 1));
+        var indexer = fixture.indexer(1000);
+        indexer.scan();
+
+        fixture.search.clear(app);
+        indexer.scan();
+        assertThat(fixture.search.indexedEntryCount()).isZero();
+
+        fixture.append(file, "\n");
+        indexer.scan();
+
+        assertThat(fixture.search.search("needle", Optional.empty(), ANY, ANY)).extracting(SessionSearchService.SearchHit::entryUuid)
+                .containsExactly("u2");
+    }
+
+    @Test
     void linesAppendedAfterClearAreIndexedButClearedOnesAreNot() {
         var app = sep("/w/app");
         var file = fixture.transcript("a", "s1");

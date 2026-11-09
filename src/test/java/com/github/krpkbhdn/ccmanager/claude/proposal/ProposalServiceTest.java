@@ -92,16 +92,23 @@ class ProposalServiceTest {
     }
 
     @Test
-    void appHeldProposalNamesWhyThereIsNoAnswerOnDismissTimeoutAndWhenTheSessionGoesIdle() throws Exception {
+    void appHeldProposalIsNotReleasedWhenItsSessionIsIdleAndStillAnswerable() throws Exception {
+        var held = holdForApp(service);
+
+        registry.markInterrupted(session);
+
+        assertThat(held).isNotDone();
+        assertThat(service.answer("app-1", PermissionAllow.once())).isTrue();
+        assertThat(held.get(WAIT_SECONDS, TimeUnit.SECONDS)).isInstanceOf(AppDecision.Answered.class);
+    }
+
+    @Test
+    void appHeldProposalNamesWhyThereIsNoAnswerOnDismissAndTimeout() throws Exception {
         var dismissed = holdForApp(service);
         assertThat(service.dismiss("app-1")).isTrue();
         assertThat(dismissed.get(WAIT_SECONDS, TimeUnit.SECONDS)).isEqualTo(AppDecision.Unanswered.RELEASED);
 
         assertThat(holdForApp(serviceHolding(SHORT_HOLD)).get(WAIT_SECONDS, TimeUnit.SECONDS)).isEqualTo(AppDecision.Unanswered.TIMED_OUT);
-
-        var interrupted = holdForApp(service);
-        registry.markInterrupted(session);
-        assertThat(interrupted.get(WAIT_SECONDS, TimeUnit.SECONDS)).isEqualTo(AppDecision.Unanswered.RELEASED);
     }
 
     @Test

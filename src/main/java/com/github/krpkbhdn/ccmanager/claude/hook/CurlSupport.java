@@ -31,7 +31,7 @@ public class CurlSupport {
         this.versionOutput = versionOutput;
     }
 
-    /** False for an older or unknown curl; the caller then falls back to the shell expanding the variable into curl's argv. */
+    /** False for an older or unknown curl; the caller then sends no curl command rather than put the token into argv. */
     public boolean expandsEnvironment(String executable) {
         return expandsByExecutable.computeIfAbsent(executable, this::detect);
     }
@@ -41,8 +41,8 @@ public class CurlSupport {
         var matcher = VERSION.matcher(version == null ? "" : version);
         var supported = matcher.find() && atLeastMinimum(Integer.parseInt(matcher.group(1)), Integer.parseInt(matcher.group(2)));
         if (!supported) {
-            log.warn("{} is older than {}.{} or its version is unknown; the session token goes through the shell into curl's arguments, "
-                    + "where other local processes can read it (statusLine and SessionStart need a POSIX shell then)", executable, MIN_MAJOR, MIN_MINOR);
+            log.warn("{} is older than {}.{} or its version is unknown; the SessionStart hook and the statusLine (usage, context meters) are "
+                    + "disabled so the session token never appears in curl's arguments", executable, MIN_MAJOR, MIN_MINOR);
         }
         return supported;
     }

@@ -96,20 +96,6 @@ class CurlCommandExecutionTest {
     }
 
     @Test
-    void theFallbackForAnOldCurlWorksInPosixShellsAndPutsTheNameNotTheTokenInTheCommand() throws Exception {
-        var command = statusLineCommand(new CurlSupport(executable -> "curl 7.81.0 (x86_64-pc-linux-gnu)"));
-        assertThat(command).contains("$CCM_HOOK_TOKEN").doesNotContain(TOKEN);
-        var ran = 0;
-        for (var shell : SHELLS.subList(0, 2)) {
-            receivedAuthorization.clear();
-            if (run(shell, command, TOKEN) == 0) {
-                ran++;
-                assertThat(receivedAuthorization).as(shell.getFirst()).containsExactly("Bearer " + TOKEN);
-            }
-        }
-        assumeTrue(ran > 0, "no POSIX shell available");
-    }
-
     private String statusLineCommand(CurlSupport curl) throws Exception {
         var writer = new HookSettingsWriter(server, new AppProperties(dataDir), mapper, HOOK_PROPERTIES, curl, WINDOWS);
         return mapper.readTree(Files.readString(writer.write("abc-1").settings())).path("statusLine").path("command").asString();

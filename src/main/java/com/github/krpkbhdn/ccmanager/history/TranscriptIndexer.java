@@ -48,7 +48,6 @@ public class TranscriptIndexer {
     private static final String TRANSCRIPT_SUFFIX = ".jsonl";
     private static final String TOOL_ID_SEPARATOR = " ";
     private static final int TRANSCRIPT_DEPTH = 2;
-    private static final long BATCH_BYTES = 8L << 20;
     static final long MAX_LINE_BYTES = 16L << 20;
     private static final int SKIP_CHUNK_BYTES = 64 * 1024;
     private static final Pattern UUID_NAME = Pattern.compile("[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}");
@@ -64,9 +63,8 @@ public class TranscriptIndexer {
         }
 
         Pass withSensitive(String toolUseId) {
-            var ids = new LinkedHashSet<>(sensitiveToolIds);
-            ids.add(toolUseId);
-            return new Pass(ids, sessionId, cwd, lastEntryAt);
+            sensitiveToolIds.add(toolUseId);
+            return this;
         }
 
         Pass withEntryAt(long at) {
@@ -74,7 +72,6 @@ public class TranscriptIndexer {
         }
     }
 
-    private final long batchBytes;
     private final Path projectsRoot;
     private final TranscriptIndexRepository repository;
     private final TranscriptLineParser parser;
@@ -90,12 +87,6 @@ public class TranscriptIndexer {
 
     public TranscriptIndexer(Path projectsRoot, JsonMapper mapper, TranscriptIndexRepository repository,
             SessionHistoryProperties properties) {
-        this(projectsRoot, mapper, repository, properties, BATCH_BYTES);
-    }
-
-    TranscriptIndexer(Path projectsRoot, JsonMapper mapper, TranscriptIndexRepository repository,
-            SessionHistoryProperties properties, long batchBytes) {
-        this.batchBytes = batchBytes;
         this.projectsRoot = projectsRoot;
         this.parser = new TranscriptLineParser(mapper);
         this.repository = repository;
@@ -199,7 +190,7 @@ public class TranscriptIndexer {
             return false;
         }
         var sensitiveIds = reset ? "" : known.map(IndexedFile::sensitiveToolIds).orElse("");
-        var sensitive = sensitiveIds.isBlank() ? Set.<String>of()
+        var sensitive = sensitiveIds.isBlank() ? new LinkedHashSet<String>()
                 : new LinkedHashSet<>(Arrays.asList(sensitiveIds.split(TOOL_ID_SEPARATOR)));
         var entries = new ArrayList<NewEntry>();
         var pass = new Pass(sensitive, "", "", 0);
@@ -207,6 +198,11 @@ public class TranscriptIndexer {
         for (var line : lines) {
             pass = indexLine(line.text(), offset, pass, entries);
             offset += line.byteLength();
+        }
+        // oldest ids go first, so a duplicate result of a recent secret read stays skipped
+        var ids = pass.sensitiveToolIds();
+        while (ids.size() > properties.maxSensitiveToolIds()) {
+            ids.remove(ids.iterator().next());
         }
         var sessionId = UUID_NAME.matcher(stem(file)).matches() ? "" : pass.sessionId();
         var finalOffset = offset;
@@ -312,17 +308,17 @@ public class TranscriptIndexer {
      */
     private List<Line> nextLines(Path file, long from, long size) {
         try (var reader = new RandomAccessFile(file.toFile(), "r")) {
-            long length = Math.min(size - from, batchBytes);
+            long length = Math.min(size - from, properties.batchBytes());
             while (true) {
                 var bytes = new byte[(int) length];
                 reader.seek(from);
                 reader.readFully(bytes);
-                var lines = wholeLines(bytes);
+                var lines = wholeLines(bytes, properties.batchLines());
                 if (!lines.isEmpty() || from + length >= size) {
                     return lines;
                 }
                 if (length >= MAX_LINE_BYTES) {
-                    return skipOversizedLine(reader, from, size);
+                    return skipOversizedLine(file, reader, from, size);
                 }
                 length = Math.min(size - from, Math.min(length * 2, MAX_LINE_BYTES));
             }
@@ -332,7 +328,7 @@ public class TranscriptIndexer {
     }
 
     /** Steps over a line too long to index as an empty line of its byte length, or reads nothing while it is unfinished. */
-    private static List<Line> skipOversizedLine(RandomAccessFile reader, long from, long size) throws IOException {
+    private static List<Line> skipOversizedLine(Path file, RandomAccessFile reader, long from, long size) throws IOException {
         var chunk = new byte[SKIP_CHUNK_BYTES];
         long position = from;
         reader.seek(position);
@@ -343,7 +339,9 @@ public class TranscriptIndexer {
             }
             for (int i = 0; i < read; i++) {
                 if (chunk[i] == '\n') {
-                    return List.of(new Line("", position + i + 1 - from));
+                    long lineBytes = position + i + 1 - from;
+                    log.warn("Skipped an oversized transcript line of {} bytes in {}", lineBytes, file.getFileName());
+                    return List.of(new Line("", lineBytes));
                 }
             }
             position += read;
@@ -351,10 +349,10 @@ public class TranscriptIndexer {
         return List.of();
     }
 
-    private static List<Line> wholeLines(byte[] bytes) {
+    private static List<Line> wholeLines(byte[] bytes, int maxLines) {
         var lines = new ArrayList<Line>();
         int start = 0;
-        for (int i = 0; i < bytes.length; i++) {
+        for (int i = 0; i < bytes.length && lines.size() < maxLines; i++) {
             if (bytes[i] == '\n') {
                 lines.add(new Line(new String(bytes, start, i - start, StandardCharsets.UTF_8), i + 1 - start));
                 start = i + 1;

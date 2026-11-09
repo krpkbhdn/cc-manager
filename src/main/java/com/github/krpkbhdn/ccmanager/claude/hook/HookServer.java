@@ -65,6 +65,12 @@ public class HookServer implements SmartLifecycle {
     private static final int NO_RESPONSE_BODY = -1;
     private static final int PAYLOAD_TOO_LARGE = 413;
     private static final String EVENT_NAME_FIELD = "hook_event_name";
+    private static final java.util.Set<HookEventType> STATUS_ENDING_EVENTS = java.util.EnumSet.of(HookEventType.STOP,
+            HookEventType.POST_TOOL_USE, HookEventType.POST_TOOL_USE_FAILURE, HookEventType.USER_PROMPT_SUBMIT,
+            HookEventType.ELICITATION_RESULT, HookEventType.SESSION_END, HookEventType.STOP_FAILURE, HookEventType.NOTIFICATION,
+            HookEventType.SUBAGENT_STOP, HookEventType.POST_COMPACT);
+    private static final Duration CRITICAL_ENQUEUE_WAIT = Duration.ofSeconds(5);
+    private static final Duration CRITICAL_ENQUEUE_POLL = Duration.ofMillis(10);
     private static final Duration EXECUTOR_STOP_WAIT = Duration.ofSeconds(2);
     private static final Duration WARN_INTERVAL = Duration.ofSeconds(30);
 
@@ -243,8 +249,36 @@ public class HookServer implements SmartLifecycle {
         try {
             payload.ifPresent(parsed -> worker.execute(() -> consume(ccmSessionId, parsed, receivedAt, consumer)));
         } catch (RejectedExecutionException e) {
-            dropped("hook call", ccmSessionId);
+            if (payload.filter(this::endsAStatus).isPresent()) {
+                exchange.close();
+                enqueueWhenRoomFrees(ccmSessionId, payload.get(), receivedAt, consumer);
+            } else {
+                dropped("hook call", ccmSessionId);
+            }
         }
+    }
+
+    /** Waits (on the already answered request's virtual thread) for a slot in the same ordered queue, so order is kept and nothing is queued after stop. */
+    private void enqueueWhenRoomFrees(String ccmSessionId, JsonNode payload, Instant receivedAt, BodyConsumer consumer) {
+        var deadline = System.nanoTime() + CRITICAL_ENQUEUE_WAIT.toNanos();
+        try {
+            while (!worker.isShutdown() && System.nanoTime() < deadline) {
+                try {
+                    worker.execute(() -> consume(ccmSessionId, payload, receivedAt, consumer));
+                    return;
+                } catch (RejectedExecutionException full) {
+                    Thread.sleep(CRITICAL_ENQUEUE_POLL.toMillis());
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        dropped("hook call", ccmSessionId);
+    }
+
+    /** Losing these leaves a session status or a held dialog wrong until the next event, so a full queue does not drop them. */
+    private boolean endsAStatus(JsonNode payload) {
+        return STATUS_ENDING_EVENTS.contains(HookEventType.of(payload.path("hook_event_name").asString("")));
     }
 
     private void respondToMcp(HttpExchange exchange, Function<byte[], Optional<String>> handler, byte[] body) throws IOException {

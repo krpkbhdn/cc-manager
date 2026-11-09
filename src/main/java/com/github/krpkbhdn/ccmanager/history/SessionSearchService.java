@@ -23,6 +23,7 @@ public class SessionSearchService {
             long lineOffset, String snippet) {}
 
     private static final int SNIPPET_TOKENS = 16;
+    private static final int LINE_END_SCAN_BYTES = 64 * 1024;
 
     private final JdbcClient jdbc;
     private final TranscriptIndexRepository repository;
@@ -97,15 +98,23 @@ public class SessionSearchService {
         return tokens.isEmpty() ? "" : String.join(" ", tokens) + "*";
     }
 
-    /** shortcut: a file that ends mid-line keeps its old offset, so that line may be indexed once it is finished. */
+    /** End of the last finished line, so a line still being written is indexed once it is complete; empty when unreadable. */
     private static OptionalLong completeLinesEnd(String path) {
         try (var reader = new RandomAccessFile(path, "r")) {
-            long size = reader.length();
-            if (size == 0) {
-                return OptionalLong.of(0);
+            var chunk = new byte[LINE_END_SCAN_BYTES];
+            long end = reader.length();
+            while (end > 0) {
+                int length = (int) Math.min(chunk.length, end);
+                reader.seek(end - length);
+                reader.readFully(chunk, 0, length);
+                for (int i = length - 1; i >= 0; i--) {
+                    if (chunk[i] == '\n') {
+                        return OptionalLong.of(end - length + i + 1);
+                    }
+                }
+                end -= length;
             }
-            reader.seek(size - 1);
-            return reader.read() == '\n' ? OptionalLong.of(size) : OptionalLong.empty();
+            return OptionalLong.of(0);
         } catch (IOException e) {
             return OptionalLong.empty();
         }

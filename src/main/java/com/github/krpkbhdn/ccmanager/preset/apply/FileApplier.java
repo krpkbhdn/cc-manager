@@ -22,7 +22,12 @@ class FileApplier implements PresetComponentApplier {
     @Override
     public PlannedChange plan(PresetComponent component, Path projectDir) throws IOException {
         var path = component.payload().path("path").asString("");
-        var state = ProjectFiles.compare(ProjectFiles.resolve(projectDir, path), content(component));
+        var resolved = ProjectFiles.resolve(projectDir, path);
+        var state = ProjectFiles.compare(resolved, content(component));
+        if (CodeExecutingPaths.matches(projectDir, resolved)) {
+            return PlannedChange.of(component, ChangeAction.NEEDS_CONFIRMATION, path + " runs code automatically, create it yourself after reviewing it")
+                    .withPreview(content(component));
+        }
         var missingLines = missingIgnoreLines(component, projectDir);
         return switch (state) {
             case DIFFERENT -> PlannedChange.of(component, ChangeAction.CONFLICT, path + " exists and differs, it is left unchanged");
@@ -34,7 +39,11 @@ class FileApplier implements PresetComponentApplier {
 
     @Override
     public ComponentOutcome apply(PresetComponent component, Path projectDir) throws IOException {
-        var file = ProjectFiles.resolve(projectDir, component.payload().path("path").asString(""));
+        var relative = component.payload().path("path").asString("");
+        var file = ProjectFiles.resolve(projectDir, relative);
+        if (CodeExecutingPaths.matches(projectDir, file)) {
+            throw new IllegalArgumentException(relative + " runs code automatically and needs confirmation");
+        }
         var missingLines = missingIgnoreLines(component, projectDir);
         if (ProjectFiles.compare(file, content(component)) == ProjectFiles.State.MISSING) {
             ProjectFiles.createNew(file, content(component));

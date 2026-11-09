@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.run;
 
+import com.github.krpkbhdn.ccmanager.config.NameRules;
 import com.github.krpkbhdn.ccmanager.config.UniqueViolations;
 import com.github.krpkbhdn.ccmanager.workspace.ChangeListeners;
 import java.nio.file.Files;
@@ -137,13 +138,7 @@ public class RunConfigurationService {
     }
 
     private String validate(long projectId, String name, String command, Path directory) {
-        var cleanName = name == null ? "" : name.strip();
-        if (cleanName.isEmpty()) {
-            throw new IllegalArgumentException("The name must not be empty.");
-        }
-        if (cleanName.length() > MAX_NAME) {
-            throw new IllegalArgumentException("The name is longer than " + MAX_NAME + " characters.");
-        }
+        var cleanName = NameRules.requireName(name, MAX_NAME);
         if (command == null || command.isBlank()) {
             throw new IllegalArgumentException("The command must not be empty.");
         }

@@ -171,10 +171,13 @@ public class HookSettingsWriter {
         var hooks = mapper.createObjectNode();
         Arrays.stream(HookEventType.values())
                 .filter(type -> !NOT_SUBSCRIBED.contains(type))
+                .filter(type -> type != HookEventType.SESSION_START || curlKeepsTokenOffArguments())
                 .forEach(type -> hooks.putArray(type.wireName()).addObject().putArray("hooks").add(handler(type, ccmSessionId)));
         var settings = mapper.createObjectNode();
         settings.set("hooks", hooks);
-        settings.set("statusLine", statusLine(ccmSessionId));
+        if (curlKeepsTokenOffArguments()) {
+            settings.set("statusLine", statusLine(ccmSessionId));
+        }
         var permissions = settings.putObject("permissions");
         permissions.putArray("allow").add("mcp__" + McpEndpoint.SERVER_NAME + "__" + LIST_RUN_CONFIGURATIONS_TOOL);
         permissions.putArray("deny").add("Read(" + absoluteRule(hooksRoot) + "/**)");
@@ -231,19 +234,23 @@ public class HookSettingsWriter {
 
     /**
      * One shell string valid in sh, Git Bash and PowerShell. curl 8.3+ reads the token from its own environment, so the argument
-     * holds only the variable name and an unset variable makes curl fail instead of sending an empty header. Older or unknown
-     * curl: the shell expands $CCM_HOOK_TOKEN into curl's argv (readable by other local processes, empty under PowerShell).
+     * holds only the variable name and an unset variable makes curl fail instead of sending an empty header. An older or unknown
+     * curl gets no curl command at all (SessionStart hook and statusLine are omitted): the token would land in curl's argv, and stdin is taken by the payload.
      */
     private String curlCommand(String url) {
-        var executable = windows ? "curl.exe" : "curl";
-        var tokenArguments = curl.expandsEnvironment(executable)
-                ? List.of("--variable", "%" + HookServer.SESSION_TOKEN_ENV, "--expand-header", quoted("Authorization: Bearer {{" + HookServer.SESSION_TOKEN_ENV + "}}"))
-                : List.of("-H", "\"Authorization: " + BEARER_FROM_ENV + "\"");
-        var arguments = new ArrayList<>(List.of(executable, "-s", "-m", String.valueOf(CURL_MAX_SECONDS), "-X", "POST",
-                "-H", quoted("Content-Type: application/json")));
-        arguments.addAll(tokenArguments);
+        var arguments = new ArrayList<>(List.of(curlExecutable(), "-s", "-m", String.valueOf(CURL_MAX_SECONDS), "-X", "POST",
+                "-H", quoted("Content-Type: application/json"),
+                "--variable", "%" + HookServer.SESSION_TOKEN_ENV, "--expand-header", quoted("Authorization: Bearer {{" + HookServer.SESSION_TOKEN_ENV + "}}")));
         arguments.addAll(List.of("--data-binary", quoted("@-"), quoted(url)));
         return String.join(" ", arguments);
+    }
+
+    private boolean curlKeepsTokenOffArguments() {
+        return curl.expandsEnvironment(curlExecutable());
+    }
+
+    private String curlExecutable() {
+        return windows ? "curl.exe" : "curl";
     }
 
     private String quoted(String arg) {

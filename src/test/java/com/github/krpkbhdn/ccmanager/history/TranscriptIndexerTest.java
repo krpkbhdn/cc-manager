@@ -5,7 +5,9 @@ import static com.github.krpkbhdn.ccmanager.history.HistoryFixture.toolResultLin
 import static com.github.krpkbhdn.ccmanager.history.HistoryFixture.userLine;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
@@ -298,6 +300,48 @@ class TranscriptIndexerTest {
 
         assertThat(hits("banana")).isEqualTo(2);
         assertThat(fixture.search.indexedEntryCount()).isEqualTo(2);
+    }
+
+    @Test
+    void toolIdStaysSoDuplicateResultIsStillSkipped() {
+        fixture.write(fixture.transcript("p", "s1"),
+                toolCallLine("a1", "/w/app", "2026-01-01T10:00:00Z", "t1", "{\"file_path\":\"/w/app/.env\"}")
+                        + toolResultLine("u2", "/w/app", "2026-01-01T10:00:01Z", "t1", "DB_HOST=zebrahost")
+                        + toolResultLine("u3", "/w/app", "2026-01-01T10:00:02Z", "t1", "DB_HOST=zebrahost")
+                        + toolCallLine("a4", "/w/app", "2026-01-01T10:00:03Z", "t2", "{\"file_path\":\"/w/app/.env\"}"));
+
+        fixture.indexer(1000).scan();
+
+        var ids = fixture.jdbc.sql("SELECT sensitive_tool_ids FROM transcript_file").query(String.class).single();
+        assertThat(ids).isEqualTo("t1 t2");
+        assertThat(hits("zebrahost")).isZero();
+    }
+
+    @Test
+    void sensitiveToolIdsOverTheCapEvictTheOldest() {
+        fixture.write(fixture.transcript("p", "s1"),
+                toolCallLine("a1", "/w/app", "2026-01-01T10:00:00Z", "t1", "{\"file_path\":\"/w/app/.env\"}")
+                        + toolCallLine("a2", "/w/app", "2026-01-01T10:00:01Z", "t2", "{\"file_path\":\"/w/app/.env\"}")
+                        + toolCallLine("a3", "/w/app", "2026-01-01T10:00:02Z", "t3", "{\"file_path\":\"/w/app/.env\"}"));
+
+        fixture.indexerKeepingToolIds(1000, 2).scan();
+
+        var ids = fixture.jdbc.sql("SELECT sensitive_tool_ids FROM transcript_file").query(String.class).single();
+        assertThat(ids).isEqualTo("t2 t3");
+    }
+
+    @Test
+    void largeFileIsCommittedInSeveralTransactionsAndIndexedCompletely() {
+        var content = new StringBuilder();
+        for (int i = 0; i < 25; i++) {
+            content.append(userLine("u" + i, "/w/app", "2026-01-01T10:00:00Z", "entry " + i));
+        }
+        fixture.write(fixture.transcript("p", "big"), content.toString());
+
+        fixture.indexerWithBatchLines(1000, 10).scan();
+
+        assertThat(fixture.search.indexedEntryCount()).isEqualTo(25);
+        verify(fixture.repository, times(3)).recordProgress(anyLong(), ArgumentMatchers.any());
     }
 
     @Test
