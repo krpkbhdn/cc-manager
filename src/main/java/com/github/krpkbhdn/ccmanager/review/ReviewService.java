@@ -68,11 +68,13 @@ public class ReviewService {
         if (title == null || title.isBlank()) {
             throw new IllegalArgumentException("The review needs a title.");
         }
-        if (jdbc.sql("SELECT COUNT(*) FROM review WHERE project_id = ?").param(projectId).query(Integer.class).single() >= properties.maxReviewsPerProject()) {
-            throw new IllegalArgumentException("too many reviews are waiting in this project: ask the user to delete some in the Review tab");
-        }
-        var id = jdbc.sql("INSERT INTO review (project_id, ccm_session_id, title, note) VALUES (?, ?, ?, ?) RETURNING id")
-                .param(projectId).param(ccmSessionId).param(title.strip()).param(note == null ? "" : note).query(Long.class).single();
+        var id = transaction.execute(status -> {
+            if (jdbc.sql("SELECT COUNT(*) FROM review WHERE project_id = ?").param(projectId).query(Integer.class).single() >= properties.maxReviewsPerProject()) {
+                throw new IllegalArgumentException("too many reviews are waiting in this project: ask the user to delete some in the Review tab");
+            }
+            return jdbc.sql("INSERT INTO review (project_id, ccm_session_id, title, note) VALUES (?, ?, ?, ?) RETURNING id")
+                    .param(projectId).param(ccmSessionId).param(title.strip()).param(note == null ? "" : note).query(Long.class).single();
+        });
         try {
             insertImages(id, imageStore.store(directoryOf(id), images));
         } catch (RuntimeException e) {

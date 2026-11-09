@@ -48,7 +48,9 @@ public class GitIndexService {
         var valid = RepositoryPaths.validate(paths);
         var tracked = trackedFiles(repo, valid);
         var untracked = valid.stream().filter(path -> !isTracked(tracked, path)).toList();
-        untracked.forEach(path -> delete(RepositoryPaths.resolveInside(repo, path)));
+        var targets = untracked.stream().map(path -> RepositoryPaths.resolveInside(repo, path)).toList();
+        targets.forEach(GitIndexService::rejectNestedRepository);
+        targets.forEach(GitIndexService::delete);
         withPaths(repo, valid.stream().filter(path -> isTracked(tracked, path)).toList(), List.of("restore", "--worktree"));
     }
 
@@ -143,12 +145,15 @@ public class GitIndexService {
         return git.outWithInput(repo, nulSeparated.getBytes(StandardCharsets.UTF_8), args.toArray(String[]::new));
     }
 
+    private static void rejectNestedRepository(Path target) {
+        if (Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS) && Files.exists(target.resolve(GIT_DIRECTORY), LinkOption.NOFOLLOW_LINKS)) {
+            throw new GitException(Kind.OTHER, "'" + target.getFileName() + "' is a nested repository; delete it by hand", "");
+        }
+    }
+
     private static void delete(Path target) {
         if (!Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
             return;
-        }
-        if (Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS) && Files.exists(target.resolve(GIT_DIRECTORY), LinkOption.NOFOLLOW_LINKS)) {
-            throw new GitException(Kind.OTHER, "'" + target.getFileName() + "' is a nested repository; delete it by hand", "");
         }
         try {
             TreeDeleter.delete(target);

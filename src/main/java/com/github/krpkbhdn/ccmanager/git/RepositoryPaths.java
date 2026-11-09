@@ -39,13 +39,22 @@ final class RepositoryPaths {
             var relative = Path.of(path);
             var normalized = relative.normalize();
             if (relative.isAbsolute() || relative.getRoot() != null || normalized.startsWith("..") || normalized.toString().isEmpty()
-                    || GIT_DIRECTORY.equalsIgnoreCase(normalized.getName(0).toString())) {
+                    || containsGitSegment(normalized)) {
                 throw rejected(path);
             }
             return File.separatorChar == '\\' ? normalized.toString().replace('\\', '/') : normalized.toString();
         } catch (InvalidPathException e) {
             throw rejected(path);
         }
+    }
+
+    private static boolean containsGitSegment(Path normalized) {
+        for (var segment : normalized) {
+            if (GIT_DIRECTORY.equalsIgnoreCase(segment.toString())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static Path realPath(Path path) {

@@ -85,9 +85,9 @@ fun ApplicationScope.AppWindow(backend: Backend, onShutdown: () -> Unit, setting
     val exit = {
         if (exiting.compareAndSet(false, true)) {
             visible = false
-            disposeState()
             thread(name = "AppShutdown") {
                 try {
+                    disposeState()
                     TerminalHost.closeAll()
                     onShutdown()
                 } finally {

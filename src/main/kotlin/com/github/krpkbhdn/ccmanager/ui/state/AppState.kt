@@ -263,7 +263,7 @@ class AppState(
         sessionSearch.dispose()
         reviews.dispose()
         queue.dispose()
-        voice?.let { Thread(it::close, "voice-close").apply { isDaemon = false }.start() }
+        voice?.let { Thread(it::close, "voice-close").apply { isDaemon = true }.start() }
         runs.dispose()
         usage.dispose()
         proposals.dispose()

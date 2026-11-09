@@ -111,6 +111,28 @@ class GitIndexServiceTest {
     }
 
     @Test
+    void discardRefusesGitDirectoryInANestedSegment() {
+        prepareWithCommit();
+        sandbox.write("nested/.git/HEAD", "ref: refs/heads/main\n");
+
+        assertThatThrownBy(() -> service.discard(sandbox.repo, List.of("nested/.git"))).isInstanceOf(GitException.class);
+
+        assertThat(sandbox.repo.resolve("nested/.git/HEAD")).exists();
+    }
+
+    @Test
+    void discardTouchesNothingWhenOnePathIsInvalid() {
+        prepareWithCommit();
+        sandbox.write("a.txt", "changed\n");
+        sandbox.write("fresh.txt", "x\n");
+
+        assertThatThrownBy(() -> service.discard(sandbox.repo, List.of("fresh.txt", "a.txt", "../outside.txt"))).isInstanceOf(GitException.class);
+
+        assertThat(sandbox.read("a.txt")).isEqualTo("changed\n");
+        assertThat(sandbox.repo.resolve("fresh.txt")).exists();
+    }
+
+    @Test
     void discardDoesNotFollowADirectoryLinkOutOfTheRepository() throws IOException {
         prepareWithCommit();
         var outsideDirectory = Files.createDirectory(root.resolve("elsewhere"));

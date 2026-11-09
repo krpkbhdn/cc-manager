@@ -85,6 +85,7 @@ class ReviewState(
     private val loadingImages = ConcurrentHashMap.newKeySet<Long>()
     private val markLists = ConcurrentHashMap<Long, SnapshotStateList<MarkDraft>>()
     private val dirty = ConcurrentHashMap.newKeySet<Long>()
+    private val loadedMarks = ConcurrentHashMap.newKeySet<Long>()
     private val saveJobs = ConcurrentHashMap<Long, Job>()
     private val writeLock = Mutex()
     private val watchedProjects = ConcurrentHashMap.newKeySet<Long>()
@@ -186,15 +187,23 @@ class ReviewState(
             fullImages.drop(image.id)
             thumbnails.drop(image.id)
             markLists.remove(image.id)
+            loadedMarks.remove(image.id)
             dirty.remove(image.id)
             saveJobs.remove(image.id)?.cancel()
         }
     }
 
     fun marks(imageId: Long): SnapshotStateList<MarkDraft> = markLists.computeIfAbsent(imageId) {
-        mutableStateListOf<MarkDraft>().also { list ->
-            scope.launch { runGuarded(reportError) { list.addAll(0, io { service.marks(imageId) }.map { MarkDraft(it.kind, it.x, it.y, it.w, it.h, it.comment, it.points) }) } }
+        mutableStateListOf<MarkDraft>().also {
+            scope.launch { runGuarded(reportError) { loadMarks(imageId) } }
         }
+    }
+
+    /** Puts the stored marks before the ones added meanwhile, once; throws when the read fails so the caller can retry. */
+    private suspend fun loadMarks(imageId: Long) {
+        if (imageId in loadedMarks) return
+        val stored = io { service.marks(imageId) }.map { MarkDraft(it.kind, it.x, it.y, it.w, it.h, it.comment, it.points) }
+        if (loadedMarks.add(imageId)) marks(imageId).addAll(0, stored)
     }
 
     fun addMark(imageId: Long, mark: MarkDraft) {
@@ -248,7 +257,9 @@ class ReviewState(
     /** Never cancelled once started; the dirty flag stays set until the write succeeded. */
     private suspend fun writeIfDirty(imageId: Long) = withContext(NonCancellable) {
         writeLock.withLock {
-            if (!dirty.remove(imageId)) return@withLock
+            if (imageId !in dirty) return@withLock
+            loadMarks(imageId)
+            dirty.remove(imageId)
             val snapshot = marks(imageId).toList()
             var written = false
             try {

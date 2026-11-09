@@ -322,10 +322,11 @@ public class HookServer implements SmartLifecycle {
             dropped("held hook call", ccmSessionId);
             decision.complete(Optional.empty());
         }
-        return decision;
+        // a hold task dropped by stop() would never complete the future, so the wait is bounded here too
+        return decision.completeOnTimeout(Optional.empty(), properties.decisionHold().toMillis(), TimeUnit.MILLISECONDS);
     }
 
-    /** Runs on a virtual thread, so waiting for the user costs nothing; ProposalService bounds the wait. */
+    /** Runs on a virtual thread, so waiting for the user costs nothing; the wait is bounded by the decision hold. */
     private void respondWithDecision(HttpExchange exchange, CompletableFuture<Optional<String>> decision) throws IOException {
         var output = decision.join();
         if (output.isPresent()) {

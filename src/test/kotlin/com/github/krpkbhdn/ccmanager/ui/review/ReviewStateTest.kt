@@ -12,6 +12,7 @@ import com.github.krpkbhdn.ccmanager.ui.state.LiveSessions
 import java.nio.file.Path
 import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -19,6 +20,8 @@ import kotlinx.coroutines.cancel
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentMatchers.anyList
+import org.mockito.ArgumentMatchers.anyLong
 import org.mockito.Mockito.doThrow
 import org.mockito.Mockito.inOrder
 import org.mockito.Mockito.mock
@@ -181,6 +184,20 @@ class ReviewStateTest {
         state.dispose()
 
         verify(service, times(2)).saveMarks(7, listOf(mark))
+    }
+
+    @Test
+    fun `marks are not saved while the stored ones could not be read`() {
+        val readable = AtomicBoolean(false)
+        `when`(service.marks(7)).thenAnswer { if (readable.get()) emptyList<Any>() else throw RuntimeException("db locked") }
+        state.addMark(7, mark)
+
+        state.dispose()
+        verify(service, never()).saveMarks(anyLong(), anyList())
+
+        readable.set(true)
+        state.dispose()
+        verify(service).saveMarks(7, listOf(mark))
     }
 
     @Test
