@@ -13,7 +13,8 @@ public class McpEndpoint extends McpJsonRpcServer<McpTool> {
     public static final String SERVER_NAME = "cc-manager";
     static final String INSTRUCTIONS = "This server belongs to Claude Code Manager, the desktop app running this session. "
             + "Use its run configuration tools so the user can start the app from cc-manager. "
-            + "See the cc-manager:run-configurations skill for when to use them.";
+            + "See the cc-manager:run-configurations skill for when to use them. "
+            + "Use submit_screenshots to hand screenshots to the user for visual review; see the cc-manager:visual-review skill.";
 
     private final SessionRegistry sessions;
 
@@ -27,7 +28,7 @@ public class McpEndpoint extends McpJsonRpcServer<McpTool> {
         return respond(body, (tool, arguments) -> {
             var session = sessions.find(ccmSessionId)
                     .orElseThrow(() -> new IllegalStateException("This session is not managed by cc-manager anymore"));
-            return tool.call(session.projectId(), arguments);
+            return tool.call(session.projectId(), ccmSessionId, arguments);
         });
     }
 }

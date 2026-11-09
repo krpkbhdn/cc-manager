@@ -113,4 +113,13 @@ object Icons {
     val Link = lucide("link")
     val Users = lucide("users")
     val Crown = lucide("crown")
+    val Square = lucide("square")
+    val Circle = lucide("circle")
+    val MapPin = lucide("map-pin")
+    val MousePointer = lucide("mouse-pointer-2")
+    val PenTool = lucide("pen-tool")
+    val ZoomIn = lucide("zoom-in")
+    val ZoomOut = lucide("zoom-out")
+    val Send = lucide("send")
+    val Maximize = lucide("maximize")
 }

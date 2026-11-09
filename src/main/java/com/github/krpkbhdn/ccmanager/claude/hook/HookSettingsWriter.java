@@ -179,7 +179,8 @@ public class HookSettingsWriter {
             settings.set("statusLine", statusLine(ccmSessionId));
         }
         var permissions = settings.putObject("permissions");
-        permissions.putArray("allow").add("mcp__" + McpEndpoint.SERVER_NAME + "__" + LIST_RUN_CONFIGURATIONS_TOOL);
+        permissions.putArray("allow")
+                .add("mcp__" + McpEndpoint.SERVER_NAME + "__" + LIST_RUN_CONFIGURATIONS_TOOL);
         permissions.putArray("deny").add("Read(" + absoluteRule(hooksRoot) + "/**)");
         return settings;
     }

@@ -38,6 +38,7 @@ import java.awt.event.KeyEvent.VK_SLASH
 import java.awt.event.KeyEvent.VK_T
 import java.awt.event.KeyEvent.VK_TAB
 import java.awt.event.KeyEvent.VK_U
+import java.awt.event.KeyEvent.VK_Z
 import java.awt.event.KeyEvent.VK_W
 import java.awt.event.KeyEvent.VK_X
 import java.awt.event.KeyEvent.VK_Y
@@ -79,6 +80,7 @@ enum class AppShortcut(val label: String, private val windows: List<KeyChord>, p
     GIT_BRANCHES("Switch branch", listOf(ctrlShift(VK_H)), listOf(cmdShift(VK_H))),
     GIT_PUSH("Push", listOf(ctrlShift(VK_U)), listOf(cmdShift(VK_U))),
     RUN("Run selected configuration", listOf(ctrlShift(VK_R)), listOf(cmdShift(VK_R))),
+    REVIEW_TAB("Review tab", listOf(ctrlShift(VK_Z)), listOf(cmdShift(VK_Z))),
     ACTIVITY_TAB("Activity tab", listOf(ctrlShift(VK_A)), listOf(cmdShift(VK_A))),
     NOTIFICATIONS("Notifications", listOf(ctrlShift(VK_M)), listOf(cmdShift(VK_M))),
     USAGE("Show usage", listOf(ctrlShift(VK_Y)), listOf(cmdShift(VK_Y))),

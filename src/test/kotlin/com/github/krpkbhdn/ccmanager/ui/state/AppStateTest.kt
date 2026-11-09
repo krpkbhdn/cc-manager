@@ -133,4 +133,20 @@ class AppStateTest {
         await { typed.contains("s-idle" to Keys.ENTER) }
         assertThat(typed.filter { it.first == "s-idle" }.map { it.second }).containsExactly("/compact", Keys.ENTER)
     }
+
+    @Test
+    fun `the palette offers show-review in a project only`() {
+        fun ids() = paletteItems(state, false).map { it.id }
+        val project = state.projects.all.first { !it.group }.id
+        val group = state.projects.all.first { it.group }.id
+        assertThat(ids()).doesNotContain("show-review")
+
+        state.navigate(Route.Project(project))
+        assertThat(ids()).contains("show-review")
+        paletteItems(state, false).first { it.id == "show-review" }.run()
+        assertThat(state.viewOf(project).selected).isEqualTo(ProjectTab.Review)
+
+        state.navigate(Route.Project(group))
+        assertThat(ids()).doesNotContain("show-review")
+    }
 }

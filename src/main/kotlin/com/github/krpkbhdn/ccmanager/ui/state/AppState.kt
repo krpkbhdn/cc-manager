@@ -22,6 +22,7 @@ import com.github.krpkbhdn.ccmanager.ui.git.model.GitHost
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitState
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
 import com.github.krpkbhdn.ccmanager.ui.history.SessionSearchState
+import com.github.krpkbhdn.ccmanager.ui.review.ReviewState
 import com.github.krpkbhdn.ccmanager.ui.sessions.SessionsTab
 import com.github.krpkbhdn.ccmanager.ui.prompts.PromptsState
 import com.github.krpkbhdn.ccmanager.claude.proposal.Proposal
@@ -169,6 +170,11 @@ class AppState(
     )
     val prompts = PromptsState(backend.promptTemplates, scope, { confirm = it }, notifications::reportError, listOf(backend.projects::subscribe, backend.teams::subscribe))
     val sessionSearch = SessionSearchState(backend.sessionSearch, backend.transcripts, scope, { confirm = it }, notifications::reportError)
+    val reviews = ReviewState(
+        backend.review, { live }, { id, text -> queue.add(id, text) },
+        { projectId, prompt, onNotStarted, onStarted -> sessions.launchTask(projectId, null, prompt, { onNotStarted() }, onStarted) },
+        scope, notifications::reportError,
+    )
     val extensions = ExtensionStates(backend, scope, { confirm = it }, notifications, environment)
     val author = AuthorProfileState(
         backend.author, scope,
@@ -220,6 +226,7 @@ class AppState(
         presets.start()
         prompts.start()
         sessionSearch.start()
+        reviews.start()
         queue.start()
         author.offerAtStart()
         runs.start()
@@ -254,6 +261,7 @@ class AppState(
         presets.dispose()
         prompts.dispose()
         sessionSearch.dispose()
+        reviews.dispose()
         queue.dispose()
         voice?.let { Thread(it::close, "voice-close").apply { isDaemon = false }.start() }
         runs.dispose()

@@ -52,6 +52,7 @@ When any session needs you, it turns red on the Overview and in the status bar; 
 - **Assistant**: a Claude session outside any project that opens projects, starts sessions and drives the app through a dedicated MCP server.
 - **Prompt library and queue**: reusable templates with placeholders, and a per-session queue that types the next prompt when a turn ends.
 - **Run configurations**: start your app from the manager; Claude can register one for its own git worktree.
+- **Visual review**: Claude submits screenshots of what it built; you mark problem areas (rectangle, ellipse, pin) with comments in the Review tab and send them back to a session.
 
 **Workspace**
 - **Git tab**: changes with hunk-aware diff, commit, log graph, branches, stashes and tags.
@@ -163,7 +164,8 @@ Plain `Ctrl+letter` chords go to the terminal, which is why the app uses `Ctrl+S
 
 ## Configuration
 
-Data lives in `~/.cc-manager` (SQLite database `cc-manager.db`); change the location with the `cc-manager.data-dir` property.
+Data lives in `~/.cc-manager` (SQLite database `cc-manager.db`); change the location with the `cc-manager.data-dir` property (or the `CC_MANAGER_DATA_DIR` environment variable).
+`./gradlew run` from a git worktree uses `<tmp>/cc-manager-worktrees/<worktree folder>` instead, unless `CC_MANAGER_DATA_DIR` is set.
 Settings are `cc-manager.*` properties, see [`application.properties`](src/main/resources/application.properties).
 The hooks and protocol reference is in [docs/claude-code-protocol.md](docs/claude-code-protocol.md).
 

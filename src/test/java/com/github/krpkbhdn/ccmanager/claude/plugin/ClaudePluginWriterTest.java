@@ -25,5 +25,6 @@ class ClaudePluginWriterTest {
         assertThat(writer.directory()).isEqualTo(dataDir.resolve("claude-plugin"));
         assertThat(Files.readString(writer.directory().resolve(".claude-plugin/plugin.json"))).contains("\"name\": \"cc-manager\"");
         assertThat(Files.readString(skill)).startsWith("---").contains("name: run-configurations");
+        assertThat(Files.readString(writer.directory().resolve("skills/visual-review/SKILL.md"))).startsWith("---").contains("name: visual-review");
     }
 }

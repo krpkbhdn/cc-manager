@@ -15,7 +15,8 @@ import org.springframework.stereotype.Component;
 public class ClaudePluginWriter {
 
     private static final String RESOURCE_ROOT = "/claude-plugin/";
-    private static final List<String> FILES = List.of(".claude-plugin/plugin.json", "skills/run-configurations/SKILL.md");
+    private static final List<String> FILES = List.of(".claude-plugin/plugin.json", "skills/run-configurations/SKILL.md",
+            "skills/visual-review/SKILL.md");
 
     private final Path directory;
 

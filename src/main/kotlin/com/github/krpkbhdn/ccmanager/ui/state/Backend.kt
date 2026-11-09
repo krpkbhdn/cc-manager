@@ -28,6 +28,7 @@ import com.github.krpkbhdn.ccmanager.project.ProjectGroupService
 import com.github.krpkbhdn.ccmanager.project.ProjectService
 import com.github.krpkbhdn.ccmanager.prompt.PromptTemplateService
 import com.github.krpkbhdn.ccmanager.run.RunConfigurationService
+import com.github.krpkbhdn.ccmanager.review.ReviewService
 import com.github.krpkbhdn.ccmanager.run.RunService
 import com.github.krpkbhdn.ccmanager.extension.mcp.McpService
 import com.github.krpkbhdn.ccmanager.extension.plugin.PluginService
@@ -81,6 +82,7 @@ class Backend(
     val presets: ProjectPresetService,
     val presetApply: PresetApplyService,
     val presetApplications: PresetApplicationService,
+    val review: ReviewService,
     val terminal: TerminalPort = HostTerminalPort,
     val updates: UpdateService? = null,
     val sound: NotificationSoundService? = null,
@@ -126,6 +128,7 @@ class Backend(
             presets = context.getBean(ProjectPresetService::class.java),
             presetApply = context.getBean(PresetApplyService::class.java),
             presetApplications = context.getBean(PresetApplicationService::class.java),
+            review = context.getBean(ReviewService::class.java),
             updates = context.getBean(UpdateService::class.java),
             sound = context.getBean(NotificationSoundService::class.java),
             usageHistory = context.getBean(UsageHistoryRepository::class.java),

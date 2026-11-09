@@ -130,6 +130,7 @@ private fun projectOnlyActions(state: AppState, project: Project, here: String):
         state.runs.selectedOf(project.id)?.let { runItem(state, it, here) },
         state.runs.selectedOf(project.id)?.takeIf { it.running }?.let { entry -> PaletteItem("stop-run", "Stop ${entry.name}", PaletteGroup.ACTIONS, here, Icons.Stop) { state.runs.stop(entry.id) } },
         PaletteItem("show-run", "Show run console", PaletteGroup.ACTIONS, here, Icons.SquareTerminal) { state.select(project.id, ProjectTab.Run) },
+        PaletteItem("show-review", "Show review", PaletteGroup.ACTIONS, here, Icons.Eye, shortcut = AppShortcut.REVIEW_TAB) { state.select(project.id, ProjectTab.Review) },
         PaletteItem("show-activity", "Show activity", PaletteGroup.ACTIONS, here, Icons.Activity, shortcut = AppShortcut.ACTIVITY_TAB) { state.select(project.id, ProjectTab.Activity) },
         PaletteItem("toggle-agents", "Toggle agents panel", PaletteGroup.ACTIONS, here, Icons.PanelRightClose, shortcut = AppShortcut.TOGGLE_AGENTS, run = state.prefs::toggleAgents),
         *contextActions(state, project, here).toTypedArray(),

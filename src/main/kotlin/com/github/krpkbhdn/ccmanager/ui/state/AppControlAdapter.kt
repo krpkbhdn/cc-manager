@@ -21,7 +21,8 @@ class AppControlAdapter(private val state: AppState, private val scope: Coroutin
             "sessions" -> view.openSessions.lastOrNull()?.let { ProjectTab.Session(it) } ?: view.selected
             "git" -> ProjectTab.Git
             "run" -> ProjectTab.Run
-            else -> error("Unknown tab '$tab', expected sessions, git or run")
+            "review" -> ProjectTab.Review
+            else -> error("Unknown tab '$tab', expected sessions, git, run or review")
         }
         state.select(projectId, target)
         state.navigate(Route.Project(projectId))

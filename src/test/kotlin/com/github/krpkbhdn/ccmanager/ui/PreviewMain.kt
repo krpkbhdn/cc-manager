@@ -35,7 +35,7 @@ import kotlinx.coroutines.withContext
 private const val SETTLE_MILLIS = 1_600L
 
 /**
- * Dev preview with fake services. Flags: `--light` (default dark), `--many` (12 projects, long names), `--empty`,
+ * Dev preview with fake services. Flags: `--light` (default dark), `--many` (12 projects, long names), `--empty`, `--review` (sample visual review, Review tab selected),
  * `--size=WxH`, `--shots` captures the main states into `--out=<dir>` with java.awt.Robot and exits; without
  * `--shots` the window stays open for manual inspection. `--real` boots the real stack instead (see RealMain).
  */
@@ -46,7 +46,7 @@ fun main(args: Array<String>) {
     application {
         val state = remember {
             AppState(world.backend(PreviewTerminal), CoroutineScope(SupervisorJob() + Dispatchers.Main), UiSettingsStore(null))
-                .also { it.updateSettings { s -> s.copy(assistantStartup = AssistantStartup.NEVER) }; it.start(); it.prefs.setThemeMode(if (flags.dark) ThemeMode.DARK else ThemeMode.LIGHT) }
+                .also { it.updateSettings { s -> s.copy(assistantStartup = AssistantStartup.NEVER) }; if (flags.review) { ReviewPreviewData.seed(1); it.select(1, ProjectTab.Review) }; it.start(); it.prefs.setThemeMode(if (flags.dark) ThemeMode.DARK else ThemeMode.LIGHT) }
         }
         val windowState = remember { WindowState(size = DpSize(flags.width.dp, flags.height.dp)) }
         val icon = remember { BitmapPainter(drawAppIcon(256).toComposeImageBitmap()) }
@@ -67,7 +67,7 @@ fun main(args: Array<String>) {
     }
 }
 
-private class PreviewFlags(val dark: Boolean, val shots: Boolean, val snap: Boolean, val many: Boolean, val empty: Boolean, val width: Int, val height: Int, val out: Path) {
+private class PreviewFlags(val dark: Boolean, val shots: Boolean, val snap: Boolean, val many: Boolean, val empty: Boolean, val review: Boolean, val width: Int, val height: Int, val out: Path) {
     companion object {
         fun parse(args: Array<String>): PreviewFlags {
             val size = args.firstOrNull { it.startsWith("--size=") }?.removePrefix("--size=")?.split('x')?.map { it.toInt() } ?: listOf(1280, 820)
@@ -77,6 +77,7 @@ private class PreviewFlags(val dark: Boolean, val shots: Boolean, val snap: Bool
                 snap = "--snap" in args,
                 many = "--many" in args,
                 empty = "--empty" in args,
+                review = "--review" in args,
                 width = size[0],
                 height = size[1],
                 out = Path.of(args.firstOrNull { it.startsWith("--out=") }?.removePrefix("--out=") ?: "build/preview"),
@@ -166,6 +167,10 @@ private suspend fun captureTour(capture: Capture, state: AppState, world: Previe
     state.runs.openDialog(1, state.runs.selectedOf(1)?.configuration)
     capture.take("4c-run-dialog")
     state.runs.closeDialog()
+    if (flags.review) {
+        state.select(1, ProjectTab.Review)
+        capture.take("4d-review-tab")
+    }
     state.notificationsOpen = true
     capture.take("5-notifications")
     state.notificationsOpen = false

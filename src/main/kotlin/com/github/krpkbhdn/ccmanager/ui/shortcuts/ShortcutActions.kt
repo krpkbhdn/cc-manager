@@ -57,6 +57,7 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
             AppShortcut.GIT_PUSH -> handled { state.gits.of(project.id)?.push() }
             AppShortcut.PROJECT_SETTINGS -> handled { state.extensions.openProjectSettings(project) }
             AppShortcut.RUN -> state.runs.selectedOf(project.id)?.takeIf { !it.directoryMissing }?.let { entry -> handled { state.runs.run(entry.id) } } ?: false
+            AppShortcut.REVIEW_TAB -> handled { state.select(project.id, ProjectTab.Review) }
             AppShortcut.ACTIVITY_TAB -> handled { state.select(project.id, ProjectTab.Activity) }
             AppShortcut.CONTEXT_USAGE -> session != null && handled { state.contextSessionId = session }
             AppShortcut.FOCUS_TERMINAL -> session != null && handled { state.terminal.focus(session) }
@@ -105,5 +106,5 @@ private val OVERLAY_TOGGLES = setOf(AppShortcut.PALETTE, AppShortcut.SHORTCUT_SH
 
 private val PROJECT_ONLY = setOf(
     AppShortcut.OPEN_TERMINAL, AppShortcut.GIT_TAB, AppShortcut.GIT_CHANGES, AppShortcut.GIT_COMMIT,
-    AppShortcut.GIT_BRANCHES, AppShortcut.GIT_PUSH, AppShortcut.RUN, AppShortcut.PROJECT_SETTINGS,
+    AppShortcut.GIT_BRANCHES, AppShortcut.GIT_PUSH, AppShortcut.RUN, AppShortcut.REVIEW_TAB, AppShortcut.PROJECT_SETTINGS,
 )
