@@ -6,7 +6,7 @@
 
 **One desktop app to run, watch and steer many local Claude Code sessions.**
 
-Projects, agent teams, notifications, and one-click approval of everything Claude asks for.
+Visual review of what Claude builds, agent teams, notifications, and one-click approval of everything Claude asks for.
 
 [![Release](https://img.shields.io/github/v/release/krpkbhdn/cc-manager?label=release)](https://github.com/krpkbhdn/cc-manager/releases)
 ![Windows](https://img.shields.io/badge/Windows-installer-informational)
@@ -21,7 +21,7 @@ Projects, agent teams, notifications, and one-click approval of everything Claud
 
 ![Overview](docs/images/overview.png)
 
-**Contents:** [Why](#why) · [Quick start](#quick-start) · [Features](#features) · [Screenshots](#screenshots) · [Requirements](#requirements) · [Install](#install) · [Build from source](#build-and-run-from-source) · [Shortcuts](#keyboard-shortcuts) · [Configuration](#configuration) · [Contributing](#contributing) · [License](#license)
+**Contents:** [Why](#why) · [Visual review](#visual-review) · [Quick start](#quick-start) · [Features](#features) · [Screenshots](#screenshots) · [Requirements](#requirements) · [Install](#install) · [Build from source](#build-and-run-from-source) · [Shortcuts](#keyboard-shortcuts) · [Configuration](#configuration) · [Contributing](#contributing) · [License](#license)
 
 ## Why
 
@@ -29,7 +29,34 @@ Working with several Claude Code sessions means a pile of terminals, and you nev
 Claude Code Manager puts them in one window: every session shows its status, and every question, plan or permission request
 becomes a dialog you can answer without hunting for the right terminal.
 
+The feature no other Claude Code tool has is **Visual review**: when Claude changes a UI, you mark up its screenshots and send the marks straight back.
+
 Everything runs **locally on your own Claude Code installation**. There is no server component and nothing proxies your sessions.
+
+## Visual review
+
+Claude changes a UI, takes screenshots and hands them to you. You circle what is wrong, write a comment on each mark, and
+the annotated images go back into the session. No more describing "the third button on the left" in words.
+
+![Visual review: marks and comments on a screenshot](docs/images/review.png)
+
+<details>
+<summary>Light theme</summary>
+
+![Visual review, light theme](docs/images/review-light.png)
+
+</details>
+
+**How it works**
+
+1. Claude calls the MCP tool `submit_screenshots` with the images it made. The first call asks your permission, because the app copies the given files.
+2. The **Review** tab (`Ctrl+Shift+Z`) shows them, with a badge counting reviews that wait for you. It never opens by itself.
+3. You mark problems with **Rectangle**, **Ellipse**, **Pin** or **Freeform** (a polygon placed point by point, closed by a click on the first point). Marks can be moved, resized by 8 handles, and polygon vertices dragged. Marks are numbered on every image and each has its own comment.
+4. **Send** hands the annotated images plus a `review.md` with all comments to the bound or a chosen session through its prompt queue, or starts a new session. **Approve** closes the review.
+
+Reviews older than 7 days are deleted automatically (`cc-manager.review.retention`).
+
+Bonus: the bundled plugin skill `visual-review` teaches Claude to take and submit screenshots on its own.
 
 ## Quick start
 
@@ -40,6 +67,9 @@ Everything runs **locally on your own Claude Code installation**. There is no se
 When any session needs you, it turns red on the Overview and in the status bar; press `Ctrl+Shift+N` to answer the next one.
 
 ## Features
+
+**Visual review**
+- **[Visual review](#visual-review)**: Claude submits screenshots, you mark problem areas (rectangle, ellipse, pin, freeform polygon) with numbered comments in the Review tab, then send the annotated images and `review.md` back to a session or approve.
 
 **Sessions**
 - **Projects and sessions**: register project folders, start or resume Claude sessions in a real embedded terminal.
@@ -52,7 +82,6 @@ When any session needs you, it turns red on the Overview and in the status bar; 
 - **Assistant**: a Claude session outside any project that opens projects, starts sessions and drives the app through a dedicated MCP server.
 - **Prompt library and queue**: reusable templates with placeholders, and a per-session queue that types the next prompt when a turn ends.
 - **Run configurations**: start your app from the manager; Claude can register one for its own git worktree.
-- **Visual review**: Claude submits screenshots of what it built; you mark problem areas (rectangle, ellipse, pin) with comments in the Review tab and send them back to a session.
 
 **Workspace**
 - **Git tab**: changes with hunk-aware diff, commit, log graph, branches, stashes and tags.
@@ -140,7 +169,7 @@ The first build needs internet: it downloads Gradle and JBR 25, so it takes a wh
 <details>
 <summary>Show all shortcuts</summary>
 
-The table shows Windows and Linux chords. On macOS most of them use `Cmd` or `Cmd+Shift` instead (`Cmd+T`, `Cmd+O`, `Cmd+K`, `Cmd+1`..`9`, `Cmd+Shift+S/I/E/N/G/K/U/R/Y/M`); `Alt+F12` is unchanged.
+The table shows Windows and Linux chords. On macOS most of them use `Cmd` or `Cmd+Shift` instead (`Cmd+T`, `Cmd+O`, `Cmd+K`, `Cmd+1`..`9`, `Cmd+Shift+S/I/E/N/G/K/U/R/Y/Z/M`); `Alt+F12` is unchanged.
 
 | Action | Shortcut |
 |---|---|
@@ -153,6 +182,7 @@ The table shows Windows and Linux chords. On macOS most of them use `Cmd` or `Cm
 | Assistant / ask the assistant | `Ctrl+Shift+I` / `Ctrl+Shift+E` |
 | Git tab / commit / push | `Ctrl+Shift+G` / `Ctrl+Shift+K` / `Ctrl+Shift+U` |
 | Run selected configuration | `Ctrl+Shift+R` |
+| Review | `Ctrl+Shift+Z` |
 | Usage | `Ctrl+Shift+Y` |
 | Notifications | `Ctrl+Shift+M` |
 | Open terminal | `Alt+F12` |
