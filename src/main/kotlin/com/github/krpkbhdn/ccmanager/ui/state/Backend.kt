@@ -3,7 +3,7 @@ package com.github.krpkbhdn.ccmanager.ui.state
 import java.time.Duration
 import com.github.krpkbhdn.ccmanager.app.AppControlProperties
 import com.github.krpkbhdn.ccmanager.app.AppControlRegistry
-import com.github.krpkbhdn.ccmanager.author.AuthorProfileService
+import com.github.krpkbhdn.ccmanager.author.AuthorCatalogService
 import com.github.krpkbhdn.ccmanager.claude.hook.HookEventStore
 import com.github.krpkbhdn.ccmanager.claude.install.ClaudeInstallationService
 import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgentService
@@ -21,10 +21,14 @@ import com.github.krpkbhdn.ccmanager.usage.UsageProperties
 import com.github.krpkbhdn.ccmanager.usage.history.UsageAlertService
 import com.github.krpkbhdn.ccmanager.usage.history.UsageHistoryRepository
 import com.github.krpkbhdn.ccmanager.usage.history.UsageThresholds
+import com.github.krpkbhdn.ccmanager.preset.PresetApplicationService
+import com.github.krpkbhdn.ccmanager.preset.ProjectPresetService
+import com.github.krpkbhdn.ccmanager.preset.apply.PresetApplyService
 import com.github.krpkbhdn.ccmanager.project.ProjectGroupService
 import com.github.krpkbhdn.ccmanager.project.ProjectService
 import com.github.krpkbhdn.ccmanager.prompt.PromptTemplateService
 import com.github.krpkbhdn.ccmanager.run.RunConfigurationService
+import com.github.krpkbhdn.ccmanager.review.ReviewService
 import com.github.krpkbhdn.ccmanager.run.RunService
 import com.github.krpkbhdn.ccmanager.extension.mcp.McpService
 import com.github.krpkbhdn.ccmanager.extension.plugin.PluginService
@@ -36,6 +40,7 @@ import com.github.krpkbhdn.ccmanager.ui.git.model.GitBackend
 import com.github.krpkbhdn.ccmanager.usage.RateLimitService
 import com.github.krpkbhdn.ccmanager.update.UpdateService
 import com.github.krpkbhdn.ccmanager.usage.SessionUsageService
+import com.github.krpkbhdn.ccmanager.usage.context.ContextBreakdownService
 import com.github.krpkbhdn.ccmanager.ui.voice.VoiceBackend
 import com.github.krpkbhdn.ccmanager.voice.VoiceInputService
 import com.github.krpkbhdn.ccmanager.voice.asset.VoiceAssetService
@@ -70,10 +75,14 @@ class Backend(
     val runs: RunService,
     val shellDetector: ShellDetector,
     val shellLauncher: ShellLauncher,
-    val author: AuthorProfileService,
+    val author: AuthorCatalogService,
     val proposals: ProposalService,
     val promptTemplates: PromptTemplateService,
     val sessionSearch: SessionSearchService,
+    val presets: ProjectPresetService,
+    val presetApply: PresetApplyService,
+    val presetApplications: PresetApplicationService,
+    val review: ReviewService,
     val terminal: TerminalPort = HostTerminalPort,
     val updates: UpdateService? = null,
     val sound: NotificationSoundService? = null,
@@ -82,6 +91,7 @@ class Backend(
     val usageDefaults: UsageThresholds = UsageThresholds(0, 0, 0.0),
     val dataDir: Path = Path.of(System.getProperty("user.home"), ".cc-manager"),
     val sessionProperties: SessionProperties,
+    val contextBreakdown: ContextBreakdownService,
     val appControl: AppControlRegistry? = null,
     val appControlProperties: AppControlProperties = AppControlProperties(Duration.ofSeconds(10), 20_000),
     val assistantTools: List<AssistantMcpTool> = emptyList(),
@@ -111,10 +121,14 @@ class Backend(
             runs = context.getBean(RunService::class.java),
             shellDetector = context.getBean(ShellDetector::class.java),
             shellLauncher = context.getBean(ShellLauncher::class.java),
-            author = context.getBean(AuthorProfileService::class.java),
+            author = context.getBean(AuthorCatalogService::class.java),
             proposals = context.getBean(ProposalService::class.java),
             promptTemplates = context.getBean(PromptTemplateService::class.java),
             sessionSearch = context.getBean(SessionSearchService::class.java),
+            presets = context.getBean(ProjectPresetService::class.java),
+            presetApply = context.getBean(PresetApplyService::class.java),
+            presetApplications = context.getBean(PresetApplicationService::class.java),
+            review = context.getBean(ReviewService::class.java),
             updates = context.getBean(UpdateService::class.java),
             sound = context.getBean(NotificationSoundService::class.java),
             usageHistory = context.getBean(UsageHistoryRepository::class.java),
@@ -122,6 +136,7 @@ class Backend(
             usageDefaults = context.getBean(UsageProperties::class.java).let { UsageThresholds(it.fiveHourPercent(), it.sevenDayPercent(), it.dailyBudgetUsd()) },
             dataDir = context.getBean(AppProperties::class.java).dataDir(),
             sessionProperties = context.getBean(SessionProperties::class.java),
+            contextBreakdown = context.getBean(ContextBreakdownService::class.java),
             appControl = context.getBean(AppControlRegistry::class.java),
             appControlProperties = context.getBean(AppControlProperties::class.java),
             assistantTools = context.getBeansOfType(AssistantMcpTool::class.java).values.toList(),

@@ -170,7 +170,8 @@ class ProjectGits(
     fun loadNew(projectIds: Set<Long>) = loadOneByOne(projectIds.filter { it !in states }.mapNotNull(::mainOf), withWorktrees = true)
 
     /** Local state only (no fetch): the open project has its watcher, the others would otherwise go stale. */
-    fun reloadUnopened(openProjectId: Long?) = loadOneByOne(states.filterKeys { it != openProjectId }.values.toList())
+    fun reloadUnopened(openProjectId: Long?, afterRunningSweep: Boolean = false) =
+        loadOneByOne(states.filterKeys { it != openProjectId }.values.toList(), rerunIfBusy = afterRunningSweep)
 
     fun retain(projectIds: Set<Long>) {
         states.keys.filter { it !in projectIds }.forEach { states.remove(it)?.close() }
@@ -180,9 +181,9 @@ class ProjectGits(
     }
 
     /** One project at a time, so many projects do not start dozens of git processes at once; a periodic reload is skipped while a sweep runs, a first load of new projects waits its turn. */
-    private fun loadOneByOne(loaded: List<GitState>, withWorktrees: Boolean = false) {
+    private fun loadOneByOne(loaded: List<GitState>, withWorktrees: Boolean = false, rerunIfBusy: Boolean = false) {
         if (loaded.isEmpty()) return
-        if (!withWorktrees && sweep.isLocked) return
+        if (!withWorktrees && !rerunIfBusy && sweep.isLocked) return
         scope.launch { sweep.withLock { loaded.forEach { it.reloadNow(); if (withWorktrees) it.loadWorktrees() } } }
     }
 }

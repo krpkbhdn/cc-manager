@@ -41,11 +41,10 @@ build/
 !gradle/wrapper/gradle-wrapper.jar
 
 ### Claude / tooling ###
-.claude/settings.local.json
-graphify-out/
-.graphify_python
+/.claude/
+/.mcp.json
+CLAUDE.local.md
 jscpd-report/
-.claude/worktrees/
 
 ### Secrets ###
 .env

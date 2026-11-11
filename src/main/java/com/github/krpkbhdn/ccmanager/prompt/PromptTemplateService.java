@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.prompt;
 
+import com.github.krpkbhdn.ccmanager.config.NameRules;
 import com.github.krpkbhdn.ccmanager.workspace.ChangeListeners;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -70,13 +71,7 @@ public class PromptTemplateService {
     }
 
     private String validate(String name, String description, String text, Long projectId, Long defaultTeamId) {
-        var cleanName = name == null ? "" : name.strip();
-        if (cleanName.isEmpty()) {
-            throw new IllegalArgumentException("The name must not be empty.");
-        }
-        if (cleanName.length() > MAX_NAME) {
-            throw new IllegalArgumentException("The name is longer than " + MAX_NAME + " characters.");
-        }
+        var cleanName = NameRules.requireName(name, MAX_NAME);
         if (description.strip().length() > MAX_DESCRIPTION) {
             throw new IllegalArgumentException("The description is longer than " + MAX_DESCRIPTION + " characters.");
         }

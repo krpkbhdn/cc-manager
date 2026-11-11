@@ -36,14 +36,6 @@ class GroupsStateTest {
     }
 
     @Test
-    fun `the author session project is never a group even while the group is open`() {
-        state.navigate(Route.Project(PREVIEW_GROUP_ID))
-
-        assertThat(state.author.sessionProjectName).isNotEqualTo(state.projects.find(PREVIEW_GROUP_ID)!!.name)
-        assertThat(state.author.sessionProjectName).isIn(state.projects.projects.map { it.name })
-    }
-
-    @Test
     fun `members are not listed as ungrouped and groups are not projects`() {
         val members = state.projects.membersOf(PREVIEW_GROUP_ID)
 

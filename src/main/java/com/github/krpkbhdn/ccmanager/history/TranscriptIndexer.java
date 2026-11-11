@@ -3,6 +3,7 @@ package com.github.krpkbhdn.ccmanager.history;
 import com.github.krpkbhdn.ccmanager.claude.session.TranscriptEntry.Kind;
 import com.github.krpkbhdn.ccmanager.claude.session.TranscriptLineParser;
 import com.github.krpkbhdn.ccmanager.history.TranscriptIndexRepository.IndexedFile;
+import com.github.krpkbhdn.ccmanager.security.SecretFilter;
 import com.github.krpkbhdn.ccmanager.history.TranscriptIndexRepository.NewEntry;
 import com.github.krpkbhdn.ccmanager.history.TranscriptIndexRepository.Progress;
 import com.github.krpkbhdn.ccmanager.workspace.HostEnvironment;
@@ -17,6 +18,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -45,8 +47,8 @@ public class TranscriptIndexer {
     private static final Logger log = LoggerFactory.getLogger(TranscriptIndexer.class);
     private static final String TRANSCRIPT_SUFFIX = ".jsonl";
     private static final String TOOL_ID_SEPARATOR = " ";
+    private static final String ALL_RESULTS_SENSITIVE = "*";
     private static final int TRANSCRIPT_DEPTH = 2;
-    private static final long BATCH_BYTES = 8L << 20;
     static final long MAX_LINE_BYTES = 16L << 20;
     private static final int SKIP_CHUNK_BYTES = 64 * 1024;
     private static final Pattern UUID_NAME = Pattern.compile("[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}");
@@ -62,9 +64,8 @@ public class TranscriptIndexer {
         }
 
         Pass withSensitive(String toolUseId) {
-            var ids = new LinkedHashSet<>(sensitiveToolIds);
-            ids.add(toolUseId);
-            return new Pass(ids, sessionId, cwd, lastEntryAt);
+            sensitiveToolIds.add(toolUseId);
+            return this;
         }
 
         Pass withEntryAt(long at) {
@@ -72,7 +73,6 @@ public class TranscriptIndexer {
         }
     }
 
-    private final long batchBytes;
     private final Path projectsRoot;
     private final TranscriptIndexRepository repository;
     private final TranscriptLineParser parser;
@@ -88,12 +88,6 @@ public class TranscriptIndexer {
 
     public TranscriptIndexer(Path projectsRoot, JsonMapper mapper, TranscriptIndexRepository repository,
             SessionHistoryProperties properties) {
-        this(projectsRoot, mapper, repository, properties, BATCH_BYTES);
-    }
-
-    TranscriptIndexer(Path projectsRoot, JsonMapper mapper, TranscriptIndexRepository repository,
-            SessionHistoryProperties properties, long batchBytes) {
-        this.batchBytes = batchBytes;
         this.projectsRoot = projectsRoot;
         this.parser = new TranscriptLineParser(mapper);
         this.repository = repository;
@@ -119,12 +113,15 @@ public class TranscriptIndexer {
     public void scan() {
         try {
             var files = transcriptFiles();
-            files.forEach(this::indexQuietly);
+            var root = realRoot();
+            files.forEach(file -> indexQuietly(file, root));
             if (Files.isDirectory(projectsRoot)) {
                 var paths = files.stream().map(Path::toString).collect(Collectors.toSet());
-                repository.inWriteTransaction(() -> repository.removeFilesExcept(paths));
+                if (repository.anyFileExcept(paths)) {
+                    repository.inWriteTransaction(() -> repository.removeFilesExcept(paths));
+                }
             }
-            repository.inWriteTransaction(this::evictOverLimit);
+            evictOverLimit();
         } catch (RuntimeException | Error e) {
             log.error("Transcript scan failed: {}", e.getClass().getSimpleName());
         }
@@ -138,15 +135,18 @@ public class TranscriptIndexer {
             return files.filter(path -> path.getFileName().toString().endsWith(TRANSCRIPT_SUFFIX))
                     .filter(path -> path.getNameCount() - projectsRoot.getNameCount() == TRANSCRIPT_DEPTH)
                     .filter(Files::isRegularFile)
+                    .map(path -> new StampedFile(path, modifiedMillisOrZero(path)))
+                    .sorted(Comparator.comparingLong(StampedFile::modifiedMillis).reversed())
+                    .map(StampedFile::path)
                     .toList();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
-    private void indexQuietly(Path file) {
+    private void indexQuietly(Path file, Path root) {
         try {
-            if (insideProjects(file)) {
+            if (insideProjects(file, root)) {
                 boolean more;
                 do {
                     more = indexBatch(file);
@@ -157,9 +157,17 @@ public class TranscriptIndexer {
         }
     }
 
-    private boolean insideProjects(Path file) {
+    private Path realRoot() {
         try {
-            return file.toRealPath().startsWith(projectsRoot.toRealPath());
+            return projectsRoot.toRealPath();
+        } catch (IOException e) {
+            return projectsRoot;
+        }
+    }
+
+    private static boolean insideProjects(Path file, Path realRoot) {
+        try {
+            return file.toRealPath().startsWith(realRoot);
         } catch (IOException e) {
             return false;
         }
@@ -183,7 +191,7 @@ public class TranscriptIndexer {
             return false;
         }
         var sensitiveIds = reset ? "" : known.map(IndexedFile::sensitiveToolIds).orElse("");
-        var sensitive = sensitiveIds.isBlank() ? Set.<String>of()
+        var sensitive = sensitiveIds.isBlank() ? new LinkedHashSet<String>()
                 : new LinkedHashSet<>(Arrays.asList(sensitiveIds.split(TOOL_ID_SEPARATOR)));
         var entries = new ArrayList<NewEntry>();
         var pass = new Pass(sensitive, "", "", 0);
@@ -191,6 +199,12 @@ public class TranscriptIndexer {
         for (var line : lines) {
             pass = indexLine(line.text(), offset, pass, entries);
             offset += line.byteLength();
+        }
+        // fails closed: past the cap the ids are forgotten, so every later tool result of the file is skipped
+        var ids = pass.sensitiveToolIds();
+        if (ids.size() > properties.maxSensitiveToolIds()) {
+            ids.clear();
+            ids.add(ALL_RESULTS_SENSITIVE);
         }
         var sessionId = UUID_NAME.matcher(stem(file)).matches() ? "" : pass.sessionId();
         var finalOffset = offset;
@@ -223,7 +237,8 @@ public class TranscriptIndexer {
                 current = current.withSensitive(entry.toolUseId());
                 continue;
             }
-            if (entry.kind() == Kind.TOOL_RESULT && current.sensitiveToolIds().contains(entry.toolUseId())) {
+            if (entry.kind() == Kind.TOOL_RESULT && (current.sensitiveToolIds().contains(entry.toolUseId())
+                    || current.sensitiveToolIds().contains(ALL_RESULTS_SENSITIVE))) {
                 continue;
             }
             var masked = SecretFilter.mask(entry.text());
@@ -237,20 +252,33 @@ public class TranscriptIndexer {
         return current;
     }
 
-    /** Trims the oldest files' oldest entries down to the limit, so one huge growing file loses only its excess. */
+    /**
+     * Trims the oldest files' oldest entries down to the limit, so one huge growing file loses only its excess. Each
+     * chunk is its own write transaction, so other writers are never blocked for long.
+     */
     private void evictOverLimit() {
         var excess = repository.totalEntries() - properties.maxEntries();
-        if (excess <= 0) {
-            return;
-        }
-        for (var file : repository.filesWithEntriesOldestFirst()) {
-            var count = Math.min(excess, file.entryCount());
-            repository.evictOldestEntries(file.id(), count);
-            excess -= count;
-            if (excess <= 0) {
+        while (excess > 0) {
+            var chunk = Math.min(excess, properties.evictChunk());
+            var evicted = repository.inWriteTransaction(() -> evictOldest(chunk));
+            if (evicted == 0) {
                 return;
             }
+            excess -= evicted;
         }
+    }
+
+    private long evictOldest(long wanted) {
+        var left = wanted;
+        for (var file : repository.filesWithEntriesOldestFirst()) {
+            var count = Math.min(left, file.entryCount());
+            repository.evictOldestEntries(file.id(), count);
+            left -= count;
+            if (left <= 0) {
+                break;
+            }
+        }
+        return wanted - left;
     }
 
     private static String role(Kind kind) {
@@ -283,17 +311,17 @@ public class TranscriptIndexer {
      */
     private List<Line> nextLines(Path file, long from, long size) {
         try (var reader = new RandomAccessFile(file.toFile(), "r")) {
-            long length = Math.min(size - from, batchBytes);
+            long length = Math.min(size - from, properties.batchBytes());
             while (true) {
                 var bytes = new byte[(int) length];
                 reader.seek(from);
                 reader.readFully(bytes);
-                var lines = wholeLines(bytes);
+                var lines = wholeLines(bytes, properties.batchLines());
                 if (!lines.isEmpty() || from + length >= size) {
                     return lines;
                 }
                 if (length >= MAX_LINE_BYTES) {
-                    return skipOversizedLine(reader, from, size);
+                    return skipOversizedLine(file, reader, from, size);
                 }
                 length = Math.min(size - from, Math.min(length * 2, MAX_LINE_BYTES));
             }
@@ -303,7 +331,7 @@ public class TranscriptIndexer {
     }
 
     /** Steps over a line too long to index as an empty line of its byte length, or reads nothing while it is unfinished. */
-    private static List<Line> skipOversizedLine(RandomAccessFile reader, long from, long size) throws IOException {
+    private static List<Line> skipOversizedLine(Path file, RandomAccessFile reader, long from, long size) throws IOException {
         var chunk = new byte[SKIP_CHUNK_BYTES];
         long position = from;
         reader.seek(position);
@@ -314,7 +342,9 @@ public class TranscriptIndexer {
             }
             for (int i = 0; i < read; i++) {
                 if (chunk[i] == '\n') {
-                    return List.of(new Line("", position + i + 1 - from));
+                    long lineBytes = position + i + 1 - from;
+                    log.warn("Skipped an oversized transcript line of {} bytes in {}", lineBytes, file.getFileName());
+                    return List.of(new Line("", lineBytes));
                 }
             }
             position += read;
@@ -322,10 +352,10 @@ public class TranscriptIndexer {
         return List.of();
     }
 
-    private static List<Line> wholeLines(byte[] bytes) {
+    private static List<Line> wholeLines(byte[] bytes, int maxLines) {
         var lines = new ArrayList<Line>();
         int start = 0;
-        for (int i = 0; i < bytes.length; i++) {
+        for (int i = 0; i < bytes.length && lines.size() < maxLines; i++) {
             if (bytes[i] == '\n') {
                 lines.add(new Line(new String(bytes, start, i - start, StandardCharsets.UTF_8), i + 1 - start));
                 start = i + 1;
@@ -347,6 +377,18 @@ public class TranscriptIndexer {
             return Files.getLastModifiedTime(file).toMillis();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        }
+    }
+
+    /** The modification time read once, so a file being written cannot change its place while sorting. */
+    private record StampedFile(Path path, long modifiedMillis) {
+    }
+
+    private static long modifiedMillisOrZero(Path file) {
+        try {
+            return modifiedMillis(file);
+        } catch (UncheckedIOException e) {
+            return 0;
         }
     }
 

@@ -8,6 +8,7 @@ import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.run.RunEntry
 import com.github.krpkbhdn.ccmanager.ui.shortcuts.AppShortcut
 import com.github.krpkbhdn.ccmanager.ui.sessions.SessionsTab
+import com.github.krpkbhdn.ccmanager.ui.settings.SettingsCategory
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.state.GroupDialogRequest
 import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
@@ -73,7 +74,9 @@ private fun globalActions(state: AppState, systemDark: Boolean): List<PaletteIte
     PaletteItem("next-waiting", "Answer next waiting session", PaletteGroup.ACTIONS, "Jump to the session that needs you", Icons.Message, shortcut = AppShortcut.NEXT_WAITING) { state.answers.answerNextWaiting() },
     PaletteItem("teams", "Manage teams", PaletteGroup.ACTIONS, "Roles and models of your agent teams", Icons.Users) { state.navigate(Route.Teams) },
     PaletteItem("prompts", "Prompt Library", PaletteGroup.ACTIONS, "Reusable task texts", Icons.Message) { state.navigate(Route.Prompts) },
-    PaletteItem("author-config", "Author configuration", PaletteGroup.ACTIONS, "Install or update the author's Claude setup", Icons.Sparkles) { state.author.openManage((state.route as? Route.Project)?.id) },
+    PaletteItem("author-config", "Author configuration", PaletteGroup.ACTIONS, "Install or update the author's Claude setup", Icons.Sparkles) { state.author.openManage() },
+    PaletteItem("project-presets", "Project presets", PaletteGroup.ACTIONS, "Build the setups you apply to projects", Icons.Tasks) { state.settingsDialog.show(SettingsCategory.PRESETS) },
+    PaletteItem("apply-preset", "Apply preset to project", PaletteGroup.ACTIONS, "Review and apply a project preset", Icons.Tasks) { state.applyPreset.open((state.route as? Route.Project)?.id) },
     PaletteItem("plugins", "Open plugins", PaletteGroup.ACTIONS, "Install and manage Claude plugins", Icons.Plug) { state.navigate(Route.Plugins) },
     PaletteItem("mcp", "Open MCP servers", PaletteGroup.ACTIONS, "Servers that give Claude extra tools", Icons.Server) { state.navigate(Route.Mcp) },
     PaletteItem("skills", "Open skills", PaletteGroup.ACTIONS, "Instructions Claude loads on demand", Icons.Book) { state.navigate(Route.Skills) },
@@ -111,6 +114,14 @@ private fun launchActions(state: AppState, project: Project, here: String) = lis
     PaletteItem("resume", "Resume a session", PaletteGroup.ACTIONS, here, Icons.Rewind) { state.sessions.launch(project.id, LaunchMode.RESUME_PICKER) },
 )
 
+private fun contextActions(state: AppState, project: Project, here: String): List<PaletteItem> {
+    val tab = state.viewOf(project.id).selected as? ProjectTab.Session ?: return emptyList()
+    return listOf(
+        PaletteItem("context-usage", "Show context usage", PaletteGroup.ACTIONS, "$here: how full the context window is", Icons.Gauge, shortcut = AppShortcut.CONTEXT_USAGE) { state.contextSessionId = tab.ccmSessionId },
+        PaletteItem("compact-context", "Compact context", PaletteGroup.ACTIONS, "$here: types /compact into the session", Icons.Zap) { state.requestCompactContext(tab.ccmSessionId) },
+    )
+}
+
 private fun projectOnlyActions(state: AppState, project: Project, here: String): List<PaletteItem> {
     return shellActions(state, project.id, here) + listOfNotNull(
         PaletteItem("open-folder", "Open folder", PaletteGroup.ACTIONS, here, Icons.FolderOpen) { state.environment.openFolder(project) },
@@ -119,8 +130,10 @@ private fun projectOnlyActions(state: AppState, project: Project, here: String):
         state.runs.selectedOf(project.id)?.let { runItem(state, it, here) },
         state.runs.selectedOf(project.id)?.takeIf { it.running }?.let { entry -> PaletteItem("stop-run", "Stop ${entry.name}", PaletteGroup.ACTIONS, here, Icons.Stop) { state.runs.stop(entry.id) } },
         PaletteItem("show-run", "Show run console", PaletteGroup.ACTIONS, here, Icons.SquareTerminal) { state.select(project.id, ProjectTab.Run) },
+        PaletteItem("show-review", "Show review", PaletteGroup.ACTIONS, here, Icons.Eye, shortcut = AppShortcut.REVIEW_TAB) { state.select(project.id, ProjectTab.Review) },
         PaletteItem("show-activity", "Show activity", PaletteGroup.ACTIONS, here, Icons.Activity, shortcut = AppShortcut.ACTIVITY_TAB) { state.select(project.id, ProjectTab.Activity) },
         PaletteItem("toggle-agents", "Toggle agents panel", PaletteGroup.ACTIONS, here, Icons.PanelRightClose, shortcut = AppShortcut.TOGGLE_AGENTS, run = state.prefs::toggleAgents),
+        *contextActions(state, project, here).toTypedArray(),
         state.viewOf(project.id).focusedSession?.let { state.live.find(it) }?.let { session ->
             PaletteItem("switch-model", "Switch model", PaletteGroup.ACTIONS, "$here, opens Claude's picker (Alt+P)", Icons.Cpu) { state.sessions.openClaudeModelPicker(session) }
         },

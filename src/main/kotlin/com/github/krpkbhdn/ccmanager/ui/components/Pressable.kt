@@ -81,13 +81,15 @@ fun Pressable(
     val pressed by source.collectIsPressedAsState()
     val focused by source.collectIsFocusedAsState()
     val active = hovered && enabled
-    val surface by animateColorAsState(if (active && hover != null) hover else base, Motion.fast(), label = "pressSurface")
+    val resting = if (hover != null && base == Color.Transparent) hover.copy(alpha = 0f) else base
+    val surface by animateColorAsState(if (active && hover != null) hover else resting, Motion.fast(), label = "pressSurface")
+    val noOverlay = colors.hoverOverlay.copy(alpha = 0f)
     val overlay by animateColorAsState(
         when {
-            !enabled -> Color.Transparent
+            !enabled -> noOverlay
             pressed -> colors.pressOverlay
             active && hover == null -> colors.hoverOverlay
-            else -> Color.Transparent
+            else -> noOverlay
         },
         Motion.fast(),
         label = "pressOverlay",

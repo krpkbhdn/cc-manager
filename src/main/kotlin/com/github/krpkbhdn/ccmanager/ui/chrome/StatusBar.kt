@@ -22,7 +22,10 @@ import com.github.krpkbhdn.ccmanager.ui.components.Pressable
 import com.github.krpkbhdn.ccmanager.ui.components.StatusDot
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
+import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
 import com.github.krpkbhdn.ccmanager.ui.state.Route
+import com.github.krpkbhdn.ccmanager.ui.state.commandBlockedReason
+import com.github.krpkbhdn.ccmanager.ui.state.contextUsageView
 import com.github.krpkbhdn.ccmanager.ui.state.sessionTitle
 import com.github.krpkbhdn.ccmanager.ui.theme.Radius
 import com.github.krpkbhdn.ccmanager.ui.theme.IconSize
@@ -43,6 +46,7 @@ fun StatusBar(state: AppState, modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             Breadcrumb(state, Modifier.weight(1f))
+            ContextMeterSegment(state)
             SessionCounters(state)
             state.environment.installation?.let { ClaudeSegment(it) }
         }
@@ -69,6 +73,18 @@ private fun Breadcrumb(state: AppState, modifier: Modifier) {
             Label(part, Modifier.weight(1f, fill = false), color = if (index == parts.lastIndex) colors.textPrimary else colors.textSecondary, style = Type.caption, tooltipWhenTruncated = true)
         }
     }
+}
+
+/** Context meter of the session tab shown on the project screen, with the compact marker once the window is nearly full. */
+@Composable
+private fun ContextMeterSegment(state: AppState) {
+    val route = state.route as? Route.Project ?: return
+    val id = (state.viewOf(route.id).selected as? ProjectTab.Session)?.ccmSessionId ?: return
+    val view = contextUsageView(state.environment.sessionUsage[id])
+    if (view != null && state.contextAlerts.shouldAlert(id, view)) {
+        CompactAlert(view.percentText, commandBlockedReason(state.live.find(id), state.sessions.isAttached(id)), { state.requestCompactContext(id) }, { state.contextAlerts.dismiss(id) })
+    }
+    ContextMeter(view) { state.contextSessionId = id }
 }
 
 @Composable

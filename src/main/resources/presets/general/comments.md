@@ -1,0 +1,4 @@
+- Names and small methods explain the code; a comment is a hint, not the explanation.
+- At most a 1-3 line doc comment before a class or non-obvious method, saying why.
+- No comments in method bodies except one line for a non-obvious why (workaround, pinned version).
+- No change history, task numbers, commented-out code.

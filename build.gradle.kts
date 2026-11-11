@@ -10,7 +10,7 @@ plugins {
 }
 
 group = "com.github.krpkbhdn"
-version = "1.5.5"
+version = "2.0.0"
 
 java {
     toolchain {
@@ -65,6 +65,17 @@ tasks.test {
     jvmArgs("--enable-native-access=ALL-UNNAMED", *awtOpens.toTypedArray())
 }
 
+// A linked worktree has a .git file (a clone has a directory); its runs must not touch the main installation's data.
+val isLinkedWorktree = layout.projectDirectory.file(".git").asFile.isFile
+val worktreeDataDir = File(System.getProperty("java.io.tmpdir"), "cc-manager-worktrees/${projectDir.name}").absolutePath
+
+tasks.withType<JavaExec>().matching { it.name == "run" }.configureEach {
+    if (isLinkedWorktree && System.getenv("CC_MANAGER_DATA_DIR") == null) {
+        environment("CC_MANAGER_DATA_DIR", worktreeDataDir)
+        logger.lifecycle("Worktree detected: data dir $worktreeDataDir")
+    }
+}
+
 tasks.register<JavaExec>("runPreview") {
     group = "application"
     description = "Boots the UI with fake services (flags: --light, --shots, --out=<dir>)"
@@ -79,6 +90,15 @@ tasks.register<JavaExec>("gitShots") {
     group = "application"
     description = "Renders the Git tab offscreen to PNGs (flags: --out=<dir> --only=<names> --dark|--light --size=WxH)"
     mainClass = "com.github.krpkbhdn.ccmanager.ui.git.GitShotsKt"
+    classpath = sourceSets["test"].runtimeClasspath
+    javaLauncher = javaToolchains.launcherFor(java.toolchain)
+    jvmArgs("--enable-native-access=ALL-UNNAMED", *awtOpens.toTypedArray())
+}
+
+tasks.register<JavaExec>("reviewShots") {
+    group = "application"
+    description = "Renders the Review screen offscreen to PNGs (flags: --out=<dir> --dark|--light --size=WxH)"
+    mainClass = "com.github.krpkbhdn.ccmanager.ui.review.ReviewShotsKt"
     classpath = sourceSets["test"].runtimeClasspath
     javaLauncher = javaToolchains.launcherFor(java.toolchain)
     jvmArgs("--enable-native-access=ALL-UNNAMED", *awtOpens.toTypedArray())

@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import com.github.krpkbhdn.ccmanager.claude.hook.ActivityEntry
 import com.github.krpkbhdn.ccmanager.claude.install.LoginState
 import com.github.krpkbhdn.ccmanager.claude.launch.BackgroundAgent
@@ -17,11 +18,11 @@ import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartupState
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantState
 import com.github.krpkbhdn.ccmanager.ui.assistant.ToolSummary
 import com.github.krpkbhdn.ccmanager.ui.author.AuthorProfileState
-import com.github.krpkbhdn.ccmanager.ui.extensions.mcp.McpState
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitHost
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitState
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
 import com.github.krpkbhdn.ccmanager.ui.history.SessionSearchState
+import com.github.krpkbhdn.ccmanager.ui.review.ReviewState
 import com.github.krpkbhdn.ccmanager.ui.sessions.SessionsTab
 import com.github.krpkbhdn.ccmanager.ui.prompts.PromptsState
 import com.github.krpkbhdn.ccmanager.claude.proposal.Proposal
@@ -31,6 +32,9 @@ import com.github.krpkbhdn.ccmanager.ui.queue.QueueState
 import com.github.krpkbhdn.ccmanager.ui.queue.QueuedPrompt
 import com.github.krpkbhdn.ccmanager.ui.run.RunState
 import com.github.krpkbhdn.ccmanager.ui.settings.SettingsState
+import com.github.krpkbhdn.ccmanager.ui.presets.PresetsState
+import com.github.krpkbhdn.ccmanager.ui.presets.apply.ApplyPresetState
+import com.github.krpkbhdn.ccmanager.ui.presets.apply.PresetOfferState
 import com.github.krpkbhdn.ccmanager.ui.teams.TeamsState
 import com.github.krpkbhdn.ccmanager.ui.usage.UsageState
 import com.github.krpkbhdn.ccmanager.ui.voice.VoiceSettingsState
@@ -48,6 +52,7 @@ private const val TICK_MILLIS = 1_000L
 private const val STALE_REFRESH_TICKS = 30
 private const val UNOPENED_GIT_REFRESH_TICKS = 60
 private const val ACTIVITY_LIMIT = 300
+private const val COMPACT_COMMAND = "/compact"
 
 /**
  * Single subscription point to the backend: re-reads snapshots on change callbacks (any thread) and exposes
@@ -77,6 +82,8 @@ class AppState(
     var confirm by mutableStateOf<ConfirmRequest?>(null)
     var notificationsOpen by mutableStateOf(false)
     var usageOpen by mutableStateOf(false)
+    var contextSessionId by mutableStateOf<String?>(null)
+    var contextShowDetails by mutableStateOf(false)
     var modelPickerOpen by mutableStateOf(false)
     var quickRequestOpen by mutableStateOf(false)
     var assistantHelpOpen by mutableStateOf(false)
@@ -110,6 +117,8 @@ class AppState(
         reportError = notifications::reportError,
         projectPath = { projects.find(it)?.path },
     )
+    val contextBreakdown = ContextBreakdownState({ target, force -> backend.contextBreakdown.measure(target.directory, target.claudeSessionId, force) }, scope, ::contextTargetOf)
+    val contextAlerts = ContextAlerts()
     val assistant = AssistantState(
         scope, backend.terminal, { live }, backend.dataDir.resolve("assistant"),
         launch = { sessions.launchAssistant(it) }, show = { navigate(Route.Assistant) }, enqueue = { id, text -> queue.add(id, text) }, requestConfirm = { confirm = it },
@@ -117,7 +126,7 @@ class AppState(
     )
     val assistantStartup = AssistantStartupState(
         scope, { settings.assistantStartup }, { mode -> prefs.update { it.copy(assistantStartup = mode) } },
-        blocked = { author.dialogOpen || author.startOfferPending || confirm != null },
+        blocked = { author.dialogOpen || author.startOfferPending || confirm != null || applyPreset.isOpen || presetOffer.offer != null },
         startInBackground = assistant::startInBackground, start = assistant::start,
     )
     val queue = QueueState(backend.sessions, backend.terminal, scope, sessions::isAttached, sessions::sendQueued)
@@ -151,15 +160,25 @@ class AppState(
     var trayAvailable by mutableStateOf(false)
     val waitingCount: Int get() = live.sessions.count { it.status == AgentStatus.NEEDS_ACTION }
     val teams = TeamsState(backend.teams, scope, { confirm = it }, notifications::reportError)
+    val presets = PresetsState(backend.presets, backend.plugins, backend.skills, scope, { confirm = it }, notifications::reportError)
+    val applyPreset: ApplyPresetState = ApplyPresetState(backend.presetApply, backend.presetApplications, { presets.presets }, projects::find, scope, notifications::reportError)
+    val presetOffer: PresetOfferState = PresetOfferState(
+        backend.presetApplications, { presets.presets }, projects::find, scope,
+        blocked = ::dialogBlocksOffer,
+        review = { projectId, presetId -> applyPreset.open(projectId, presetId) },
+        reportError = notifications::reportError,
+    )
     val prompts = PromptsState(backend.promptTemplates, scope, { confirm = it }, notifications::reportError, listOf(backend.projects::subscribe, backend.teams::subscribe))
     val sessionSearch = SessionSearchState(backend.sessionSearch, backend.transcripts, scope, { confirm = it }, notifications::reportError)
+    val reviews = ReviewState(
+        backend.review, { live }, { id, text -> queue.add(id, text) },
+        { projectId, prompt, onNotStarted, onStarted -> sessions.launchTask(projectId, null, prompt, { onNotStarted() }, onStarted) },
+        scope, notifications::reportError,
+    )
     val extensions = ExtensionStates(backend, scope, { confirm = it }, notifications, environment)
     val author = AuthorProfileState(
         backend.author, scope,
-        sessionProject = { (route as? Route.Project)?.let { projects.find(it.id) }?.takeIf { !it.group } ?: projects.projects.firstOrNull() },
-        projectOf = projects::find,
-        launchSetup = sessions::launchSetup,
-        mcpOf = { path -> if (path == null) extensions.mcp else McpState(backend.mcp, path, scope, { confirm = it }, notifications::toast) },
+        mcp = extensions.mcp,
         reportError = notifications::reportError,
         toast = notifications::toast,
     )
@@ -202,9 +221,12 @@ class AppState(
             }
         }
         backend.appControl?.let { unsubscribers += it.connect(AppControlAdapter(this, scope, backend.appControlProperties.uiTimeout())) }
+        scope.launch { snapshotFlow { environment.sessionUsage }.collect(contextAlerts::rearmBelowCritical) }
         teams.start()
+        presets.start()
         prompts.start()
         sessionSearch.start()
+        reviews.start()
         queue.start()
         author.offerAtStart()
         runs.start()
@@ -220,11 +242,15 @@ class AppState(
         scope.launch { guarded { notifications.restore(io { backend.notifications.history() }) } }
         scope.launch {
             var ticks = 0
+            var wasActive = windowActive
             while (true) {
                 delay(TICK_MILLIS)
                 now = Instant.now()
                 if (++ticks % STALE_REFRESH_TICKS == 0) sessionReload.request()
-                if (ticks % UNOPENED_GIT_REFRESH_TICKS == 0) gits.reloadUnopened((route as? Route.Project)?.id)
+                val active = windowActive
+                val refocused = active && !wasActive
+                wasActive = active
+                if (active && (refocused || ticks % UNOPENED_GIT_REFRESH_TICKS == 0)) gits.reloadUnopened((route as? Route.Project)?.id, afterRunningSweep = refocused)
             }
         }
     }
@@ -232,10 +258,12 @@ class AppState(
     fun dispose() {
         extensions.dispose()
         teams.dispose()
+        presets.dispose()
         prompts.dispose()
         sessionSearch.dispose()
+        reviews.dispose()
         queue.dispose()
-        voice?.let { Thread(it::close, "voice-close").apply { isDaemon = false }.start() }
+        voice?.let { Thread(it::close, "voice-close").apply { isDaemon = true }.start() }
         runs.dispose()
         usage.dispose()
         proposals.dispose()
@@ -249,11 +277,32 @@ class AppState(
         }
     }
 
+    private fun contextTargetOf(ccmSessionId: String): ContextTarget? {
+        val session = live.find(ccmSessionId) ?: return null
+        val directory = sessions.sessionDirectories[ccmSessionId] ?: projects.find(session.projectId())?.path ?: return null
+        return ContextTarget(directory, session.claudeSessionId())
+    }
+
+    /** /compact is a model call that rewrites the conversation, so it is confirmed first. */
+    fun requestCompactContext(ccmSessionId: String) {
+        confirm = ConfirmRequest("Compact this session?", "Types /compact into the session. Claude summarises the conversation, which uses the model.", "Compact", destructive = false) { compactContext(ccmSessionId) }
+    }
+
+    /** Types /compact into the session; refused with the usual reason while it is busy. */
+    fun compactContext(ccmSessionId: String) {
+        sessions.send(ccmSessionId, COMPACT_COMMAND + Keys.ENTER) { contextAlerts.dismiss(ccmSessionId) }
+    }
+
+    private fun dialogBlocksOffer(): Boolean = author.dialogOpen || author.startOfferPending || assistantStartup.asking || confirm != null || settingsDialog.open ||
+        applyPreset.isOpen || presetOffer.offer != null || presets.dialog != null || answers.dialog != null || tasks.projectId != null
+
     fun navigate(target: Route) {
         route = target
-        (target as? Route.Project)?.takeIf { projects.find(it.id)?.group != true }?.let { author.offerForProject(it.id) }
+        (target as? Route.Project)?.let { presetOffer.offerFor(it.id) }
         notificationsOpen = false
         usageOpen = false
+        contextSessionId = null
+        contextShowDetails = false
         modelPickerOpen = false
     }
 

@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -35,6 +35,7 @@ import com.github.krpkbhdn.ccmanager.ui.components.Pressable
 import com.github.krpkbhdn.ccmanager.ui.components.ThinScrollbar
 import com.github.krpkbhdn.ccmanager.ui.components.VerticalRule
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
+import com.github.krpkbhdn.ccmanager.ui.presets.PresetsPage
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
 import com.github.krpkbhdn.ccmanager.ui.theme.IconSize
 import com.github.krpkbhdn.ccmanager.ui.theme.Radius
@@ -42,9 +43,11 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
-private const val WINDOW_SHARE = 0.88f
-private val dialogWidth = 880.dp
-private val navWidth = 216.dp
+private const val WIDTH_SHARE = 0.92f
+private const val HEIGHT_SHARE = 0.86f
+private val maxDialogWidth = 1180.dp
+private val maxDialogHeight = 760.dp
+private val navWidth = 200.dp
 
 private fun SettingsCategory.icon(): ImageVector = when (this) {
     SettingsCategory.APPEARANCE -> Icons.Sun
@@ -54,6 +57,7 @@ private fun SettingsCategory.icon(): ImageVector = when (this) {
     SettingsCategory.ASSISTANT -> Icons.Sparkles
     SettingsCategory.VOICE -> Icons.Mic
     SettingsCategory.UPDATES -> Icons.Download
+    SettingsCategory.PRESETS -> Icons.Tasks
     SettingsCategory.AUTHOR -> Icons.User
     SettingsCategory.ABOUT -> Icons.Info
 }
@@ -63,9 +67,11 @@ private fun SettingsCategory.icon(): ImageVector = when (this) {
 fun SettingsDialog(app: AppState) {
     val state = app.settingsDialog
     BoxWithConstraints {
-        ModalHost(state::close, width = minOf(dialogWidth, maxWidth * WINDOW_SHARE)) {
+        val width = minOf(maxDialogWidth, maxWidth * WIDTH_SHARE)
+        val height = minOf(maxDialogHeight, maxHeight * HEIGHT_SHARE)
+        ModalHost(state::close, width = width, height = height) {
             Column(
-                Modifier.height(maxHeight * WINDOW_SHARE).onKeyEvent { event ->
+                Modifier.fillMaxSize().onKeyEvent { event ->
                     val delta = when (event.key) { Key.DirectionDown -> 1; Key.DirectionUp -> -1; else -> 0 }
                     (delta != 0 && event.type == KeyEventType.KeyDown).also { if (it) state.move(delta) }
                 },
@@ -112,6 +118,10 @@ private fun CategoryRow(category: SettingsCategory, selected: Boolean, onClick: 
 
 @Composable
 private fun CategoryPage(app: AppState, category: SettingsCategory, modifier: Modifier) {
+    if (category == SettingsCategory.PRESETS) {
+        PresetsPage(app.presets, modifier) { app.applyPreset.open(null, it) }
+        return
+    }
     val scroll = key(category) { rememberScrollState() }
     Box(modifier) {
         Column(Modifier.fillMaxWidth().verticalScroll(scroll).padding(Spacing.xl), verticalArrangement = Arrangement.spacedBy(Spacing.xl)) {
@@ -123,6 +133,7 @@ private fun CategoryPage(app: AppState, category: SettingsCategory, modifier: Mo
                 SettingsCategory.ASSISTANT -> AssistantPage(app)
                 SettingsCategory.VOICE -> VoicePage(app)
                 SettingsCategory.UPDATES -> UpdatesPage(app.update)
+                SettingsCategory.PRESETS -> Unit
                 SettingsCategory.AUTHOR -> AuthorPage(app)
                 SettingsCategory.ABOUT -> AboutPage(app)
             }

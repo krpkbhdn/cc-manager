@@ -35,7 +35,7 @@ class PullRequestServiceTest {
         var json = "{\"number\":3,\"url\":\"https://x/pull/3\",\"state\":\"OPEN\",\"baseRefName\":\"develop\",\"statusCheckRollup\":[]}";
         var pr = service(0, json).find(Path.of("."), "feature").pullRequest();
         assertThat(pr).contains(new PullRequest(3, "https://x/pull/3", PullRequestState.OPEN, CheckSummary.NONE, "develop"));
-        assertThat(commands.getFirst()).containsExactly("gh", "pr", "view", "feature", "--json", "number,url,state,baseRefName,headRefOid,statusCheckRollup");
+        assertThat(commands.getFirst()).containsExactly("gh", "pr", "view", "--json", "number,url,state,baseRefName,headRefOid,statusCheckRollup", "--", "feature");
     }
 
     @Test

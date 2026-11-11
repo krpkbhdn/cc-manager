@@ -154,6 +154,18 @@ class UsageHistoryRepositoryTest {
     }
 
     @Test
+    void foldedDayIsCountedOnlyWhenWhollyInsideTheRange() {
+        sample(DAY, 0, "s1", 1, "opus", 1.0, 1.0);
+        repository.aggregateBefore(startOf(DAY.plusDays(1)).toEpochMilli());
+
+        assertThat(repository.summary(noon(DAY).plusSeconds(7200), startOf(DAY.plusDays(3))).totalCostUsd()).isZero();
+        assertThat(repository.summary(startOf(DAY.minusDays(1)), noon(DAY)).totalCostUsd()).isZero();
+        assertThat(repository.summary(startOf(DAY), startOf(DAY.plusDays(1))).totalCostUsd())
+                .isCloseTo(1.0, within(1e-9));
+        assertThat(repository.dailyCosts(noon(DAY).plusSeconds(7200), startOf(DAY.plusDays(3)))).isEmpty();
+    }
+
+    @Test
     void aggregateBeforeKeepsRowsOfTheCutoffDay() {
         sample(DAY, 0, "s1", 1, "opus", 1.0, 1.0);
 

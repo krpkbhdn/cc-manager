@@ -13,7 +13,8 @@ enum class SettingsCategory(val label: String) {
     ASSISTANT("Assistant"),
     VOICE("Voice input"),
     UPDATES("Updates"),
-    AUTHOR("Author configuration"),
+    PRESETS("Project presets"),
+    AUTHOR("Author setup"),
     ABOUT("About"),
     ;
 
@@ -28,7 +29,8 @@ class SettingsState {
     var category by mutableStateOf(SettingsCategory.APPEARANCE)
         private set
 
-    fun show() {
+    fun show(target: SettingsCategory? = null) {
+        target?.let { category = it }
         open = true
     }
 

@@ -30,7 +30,7 @@ public class PullRequestService {
     /** Tells "no pull request for the branch" from a gh failure (offline, rate limit). */
     public PullRequestLookup find(Path directory, String branch) {
         try {
-            var result = gh.run(directory, "pr", "view", branch, "--json", VIEW_FIELDS);
+            var result = gh.run(directory, "pr", "view", "--json", VIEW_FIELDS, "--", branch);
             if (result.succeeded()) {
                 return PullRequestLookup.found(PullRequestJson.parse(mapper.readTree(result.stdout())));
             }

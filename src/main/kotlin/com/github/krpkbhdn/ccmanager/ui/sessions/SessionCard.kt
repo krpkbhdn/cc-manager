@@ -25,6 +25,8 @@ import com.github.krpkbhdn.ccmanager.ui.components.ProjectAvatar
 import com.github.krpkbhdn.ccmanager.ui.components.StatusChip
 import com.github.krpkbhdn.ccmanager.ui.components.card
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
+import com.github.krpkbhdn.ccmanager.ui.chrome.ContextBar
+import com.github.krpkbhdn.ccmanager.ui.state.contextUsageView
 import com.github.krpkbhdn.ccmanager.ui.state.formatCost
 import com.github.krpkbhdn.ccmanager.ui.state.formatElapsed
 import com.github.krpkbhdn.ccmanager.ui.state.sessionTitle
@@ -36,7 +38,6 @@ import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import com.github.krpkbhdn.ccmanager.usage.SessionUsage
 import java.time.Duration
 import java.time.Instant
-import kotlin.math.roundToInt
 
 private const val ACTIVITY_LINES = 3
 private val footerHeight = 28.dp
@@ -79,7 +80,14 @@ fun SessionCard(
             Row(Modifier.height(footerHeight), horizontalArrangement = Arrangement.spacedBy(Spacing.md), verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                     silence(session, now, stale)
-                    figures(usage).forEach { Label(it, color = colors.textTertiary, style = Type.numeric) }
+                    contextUsageView(usage)?.let { context ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
+                            Label("ctx", color = colors.textTertiary, style = Type.numeric)
+                            ContextBar(context.fraction, context.level)
+                            Label(context.percentText, color = colors.textTertiary, style = Type.numeric)
+                        }
+                    }
+                    usage?.costUsd()?.let { Label(formatCost(it), color = colors.textTertiary, style = Type.numeric) }
                 }
                 if (waiting) AppButton("Answer", onAnswer, variant = ButtonVariant.PRIMARY, icon = Icons.Message, compact = true)
             }
@@ -92,8 +100,3 @@ private fun silence(session: SessionSnapshot, now: () -> Instant, stale: () -> B
     val elapsed = session.lastEventAt?.let { formatElapsed(Duration.between(it, now())) } ?: return
     if (stale()) StaleMarker("No activity for $elapsed") else Label("$elapsed ago", color = colors.textTertiary, style = Type.numeric)
 }
-
-private fun figures(usage: SessionUsage?): List<String> = listOfNotNull(
-    usage?.contextUsedPercent()?.let { "ctx ${it.roundToInt()}%" },
-    usage?.costUsd()?.let(::formatCost),
-)

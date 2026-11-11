@@ -21,6 +21,7 @@ sealed interface ProjectTab {
     data class Shell(val terminalId: String) : ProjectTab
     data object Git : ProjectTab
     data object Run : ProjectTab
+    data object Review : ProjectTab
     data object Activity : ProjectTab
 }
 
@@ -47,9 +48,9 @@ data class ProjectView(
         else -> copy(selected = tab)
     }
 
-    /** Session tabs in strip order, then shell tabs, Git, Run and Activity. */
+    /** Session tabs in strip order, then shell tabs, Git, Run, Review and Activity. */
     fun tabs(): List<ProjectTab> =
-        openSessions.map { ProjectTab.Session(it) } + openShells.map { ProjectTab.Shell(it) } + ProjectTab.Git + ProjectTab.Run + ProjectTab.Activity
+        openSessions.map { ProjectTab.Session(it) } + openShells.map { ProjectTab.Shell(it) } + ProjectTab.Git + ProjectTab.Run + ProjectTab.Review + ProjectTab.Activity
 
     fun closeShell(terminalId: String): ProjectView {
         if (terminalId !in openShells) return this

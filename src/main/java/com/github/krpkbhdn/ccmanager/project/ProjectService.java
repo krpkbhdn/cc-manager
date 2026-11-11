@@ -94,9 +94,12 @@ public class ProjectService {
 
     /** A group's service directory goes with it; its members stay registered. */
     public void remove(long id) {
-        var groupPath = jdbc.sql("SELECT path FROM project WHERE id = ? AND is_group = 1").param(id).query(String.class).optional();
-        if (jdbc.sql("DELETE FROM project WHERE id = ?").param(id).update() > 0) {
-            groupPath.ifPresent(path -> deleteGroupDirectory(Path.of(path)));
+        var removed = jdbc.sql("DELETE FROM project WHERE id = ? RETURNING path, is_group").param(id)
+                .query((rs, row) -> rs.getInt("is_group") == 1 ? rs.getString("path") : null).list();
+        if (!removed.isEmpty()) {
+            if (removed.get(0) != null) {
+                deleteGroupDirectory(Path.of(removed.get(0)));
+            }
             fireChanged();
         }
     }
@@ -105,6 +108,7 @@ public class ProjectService {
         try {
             groupWorkspace.delete(directory);
         } catch (RuntimeException e) {
+            // the row is gone, so the startup sweep of ProjectGroupService removes the leftover folder
             log.warn("Could not delete the group folder {}", directory, e);
         }
     }

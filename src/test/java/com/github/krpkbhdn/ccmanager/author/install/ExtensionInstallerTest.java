@@ -117,7 +117,7 @@ class ExtensionInstallerTest {
         }
         when(skills.skillDirectory(ExtensionScope.USER, null, "jscpd")).thenReturn(existing);
 
-        var outcome = installer.install(new ExtensionSet(null, null, List.of(new ProfileSkill("jscpd", List.of("SKILL.md"))), null),
+        var outcome = installer.install(new ExtensionSet(null, null, List.of(new ProfileSkill("jscpd", "user/skills/jscpd", List.of("SKILL.md"))), null),
                 ExtensionScope.USER, null);
 
         assertThat(outcome.alreadyPresent()).containsExactly("skill jscpd");
@@ -130,8 +130,8 @@ class ExtensionInstallerTest {
         Files.writeString(existing.resolve("SKILL.md"), "mine");
         when(skills.skillDirectory(ExtensionScope.USER, null, "jscpd")).thenReturn(fresh);
         when(skills.skillDirectory(ExtensionScope.USER, null, "dry-refactoring")).thenReturn(existing);
-        var set = new ExtensionSet(null, null, List.of(new ProfileSkill("jscpd", List.of("SKILL.md")),
-                new ProfileSkill("dry-refactoring", List.of("SKILL.md"))), null);
+        var set = new ExtensionSet(null, null, List.of(new ProfileSkill("jscpd", "user/skills/jscpd", List.of("SKILL.md")),
+                new ProfileSkill("dry-refactoring", "user/skills/dry-refactoring", List.of("SKILL.md"))), null);
 
         var outcome = installer.install(set, ExtensionScope.USER, null);
 
@@ -166,7 +166,7 @@ class ExtensionInstallerTest {
     void failedSkillCopyLeavesNoHalfCopiedSkillBehind() throws IOException {
         var target = temp.resolve("skills/jscpd");
         when(skills.skillDirectory(ExtensionScope.USER, null, "jscpd")).thenReturn(target);
-        var set = new ExtensionSet(null, null, List.of(new ProfileSkill("jscpd", List.of("SKILL.md", "missing.md"))), null);
+        var set = new ExtensionSet(null, null, List.of(new ProfileSkill("jscpd", "user/skills/jscpd", List.of("SKILL.md", "missing.md"))), null);
 
         var outcome = installer.install(set, ExtensionScope.USER, null);
 

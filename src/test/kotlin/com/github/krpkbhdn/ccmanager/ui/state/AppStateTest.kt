@@ -3,9 +3,6 @@ package com.github.krpkbhdn.ccmanager.ui.state
 import com.github.krpkbhdn.ccmanager.ui.await
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.github.krpkbhdn.ccmanager.author.AuthorComponent
-import com.github.krpkbhdn.ccmanager.author.AuthorEntry
-import com.github.krpkbhdn.ccmanager.author.AuthorStatus
 import com.github.krpkbhdn.ccmanager.claude.launch.ClaudeLauncher
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
 import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
@@ -31,9 +28,12 @@ private const val PROJECT_ID = 1L
 class AppStateTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val closedSessions = CopyOnWriteArrayList<String>()
+    private val typed = CopyOnWriteArrayList<Pair<String, String>>()
     private val terminal = object : TerminalPort {
         override fun open(session: LaunchedSession) = Unit
-        override fun send(ccmSessionId: String, text: String) = Unit
+        override fun send(ccmSessionId: String, text: String) {
+            typed += ccmSessionId to text
+        }
         override fun close(ccmSessionId: String) {
             closedSessions += ccmSessionId
         }
@@ -88,17 +88,6 @@ class AppStateTest {
     }
 
     @Test
-    fun `opening a project offers its author setup`() {
-        val projectSetup = AuthorEntry(AuthorComponent.PROJECT_SETUP, PROJECT_ID, "Project setup", "summary", 1, 0, AuthorStatus.NOT_INSTALLED, emptyList(), false)
-        `when`(backend.author.entries(PROJECT_ID)).thenReturn(listOf(projectSetup))
-
-        state.navigate(Route.Project(PROJECT_ID))
-
-        await { state.author.offer != null }
-        assertThat(state.author.offer!!.entries).containsExactly(projectSetup)
-    }
-
-    @Test
     fun `opening the assistant session routes to the assistant screen and the assistant is named`() {
         val assistant = SessionSnapshot(
             "ccm-assistant", ClaudeLauncher.ASSISTANT_PROJECT_ID, "c0", AgentStatus.IDLE, null, null, null, null,
@@ -124,5 +113,40 @@ class AppStateTest {
 
         assertThat(state.settings.assistantStartup).isEqualTo(AssistantStartup.AUTO_START)
         assertThat(entry().title).endsWith("Start automatically")
+    }
+
+    @Test
+    fun `compacting the context asks for confirmation before anything is sent`() {
+        state.requestCompactContext("ccm-x")
+
+        assertThat(state.confirm?.title).isEqualTo("Compact this session?")
+        assertThat(state.confirm?.destructive).isFalse()
+        assertThat(typed).isEmpty()
+    }
+
+    @Test
+    fun `confirming the compact request types the command into the session`() {
+        state.requestCompactContext("s-idle")
+
+        state.confirm!!.onConfirm()
+
+        await { typed.contains("s-idle" to Keys.ENTER) }
+        assertThat(typed.filter { it.first == "s-idle" }.map { it.second }).containsExactly("/compact", Keys.ENTER)
+    }
+
+    @Test
+    fun `the palette offers show-review in a project only`() {
+        fun ids() = paletteItems(state, false).map { it.id }
+        val project = state.projects.all.first { !it.group }.id
+        val group = state.projects.all.first { it.group }.id
+        assertThat(ids()).doesNotContain("show-review")
+
+        state.navigate(Route.Project(project))
+        assertThat(ids()).contains("show-review")
+        paletteItems(state, false).first { it.id == "show-review" }.run()
+        assertThat(state.viewOf(project).selected).isEqualTo(ProjectTab.Review)
+
+        state.navigate(Route.Project(group))
+        assertThat(ids()).doesNotContain("show-review")
     }
 }

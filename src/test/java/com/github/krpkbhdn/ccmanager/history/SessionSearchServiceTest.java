@@ -45,6 +45,56 @@ class SessionSearchServiceTest {
     }
 
     @Test
+    void limitedSearchKeepsTheRankOrderOfTheUnlimitedQueryAndFilters() {
+        var app = sep("/w/app");
+        var other = sep("/w/other");
+        var text = new StringBuilder();
+        var otherText = new StringBuilder();
+        for (int i = 0; i < 150; i++) {
+            var at = "2026-01-%02dT10:%02d:00Z".formatted(1 + i / 60, i % 60);
+            text.append(userLine("a" + i, app, at, "needle " + "filler ".repeat(i)));
+            otherText.append(userLine("o" + i, other, at, "needle " + "pad ".repeat(i)));
+        }
+        fixture.write(fixture.transcript("a", "s1"), text.toString());
+        fixture.write(fixture.transcript("b", "s2"), otherText.toString());
+        fixture.indexer(100000).scan();
+
+        var expected = fixture.jdbc.sql("""
+                SELECT e.entry_uuid FROM transcript_entry_fts e JOIN transcript_file f ON f.id = e.file_id
+                WHERE transcript_entry_fts MATCH '"needle"*' AND f.cwd = ? AND e.at >= ?
+                ORDER BY rank, e.at DESC LIMIT 100""").params(app, Instant.parse("2026-01-01T10:30:00Z").toEpochMilli())
+                .query(String.class).list();
+        var hits = fixture.search.search("needle", Optional.of(app), Optional.of(Instant.parse("2026-01-01T10:30:00Z")), ANY);
+
+        assertThat(hits).extracting(SessionSearchService.SearchHit::entryUuid).containsExactlyElementsOf(expected);
+        assertThat(hits).hasSize(100).allSatisfy(hit -> assertThat(hit.snippet()).contains("needle"));
+    }
+
+    @Test
+    void tiedEntriesKeepAStableOrderUnderTheLimitWithAllFiltersCombined() {
+        var app = sep("/w/app");
+        var text = new StringBuilder();
+        for (int i = 0; i < 150; i++) {
+            text.append(userLine("t%03d".formatted(i), app, "2026-01-05T10:00:00Z", "needle same text"));
+        }
+        text.append(userLine("early", app, "2025-01-01T10:00:00Z", "needle same text"));
+        text.append(userLine("late", app, "2027-01-01T10:00:00Z", "needle same text"));
+        fixture.write(fixture.transcript("a", "s1"), text.toString());
+        fixture.indexer(100000).scan();
+        var from = Instant.parse("2026-01-01T00:00:00Z");
+        var to = Instant.parse("2026-02-01T00:00:00Z");
+
+        var expected = fixture.jdbc.sql("""
+                SELECT e.entry_uuid FROM transcript_entry_fts e JOIN transcript_file f ON f.id = e.file_id
+                WHERE transcript_entry_fts MATCH '"needle"*' AND f.cwd = ? AND e.at >= ? AND e.at <= ?
+                ORDER BY rank, e.at DESC, e.rowid LIMIT 100""").params(app, from.toEpochMilli(), to.toEpochMilli())
+                .query(String.class).list();
+        var hits = fixture.search.search("needle", Optional.of(app), Optional.of(from), Optional.of(to));
+
+        assertThat(hits).extracting(SessionSearchService.SearchHit::entryUuid).containsExactlyElementsOf(expected).hasSize(100);
+    }
+
+    @Test
     void queryWithSyntaxCharactersDoesNotFail() {
         fixture.write(fixture.transcript("p", "s1"), userLine("u1", "/w/app", "2026-01-01T10:00:00Z", "plain text"));
         fixture.indexer(1000).scan();
@@ -95,6 +145,26 @@ class SessionSearchServiceTest {
         assertThat(fixture.search.search("needle", Optional.empty(), ANY, ANY)).extracting(SessionSearchService.SearchHit::entryUuid)
                 .containsExactly("u2");
         assertThat(fixture.search.indexedEntryCount()).isEqualTo(1);
+    }
+
+    @Test
+    void clearKeepsClearedLinesForgottenWhenTheFileEndsMidLine() {
+        var app = sep("/w/app");
+        var file = fixture.transcript("a", "s1");
+        var partial = userLine("u2", app, "2026-01-01T10:01:00Z", "needle partial");
+        fixture.write(file, userLine("u1", app, "2026-01-01T10:00:00Z", "needle before") + partial.substring(0, partial.length() - 1));
+        var indexer = fixture.indexer(1000);
+        indexer.scan();
+
+        fixture.search.clear(app);
+        indexer.scan();
+        assertThat(fixture.search.indexedEntryCount()).isZero();
+
+        fixture.append(file, "\n");
+        indexer.scan();
+
+        assertThat(fixture.search.search("needle", Optional.empty(), ANY, ANY)).extracting(SessionSearchService.SearchHit::entryUuid)
+                .containsExactly("u2");
     }
 
     @Test

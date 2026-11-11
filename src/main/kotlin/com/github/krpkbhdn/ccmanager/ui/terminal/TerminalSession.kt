@@ -71,7 +71,7 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
     val rows: Int get() = buffer.height
 
     /** Lines of scrollback that can be scrolled to; the alternate screen has none. */
-    val scrollbackLines: Int get() = if (modes.alternateScreen) 0 else buffer.historyLinesCount
+    val scrollbackLines: Int get() = if (modes.alternateScreen) 0 else buffer.withLock { buffer.historyLinesCount }
 
     val mouseReporting: Boolean get() = modes.mouseMode != MouseMode.MOUSE_REPORTING_NONE
 

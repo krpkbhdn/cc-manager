@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.run;
 
+import com.github.krpkbhdn.ccmanager.config.NameRules;
 import com.github.krpkbhdn.ccmanager.config.UniqueViolations;
 import com.github.krpkbhdn.ccmanager.workspace.ChangeListeners;
 import java.nio.file.Files;
@@ -8,6 +9,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -34,6 +36,10 @@ public class RunConfigurationService {
 
     public Optional<RunConfiguration> find(long id) {
         return jdbc.sql(SELECT + " WHERE id = ?").param(id).query(RunConfigurationService::mapRow).optional();
+    }
+
+    public Set<Long> existingIds() {
+        return Set.copyOf(jdbc.sql("SELECT id FROM run_configuration").query(Long.class).list());
     }
 
     /**
@@ -119,11 +125,12 @@ public class RunConfigurationService {
 
     /** Deletes what [listByDirectory] returns, e.g. after its worktree was removed. */
     public void deleteByDirectory(Path directory) {
-        var found = listByDirectory(directory);
-        found.forEach(configuration -> jdbc.sql("DELETE FROM run_configuration WHERE id = ?").param(configuration.id()).update());
-        if (!found.isEmpty()) {
-            listeners.fire();
+        var ids = listByDirectory(directory).stream().map(RunConfiguration::id).toList();
+        if (ids.isEmpty()) {
+            return;
         }
+        jdbc.sql("DELETE FROM run_configuration WHERE id IN (:ids)").param("ids", ids).update();
+        listeners.fire();
     }
 
     /** @return unsubscribe handle; callback fires (any thread) after any change to run configurations */
@@ -132,13 +139,7 @@ public class RunConfigurationService {
     }
 
     private String validate(long projectId, String name, String command, Path directory) {
-        var cleanName = name == null ? "" : name.strip();
-        if (cleanName.isEmpty()) {
-            throw new IllegalArgumentException("The name must not be empty.");
-        }
-        if (cleanName.length() > MAX_NAME) {
-            throw new IllegalArgumentException("The name is longer than " + MAX_NAME + " characters.");
-        }
+        var cleanName = NameRules.requireName(name, MAX_NAME);
         if (command == null || command.isBlank()) {
             throw new IllegalArgumentException("The command must not be empty.");
         }

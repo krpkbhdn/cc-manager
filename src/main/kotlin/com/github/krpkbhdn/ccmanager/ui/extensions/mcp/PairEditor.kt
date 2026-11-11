@@ -23,12 +23,14 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
+internal const val SECRET_HINT = "Values are treated as secrets and are only sent to claude."
+
 /** One key and value being typed; the value is a secret. */
 class PairRow(val key: TextFieldState = TextFieldState(), val value: TextFieldState = TextFieldState())
 
 /** Rows of key and secret value with a shared show/hide toggle for the values. */
 @Composable
-fun PairEditor(title: String, addLabel: String, rows: SnapshotStateList<PairRow>, modifier: Modifier = Modifier) {
+fun PairEditor(title: String, addLabel: String, rows: SnapshotStateList<PairRow>, modifier: Modifier = Modifier, emptyHint: String = SECRET_HINT) {
     var revealed by remember { mutableStateOf(false) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
@@ -42,7 +44,7 @@ fun PairEditor(title: String, addLabel: String, rows: SnapshotStateList<PairRow>
                 IconButton(Icons.Close, { rows.remove(row) }, tooltip = "Remove")
             }
         }
-        if (rows.isEmpty()) Label("Values are treated as secrets and are only sent to claude.", color = colors.textTertiary, style = Type.caption)
+        if (rows.isEmpty()) Label(emptyHint, color = colors.textTertiary, style = Type.caption)
         AppButton(addLabel, { rows.add(PairRow()) }, variant = ButtonVariant.GHOST, icon = Icons.Plus, compact = true)
     }
 }

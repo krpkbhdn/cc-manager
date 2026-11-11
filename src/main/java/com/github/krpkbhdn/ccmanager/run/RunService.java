@@ -41,6 +41,7 @@ public class RunService {
     private final HostEnvironment host;
     private final Map<Long, ActiveRun> runs = new ConcurrentHashMap<>();
     private final ChangeListeners listeners = new ChangeListeners("Run");
+    private final Map<Long, Object> startLocks = new ConcurrentHashMap<>();
     private final AtomicLong counter = new AtomicLong();
 
     public RunService(RunConfigurationService configurations, ProjectService projects, RunShell shell, HostEnvironment host) {
@@ -53,9 +54,15 @@ public class RunService {
 
     /** Restarts the configuration when it is already running.
      * @throws IllegalStateException with a user-readable message (configuration or directory gone, spawn failed) */
-    public synchronized LaunchedSession start(long configurationId) {
+    public LaunchedSession start(long configurationId) {
         findRunnable(configurationId);
-        stopAndAwaitExit(configurationId);
+        synchronized (startLocks.computeIfAbsent(configurationId, id -> new Object())) {
+            stopAndAwaitExit(configurationId);
+            return startLocked(configurationId);
+        }
+    }
+
+    private LaunchedSession startLocked(long configurationId) {
         var configuration = findRunnable(configurationId);
         var runId = "run-" + configurationId + "-" + counter.incrementAndGet();
         PtyProcess process;
@@ -163,12 +170,15 @@ public class RunService {
     }
 
     private void dropRunsOfDeletedConfigurations() {
+        var existing = configurations.existingIds();
         for (var configurationId : runs.keySet()) {
-            if (configurations.find(configurationId).isEmpty()) {
+            if (!existing.contains(configurationId)) {
                 stop(configurationId);
                 runs.remove(configurationId);
                 listeners.fire();
             }
         }
+        // A deleted configuration cannot be started again (ids are not reused), so its lock can go without a race.
+        startLocks.keySet().retainAll(existing);
     }
 }

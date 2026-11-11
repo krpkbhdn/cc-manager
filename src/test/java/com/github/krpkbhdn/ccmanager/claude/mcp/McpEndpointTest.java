@@ -51,7 +51,16 @@ class McpEndpointTest {
         assertThat(result.path("protocolVersion").asString()).isEqualTo("2025-06-18");
         assertThat(result.path("capabilities").has("tools")).isTrue();
         assertThat(result.path("serverInfo").path("name").asString()).isEqualTo("cc-manager");
-        assertThat(result.path("instructions").asString()).contains("run-configurations");
+        assertThat(result.path("instructions").asString()).contains("run-configurations").contains("submit_screenshots");
+    }
+
+    @Test
+    void toolCallPassesTheSessionIdToTheTool() {
+        when(tool.call(PROJECT_ID, "s1", mapper.readTree("{}"))).thenReturn("with session");
+
+        var response = call("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"echo\",\"arguments\":{}}}");
+
+        assertThat(response.path("result").path("content").get(0).path("text").asString()).isEqualTo("with session");
     }
 
     @Test
@@ -82,7 +91,7 @@ class McpEndpointTest {
 
     @Test
     void toolCallRunsTheToolForTheProjectOfTheSession() {
-        when(tool.call(PROJECT_ID, mapper.readTree("{\"x\":1}"))).thenReturn("done");
+        when(tool.call(PROJECT_ID, "s1", mapper.readTree("{\"x\":1}"))).thenReturn("done");
 
         var response = call("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"echo\",\"arguments\":{\"x\":1}}}");
 
@@ -93,7 +102,7 @@ class McpEndpointTest {
 
     @Test
     void toolFailureBecomesAnErrorResultNotAProtocolError() {
-        when(tool.call(anyLong(), any())).thenThrow(new IllegalArgumentException("bad name"));
+        when(tool.call(anyLong(), any(String.class), any())).thenThrow(new IllegalArgumentException("bad name"));
 
         var result = call("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"echo\"}}").path("result");
 

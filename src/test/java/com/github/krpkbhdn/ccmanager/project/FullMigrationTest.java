@@ -22,7 +22,7 @@ class FullMigrationTest {
 
         var jdbc = JdbcClient.create(dataSource);
         assertThat(jdbc.sql("SELECT name FROM sqlite_master WHERE type = 'table'").query(String.class).list())
-                .contains("project", "hook_event", "team", "team_role", "run_configuration", "author_decision", "prompt_template");
+                .contains("project", "hook_event", "team", "team_role", "run_configuration", "author_item_decision", "project_preset", "prompt_template");
         assertThat(jdbc.sql("SELECT name FROM sqlite_master WHERE type = 'index'").query(String.class).list())
                 .contains("idx_hook_event_session");
         assertThat(jdbc.sql("SELECT name FROM pragma_table_info('project')").query(String.class).list())

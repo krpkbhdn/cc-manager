@@ -114,4 +114,17 @@ class AppControlAdapterTest {
         assertThatThrownBy { AppControlAdapter(state, stuck, Duration.ofMillis(50)).navigate("overview") }
             .isInstanceOf(IllegalStateException::class.java).hasMessageContaining("did not respond")
     }
+
+    @Test
+    fun `openProject review selects the review tab`() {
+        state.start()
+        com.github.krpkbhdn.ccmanager.ui.await { state.projects.all.isNotEmpty() }
+        val id = state.projects.all.first { !it.group }.id
+
+        adapter.openProject(id, "review")
+
+        assertThat(state.viewOf(id).selected).isEqualTo(ProjectTab.Review)
+        assertThat(state.route).isEqualTo(Route.Project(id))
+        state.dispose()
+    }
 }

@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -62,8 +63,14 @@ import com.github.krpkbhdn.ccmanager.ui.prompts.TemplatePickerDialog
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantHelpDialog
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartupDialog
 import com.github.krpkbhdn.ccmanager.ui.assistant.QuickRequestDialog
+import com.github.krpkbhdn.ccmanager.ui.components.LocalModalScrim
+import com.github.krpkbhdn.ccmanager.ui.presets.PresetDialogHost
+import com.github.krpkbhdn.ccmanager.ui.presets.apply.ApplyPresetDialog
+import com.github.krpkbhdn.ccmanager.ui.presets.apply.PresetOfferDialog
+import com.github.krpkbhdn.ccmanager.ui.prompts.ProjectPickerDialog
 import com.github.krpkbhdn.ccmanager.ui.proposal.ProposalDialogHost
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
+import com.github.krpkbhdn.ccmanager.ui.state.contextUsageView
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantScreen
 import com.github.krpkbhdn.ccmanager.ui.sessions.SessionsScreen
 import com.github.krpkbhdn.ccmanager.ui.state.usageWindowDetails
@@ -77,8 +84,7 @@ import com.github.krpkbhdn.ccmanager.ui.extensions.skills.SkillsScreen
 import com.github.krpkbhdn.ccmanager.ui.run.RunConfigurationDialog
 import com.github.krpkbhdn.ccmanager.ui.teams.RoleDialog
 import com.github.krpkbhdn.ccmanager.ui.teams.StartTaskDialog
-import com.github.krpkbhdn.ccmanager.ui.author.AuthorConfigurationDialog
-import com.github.krpkbhdn.ccmanager.ui.author.AuthorOfferDialog
+import com.github.krpkbhdn.ccmanager.ui.author.AuthorCatalogDialog
 import com.github.krpkbhdn.ccmanager.ui.author.AuthorReportPanel
 import com.github.krpkbhdn.ccmanager.ui.teams.StartTaskActions
 import com.github.krpkbhdn.ccmanager.ui.teams.TaskTemplates
@@ -126,12 +132,21 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
             state.teams.dialog?.let { open -> state.teams.find(open.teamId)?.let { RoleDialog(it, open, state.teams) } }
             state.extensions.projectSettings?.let { ProjectSettingsDialog(it, state.extensions::closeProjectSettings) }
             if (state.settingsDialog.open) SettingsDialog(state)
+            CompositionLocalProvider(LocalModalScrim provides !state.settingsDialog.open) {
+                state.presets.dialog?.let { PresetDialogHost(it, state.presets, state.dataDir) }
+                if (state.applyPreset.pickingProject) ProjectPickerDialog(state.projects.all.filter { !it.group }, { state.teams.defaultTeamOf(it.id) }, state.applyPreset::chooseProject, state.applyPreset::close)
+                if (state.applyPreset.project != null) ApplyPresetDialog(state.applyPreset)
+            }
+            state.presetOffer.offer?.let { PresetOfferDialog(it, state.presets.presets, state.presetOffer) }
             state.extensions.plugins.pending?.let { PluginCommandDialog(it, state.extensions.plugins.job == null, state.extensions.plugins::confirmPending, state.extensions.plugins::dismissPending) }
             state.agents.log?.let { SubagentLogHost(state.agents, { state.now }, it) }
-            state.author.offer?.let { AuthorOfferDialog(it, state.author) }
-            state.author.manage?.let { open -> AuthorConfigurationDialog(open, open.projectId?.let { state.projects.find(it)?.name }, state.author) }
+            state.author.catalog?.let { AuthorCatalogDialog(it, state.author) }
             state.author.report?.let { AuthorReportPanel(it, state.author::closeReport) }
             ProposalDialogHost(state)
+            state.contextSessionId?.let { id ->
+                LaunchedEffect(id) { state.contextBreakdown.load(id, false) }
+                ContextUsageDialog(contextUsageView(state.environment.sessionUsage[id]), state.contextBreakdown.loadOf(id), state.contextBreakdown.isLoading(id), state.now, { state.contextBreakdown.load(id, true) }, state.contextShowDetails, { state.contextShowDetails = it }) { state.contextSessionId = null; state.contextShowDetails = false }
+            }
             if (state.quickRequestOpen) QuickRequestDialog({ state.assistant.request(it); state.quickRequestOpen = false }, { state.quickRequestOpen = false })
             if (state.assistantStartup.asking) AssistantStartupDialog(state.assistantStartup)
             if (state.assistantHelpOpen) AssistantHelpDialog(state.assistantTools) { state.assistantHelpOpen = false }

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.github.krpkbhdn.ccmanager.author.AuthorItem;
 import com.github.krpkbhdn.ccmanager.author.AuthorProfileLoader;
 import com.github.krpkbhdn.ccmanager.team.Team;
 import com.github.krpkbhdn.ccmanager.team.TeamService;
@@ -21,13 +22,14 @@ class TeamsInstallerTest {
     final TeamService teams = mock(TeamService.class);
     final AuthorProfileLoader loader = new AuthorProfileLoader();
     final TeamsInstaller installer = new TeamsInstaller(teams, loader);
-    final String name = loader.teamTemplates().getFirst().name();
+    final AuthorItem item = loader.catalog().byId("team.dev-team").orElseThrow();
+    final String name = loader.teamTemplate(item.id()).name();
 
     @Test
     void createsAMissingTeam() {
         when(teams.list()).thenReturn(List.of());
 
-        var outcome = installer.install();
+        var outcome = installer.install(List.of(item));
 
         assertThat(outcome.installed()).containsExactly("team " + name);
         verify(teams).create(any(), anyList());
@@ -37,7 +39,7 @@ class TeamsInstallerTest {
     void replacesTheRolesOfAnExistingTeamWithTheSameName() {
         when(teams.list()).thenReturn(List.of(new Team(7, name, List.of())));
 
-        var outcome = installer.install();
+        var outcome = installer.install(List.of(item));
 
         assertThat(outcome.installed()).containsExactly("team " + name);
         verify(teams).update(anyLong(), anyString(), anyList());
@@ -49,6 +51,6 @@ class TeamsInstallerTest {
         when(teams.list()).thenReturn(List.of());
         when(teams.create(any(), anyList())).thenThrow(new IllegalArgumentException("nope"));
 
-        assertThat(installer.install().failed()).containsExactly("team " + name + ": nope");
+        assertThat(installer.install(List.of(item)).failed()).containsExactly("team " + name + ": nope");
     }
 }

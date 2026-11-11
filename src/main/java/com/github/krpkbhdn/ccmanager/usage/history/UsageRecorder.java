@@ -8,8 +8,8 @@ import com.github.krpkbhdn.ccmanager.usage.SessionUsage;
 import com.github.krpkbhdn.ccmanager.usage.SessionUsageService;
 import com.github.krpkbhdn.ccmanager.usage.UsageProperties;
 import jakarta.annotation.PreDestroy;
+import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +18,7 @@ import java.util.OptionalDouble;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -51,6 +52,7 @@ public class UsageRecorder {
     private final UsageAlertService alerts;
     private final Duration rateLimitInterval;
     private final Executor writer;
+    private final Clock clock;
     private RateLimitSample lastRateLimit;
     private final Map<String, SessionSnapshot> sessions = new HashMap<>();
     private final Map<String, SessionUsage> lastUsage = new HashMap<>();
@@ -60,10 +62,11 @@ public class UsageRecorder {
     @Autowired
     public UsageRecorder(SessionRegistry registry, SessionUsageService usage, RateLimitService rateLimits,
             UsageHistoryRepository repository, UsageAlertService alerts, UsageProperties properties) {
-        this(registry, usage, rateLimits, repository, alerts, properties, boundedWriter(MAX_QUEUED_WRITES));
+        this(registry, usage, rateLimits, repository, alerts, properties, boundedWriter(MAX_QUEUED_WRITES),
+                Clock.systemUTC());
     }
 
-    /** Drops the newest write when full so a stalled database cannot grow memory without limit. */
+    /** Rejects the newest write when full (the caller learns of it) so a stalled database cannot grow memory without limit. */
     static ThreadPoolExecutor boundedWriter(int capacity) {
         var lastWarning = new AtomicLong();
         RejectedExecutionHandler drop = (task, executor) -> {
@@ -72,6 +75,7 @@ public class UsageRecorder {
             if ((last == 0 || now - last >= DROP_WARNING_INTERVAL.toNanos()) && lastWarning.compareAndSet(last, now)) {
                 log.warn("Usage write queue is full, dropping samples");
             }
+            throw new RejectedExecutionException("Usage write queue is full");
         };
         return new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(capacity), task -> {
             var thread = new Thread(task, "usage-recorder");
@@ -81,7 +85,8 @@ public class UsageRecorder {
     }
 
     UsageRecorder(SessionRegistry registry, SessionUsageService usage, RateLimitService rateLimits,
-            UsageHistoryRepository repository, UsageAlertService alerts, UsageProperties properties, Executor writer) {
+            UsageHistoryRepository repository, UsageAlertService alerts, UsageProperties properties, Executor writer,
+            Clock clock) {
         this.rateLimitInterval = properties.rateLimitSampleInterval();
         this.registry = registry;
         this.usage = usage;
@@ -89,6 +94,7 @@ public class UsageRecorder {
         this.repository = repository;
         this.alerts = alerts;
         this.writer = writer;
+        this.clock = clock;
         registry.subscribe(this::onSessionsChanged);
         usage.subscribe(this::onUsageChanged);
         rateLimits.subscribe(this::onRateLimitChanged);
@@ -112,7 +118,7 @@ public class UsageRecorder {
             if (!liveIds.contains(id)) {
                 var ended = sessions.remove(id);
                 record(ended);
-                writer.execute(() -> forgetCost(ended));
+                forgetCostAfterWrites(ended);
                 lastUsage.remove(id);
                 lastWritten.remove(id);
             }
@@ -125,13 +131,36 @@ public class UsageRecorder {
             return;
         }
         var figures = new Figures(u.costUsd(), u.contextUsedPercent());
-        if (figures.equals(lastWritten.put(session.ccmSessionId(), figures))) {
+        var previousFigures = lastWritten.put(session.ccmSessionId(), figures);
+        if (figures.equals(previousFigures)) {
             return;
         }
         var model = u.modelName() != null ? u.modelName() : session.model();
-        var sample = new UsageSample(Instant.now(), session.ccmSessionId(), session.claudeSessionId(),
+        var sample = new UsageSample(clock.instant(), session.ccmSessionId(), session.claudeSessionId(),
                 session.projectId(), model, u.effort(), u.contextUsedPercent(), u.costUsd(), 0);
-        writer.execute(() -> write(sample));
+        try {
+            writer.execute(() -> write(sample));
+        } catch (RejectedExecutionException e) {
+            restore(session.ccmSessionId(), previousFigures);
+            log.debug("Usage sample of session {} was not queued, will retry on the next change", session.ccmSessionId());
+        }
+    }
+
+    private void restore(String id, Figures previous) {
+        if (previous == null) {
+            lastWritten.remove(id);
+        } else {
+            lastWritten.put(id, previous);
+        }
+    }
+
+    /** Queued behind the session's last write on the single writer thread, so that write cannot put the entries back. */
+    private void forgetCostAfterWrites(SessionSnapshot ended) {
+        try {
+            writer.execute(() -> forgetCost(ended));
+        } catch (RejectedExecutionException e) {
+            forgetCost(ended);
+        }
     }
 
     private void forgetCost(SessionSnapshot ended) {
@@ -181,8 +210,14 @@ public class UsageRecorder {
                     snapshot.sevenDay() == null ? null : snapshot.sevenDay().usedPercent(),
                     snapshot.sevenDay() == null ? null : snapshot.sevenDay().resetsAt());
             if (worthStoring(sample)) {
+                var previous = lastRateLimit;
                 lastRateLimit = sample;
-                writer.execute(() -> writeRateLimit(sample));
+                try {
+                    writer.execute(() -> writeRateLimit(sample));
+                } catch (RejectedExecutionException e) {
+                    lastRateLimit = previous;
+                    log.debug("Rate limit sample was not queued, will retry on the next change");
+                }
             }
         });
     }

@@ -14,6 +14,7 @@ import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -21,14 +22,17 @@ import tools.jackson.databind.json.JsonMapper;
 
 class HookSettingsWriterTest {
 
-    private static final String URL = "http://127.0.0.1:5555/hook/secret/abc-1";
-    private static final String STATUS_LINE_URL = "http://127.0.0.1:5555/statusline/secret/abc-1";
-    private static final String MCP_URL = "http://127.0.0.1:5555/mcp/secret/abc-1";
+    private static final String URL = "http://127.0.0.1:5555/hook/abc-1";
+    private static final String STATUS_LINE_URL = "http://127.0.0.1:5555/statusline/abc-1";
+    private static final String MCP_URL = "http://127.0.0.1:5555/mcp/abc-1";
+    private static final String PROJECT_MCP_ENTRY = "{\"type\":\"http\",\"url\":\"" + MCP_URL + "\",\"headers\":{\"Authorization\":\"Bearer ${CCM_HOOK_TOKEN}\"}}";
     private static final String APP_MCP_URL = "http://127.0.0.1:5555/assistant-mcp";
     private static final String APP_TOKEN = "apptokenvalue";
     private static final String DEAD_PID = String.valueOf(Integer.MAX_VALUE);
 
-    private static final HookProperties HOOK_PROPERTIES = new HookProperties(10, 1024, 500, Duration.ofSeconds(590), 10, 1000);
+    private static final CurlSupport NEW_CURL = new CurlSupport(executable -> "curl 8.16.0 (x86_64-w64-mingw32)");
+    private static final CurlSupport OLD_CURL = new CurlSupport(executable -> "curl 7.81.0 (x86_64-pc-linux-gnu)");
+    private static final HookProperties HOOK_PROPERTIES = new HookProperties(10, 1024, 500, Duration.ofSeconds(590), 10, 1000, 1000);
 
     private final JsonMapper mapper =JsonMapper.builder().build();
     private HookSettingsWriter writer;
@@ -44,28 +48,18 @@ class HookSettingsWriterTest {
         when(server.hookUrl("abc-1")).thenReturn(URL);
         when(server.statusLineUrl("abc-1")).thenReturn(STATUS_LINE_URL);
         when(server.mcpUrl("abc-1")).thenReturn(MCP_URL);
-        writer = new HookSettingsWriter(server, new AppProperties(dataDir), mapper, HOOK_PROPERTIES, false);
-        windowsWriter = new HookSettingsWriter(server, new AppProperties(dataDir), mapper, HOOK_PROPERTIES, true);
+        writer = new HookSettingsWriter(server, new AppProperties(dataDir), mapper, HOOK_PROPERTIES, NEW_CURL, false);
+        windowsWriter = new HookSettingsWriter(server, new AppProperties(dataDir), mapper, HOOK_PROPERTIES, NEW_CURL, true);
     }
 
     @Test
     void decisionHookTimeoutFollowsTheConfiguredHoldWithAMargin() throws Exception {
-        var longHold = new HookProperties(10, 1024, 500, Duration.ofSeconds(900), 10, 1000);
-        var file = new HookSettingsWriter(server, new AppProperties(dataDir), mapper, longHold, false).write("abc-1").settings();
+        var longHold = new HookProperties(10, 1024, 500, Duration.ofSeconds(900), 10, 1000, 1000);
+        var file = new HookSettingsWriter(server, new AppProperties(dataDir), mapper, longHold, NEW_CURL, false).write("abc-1").settings();
 
         var hooks = mapper.readTree(Files.readString(file)).path("hooks");
 
         assertThat(hooks.path("PermissionRequest").get(0).path("hooks").get(0).path("timeout").asInt()).isEqualTo(910);
-    }
-
-    @Test
-    void onPosixStatusLineArgumentsAreSingleQuotedSoADollarInThePathIsNotExpanded() throws Exception {
-        var odd = dataDir.resolve("a$b`c'd");
-        var oddWriter = new HookSettingsWriter(server, new AppProperties(odd), mapper, HOOK_PROPERTIES, false);
-
-        var command = mapper.readTree(Files.readString(oddWriter.write("abc-1").settings())).path("statusLine").path("command").asString();
-
-        assertThat(command).contains("'-K'", "a$b`c'\\''d").doesNotContain("\"");
     }
 
     @Test
@@ -75,7 +69,7 @@ class HookSettingsWriterTest {
 
         try (var files = Files.list(ownDir())) {
             assertThat(files.map(file -> file.getFileName().toString()))
-                    .containsExactlyInAnyOrder("abc-1.json", "abc-1.mcp.json", "abc-1.json.hook.curl", "abc-1.json.status.curl");
+                    .containsExactlyInAnyOrder("abc-1.json", "abc-1.mcp.json");
         }
     }
 
@@ -120,6 +114,9 @@ class HookSettingsWriterTest {
         assertThat(handler.path("type").asString()).isEqualTo("http");
         assertThat(handler.path("url").asString()).isEqualTo(URL);
         assertThat(handler.path("timeout").asInt()).isEqualTo(5);
+        assertThat(handler.path("headers").toString()).isEqualTo("{\"Authorization\":\"Bearer $CCM_HOOK_TOKEN\"}");
+        assertThat(handler.path("allowedEnvVars").toString()).isEqualTo("[\"CCM_HOOK_TOKEN\"]");
+        assertThat(handler.toString()).doesNotContain("tok-abc");
     }
 
     @Test
@@ -131,15 +128,27 @@ class HookSettingsWriterTest {
     }
 
     @Test
-    void onPosixSessionStartUsesAsyncExecFormCurlReadingItsUrlFromAConfigFile() throws Exception {
+    void onPosixSessionStartIsAnAsyncShellCurlSendingTheBearerFromTheEnvironment() throws Exception {
         var handler = mapper.readTree(Files.readString(writer.write("abc-1").settings())).path("hooks").path("SessionStart").get(0)
                 .path("hooks").get(0);
 
         assertThat(handler.path("type").asString()).isEqualTo("command");
-        assertThat(handler.path("command").asString()).isEqualTo("curl");
+        assertThat(handler.path("command").asString()).isEqualTo("curl -s -m 3 -X POST -H 'Content-Type: application/json' "
+                + "--variable %CCM_HOOK_TOKEN --expand-header 'Authorization: Bearer {{CCM_HOOK_TOKEN}}' --data-binary '@-' '" + URL + "'");
         assertThat(handler.path("async").asBoolean()).isTrue();
-        assertThat(handler.path("args").toString()).contains("-K", "--data-binary", "@-", "abc-1.json.hook.curl").doesNotContain(URL);
-        assertThat(Files.readString(ownDir().resolve("abc-1.json.hook.curl"))).isEqualTo("url = \"" + URL + "\"\n");
+    }
+
+    @Test
+    void anOldOrUnknownCurlGetsNoCurlCommandSoTheTokenNeverReachesArguments() throws Exception {
+        var oldWriter = new HookSettingsWriter(server, new AppProperties(dataDir), mapper, HOOK_PROPERTIES, OLD_CURL, false);
+        var unknownWriter = new HookSettingsWriter(server, new AppProperties(dataDir), mapper, HOOK_PROPERTIES, new CurlSupport(executable -> ""), false);
+
+        for (var json : List.of(oldWriter, unknownWriter)) {
+            var settings = mapper.readTree(Files.readString(json.write("abc-1").settings()));
+            assertThat(settings.has("statusLine")).isFalse();
+            assertThat(settings.path("hooks").has("SessionStart")).isFalse();
+            assertThat(settings.toString()).doesNotContain("curl");
+        }
     }
 
     @Test
@@ -147,20 +156,19 @@ class HookSettingsWriterTest {
         var statusLine = mapper.readTree(Files.readString(writer.write("abc-1").settings())).path("statusLine");
 
         assertThat(statusLine.path("type").asString()).isEqualTo("command");
-        assertThat(statusLine.path("command").asString()).startsWith("curl ").contains("'-K'", "'--data-binary' '@-'", "abc-1.json.status.curl")
-                .doesNotContain(STATUS_LINE_URL);
-        assertThat(Files.readString(ownDir().resolve("abc-1.json.status.curl"))).isEqualTo("url = \"" + STATUS_LINE_URL + "\"\n");
+        assertThat(statusLine.path("command").asString()).isEqualTo("curl -s -m 3 -X POST -H 'Content-Type: application/json' "
+                + "--variable %CCM_HOOK_TOKEN --expand-header 'Authorization: Bearer {{CCM_HOOK_TOKEN}}' --data-binary '@-' '" + STATUS_LINE_URL + "'");
     }
 
     @Test
-    void onWindowsTheUrlStaysAnArgumentAndNoCurlFileIsWritten() throws Exception {
+    void onWindowsCurlExeAlsoTakesTheBearerFromTheEnvironmentAndNoSideFileIsWritten() throws Exception {
         var json = mapper.readTree(Files.readString(windowsWriter.write("abc-1").settings()));
 
         var handler = json.path("hooks").path("SessionStart").get(0).path("hooks").get(0);
-        assertThat(handler.path("command").asString()).isEqualTo("curl.exe");
-        assertThat(handler.path("args").toString()).contains(URL).doesNotContain("-K", ".curl");
+        assertThat(handler.path("command").asString()).isEqualTo("curl.exe -s -m 3 -X POST -H \"Content-Type: application/json\" "
+                + "--variable %CCM_HOOK_TOKEN --expand-header \"Authorization: Bearer {{CCM_HOOK_TOKEN}}\" --data-binary \"@-\" \"" + URL + "\"");
         assertThat(json.path("statusLine").path("command").asString()).startsWith("curl.exe ").contains("\"" + STATUS_LINE_URL + "\"")
-                .doesNotContain("-K", ".curl");
+                .doesNotContain("$");
         try (var files = Files.list(ownDir())) {
             assertThat(files.map(file -> file.getFileName().toString())).containsExactlyInAnyOrder("abc-1.json", "abc-1.mcp.json");
         }
@@ -179,7 +187,7 @@ class HookSettingsWriterTest {
         assertThat(entry.path("headers").path("Authorization").asString()).isEqualTo("Bearer ${CCM_ASSISTANT_TOKEN}");
         assertThat(text).doesNotContain(APP_TOKEN);
         assertThat(Files.readString(files.settings())).doesNotContain(APP_TOKEN);
-        assertThat(Files.readString(writer.write("abc-1").mcpConfig())).doesNotContain("headers", "CCM_ASSISTANT_TOKEN");
+        assertThat(Files.readString(writer.write("abc-1").mcpConfig())).doesNotContain("CCM_ASSISTANT_TOKEN");
     }
 
     @Test
@@ -200,7 +208,8 @@ class HookSettingsWriterTest {
 
         assertThat(files.mcpConfig()).isEqualTo(ownDir().resolve("abc-1.mcp.json"));
         assertThat(mapper.readTree(Files.readString(files.mcpConfig())).path("mcpServers").path("cc-manager").toString())
-                .isEqualTo("{\"type\":\"http\",\"url\":\"" + MCP_URL + "\"}");
+                .isEqualTo(PROJECT_MCP_ENTRY);
+        assertThat(Files.readString(files.mcpConfig())).doesNotContain("secret", "tok-abc");
         assertThat(mapper.readTree(Files.readString(files.settings())).path("permissions").path("allow").toString()).isEqualTo("[\"mcp__cc-manager__list_run_configurations\"]");
     }
 
@@ -213,7 +222,26 @@ class HookSettingsWriterTest {
         var servers = mapper.readTree(Files.readString(writer.write("abc-1", extra).mcpConfig())).path("mcpServers");
 
         assertThat(servers.path("db").toString()).isEqualTo("{\"command\":\"db-mcp\"}");
-        assertThat(servers.path("cc-manager").toString()).isEqualTo("{\"type\":\"http\",\"url\":\"" + MCP_URL + "\"}");
+        assertThat(servers.path("cc-manager").toString()).isEqualTo(PROJECT_MCP_ENTRY);
+    }
+
+    @Test
+    void onlyTheLauncherWritesSessionFilesSoEveryLaunchGetsTheTokenVariable() throws Exception {
+        try (var sources = Files.walk(Path.of("src/main"))) {
+            var users = sources.filter(file -> file.toString().endsWith(".java") || file.toString().endsWith(".kt"))
+                    .filter(file -> !file.getFileName().toString().startsWith("HookSettingsWriter"))
+                    .filter(file -> read(file).contains("HookSettingsWriter")).map(file -> file.getFileName().toString()).toList();
+
+            assertThat(users).containsExactly("ClaudeLauncher.java");
+        }
+    }
+
+    private static String read(Path file) {
+        try {
+            return Files.readString(file);
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
     }
 
     @Test
@@ -269,7 +297,7 @@ class HookSettingsWriterTest {
     void aSecondWriterInTheSameProcessLeavesTheRunningOnesFilesAlone() throws Exception {
         var live = writer.write("abc-1").settings();
 
-        new HookSettingsWriter(server, new AppProperties(dataDir), mapper, HOOK_PROPERTIES, false).deleteStaleFiles();
+        new HookSettingsWriter(server, new AppProperties(dataDir), mapper, HOOK_PROPERTIES, NEW_CURL, false).deleteStaleFiles();
 
         assertThat(live).exists();
     }

@@ -39,7 +39,7 @@ final class HistoryFixture {
         repository = spy(new TranscriptIndexRepository(jdbc, new TransactionTemplate(new DataSourceTransactionManager(dataSource))));
         var host = mock(HostEnvironment.class);
         when(host.windows()).thenReturn(windowsHost);
-        search = new SessionSearchService(jdbc, repository, host, new SessionHistoryProperties(Duration.ofMinutes(1), 200000, 100));
+        search = new SessionSearchService(jdbc, repository, host, new SessionHistoryProperties(Duration.ofMinutes(1), 200000, 100, 5000, 1048576L, 300, 1000));
     }
 
     TranscriptIndexer indexer(int maxEntries) {
@@ -48,12 +48,27 @@ final class HistoryFixture {
 
     TranscriptIndexer indexer(int maxEntries, JsonMapper mapper) {
         return new TranscriptIndexer(projects, mapper, repository,
-                new SessionHistoryProperties(Duration.ofMinutes(1), maxEntries, 100));
+                new SessionHistoryProperties(Duration.ofMinutes(1), maxEntries, 100, 5000, 1048576L, 300, 1000));
+    }
+
+    TranscriptIndexer indexerEvictingIn(int maxEntries, int evictChunk) {
+        return new TranscriptIndexer(projects, JsonMapper.shared(), repository,
+                new SessionHistoryProperties(Duration.ofMinutes(1), maxEntries, 100, evictChunk, 1048576L, 300, 1000));
     }
 
     TranscriptIndexer indexer(int maxEntries, long batchBytes) {
         return new TranscriptIndexer(projects, JsonMapper.shared(), repository,
-                new SessionHistoryProperties(Duration.ofMinutes(1), maxEntries, 100), batchBytes);
+                new SessionHistoryProperties(Duration.ofMinutes(1), maxEntries, 100, 5000, batchBytes, 300, 1000));
+    }
+
+    TranscriptIndexer indexerWithBatchLines(int maxEntries, int batchLines) {
+        return new TranscriptIndexer(projects, JsonMapper.shared(), repository,
+                new SessionHistoryProperties(Duration.ofMinutes(1), maxEntries, 100, 5000, 1048576L, batchLines, 1000));
+    }
+
+    TranscriptIndexer indexerKeepingToolIds(int maxEntries, int maxSensitiveToolIds) {
+        return new TranscriptIndexer(projects, JsonMapper.shared(), repository,
+                new SessionHistoryProperties(Duration.ofMinutes(1), maxEntries, 100, 5000, 1048576L, 300, maxSensitiveToolIds));
     }
 
     static String userLine(String uuid, String cwd, String at, String text) {

@@ -35,6 +35,7 @@ import com.github.krpkbhdn.ccmanager.ui.components.HorizontalRule
 import com.github.krpkbhdn.ccmanager.ui.components.IconButton
 import com.github.krpkbhdn.ccmanager.ui.components.MenuEntry
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
+import com.github.krpkbhdn.ccmanager.ui.review.ReviewScreen
 import com.github.krpkbhdn.ccmanager.ui.run.RunControlActions
 import com.github.krpkbhdn.ccmanager.ui.run.RunTab
 import com.github.krpkbhdn.ccmanager.ui.run.RunTabActions
@@ -200,6 +201,7 @@ private fun MainContent(state: AppState, project: Project, view: ProjectView) {
                 state.runs.selectedOf(project.id), state.terminal,
                 RunTabActions(state.runs::run, state.runs::stop) { state.runs.openDialog(project.id) },
             )
+            ProjectTab.Review -> ReviewScreen(project.id, state.reviews)
             else -> ActivityTabHost(state, view, project)
         }
     }
@@ -215,7 +217,9 @@ private fun tabSpecs(state: AppState, view: ProjectView, project: Project): List
     val git = if (project.group) TabSpec(ProjectTab.Git, "Members", null, Icons.FolderTree, closable = false)
     else TabSpec(ProjectTab.Git, "Git", null, Icons.Branch, closable = false)
     val run = TabSpec(ProjectTab.Run, "Run", null, Icons.Play, closable = false).takeIf { !project.group }
-    return sessions + shells + listOfNotNull(git, run, TabSpec(ProjectTab.Activity, "Activity", null, Icons.Activity, closable = false))
+    val pending = state.reviews.pendingCount(project.id)
+    val review = TabSpec(ProjectTab.Review, "Review", null, Icons.Eye, closable = false, badge = pending.takeIf { it > 0 }?.toString()).takeIf { !project.group }
+    return sessions + shells + listOfNotNull(git, run, review, TabSpec(ProjectTab.Activity, "Activity", null, Icons.Activity, closable = false))
 }
 
 @Composable

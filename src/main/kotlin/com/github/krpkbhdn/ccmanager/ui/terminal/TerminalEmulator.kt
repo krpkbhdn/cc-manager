@@ -25,6 +25,9 @@ private const val FRAME_MILLIS = 16L
 private const val CONNECTOR_RESIZE_MILLIS = 100L
 private const val WORKER_IDLE_SECONDS = 2L
 
+/** Writes queued behind a child that does not read stdin; past this they are dropped instead of replayed as a burst. */
+private const val MAX_PENDING_WRITES = 1024
+
 /**
  * The terminal emulation of one process: reads its output on its own thread into [buffer], writes user input and
  * resizes on a single worker, and calls [onFrame] at most every [FRAME_MILLIS] ms while the screen changes.
@@ -47,6 +50,8 @@ internal class TerminalEmulator(
     // input goes through its own thread: a write blocks while the process does not drain stdin and must not stall frames or resizes
     private val writer = ScheduledThreadPoolExecutor(1) { task -> Thread(task, "TerminalWriter-${connector.name}").apply { isDaemon = true } }
         .apply { setKeepAliveTime(WORKER_IDLE_SECONDS, TimeUnit.SECONDS); allowCoreThreadTimeOut(true) }
+
+    private val pendingWrites = AtomicInteger()
 
     val modes = ScreenModes(::invalidate)
     val buffer: TerminalTextBuffer
@@ -74,7 +79,12 @@ internal class TerminalEmulator(
 
     fun write(bytes: ByteArray) {
         if (bytes.isEmpty()) return
-        runCatching { writer.execute { writeNow(bytes) } }
+        if (pendingWrites.incrementAndGet() > MAX_PENDING_WRITES) {
+            pendingWrites.decrementAndGet()
+            return
+        }
+        val queued = runCatching { writer.execute { try { writeNow(bytes) } finally { pendingWrites.decrementAndGet() } } }
+        if (queued.isFailure) pendingWrites.decrementAndGet()
     }
 
     fun resize(columns: Int, rows: Int) {

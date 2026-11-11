@@ -63,7 +63,7 @@ class PtyClaudeRealTest {
         System.arraycopy(args, 0, command, 1, args.length);
         return new PtyProcessBuilder(command)
                 .setDirectory(directory.toString())
-                .setEnvironment(ClaudeCommand.environment(System.getenv(), "ccm-test"))
+                .setEnvironment(ClaudeCommand.environment(System.getenv(), "ccm-test", "unused"))
                 .setInitialColumns(PtySpawner.INITIAL_COLUMNS)
                 .setInitialRows(PtySpawner.INITIAL_ROWS)
                 .start();

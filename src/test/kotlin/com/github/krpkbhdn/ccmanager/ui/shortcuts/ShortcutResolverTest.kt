@@ -1,5 +1,6 @@
 package com.github.krpkbhdn.ccmanager.ui.shortcuts
 
+import java.awt.event.KeyEvent.VK_Z
 import java.awt.event.KeyEvent.VK_0
 import java.awt.event.KeyEvent.VK_1
 import java.awt.event.KeyEvent.VK_EQUALS
@@ -101,5 +102,16 @@ class ShortcutResolverTest {
         val altP = KeyChord(VK_P, ctrl = false, shift = false, alt = true, meta = false)
         assertThat(windows(altP, terminal = true)).isNull()
         assertThat(windows(altP, terminal = false)).isNull()
+    }
+
+    @Test
+    fun `review shortcut chord is ctrl shift z and cmd shift z and resolves back`() {
+        assertThat(AppShortcut.REVIEW_TAB.chords(false)).containsExactly(ctrlShift(VK_Z))
+        assertThat(AppShortcut.REVIEW_TAB.chords(true)).containsExactly(cmdShift(VK_Z))
+        assertThat(windows(ctrlShift(VK_Z), terminal = true)).isEqualTo(AppShortcut.REVIEW_TAB)
+        assertThat(ShortcutResolver.resolve(cmdShift(VK_Z), mac = true, terminalFocused = false)).isEqualTo(AppShortcut.REVIEW_TAB)
+        listOf(false, true).forEach { mac ->
+            assertThat(AppShortcut.entries.filter { it.chords(mac).any { c -> c in AppShortcut.REVIEW_TAB.chords(mac) } }).containsExactly(AppShortcut.REVIEW_TAB)
+        }
     }
 }

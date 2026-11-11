@@ -36,7 +36,7 @@ public final class ClaudeCommand {
     private static final List<String> INHERITED_ENV_TO_DROP = List.of(
             "NO_COLOR", "FORCE_COLOR", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_CHILD_SESSION",
             "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_SESSION_ATTENDED", "CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN", "CLAUDE_CODE_SSE_PORT", "CLAUDE_CODE_EXECPATH", "CLAUDE_PID",
-            "AI_AGENT", "TERMINAL_EMULATOR", "TERM_SESSION_ID", HookServer.ASSISTANT_TOKEN_ENV);
+            "AI_AGENT", "TERMINAL_EMULATOR", "TERM_SESSION_ID", HookServer.ASSISTANT_TOKEN_ENV, HookServer.SESSION_TOKEN_ENV);
 
     private ClaudeCommand() {}
 
@@ -72,7 +72,7 @@ public final class ClaudeCommand {
         return command;
     }
 
-    static String canonicalUuid(String value) {
+    public static String canonicalUuid(String value) {
         try {
             String id = UUID.fromString(value).toString();
             if (id.equalsIgnoreCase(value)) {
@@ -100,14 +100,6 @@ public final class ClaudeCommand {
         addClaudeManager(command, files, pluginDir);
         command.addAll(selection.arguments());
         command.addAll(List.of("--", task));
-        return command;
-    }
-
-    /** The author setup session: the staged profile is readable through --add-dir and the first prompt only points at it. */
-    static List<String> setupArguments(Path executable, SessionFiles files, Path pluginDir, String prompt, Path profileDirectory) {
-        List<String> command = base(executable, files);
-        addClaudeManager(command, files, pluginDir);
-        command.addAll(List.of("--add-dir", profileDirectory.toAbsolutePath().toString(), "--", prompt));
         return command;
     }
 
@@ -140,22 +132,24 @@ public final class ClaudeCommand {
         return command;
     }
 
-    static Map<String, String> environment(Map<String, String> parent, String ccmSessionId) {
+    /** [sessionToken] is the bearer token the session's settings and mcp files refer to; without it every hook would be rejected. */
+    static Map<String, String> environment(Map<String, String> parent, String ccmSessionId, String sessionToken) {
         Map<String, String> env = terminalEnvironment(parent);
         env.put(ENV_SESSION, ccmSessionId);
+        env.put(HookServer.SESSION_TOKEN_ENV, sessionToken);
         return env;
     }
 
     /** Only the Assistant gets the token its mcp file refers to. */
-    static Map<String, String> assistantEnvironment(Map<String, String> parent, String ccmSessionId, String token) {
-        Map<String, String> env = environment(parent, ccmSessionId);
+    static Map<String, String> assistantEnvironment(Map<String, String> parent, String ccmSessionId, String sessionToken, String token) {
+        Map<String, String> env = environment(parent, ccmSessionId, sessionToken);
         env.put(HookServer.ASSISTANT_TOKEN_ENV, token);
         return env;
     }
 
     /** A group session also loads the CLAUDE.md of its --add-dir members. */
-    static Map<String, String> groupEnvironment(Map<String, String> parent, String ccmSessionId) {
-        Map<String, String> env = environment(parent, ccmSessionId);
+    static Map<String, String> groupEnvironment(Map<String, String> parent, String ccmSessionId, String sessionToken) {
+        Map<String, String> env = environment(parent, ccmSessionId, sessionToken);
         env.put(ENV_ADDITIONAL_DIRECTORIES_CLAUDE_MD, ENABLED);
         return env;
     }

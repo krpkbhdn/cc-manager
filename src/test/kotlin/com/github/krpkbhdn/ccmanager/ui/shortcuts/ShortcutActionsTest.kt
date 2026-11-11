@@ -1,5 +1,7 @@
 package com.github.krpkbhdn.ccmanager.ui.shortcuts
 
+import com.github.krpkbhdn.ccmanager.ui.state.Route
+import com.github.krpkbhdn.ccmanager.ui.state.ProjectTab
 import com.github.krpkbhdn.ccmanager.ui.state.GroupDialogRequest
 import com.github.krpkbhdn.ccmanager.ui.PreviewTerminal
 import com.github.krpkbhdn.ccmanager.ui.PreviewWorld
@@ -132,5 +134,28 @@ class ShortcutActionsTest {
 
         assertThat(actions.perform(AppShortcut.PALETTE)).isFalse()
         assertThat(state.paletteOpen).isFalse()
+    }
+
+    @Test
+    fun `review shortcut selects the tab in a project`() {
+        runBlocking { state.projects.load() }
+        val id = state.projects.all.first { !it.group }.id
+        state.navigate(Route.Project(id))
+
+        assertThat(actions.perform(AppShortcut.REVIEW_TAB)).isTrue()
+
+        assertThat(state.viewOf(id).selected).isEqualTo(ProjectTab.Review)
+    }
+
+    @Test
+    fun `review shortcut is ignored for a group`() {
+        runBlocking { state.projects.load() }
+        val id = state.projects.all.first { it.group }.id
+        state.navigate(Route.Project(id))
+        val before = state.viewOf(id).selected
+
+        assertThat(actions.perform(AppShortcut.REVIEW_TAB)).isFalse()
+
+        assertThat(state.viewOf(id).selected).isEqualTo(before)
     }
 }

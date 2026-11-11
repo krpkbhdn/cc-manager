@@ -45,7 +45,7 @@ public class ProposalService implements DecisionHolder {
         if (proposal.isEmpty()) {
             return CompletableFuture.completedFuture(Optional.empty());
         }
-        return holdProposal(proposal.get())
+        return holdProposal(proposal.get(), false)
                 .map(held -> held.thenApply(answer -> answer.map(given -> given.hookOutput(proposal.get()))))
                 .orElseGet(() -> CompletableFuture.completedFuture(Optional.empty()));
     }
@@ -56,7 +56,7 @@ public class ProposalService implements DecisionHolder {
      */
     public CompletableFuture<AppDecision> holdForApp(PermissionProposal proposal) {
         var started = System.nanoTime();
-        return holdProposal(proposal)
+        return holdProposal(proposal, true)
                 .map(held -> held.thenApply(answer -> answer.<AppDecision>map(AppDecision.Answered::new)
                         .orElseGet(() -> System.nanoTime() - started >= properties.decisionHold().toNanos()
                                 ? AppDecision.Unanswered.TIMED_OUT : AppDecision.Unanswered.RELEASED)))
@@ -64,10 +64,10 @@ public class ProposalService implements DecisionHolder {
     }
 
     /** Empty when the cap of held proposals is reached. */
-    private Optional<CompletableFuture<Optional<ProposalAnswer>>> holdProposal(Proposal proposal) {
+    private Optional<CompletableFuture<Optional<ProposalAnswer>>> holdProposal(Proposal proposal, boolean forApp) {
         var decision = new CompletableFuture<Optional<ProposalAnswer>>()
                 .completeOnTimeout(Optional.empty(), properties.decisionHold().toMillis(), TimeUnit.MILLISECONDS);
-        var entry = new Held(proposal, decision);
+        var entry = new Held(proposal, decision, forApp);
         synchronized (held) {
             if (held.size() >= properties.maxHeldProposals()) {
                 decision.cancel(false);
@@ -129,12 +129,13 @@ public class ProposalService implements DecisionHolder {
                 .forEach(pending -> pending.decision().complete(Optional.empty()));
     }
 
-    /** Esc and process exit emit no hook event; an idle or gone session cannot be waiting for a decision any more. */
+    /** Esc and process exit emit no hook event; an idle or gone session cannot be waiting for a hook decision any more (app holds have no hook call, the hold time bounds them). */
     private void releaseOfEndedOrInterruptedSessions() {
         held.values().stream()
+                .filter(pending -> !pending.forApp())
                 .filter(pending -> sessions.find(pending.proposal().ccmSessionId()).map(session -> session.status() == AgentStatus.IDLE).orElse(true))
                 .forEach(pending -> pending.decision().complete(Optional.empty()));
     }
 
-    private record Held(Proposal proposal, CompletableFuture<Optional<ProposalAnswer>> decision) {}
+    private record Held(Proposal proposal, CompletableFuture<Optional<ProposalAnswer>> decision, boolean forApp) {}
 }

@@ -17,6 +17,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import tools.jackson.databind.json.JsonMapper;
@@ -49,7 +51,7 @@ class HookEventStoreTest {
     }
 
     private static HookProperties properties(int maxScanned) {
-        return new HookProperties(RETENTION, 1024, MAX_TEXT, java.time.Duration.ofSeconds(1), 10, maxScanned);
+        return new HookProperties(RETENTION, 1024, MAX_TEXT, java.time.Duration.ofSeconds(1), 10, maxScanned, 1000);
     }
 
     @Test
@@ -61,8 +63,21 @@ class HookEventStoreTest {
 
         var stored = String.join("", jdbc.sql("SELECT payload FROM hook_event").query(String.class).list());
 
-        assertThat(stored).doesNotContain("abc123", "hidden", "out\"", "filebody", "hunter2").contains("TOKEN=[redacted]", "a.txt");
+        assertThat(stored).doesNotContain("abc123", "hidden", "out\"", "filebody", "hunter2").contains("[redacted]", "a.txt");
         assertThat(store.recent("s1", 10)).extracting(ActivityEntry::text).contains("Bash: TOKEN=[redacted]", "Wrote a.txt");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"curl -H 'Authorization: Basic dXNlcjpwdw==' x", "curl -u admin:hunter2 http://h", "psql postgres://u:hunter2@host/db",
+            "run --password hunter2", "echo ghp_abcdefghijklmnopqrstuvwx", "echo sk-abcdefghijklmnopqrstuv"})
+    void commandSecretsOfAnyShapeAreMaskedBeforeStoring(String command) {
+        store = new HookEventStore(jdbc, JsonMapper.builder().build(),
+                new HookProperties(RETENTION, 1024, 200, Duration.ofSeconds(1), 10, MAX_SCANNED, 1000), Runnable::run);
+
+        store.save(of("PreToolUse", "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"" + command + "\"}}"));
+
+        var stored = jdbc.sql("SELECT payload FROM hook_event").query(String.class).single();
+        assertThat(stored).contains("[redacted]").doesNotContain("hunter2", "dXNlcjpwdw", "abcdefghijklmnop");
     }
 
     @Test
@@ -75,13 +90,25 @@ class HookEventStoreTest {
     }
 
     @Test
+    void aTokenHalfCutByTheLookaheadWindowIsDroppedWhenMaskingShrinksTheText() {
+        store = new HookEventStore(jdbc, JsonMapper.builder().build(),
+                new HookProperties(RETENTION, 100_000, 2000, Duration.ofSeconds(1), 10, MAX_SCANNED, 1000), Runnable::run);
+        var text = "x sk-abcdefghijklmnopqrstuv ".repeat(100);
+
+        store.save(of("UserPromptSubmit", "{\"prompt\":\"" + text + "\"}"));
+
+        var stored = jdbc.sql("SELECT payload FROM hook_event").query(String.class).single();
+        assertThat(stored).doesNotContain("sk-abc").contains("[redacted]");
+    }
+
+    @Test
     void aSecretCrossingTheCutLimitLeaksNothingBeyondTheKeptPrefix() {
         store.save(of("UserPromptSubmit", "{\"prompt\":\"aaaa password=hunter2secret\"}"));
         store.save(of("UserPromptSubmit", "{\"prompt\":\"aaaaaaaaaa password=hunter2secret\"}"));
 
         var stored = String.join("", jdbc.sql("SELECT payload FROM hook_event").query(String.class).list());
 
-        assertThat(stored).doesNotContain("hunter", "secret\"").contains("password=[redacted]");
+        assertThat(stored).doesNotContain("hunter", "secret\"");
     }
 
     @Test
@@ -152,17 +179,17 @@ class HookEventStoreTest {
 
     @Test
     void longStringsAreTruncatedBeforeStoring() {
-        store.save(of("UserPromptSubmit", "{\"prompt\":\"" + "p".repeat(100) + "\"}"));
+        store.save(of("UserPromptSubmit", "{\"prompt\":\"" + "p ".repeat(50) + "\"}"));
 
         var stored = jdbc.sql("SELECT payload FROM hook_event").query(String.class).single();
 
-        assertThat(stored).contains("p".repeat(MAX_TEXT)).doesNotContain("p".repeat(MAX_TEXT + 1));
+        assertThat(stored).contains("p ".repeat(MAX_TEXT / 2)).doesNotContain("p ".repeat(MAX_TEXT / 2 + 1));
     }
 
     @Test
     void pruneKeepsAQuietSessionsRowsWhileABusySessionOverflowsRetention() {
         var roomy = new HookEventStore(jdbc, JsonMapper.builder().build(),
-                new HookProperties(ROOMY_RETENTION, 1024, MAX_TEXT, Duration.ofSeconds(1), 10, MAX_SCANNED), Runnable::run);
+                new HookProperties(ROOMY_RETENTION, 1024, MAX_TEXT, Duration.ofSeconds(1), 10, MAX_SCANNED, 1000), Runnable::run);
         roomy.save(justNow("quiet", of("UserPromptSubmit", "{\"prompt\":\"quiet\"}")));
         for (var i = 0; i < ROOMY_RETENTION + 100; i++) {
             roomy.save(justNow("s1", of("Stop")));
@@ -180,7 +207,7 @@ class HookEventStoreTest {
     @Test
     void pruneDropsAQuietSessionsRowsOnceTheyAreOlderThanAWeek() {
         var roomy = new HookEventStore(jdbc, JsonMapper.builder().build(),
-                new HookProperties(ROOMY_RETENTION, 1024, MAX_TEXT, Duration.ofSeconds(1), 10, MAX_SCANNED), Runnable::run);
+                new HookProperties(ROOMY_RETENTION, 1024, MAX_TEXT, Duration.ofSeconds(1), 10, MAX_SCANNED, 1000), Runnable::run);
         var prompt = of("UserPromptSubmit", "{\"prompt\":\"quiet\"}");
         roomy.save(new HookEvent("quiet", prompt.type(), prompt.rawName(), prompt.payload(), prompt.receivedAt()));
         jdbc.sql("UPDATE hook_event SET received_at = ?").param(java.time.Instant.now().minus(Duration.ofDays(30)).toString()).update();
@@ -222,5 +249,21 @@ class HookEventStoreTest {
             async.save(of("Stop"));
         }
         assertThat(queued).hasSize(2);
+    }
+
+    @Test
+    void gitShasAndPathsSurviveWhileASecretCrossingTheCutIsMasked() {
+        store = new HookEventStore(jdbc, JsonMapper.builder().build(),
+                new HookProperties(RETENTION, 1024, 60, Duration.ofSeconds(1), 10, MAX_SCANNED, 1000), Runnable::run);
+        var sha = "git show 0123456789abcdef0123456789abcdef01234567";
+        store.save(of("PreToolUse", "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"" + sha + "\"}}"));
+        store.save(of("PreToolUse", "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"ls src/task-runner-configuration/ --max-tokens 4096\"}}"));
+        store.save(of("PreToolUse", "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"" + "x".repeat(50) + " sk-abcdefghijklmnopqrstuvwxyz\"}}"));
+
+        var stored = jdbc.sql("SELECT payload FROM hook_event ORDER BY id").query(String.class).list();
+
+        assertThat(stored.get(0)).contains("0123456789abcdef0123456789abcdef01234567");
+        assertThat(stored.get(1)).contains("src/task-runner-configuration/", "--max-tokens 4096");
+        assertThat(stored.get(2)).doesNotContain("sk-abcdefghij");
     }
 }

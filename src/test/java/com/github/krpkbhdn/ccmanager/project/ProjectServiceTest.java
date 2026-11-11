@@ -94,6 +94,25 @@ class ProjectServiceTest {
     }
 
     @Test
+    void removingGroupDeletesRowAndFolderEvenWhenFolderDeleteFails() throws IOException {
+        var folder = directory("group-folder");
+        jdbc.sql("INSERT INTO project (name, path, created_at, is_group) VALUES ('g', ?, 'now', 1)")
+                .param(folder.toString()).update();
+        var id = jdbc.sql("SELECT id FROM project WHERE name = 'g'").query(Long.class).single();
+        var workspace = org.mockito.Mockito.mock(GroupWorkspace.class);
+        org.mockito.Mockito.doThrow(new java.io.UncheckedIOException(new IOException("locked"))).when(workspace).delete(folder);
+        var calls = new AtomicInteger();
+        var failing = new ProjectService(jdbc, workspace);
+        failing.subscribe(calls::incrementAndGet);
+
+        failing.remove(id);
+
+        org.mockito.Mockito.verify(workspace).delete(folder);
+        assertThat(failing.find(id)).isEmpty();
+        assertThat(calls).hasValue(1);
+    }
+
+    @Test
     void modelSelectionIsStoredPerProjectAndClearable() throws IOException {
         var project = service.add(directory("alpha"));
         assertThat(project.modelSelection()).isEqualTo(ModelSelection.DEFAULT);

@@ -12,6 +12,7 @@ import java.util.List;
 final class RepositoryPaths {
 
     private static final String GIT_DIRECTORY = ".git";
+    private static final String GIT_SHORT_NAME = "GIT~1";
 
     private RepositoryPaths() {}
 
@@ -39,13 +40,23 @@ final class RepositoryPaths {
             var relative = Path.of(path);
             var normalized = relative.normalize();
             if (relative.isAbsolute() || relative.getRoot() != null || normalized.startsWith("..") || normalized.toString().isEmpty()
-                    || GIT_DIRECTORY.equalsIgnoreCase(normalized.getName(0).toString())) {
+                    || containsGitSegment(normalized)) {
                 throw rejected(path);
             }
             return File.separatorChar == '\\' ? normalized.toString().replace('\\', '/') : normalized.toString();
         } catch (InvalidPathException e) {
             throw rejected(path);
         }
+    }
+
+    private static boolean containsGitSegment(Path normalized) {
+        for (var segment : normalized) {
+            var name = segment.toString().replaceAll("[. ]+$", "");
+            if (GIT_DIRECTORY.equalsIgnoreCase(name) || GIT_SHORT_NAME.equalsIgnoreCase(name)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static Path realPath(Path path) {

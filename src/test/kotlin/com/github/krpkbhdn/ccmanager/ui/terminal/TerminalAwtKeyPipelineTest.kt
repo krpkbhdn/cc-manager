@@ -112,16 +112,18 @@ class TerminalAwtKeyPipelineTest {
         assertThat(writtenAtLeast(expected)).isEqualTo(expected)
     }
 
-    private val clipboard = Toolkit.getDefaultToolkit().systemClipboard
+    private val clipboard by lazy { Toolkit.getDefaultToolkit().systemClipboard }
     private var savedClipboard: Transferable? = null
 
     @BeforeEach
     fun saveClipboard() {
-        savedClipboard = runCatching { clipboard.getContents(null) }.getOrNull()
+        assumeFalse(GraphicsEnvironment.isHeadless())
+        savedClipboard =runCatching { clipboard.getContents(null) }.getOrNull()
     }
 
     @AfterEach
     fun restoreClipboard() {
+        if (GraphicsEnvironment.isHeadless()) return
         savedClipboard?.let { runCatching { clipboard.setContents(it, null) } }
     }
 

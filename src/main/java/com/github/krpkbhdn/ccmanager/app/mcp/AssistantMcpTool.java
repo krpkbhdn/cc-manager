@@ -16,4 +16,9 @@ public interface AssistantMcpTool extends McpToolDescriptor {
     default boolean autoApproved() {
         return false;
     }
+
+    /** @return what the permission dialog shows for this call; override when the raw arguments do not tell the user what will happen */
+    default JsonNode approvalInput(JsonNode arguments) {
+        return arguments;
+    }
 }

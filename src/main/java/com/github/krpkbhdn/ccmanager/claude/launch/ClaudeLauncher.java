@@ -128,12 +128,6 @@ public class ClaudeLauncher {
                 (files, exe, selection) -> ClaudeCommand.taskArguments(exe, files, plugin.directory(), selection, task));
     }
 
-    /** A session that finishes the author's setup; the prompt points at the staged profile. */
-    public LaunchedSession launchSetup(long projectId, String prompt, Path profileDirectory) {
-        return start(projectId, "claude (author setup)",
-                (files, exe, selection) -> ClaudeCommand.setupArguments(exe, files, plugin.directory(), prompt, profileDirectory));
-    }
-
     /** claude attach ID for a background agent; not for a group, whose variadic --add-dir would swallow the subcommand. */
     public LaunchedSession attach(long projectId, String backgroundSessionId) {
         ClaudeCommand.requireSafeBackgroundId(backgroundSessionId);
@@ -185,10 +179,11 @@ public class ClaudeLauncher {
             if (group) {
                 ClaudeCommand.addDirectories(command, memberPaths);
             }
+            String sessionToken = hookSettings.sessionToken(ccmSessionId);
             Map<String, String> environment = projectId == ASSISTANT_PROJECT_ID
-                    ? ClaudeCommand.assistantEnvironment(System.getenv(), ccmSessionId, hookSettings.assistantToken())
-                    : group ? ClaudeCommand.groupEnvironment(System.getenv(), ccmSessionId)
-                    : ClaudeCommand.environment(System.getenv(), ccmSessionId);
+                    ? ClaudeCommand.assistantEnvironment(System.getenv(), ccmSessionId, sessionToken, hookSettings.assistantToken())
+                    : group ? ClaudeCommand.groupEnvironment(System.getenv(), ccmSessionId, sessionToken)
+                    : ClaudeCommand.environment(System.getenv(), ccmSessionId, sessionToken);
             process = PtySpawner.spawn(command, directory, environment);
             watchExit(ccmSessionId, process);
             return new LaunchedSession(ccmSessionId, projectId, label, process, directory);

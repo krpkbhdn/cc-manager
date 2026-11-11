@@ -6,7 +6,13 @@ import com.github.krpkbhdn.ccmanager.CcManagerApplication;
 import com.github.krpkbhdn.ccmanager.app.mcp.AssistantMcpEndpoint;
 import com.github.krpkbhdn.ccmanager.claude.event.HookEvent;
 import com.github.krpkbhdn.ccmanager.claude.event.HookEventType;
+import com.github.krpkbhdn.ccmanager.claude.hook.HookEventMulticaster;
 import com.github.krpkbhdn.ccmanager.claude.hook.SessionFiles;
+import com.github.krpkbhdn.ccmanager.voice.VoiceConfigurationBootTest;
+import java.util.ArrayList;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.PayloadApplicationEvent;
+import org.springframework.core.Ordered;
 import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalAnswer.PermissionAllow;
 import com.github.krpkbhdn.ccmanager.claude.proposal.ProposalService;
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry;
@@ -39,8 +45,13 @@ class AssistantContextBootTest {
 
     @BeforeAll
     static void boot(@TempDir Path dataDir) {
-        context = new SpringApplicationBuilder(CcManagerApplication.class).web(WebApplicationType.NONE).headless(true)
-                .run("--cc-manager.data-dir=" + dataDir.toAbsolutePath());
+        var headless = System.getProperty("java.awt.headless");
+        try {
+            context = new SpringApplicationBuilder(CcManagerApplication.class).web(WebApplicationType.NONE).headless(true)
+                    .run("--cc-manager.data-dir=" + dataDir.toAbsolutePath());
+        } finally {
+            VoiceConfigurationBootTest.restoreHeadless(headless);
+        }
         assertThat(context.getBean(AppProperties.class).dataDir()).isEqualTo(dataDir.toAbsolutePath());
         endpoint = context.getBean(AssistantMcpEndpoint.class);
         allowEveryAppConfirmation();
@@ -97,6 +108,35 @@ class AssistantContextBootTest {
         var list = arguments.get(arguments.indexOf("--allowedTools") + 1);
         assertThat(List.of(list.split(","))).hasSize(allowed.size()).allMatch(n -> n.startsWith("mcp__cc-manager-app__"));
         assertThat(context.getBean(ClaudeLauncher.class)).isNotNull();
+    }
+
+    @Test
+    void applicationEventMulticasterIsolatesFailingHookEventListeners() {
+        assertThat(context.getBean("applicationEventMulticaster")).isInstanceOf(HookEventMulticaster.class);
+        var seen = new ArrayList<HookEvent>();
+        context.addApplicationListener(new FailingFirstListener());
+        context.addApplicationListener(new ApplicationListener<PayloadApplicationEvent<HookEvent>>() {
+            @Override
+            public void onApplicationEvent(PayloadApplicationEvent<HookEvent> e) {
+                seen.add(e.getPayload());
+            }
+        });
+        var session = context.getBean(SessionRegistry.class).register(ClaudeLauncher.ASSISTANT_PROJECT_ID);
+        var event = new HookEvent(session, HookEventType.PRE_TOOL_USE, "PreToolUse", MAPPER.readTree("{}"), Instant.now());
+        context.publishEvent(event);
+        assertThat(seen).containsExactly(event);
+    }
+
+    private static final class FailingFirstListener implements ApplicationListener<PayloadApplicationEvent<HookEvent>>, Ordered {
+        @Override
+        public void onApplicationEvent(PayloadApplicationEvent<HookEvent> event) {
+            throw new IllegalStateException("boom");
+        }
+
+        @Override
+        public int getOrder() {
+            return Ordered.HIGHEST_PRECEDENCE;
+        }
     }
 
     @Test

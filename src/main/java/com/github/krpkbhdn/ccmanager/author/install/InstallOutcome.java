@@ -31,7 +31,7 @@ public record InstallOutcome(List<String> installed, List<String> alreadyPresent
         var lines = new ArrayList<String>();
         installed.forEach(item -> lines.add("Installed " + item));
         alreadyPresent.forEach(item -> lines.add("Already present " + item));
-        needsAttention.forEach(item -> lines.add("Needs your confirmation on the Plugins page: " + item));
+        needsAttention.forEach(item -> lines.add("Needs your attention: " + item));
         failed.forEach(item -> lines.add("Failed " + item));
         signInNeeded.forEach(item -> lines.add("Sign-in needed for MCP server " + item));
         return lines;

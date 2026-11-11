@@ -43,7 +43,7 @@ class ProposalServiceTest {
     }
 
     private ProposalService serviceHolding(Duration hold, int cap) {
-        return new ProposalService(registry, new HookProperties(10, 1024, 500, hold, cap, 1000));
+        return new ProposalService(registry, new HookProperties(10, 1024, 500, hold, cap, 1000, 1000));
     }
 
     @Test
@@ -66,6 +66,19 @@ class ProposalServiceTest {
     }
 
     @Test
+    void appProposalWithDisplayOnlyInputIsSettledByItsToolsPostToolUseOnTheMatchInput() throws Exception {
+        registry.on(event(session, HookEventType.PRE_TOOL_USE, BASH_LS));
+        var args = MAPPER.readTree("{\"project_id\":7}");
+        var shown = MAPPER.readTree("{\"project_id\":7,\"plan\":\"x\",\"will_write_to\":\"/p\"}");
+        var held = service.holdForApp(new PermissionProposal("app-2", session, Instant.now(), "", "mcp__cc-manager-app__apply_preset", shown, args, List.of()));
+
+        service.on(event(session, HookEventType.POST_TOOL_USE, "{\"tool_name\":\"mcp__cc-manager-app__apply_preset\",\"tool_input\":{\"project_id\":7}}"));
+
+        assertThat(held).isDone();
+        assertThat(service.pending()).isEmpty();
+    }
+
+    @Test
     void appHeldProposalCompletesWithTheUsersAnswerAndNoHookOutput() throws Exception {
         var held = holdForApp(service);
         assertThat(held).isNotDone();
@@ -79,16 +92,23 @@ class ProposalServiceTest {
     }
 
     @Test
-    void appHeldProposalNamesWhyThereIsNoAnswerOnDismissTimeoutAndWhenTheSessionGoesIdle() throws Exception {
+    void appHeldProposalIsNotReleasedWhenItsSessionIsIdleAndStillAnswerable() throws Exception {
+        var held = holdForApp(service);
+
+        registry.markInterrupted(session);
+
+        assertThat(held).isNotDone();
+        assertThat(service.answer("app-1", PermissionAllow.once())).isTrue();
+        assertThat(held.get(WAIT_SECONDS, TimeUnit.SECONDS)).isInstanceOf(AppDecision.Answered.class);
+    }
+
+    @Test
+    void appHeldProposalNamesWhyThereIsNoAnswerOnDismissAndTimeout() throws Exception {
         var dismissed = holdForApp(service);
         assertThat(service.dismiss("app-1")).isTrue();
         assertThat(dismissed.get(WAIT_SECONDS, TimeUnit.SECONDS)).isEqualTo(AppDecision.Unanswered.RELEASED);
 
         assertThat(holdForApp(serviceHolding(SHORT_HOLD)).get(WAIT_SECONDS, TimeUnit.SECONDS)).isEqualTo(AppDecision.Unanswered.TIMED_OUT);
-
-        var interrupted = holdForApp(service);
-        registry.markInterrupted(session);
-        assertThat(interrupted.get(WAIT_SECONDS, TimeUnit.SECONDS)).isEqualTo(AppDecision.Unanswered.RELEASED);
     }
 
     @Test

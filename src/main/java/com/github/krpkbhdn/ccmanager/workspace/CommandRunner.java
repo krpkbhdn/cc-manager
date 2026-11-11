@@ -55,7 +55,9 @@ public final class CommandRunner {
             if (!finished) {
                 ProcessTree.kill(process);
             }
-            awaitReaders(process, CompletableFuture.allOf(stdoutTruncated, stderrTruncated));
+            var readers = CompletableFuture.allOf(stdoutTruncated, stderrTruncated);
+            awaitReaders(process, readers);
+            readers.completeOnTimeout(null, READER_GRACE.toMillis(), TimeUnit.MILLISECONDS).join();
             return new Result(finished ? process.exitValue() : -1, stdout.toString(StandardCharsets.UTF_8), stderr.toString(StandardCharsets.UTF_8), !finished,
                     stdoutTruncated.getNow(false) || stderrTruncated.getNow(false));
         } catch (InterruptedException e) {

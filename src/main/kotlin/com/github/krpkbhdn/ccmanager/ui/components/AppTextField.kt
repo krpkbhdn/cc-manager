@@ -30,6 +30,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.ui.theme.Motion
 import com.github.krpkbhdn.ccmanager.ui.theme.Radius
@@ -38,7 +39,7 @@ import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 import com.github.krpkbhdn.ccmanager.ui.voice.VoiceDictation
 
-private val fieldHeight = 36.dp
+internal val DEFAULT_FIELD_HEIGHT = 36.dp
 private const val MASK_CHAR = '•'
 
 /** Single-line text field with an optional leading icon and placeholder, a focus ring and Enter-to-submit; with [voice], holding Space dictates. */
@@ -53,6 +54,7 @@ fun AppTextField(
     masked: Boolean = false,
     onSubmit: () -> Unit = {},
     voice: VoiceDictation? = null,
+    height: Dp = DEFAULT_FIELD_HEIGHT,
     trailing: @Composable () -> Unit = {},
 ) {
     val source = remember { MutableInteractionSource() }
@@ -77,7 +79,7 @@ fun AppTextField(
         interactionSource = source,
         decorator = { inner ->
             Row(
-                Modifier.fillMaxWidth().height(fieldHeight).background(colors.background, shape).border(1.dp, borderColor, shape).padding(horizontal = Spacing.md),
+                Modifier.fillMaxWidth().height(height).background(colors.background, shape).border(1.dp, borderColor, shape).padding(horizontal = Spacing.md),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {

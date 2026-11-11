@@ -58,6 +58,28 @@ class GitRunnerTest {
     }
 
     @Test
+    void writeCommandIsNotKilledAtTheTimeout() throws Exception {
+        var sandbox = GitCliSandbox.create(root);
+        var hooks = java.nio.file.Files.createDirectory(root.resolve("hooks"));
+        java.nio.file.Files.writeString(hooks.resolve("pre-commit"), "#!/bin/sh\nsleep 2\n");
+        hooks.resolve("pre-commit").toFile().setExecutable(true);
+
+        var result = sandbox.runner.run(sandbox.repo, Duration.ofMillis(300), null, null,
+                List.of("-c", "core.hooksPath=" + hooks.toString().replace('\\', '/'), "commit", "--allow-empty", "-m", "slow"));
+
+        assertThat(result.ok()).isTrue();
+    }
+
+    @Test
+    void onlyHookRunningCommandsAreExemptFromTheKill() {
+        assertThat(GitRunner.runsHooks(List.of("commit", "-m", "x"))).isTrue();
+        assertThat(GitRunner.runsHooks(List.of("-c", "core.editor=true", "rebase", "--continue"))).isTrue();
+        assertThat(GitRunner.runsHooks(List.of("pull", "--ff-only"))).isFalse();
+        assertThat(GitRunner.runsHooks(List.of("stash", "list"))).isFalse();
+        assertThat(GitRunner.runsHooks(List.of("worktree", "list"))).isFalse();
+    }
+
+    @Test
     void writingCommandsGetTheSyncTimeout() {
         var runner = new GitRunner();
         var properties = runner.properties();

@@ -74,8 +74,8 @@ class QueueDispatchTest {
     }
 
     @Test
-    fun `the timed re-check gives up after the retry cap and the next evaluation restarts it`() {
-        val capped = QueueDispatch(queues, { listOf(session()) }, { draft }, { false }, { _, text -> sent += text; true }, scope, clock::get, RETRY_MILLIS, 2)
+    fun `after the retry cap the re-check continues at the slow cadence`() {
+        val capped = QueueDispatch(queues, { listOf(session()) }, { draft }, { false }, { _, text -> sent += text; true }, scope, clock::get, RETRY_MILLIS, 2, RETRY_MILLIS * 5)
         draft = true
         queues.add("s", "later")
         evaluate(capped)
@@ -83,10 +83,7 @@ class QueueDispatchTest {
 
         draft = false
         advance(RETRY_MILLIS * 5)
-        assertThat(sent).isEmpty()
-
-        evaluate(capped)
-        assertThat(sent).isNotEmpty()
+        assertThat(sent).containsExactly("later")
         capped.dispose()
     }
 

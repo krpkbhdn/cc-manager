@@ -59,9 +59,9 @@ public class UsageHistoryRepository {
                     FROM usage_sample WHERE at >= :from AND at < :to
                     UNION ALL
                     SELECT day, project_id, model, cost_usd FROM usage_daily
-                    WHERE day >= %s AND day <= %s)
+                    WHERE day > %s AND day < %s)
                 GROUP BY day, project_id, model ORDER BY day, project_id, model"""
-                .formatted(LOCAL_DAY, dayOf(":from"), dayOf(":to - 1")))
+                .formatted(LOCAL_DAY, dayOf(":from - 1"), dayOf(":to")))
                 .param("from", from.toEpochMilli()).param("to", to.toEpochMilli())
                 .query((rs, i) -> new DailyCost(LocalDate.parse(rs.getString("day")), rs.getLong("project_id"),
                         rs.getString("model"), rs.getDouble("cost")))
@@ -88,9 +88,10 @@ public class UsageHistoryRepository {
                 .param("from", from.toEpochMilli()).param("to", to.toEpochMilli())
                 .query((rs, i) -> new PeriodSummary(rs.getDouble(1), rs.getLong(2), rs.getLong(3))).single();
         // sessions spanning several days are counted once per day
+        // shortcut: a folded day is counted only when wholly inside [from, to), partial edge days of folded data are dropped, split would need hourly totals
         var daily = jdbc.sql("""
                 SELECT COALESCE(SUM(cost_usd), 0), COALESCE(SUM(sessions), 0), COALESCE(SUM(samples), 0)
-                FROM usage_daily WHERE day >= %s AND day <= %s""".formatted(dayOf(":from"), dayOf(":to - 1")))
+                FROM usage_daily WHERE day > %s AND day < %s""".formatted(dayOf(":from - 1"), dayOf(":to")))
                 .param("from", from.toEpochMilli()).param("to", to.toEpochMilli())
                 .query((rs, i) -> new PeriodSummary(rs.getDouble(1), rs.getLong(2), rs.getLong(3))).single();
         return new PeriodSummary(raw.totalCostUsd() + daily.totalCostUsd(), raw.sessionCount() + daily.sessionCount(),

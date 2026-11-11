@@ -156,6 +156,109 @@ class RunServiceTest {
     }
 
     @Test
+    void startOfAnotherConfigurationIsNotBlockedByASlowStart() throws Exception {
+        var slow = configurations.save(projectId, "slow", "exit 0", temp);
+        var fast = configurations.save(projectId, "fast", "exit 0", temp);
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var service = serviceWhoseLookupOf(slow.id(), entered, release);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            var slowStart = pool.submit(() -> service.start(slow.id()));
+            assertThat(entered.await(TIMEOUT.toSeconds(), TimeUnit.SECONDS)).isTrue();
+
+            var fastStart = pool.submit(() -> service.start(fast.id()));
+
+            assertThat(fastStart.get(TIMEOUT.toSeconds(), TimeUnit.SECONDS).ccmSessionId()).startsWith("run-" + fast.id() + "-");
+            release.countDown();
+            slowStart.get(TIMEOUT.toSeconds(), TimeUnit.SECONDS);
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+            service.stopAll();
+        }
+    }
+
+    @Test
+    void secondConcurrentStartWaitsForTheFirstRunToExitBeforeSpawning() throws Exception {
+        var configuration = configurations.save(projectId, "long", LONG_COMMAND, temp);
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var service = serviceWhoseLookupOf(configuration.id(), entered, release);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            var first = pool.submit(() -> service.start(configuration.id()));
+            assertThat(entered.await(TIMEOUT.toSeconds(), TimeUnit.SECONDS)).isTrue();
+            var second = pool.submit(() -> service.start(configuration.id()));
+            release.countDown();
+
+            var firstRun = first.get(TIMEOUT.toSeconds(), TimeUnit.SECONDS);
+            var secondRun = second.get(TIMEOUT.toSeconds(), TimeUnit.SECONDS);
+
+            assertThat(firstRun.process().isAlive()).isFalse();
+            assertThat(secondRun.process().isAlive()).isTrue();
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+            service.stopAll();
+        }
+    }
+
+    @Test
+    void concurrentStartsOfTheSameConfigurationAreSerialised() throws Exception {
+        var configuration = configurations.save(projectId, "same", "exit 0", temp);
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var service = serviceWhoseLookupOf(configuration.id(), entered, release);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            var first = pool.submit(() -> service.start(configuration.id()));
+            assertThat(entered.await(TIMEOUT.toSeconds(), TimeUnit.SECONDS)).isTrue();
+
+            var second = pool.submit(() -> service.start(configuration.id()));
+
+            assertThatThrownBy(() -> second.get(500, TimeUnit.MILLISECONDS)).isInstanceOf(java.util.concurrent.TimeoutException.class);
+            release.countDown();
+            var firstId = first.get(TIMEOUT.toSeconds(), TimeUnit.SECONDS).ccmSessionId();
+            assertThat(second.get(TIMEOUT.toSeconds(), TimeUnit.SECONDS).ccmSessionId()).isNotEqualTo(firstId);
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+            service.stopAll();
+        }
+    }
+
+    /** A service whose second lookup (the one inside the start lock) waits for {@code release}, so a start can be held inside its lock. */
+    private RunService serviceWhoseLookupOf(long configurationId, CountDownLatch entered, CountDownLatch release) {
+        var spied = org.mockito.Mockito.spy(configurations);
+        var lookups = new java.util.concurrent.atomic.AtomicInteger();
+        org.mockito.Mockito.doAnswer(invocation -> {
+            if (lookups.incrementAndGet() == 2) {
+                entered.countDown();
+                release.await(TIMEOUT.toSeconds(), TimeUnit.SECONDS);
+            }
+            return invocation.callRealMethod();
+        }).when(spied).find(configurationId);
+        var host = new SystemHostEnvironment();
+        return new RunService(spied, projects, new RunShell(host), host);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void deletingAConfigurationDropsItsStartLock() throws Exception {
+        var configuration = configurations.save(projectId, "short", "exit 0", temp);
+        runs.start(configuration.id());
+        var locks = RunService.class.getDeclaredField("startLocks");
+        locks.setAccessible(true);
+        var startLocks = (java.util.Map<Long, Object>) locks.get(runs);
+        assertThat(startLocks).containsKey(configuration.id());
+
+        configurations.delete(configuration.id());
+
+        assertThat(startLocks).doesNotContainKey(configuration.id());
+    }
+
+    @Test
     void startFailsReadablyForAMissingConfiguration() {
         assertThatThrownBy(() -> runs.start(12345)).isInstanceOf(IllegalStateException.class).hasMessageContaining("no longer exists");
     }
