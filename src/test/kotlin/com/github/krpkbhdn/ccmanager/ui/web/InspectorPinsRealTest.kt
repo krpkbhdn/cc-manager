@@ -226,18 +226,9 @@ class InspectorPinsRealTest {
     }
 
     @Test
-    fun scroll_and_editing_messages_are_sent() {
-        evaluate("(document.body.style.height = '2000px', 1)")
-        try {
-            val scrolled = messagesAfter(InspectorBridge.scrollBy(0.0, 150.0))
-            val scroll = scrolled.last { it["type"].asString() == "scroll" }
-            assertThat(scroll["y"].asDouble()).isEqualTo(150.0)
-            assertThat(scroll["h"].asDouble()).isGreaterThanOrEqualTo(2000.0)
-            assertThat(editingMessages("focusin")).containsExactly(true)
-            assertThat(editingMessages("focusout")).containsExactly(false)
-        } finally {
-            evaluate("(document.body.style.height = '', scrollTo(0, 0), 1)")
-        }
+    fun editing_messages_are_sent() {
+        assertThat(editingMessages("focusin")).containsExactly(true)
+        assertThat(editingMessages("focusout")).containsExactly(false)
     }
 
     @Test

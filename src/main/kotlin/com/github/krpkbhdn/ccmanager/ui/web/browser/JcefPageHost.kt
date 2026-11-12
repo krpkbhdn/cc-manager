@@ -3,6 +3,7 @@ package com.github.krpkbhdn.ccmanager.ui.web.browser
 import com.github.krpkbhdn.ccmanager.ui.web.ConsoleLevel
 import com.github.krpkbhdn.ccmanager.ui.web.InspectorBridge
 import com.github.krpkbhdn.ccmanager.ui.web.InspectorMessage
+import com.github.krpkbhdn.ccmanager.web.WebReviewProperties
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,6 +40,7 @@ import java.awt.event.MouseEvent
 import java.awt.event.MouseWheelEvent
 import java.nio.ByteBuffer
 import java.nio.file.Path
+import java.time.Duration
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.atomic.AtomicBoolean
@@ -48,7 +50,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * flows; sizes in the interface are DIPs, the painted frame is DIP size times the density.
  * Per host a client and message router, so a query always belongs to its page.
  */
-class JcefPageHost(app: CefApp, url: String = "about:blank") : WebPageHost {
+class JcefPageHost(app: CefApp, url: String = "about:blank", private val screenshotTimeout: Duration = WebReviewProperties.DEFAULT_SCREENSHOT_TIMEOUT) : WebPageHost {
     // First, so a rejected URL fails before any native object exists.
     private val initialUrl = NavigationPolicy.require(url)
     private val pageState = MutableStateFlow(PageState(url = initialUrl))
@@ -159,6 +161,12 @@ class JcefPageHost(app: CefApp, url: String = "about:blank") : WebPageHost {
 
     override fun capture(xDip: Int, yDip: Int, widthDip: Int, heightDip: Int): ByteArray? =
         pageFrames.withLatestImage { image, frameDensity -> FrameCrop.png(image, frameDensity, xDip, yDip, widthDip, heightDip) }
+
+    override fun screenshot(area: ShotArea, limits: ShotLimits): PageShot? = if (closed.get()) null else shooter().screenshot(area, limits)
+
+    override fun scrollOffset(): PageScroll? = if (closed.get()) null else shooter().scrollOffset()
+
+    private fun shooter() = PageShooter(DevTools(browser), screenshotTimeout) { pageState.value }
 
     /** Open Skia images behind the page frames, for tests that watch native memory. */
     internal val openFrameImages: Int get() = pageFrames.openImages
@@ -314,7 +322,8 @@ class JcefPageHost(app: CefApp, url: String = "about:blank") : WebPageHost {
         }
 
         /** Starts CEF on first use; [dataDir] is the app data directory that holds the browser cache. */
-        fun open(dataDir: Path, url: String = "about:blank"): WebPageHost = JcefPageHost(JcefRuntime.start(dataDir), url)
+        fun open(dataDir: Path, url: String = "about:blank", screenshotTimeout: Duration = WebReviewProperties.DEFAULT_SCREENSHOT_TIMEOUT): WebPageHost =
+            JcefPageHost(JcefRuntime.start(dataDir), url, screenshotTimeout)
 
         internal fun consoleLevel(severity: CefSettings.LogSeverity): ConsoleLevel = when (severity) {
             CefSettings.LogSeverity.LOGSEVERITY_VERBOSE -> ConsoleLevel.DEBUG

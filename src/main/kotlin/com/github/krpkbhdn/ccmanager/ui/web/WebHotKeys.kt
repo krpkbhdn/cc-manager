@@ -1,6 +1,6 @@
 package com.github.krpkbhdn.ccmanager.ui.web
 
-import com.github.krpkbhdn.ccmanager.ui.review.ReviewTool
+import com.github.krpkbhdn.ccmanager.ui.web.browser.ShotArea
 import java.awt.event.InputEvent
 import java.awt.event.KeyEvent
 
@@ -9,7 +9,6 @@ sealed interface WebAction {
     data object TogglePick : WebAction
     data object StickyPick : WebAction
     data object QuickFeedback : WebAction
-    data object ToggleDrawing : WebAction
     data object ToggleOverlays : WebAction
     data object ToggleLock : WebAction
     data object Rotate : WebAction
@@ -17,25 +16,20 @@ sealed interface WebAction {
     data object Zoom100 : WebAction
     data object ZoomIn : WebAction
     data object ZoomOut : WebAction
-    data object DeleteMark : WebAction
-    data object Confirm : WebAction
     data object CloseMenu : WebAction
-    data object CancelGesture : WebAction
-    data object DisarmTool : WebAction
     data object StopPick : WebAction
-    data object ExitDrawing : WebAction
+    data object StartRegion : WebAction
+    data object CancelRegion : WebAction
+    data class Screenshot(val area: ShotArea) : WebAction
     data class ToggleGroup(val group: OverlayGroup) : WebAction
-    data class SelectTool(val tool: ReviewTool) : WebAction
 }
 
-/** The app modes that decide what a key means; [menuOpen] is a context menu or popover, [gestureRunning] a mark being drawn. */
+/** The app modes that decide what a key means; [menuOpen] is a context menu or popover, [regionSelecting] the screenshot region overlay. */
 data class HotKeyModes(
     val interaction: Boolean = true,
-    val drawing: Boolean = false,
     val picking: Boolean = false,
     val menuOpen: Boolean = false,
-    val gestureRunning: Boolean = false,
-    val toolArmed: Boolean = false,
+    val regionSelecting: Boolean = false,
 )
 
 /** [swallow]: the key was taken (or is the typed/released echo of one that was), so the page must not see it. */
@@ -51,27 +45,14 @@ object WebHotKeys {
         if (pageEditing && modes.interaction) return null
         val shift = modifiers and InputEvent.SHIFT_DOWN_MASK != 0
         if (key == KeyEvent.VK_ESCAPE) return if (shift) null else escape(modes)
-        return (if (modes.drawing && !shift) drawingKey(key) else null) ?: globalKey(key, shift)
+        return globalKey(key, shift)
     }
 
     /** Nearest thing to close first; null leaves Esc to the page. */
     private fun escape(modes: HotKeyModes): WebAction? = when {
+        modes.regionSelecting -> WebAction.CancelRegion
         modes.menuOpen -> WebAction.CloseMenu
-        modes.gestureRunning -> WebAction.CancelGesture
-        modes.toolArmed -> WebAction.DisarmTool
         modes.picking -> WebAction.StopPick
-        modes.drawing -> WebAction.ExitDrawing
-        else -> null
-    }
-
-    private fun drawingKey(key: Int): WebAction? = when (key) {
-        KeyEvent.VK_V -> WebAction.SelectTool(ReviewTool.POINTER)
-        KeyEvent.VK_R -> WebAction.SelectTool(ReviewTool.RECTANGLE)
-        KeyEvent.VK_E -> WebAction.SelectTool(ReviewTool.ELLIPSE)
-        KeyEvent.VK_P -> WebAction.SelectTool(ReviewTool.PIN)
-        KeyEvent.VK_F -> WebAction.SelectTool(ReviewTool.FREEFORM)
-        KeyEvent.VK_DELETE ->WebAction.DeleteMark
-        KeyEvent.VK_ENTER -> WebAction.Confirm
         else -> null
     }
 
@@ -80,15 +61,16 @@ object WebHotKeys {
         KeyEvent.VK_0 -> if (shift) WebAction.Zoom100 else WebAction.ZoomFit
         KeyEvent.VK_EQUALS, KeyEvent.VK_PLUS, KeyEvent.VK_ADD -> WebAction.ZoomIn
         KeyEvent.VK_MINUS, KeyEvent.VK_SUBTRACT -> WebAction.ZoomOut
+        KeyEvent.VK_S -> WebAction.Screenshot(if (shift) ShotArea.WholePage else ShotArea.Visible)
         else -> if (shift) null else plainKey(key)
     }
 
     private fun plainKey(key: Int): WebAction? = when (key) {
         KeyEvent.VK_Q -> WebAction.QuickFeedback
-        KeyEvent.VK_D -> WebAction.ToggleDrawing
         KeyEvent.VK_O -> WebAction.ToggleOverlays
         KeyEvent.VK_L -> WebAction.ToggleLock
         KeyEvent.VK_T -> WebAction.Rotate
+        KeyEvent.VK_R -> WebAction.StartRegion
         in KeyEvent.VK_1..KeyEvent.VK_5 -> GROUPS[('0' + (key - KeyEvent.VK_0))]?.let(WebAction::ToggleGroup)
         else -> null
     }

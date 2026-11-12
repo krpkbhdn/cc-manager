@@ -49,7 +49,6 @@ sealed interface InspectorMessage {
     data class AnnotationHover(val id: String, val rect: Rect?) : InspectorMessage
     data object AnnotationLeave : InspectorMessage
     data class Editing(val on: Boolean) : InspectorMessage
-    data class Scroll(val x: Double, val y: Double, val w: Double, val h: Double) : InspectorMessage
     data class ModuleError(val module: String, val message: String) : InspectorMessage
 
     companion object {
@@ -97,7 +96,6 @@ private object InspectorMessageReader {
         "annotationHover" -> idOf(node)?.let { InspectorMessage.AnnotationHover(it, rect(node, "rect")) }
         "annotationLeave" -> InspectorMessage.AnnotationLeave
         "editing" -> InspectorMessage.Editing(flag(node, "on"))
-        "scroll" -> InspectorMessage.Scroll(number(node, "x"), number(node, "y"), number(node, "w").coerceAtLeast(0.0), number(node, "h").coerceAtLeast(0.0))
         "moduleError" -> InspectorMessage.ModuleError(text(node, "module", MAX_VALUE).orEmpty(), text(node, "message", MAX_VALUE).orEmpty())
         else -> null
     }

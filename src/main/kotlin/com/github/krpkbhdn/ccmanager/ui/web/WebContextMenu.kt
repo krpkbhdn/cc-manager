@@ -41,7 +41,7 @@ fun WebContextMenu(view: WebView, state: WebState) {
     val layer = menu.items.getOrNull(menu.chosen)
     fun inspect(reason: String) = layer?.let { state.requestInspect(view, it.selector, reason) }
     val entries = listOf(
-        MenuEntry("Leave feedback", Icons.Message, enabled = layer != null, onSelect = { inspect(REASON_FEEDBACK) }),
+        MenuEntry("Leave feedback", Icons.Message, hint = "Q", enabled = layer != null, onSelect = { inspect(REASON_FEEDBACK) }),
         MenuEntry("Edit styles", Icons.Edit, enabled = layer != null, onSelect = { inspect(REASON_STYLES) }),
         MenuEntry("Select similar", Icons.Layers, enabled = layer != null, onSelect = { view.host.runScript(InspectorBridge.highlight("")); view.host.runScript(InspectorBridge.showSimilar(layer!!.selector)); view.contextMenu = null }),
         MenuEntry("Copy selector", Icons.Copy, enabled = layer != null, onSelect = { copyToClipboard(layer!!.selector); close() }),

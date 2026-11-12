@@ -1,18 +1,10 @@
 package com.github.krpkbhdn.ccmanager.web;
 
-import com.github.krpkbhdn.ccmanager.review.MarkPoint;
-import com.github.krpkbhdn.ccmanager.review.ReviewImageAnnotator;
-import com.github.krpkbhdn.ccmanager.review.ReviewMark;
 import com.github.krpkbhdn.ccmanager.review.ReviewStatus;
 import com.github.krpkbhdn.ccmanager.web.WebReviewRepository.ItemRef;
 import com.github.krpkbhdn.ccmanager.workspace.ChangeListeners;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import javax.imageio.ImageIO;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -40,7 +32,6 @@ public class WebReviewService {
     private final WebReviewProperties properties;
     private final WebScreenshotStore screenshots;
     private final WebFeedbackWriter feedbackWriter;
-    private final ReviewImageAnnotator annotator = new ReviewImageAnnotator();
     private final ChangeListeners listeners = new ChangeListeners("Web review");
 
     public WebReviewService(JdbcClient jdbc, TransactionTemplate transaction, WebReviewProperties properties, WebScreenshotStore screenshots,
@@ -54,6 +45,10 @@ public class WebReviewService {
 
     public BrowserLimits browserLimits() {
         return new BrowserLimits(properties.maxLiveBrowsers(), properties.idleBrowserTtl());
+    }
+
+    public Duration screenshotTimeout() {
+        return properties.screenshotTimeout();
     }
 
     /** The project's PENDING revision, created when missing; there is never more than one. */
@@ -108,96 +103,16 @@ public class WebReviewService {
      */
     public WebItem addItem(long projectId, String url, String title, ElementAnchor anchor, String comment, List<StyleChange> changes,
             WebViewport viewport) {
-        return addItem(projectId, url, title, anchor, comment, changes, viewport, null);
-    }
-
-    /**
-     * @param shape a mark drawn on the page, in document px; with a null anchor an element-less one holding the shape's rectangle is stored
-     * @throws IllegalArgumentException as above
-     */
-    public WebItem addItem(long projectId, String url, String title, ElementAnchor anchor, String comment, List<StyleChange> changes,
-            WebViewport viewport, WebMarkShape shape) {
-        var itemAnchor = anchor == null && shape != null ? shapeAnchor(shape) : anchor;
-        requireContent(itemAnchor, comment, changes);
+        requireContent(anchor, comment, changes);
         var pageKey = PageKey.of(url);
         var item = transaction.execute(status -> {
             var revision = repository.pendingOrNewRevision(projectId);
             requireRoom(revision.id());
             var page = repository.upsertPage(projectId, pageKey, url.strip(), title == null ? "" : title);
-            return repository.insertItem(projectId, revision.id(), page.id(), itemAnchor, comment, changes, viewport, shape);
+            return repository.insertItem(projectId, revision.id(), page.id(), anchor, comment, changes, viewport);
         });
         listeners.fire();
         return item;
-    }
-
-    /**
-     * Replaces the shape and drops the now stale screenshot (file and column); the caller re-captures it and calls {@link #saveAnnotatedScreenshot}.
-     * @throws IllegalArgumentException for an unknown item or one that was not drawn @throws IllegalStateException when the item is not OPEN
-     */
-    public void updateItemShape(long itemId, WebMarkShape shape) {
-        changeShape(itemId, shape, false);
-    }
-
-    /** As {@link #updateItemShape}, but returns false instead of throwing when the item is gone, not drawn or no longer OPEN. */
-    public boolean tryUpdateItemShape(long itemId, WebMarkShape shape) {
-        return changeShape(itemId, shape, true);
-    }
-
-    private boolean changeShape(long itemId, WebMarkShape shape, boolean lenient) {
-        Objects.requireNonNull(shape, "shape");
-        var changed = transaction.execute(status -> {
-            var found = repository.itemRef(itemId);
-            if (found.isEmpty() && lenient) {
-                return Optional.<ItemRef>empty();
-            }
-            var ref = found.orElseThrow(() -> new IllegalArgumentException("Item not found: " + itemId));
-            if (ref.status() != WebItemStatus.OPEN) {
-                if (lenient) {
-                    return Optional.<ItemRef>empty();
-                }
-                throw new IllegalStateException("Only an open item can be edited.");
-            }
-            if (repository.findItem(itemId).map(WebItem::shape).isEmpty()) {
-                if (lenient) {
-                    return Optional.<ItemRef>empty();
-                }
-                throw new IllegalArgumentException("Item " + itemId + " has no drawn shape.");
-            }
-            repository.updateShape(itemId, shape);
-            return Optional.of(ref);
-        });
-        changed.ifPresent(ref -> {
-            bestEffort(() -> screenshots.delete(ref.projectId(), ref.revisionId(), ref.n()));
-            listeners.fire();
-        });
-        return changed.isPresent();
-    }
-
-    /**
-     * Stores the cropped screenshot of a drawn item with the mark burned in.
-     * @param markInCrop the shape in pixels of the cropped PNG
-     * @throws IllegalArgumentException when the bytes are not a PNG or too large, or the item is gone
-     */
-    public void saveAnnotatedScreenshot(long itemId, byte[] png, WebMarkShape markInCrop) {
-        Objects.requireNonNull(markInCrop, "markInCrop");
-        var ref = repository.itemRef(itemId).orElseThrow(() -> new IllegalArgumentException("Item not found: " + itemId));
-        var file = screenshots.save(ref.projectId(), ref.revisionId(), ref.n(), png);
-        var path = screenshots.directory(ref.projectId(), ref.revisionId()).resolve(file);
-        var temporary = path.resolveSibling(file + ".tmp");
-        try {
-            var size = ImageIO.read(new ByteArrayInputStream(png));
-            annotator.annotate(path, temporary, List.of(normalised(markInCrop, size.getWidth(), size.getHeight())));
-            Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException | RuntimeException e) {
-            deleteQuietly(temporary);
-            deleteQuietly(path);
-            if (e instanceof IOException io) {
-                throw new UncheckedIOException(io);
-            }
-            throw (RuntimeException) e;
-        }
-        repository.setScreenshot(itemId, file);
-        listeners.fire();
     }
 
     /** @throws IllegalArgumentException for an unknown item @throws IllegalStateException when the item is not OPEN */
@@ -332,15 +247,6 @@ public class WebReviewService {
         return listeners.add(onChange);
     }
 
-    private static ElementAnchor shapeAnchor(WebMarkShape shape) {
-        return new ElementAnchor("", null, null, null, new ElementAnchor.Rect(shape.x(), shape.y(), shape.w(), shape.h()), null, null, null, null);
-    }
-
-    private static ReviewMark normalised(WebMarkShape shape, int width, int height) {
-        var points = shape.points().stream().map(p -> new MarkPoint(p.x() / width, p.y() / height)).toList();
-        return new ReviewMark(0, 0, shape.kind(), shape.x() / width, shape.y() / height, shape.w() / width, shape.h() / height, "", points);
-    }
-
     private void requireRoom(long revisionId) {
         if (repository.itemCount(revisionId) >= properties.maxItemsPerRevision()) {
             throw new IllegalArgumentException("This revision already has " + properties.maxItemsPerRevision() + " items: send it first.");
@@ -357,14 +263,6 @@ public class WebReviewService {
     private static void requireContent(String comment, List<StyleChange> changes) {
         if (comment == null || changes == null || changes.stream().anyMatch(Objects::isNull)) {
             throw new IllegalArgumentException("The item needs a comment and a list of style changes (possibly empty).");
-        }
-    }
-
-    private static void deleteQuietly(Path file) {
-        try {
-            Files.deleteIfExists(file);
-        } catch (IOException e) {
-            LOG.warn("A web review file could not be removed: {}", e.getClass().getSimpleName());
         }
     }
 

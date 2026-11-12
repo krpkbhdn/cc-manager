@@ -46,6 +46,16 @@ class ReviewCleanupTest {
     }
 
     @Test
+    void sweepsStaleCaptureFilesAndKeepsTheCaptureFolder() throws IOException {
+        var captures = folder(ReviewService.CAPTURE_FOLDER, NOW.minus(Duration.ofHours(5)));
+
+        cleanup.sweep();
+
+        verify(service).deleteStaleCaptures(NOW.minus(ReviewCleanup.STALE_CAPTURE_AGE));
+        assertThat(captures).exists();
+    }
+
+    @Test
     void deletesOldOrphanAndNonNumericFoldersButKeepsKnownOnes() throws IOException {
         var known = folder("1", NOW.minus(Duration.ofHours(1)));
         var orphan = folder("2", NOW.minus(Duration.ofHours(1)));

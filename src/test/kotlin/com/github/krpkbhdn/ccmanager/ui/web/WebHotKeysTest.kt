@@ -1,6 +1,6 @@
 package com.github.krpkbhdn.ccmanager.ui.web
 
-import com.github.krpkbhdn.ccmanager.ui.review.ReviewTool
+import com.github.krpkbhdn.ccmanager.ui.web.browser.ShotArea
 import java.awt.event.InputEvent
 import java.awt.event.KeyEvent
 import org.assertj.core.api.Assertions.assertThat
@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test
 
 class WebHotKeysTest {
     private val idle = HotKeyModes()
-    private val drawing = HotKeyModes(drawing = true)
     private val none = 0
     private val shift = InputEvent.SHIFT_DOWN_MASK
 
@@ -20,7 +19,6 @@ class WebHotKeysTest {
         assertThat(resolve(KeyEvent.VK_I)).isEqualTo(WebAction.TogglePick)
         assertThat(resolve(KeyEvent.VK_I, shift)).isEqualTo(WebAction.StickyPick)
         assertThat(resolve(KeyEvent.VK_Q)).isEqualTo(WebAction.QuickFeedback)
-        assertThat(resolve(KeyEvent.VK_D)).isEqualTo(WebAction.ToggleDrawing)
         assertThat(resolve(KeyEvent.VK_O)).isEqualTo(WebAction.ToggleOverlays)
         assertThat(resolve(KeyEvent.VK_L)).isEqualTo(WebAction.ToggleLock)
         assertThat(resolve(KeyEvent.VK_T)).isEqualTo(WebAction.Rotate)
@@ -35,43 +33,42 @@ class WebHotKeysTest {
     }
 
     @Test
+    fun `S takes a screenshot of the visible part, Shift+S of the whole page and R starts a region`() {
+        assertThat(resolve(KeyEvent.VK_S)).isEqualTo(WebAction.Screenshot(ShotArea.Visible))
+        assertThat(resolve(KeyEvent.VK_S, shift)).isEqualTo(WebAction.Screenshot(ShotArea.WholePage))
+        assertThat(resolve(KeyEvent.VK_R)).isEqualTo(WebAction.StartRegion)
+        assertThat(resolve(KeyEvent.VK_R, shift)).isNull()
+        assertThat(resolve(KeyEvent.VK_S, InputEvent.CTRL_DOWN_MASK)).isNull()
+        assertThat(resolve(KeyEvent.VK_S, editing = true)).isNull()
+    }
+
+    @Test
+    fun `Esc cancels the region overlay before the menu and the pick`() {
+        val all = HotKeyModes(picking = true, menuOpen = true, regionSelecting = true)
+        assertThat(resolve(KeyEvent.VK_ESCAPE, modes = all)).isEqualTo(WebAction.CancelRegion)
+        assertThat(resolve(KeyEvent.VK_ESCAPE, modes = all.copy(regionSelecting = false))).isEqualTo(WebAction.CloseMenu)
+    }
+
+    @Test
     fun `a chord with Ctrl Alt or Meta passes through`() {
         listOf(InputEvent.CTRL_DOWN_MASK, InputEvent.ALT_DOWN_MASK, InputEvent.META_DOWN_MASK).forEach {
             assertThat(resolve(KeyEvent.VK_I, it)).isNull()
-            assertThat(resolve(KeyEvent.VK_ESCAPE, it, HotKeyModes(drawing = true))).isNull()
+            assertThat(resolve(KeyEvent.VK_ESCAPE, it, HotKeyModes(menuOpen = true))).isNull()
         }
     }
 
     @Test
     fun `nothing fires while the page edits text unless the page is locked`() {
         assertThat(resolve(KeyEvent.VK_I, editing = true)).isNull()
-        assertThat(resolve(KeyEvent.VK_ESCAPE, modes = drawing, editing = true)).isNull()
+        assertThat(resolve(KeyEvent.VK_ESCAPE, modes = HotKeyModes(menuOpen = true), editing = true)).isNull()
         assertThat(resolve(KeyEvent.VK_I, modes = HotKeyModes(interaction = false), editing = true)).isEqualTo(WebAction.TogglePick)
     }
 
     @Test
-    fun `tool keys and mark keys exist only in drawing mode`() {
-        assertThat(resolve(KeyEvent.VK_R)).isNull()
-        assertThat(resolve(KeyEvent.VK_DELETE)).isNull()
-        assertThat(resolve(KeyEvent.VK_V, modes = drawing)).isEqualTo(WebAction.SelectTool(ReviewTool.POINTER))
-        assertThat(resolve(KeyEvent.VK_R, modes = drawing)).isEqualTo(WebAction.SelectTool(ReviewTool.RECTANGLE))
-        assertThat(resolve(KeyEvent.VK_E, modes = drawing)).isEqualTo(WebAction.SelectTool(ReviewTool.ELLIPSE))
-        assertThat(resolve(KeyEvent.VK_P, modes = drawing)).isEqualTo(WebAction.SelectTool(ReviewTool.PIN))
-        assertThat(resolve(KeyEvent.VK_F, modes = drawing)).isEqualTo(WebAction.SelectTool(ReviewTool.FREEFORM))
-        assertThat(resolve(KeyEvent.VK_DELETE, modes = drawing)).isEqualTo(WebAction.DeleteMark)
-        assertThat(resolve(KeyEvent.VK_BACK_SPACE, modes = drawing)).isNull()
-        assertThat(resolve(KeyEvent.VK_ENTER, modes = drawing)).isEqualTo(WebAction.Confirm)
-        assertThat(resolve(KeyEvent.VK_D, modes = drawing)).isEqualTo(WebAction.ToggleDrawing)
-    }
-
-    @Test
     fun `Esc closes the nearest thing first and reaches the page only when no mode is active`() {
-        val all = HotKeyModes(drawing = true, picking = true, menuOpen = true, gestureRunning = true, toolArmed = true)
+        val all = HotKeyModes(picking = true, menuOpen = true)
         assertThat(resolve(KeyEvent.VK_ESCAPE, modes = all)).isEqualTo(WebAction.CloseMenu)
-        assertThat(resolve(KeyEvent.VK_ESCAPE, modes = all.copy(menuOpen = false))).isEqualTo(WebAction.CancelGesture)
-        assertThat(resolve(KeyEvent.VK_ESCAPE, modes = all.copy(menuOpen = false, gestureRunning = false))).isEqualTo(WebAction.DisarmTool)
-        assertThat(resolve(KeyEvent.VK_ESCAPE, modes = HotKeyModes(drawing = true, picking = true))).isEqualTo(WebAction.StopPick)
-        assertThat(resolve(KeyEvent.VK_ESCAPE, modes = drawing)).isEqualTo(WebAction.ExitDrawing)
+        assertThat(resolve(KeyEvent.VK_ESCAPE, modes = all.copy(menuOpen = false))).isEqualTo(WebAction.StopPick)
         assertThat(resolve(KeyEvent.VK_ESCAPE)).isNull()
     }
 

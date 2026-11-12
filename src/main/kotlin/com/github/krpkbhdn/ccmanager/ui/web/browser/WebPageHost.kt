@@ -60,5 +60,11 @@ interface WebPageHost : AutoCloseable {
 
     /** PNG of a rectangle (DIPs) cropped from the last frame, or null if no frame/rect outside. */
     fun capture(xDip: Int, yDip: Int, widthDip: Int, heightDip: Int): ByteArray?
+
+    /** A protocol screenshot without the inspector overlay, or null on failure. Blocking: IO threads only, never the CEF thread or EDT. */
+    fun screenshot(area: ShotArea, limits: ShotLimits): PageShot?
+
+    /** The page scroll offset (CSS px), or null when it cannot be read. Blocking: IO threads only. */
+    fun scrollOffset(): PageScroll?
     override fun close()
 }

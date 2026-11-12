@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.ui.components.AppButton
 import com.github.krpkbhdn.ccmanager.ui.components.EmptyState
@@ -51,7 +52,7 @@ fun WebScreen(projectId: Long, state: WebState, modifier: Modifier = Modifier) {
         EmptyState(Icons.Globe, "Opening the page...", "", modifier)
         return
     }
-    Column(modifier.fillMaxSize()) {
+    Column(modifier.fillMaxSize().onFocusChanged { view.screenFocused = it.hasFocus }) {
         WebToolbar(view, state)
         HorizontalRule()
         Row(Modifier.weight(1f)) {
@@ -83,14 +84,20 @@ fun WebScreen(projectId: Long, state: WebState, modifier: Modifier = Modifier) {
                     view.host, viewport, Modifier.fillMaxSize(), device = view.device,
                     onZoom = zoomAt,
                     interaction = view.interaction,
+                    blocked = view.shooting,
                     hotKeyModes = { view.hotKeyModes() },
                     pageEditing = { view.pageEditing },
                     onAction = { state.perform(view, it) { notches -> zoomAt(Offset(maxWidth.value / 2, maxHeight.value / 2), notches) } },
                     onPointer = { page, canvas -> view.lastPointer = PointerSpot(page, canvas) },
                     onPan = panBy,
                     onContextMenu = { page, canvas -> state.openContextMenu(view, page, canvas) },
+                    canGrabFocus = view::canGrabCanvasFocus,
+                    focusSignal = view.contextMenu == null && view.itemPopover == null && !view.regionSelecting,
                 )
-                WebPageOverlay(view, state, viewport, onZoom = zoomAt, onPan = panBy)
+                WebPageOverlay(view, state, viewport)
+                if (view.regionSelecting) {
+                    WebRegionSelect(viewport, onSelected = { state.regionSelected(view, it) }, onCancel = { state.perform(view, WebAction.CancelRegion) })
+                }
             }
             VerticalRule()
             WebSidePanel(projectId, view, state, Modifier.width(sidePanelWidth))

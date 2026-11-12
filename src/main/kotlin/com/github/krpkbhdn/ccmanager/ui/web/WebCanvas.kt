@@ -81,12 +81,15 @@ fun WebCanvas(
     onZoom: (cursorDp: Offset, notches: Int) -> Unit = { _, _ -> },
     onContextMenu: (pagePoint: Offset, canvasOffset: Offset) -> Unit = { _, _ -> },
     interaction: Boolean = true,
+    blocked: Boolean = false,
     hotKeyModes: () -> HotKeyModes = { HotKeyModes() },
     pageEditing: () -> Boolean = { false },
     onAction: (WebAction) -> Unit = {},
     onPointer: (pagePoint: Offset, canvasOffset: Offset) -> Unit = { _, _ -> },
+    canGrabFocus: () -> Boolean = { false },
+    focusSignal: Boolean = false,
 ) {
-    val callbacks = CanvasCallbacks(onContextMenu, onPan, onZoom, onPointer, onAction, hotKeyModes, pageEditing)
+    val callbacks = CanvasCallbacks(onContextMenu, onPan, onZoom, onPointer, onAction, hotKeyModes, pageEditing, canGrabFocus)
     val density = LocalDensity.current.density
     val frame by host.frame.collectAsState()
     val popup by host.popup.collectAsState()
@@ -95,6 +98,14 @@ fun WebCanvas(
     val colors = LocalAppColors.current
     val focus = remember { FocusRequester() }
     val renderScale = viewport.renderScale(density)
+    val grab = rememberUpdatedState(canGrabFocus)
+
+    // A tab that just opened, or a menu or popover that just closed, hands the keyboard back to the canvas.
+    LaunchedEffect(focusSignal) {
+        if (!interactive || !focusSignal) return@LaunchedEffect
+        withFrameNanos {} // lets the closed popup release its focus before it is checked
+        if (grab.value()) focus.requestFocus()
+    }
 
     DisposableEffect(host) {
         host.setHidden(false)
@@ -115,7 +126,7 @@ fun WebCanvas(
     Box(modifier.fillMaxSize().clipToBounds()) {
         Canvas(
             Modifier.fillMaxSize().onSizeChanged { size = it }.semantics { contentDescription = "Web page" }
-                .then(if (interactive) Modifier.inputHandling(host, density, viewport, focus, cursor, interaction, callbacks) else Modifier),
+                .then(if (interactive) Modifier.inputHandling(host, density, viewport, focus, cursor, interaction, blocked, callbacks) else Modifier),
         ) {
             drawRect(if (device.responsive) colors.surface else colors.background)
             if (!device.responsive) {
@@ -165,6 +176,7 @@ private fun Modifier.inputHandling(
     focus: FocusRequester,
     cursor: Int,
     interaction: Boolean,
+    blocked: Boolean,
     callbacks: CanvasCallbacks,
 ): Modifier {
     val mapper = remember(host) { WebInputMapper(host.asSink()) }
@@ -174,10 +186,14 @@ private fun Modifier.inputHandling(
     val currentViewport = rememberUpdatedState(viewport)
     val currentCallbacks = rememberUpdatedState(callbacks)
     val currentInteraction = rememberUpdatedState(interaction)
+    val currentBlocked = rememberUpdatedState(blocked)
     val spaceDown = remember { java.util.concurrent.atomic.AtomicBoolean() }
     // A held button or hover state must not outlive the switch: CEF keeps :hover until it sees the pointer leave.
     LaunchedEffect(interaction, mapper) {
         if (!interaction) mapper.releaseAll()
+    }
+    LaunchedEffect(blocked, mapper) {
+        if (blocked) mapper.releaseAll()
     }
     LaunchedEffect(interaction, locked) {
         if (!interaction) try { locked.run() } finally { locked.leave() }
@@ -191,6 +207,7 @@ private fun Modifier.inputHandling(
             }
         }
         .onPreviewKeyEvent { event ->
+            if (currentBlocked.value) return@onPreviewKeyEvent true
             if (event.key == Key.Spacebar) spaceDown.set(event.type == KeyEventType.KeyDown)
             val awt = awtEventOf(event)
             val c = currentCallbacks.value
@@ -207,7 +224,7 @@ private fun Modifier.inputHandling(
         .pointerHoverIcon(PointerIcon(Cursor.getPredefinedCursor(cursor)))
         // Keyed on stable values only: a restart mid-gesture would drop the pan and the held button.
         .pointerInput(mapper, density) {
-            forwardPointer(mapper, locked, density, { currentViewport.value }, focus, { currentCallbacks.value }, currentInteraction::value, spaceDown::get)
+            forwardPointer(mapper, locked, density, { currentViewport.value }, focus, { currentCallbacks.value }, currentInteraction::value, currentBlocked::value, spaceDown::get)
         }
 }
 
@@ -219,6 +236,7 @@ private class CanvasCallbacks(
     val onAction: (WebAction) -> Unit,
     val hotKeyModes: () -> HotKeyModes,
     val pageEditing: () -> Boolean,
+    val canGrabFocus: () -> Boolean,
 )
 
 /**
@@ -279,6 +297,7 @@ private suspend fun PointerInputScope.forwardPointer(
     focus: FocusRequester,
     callbacks: () -> CanvasCallbacks,
     interaction: () -> Boolean,
+    blocked: () -> Boolean,
     spaceDown: () -> Boolean,
 ) {
     awaitPointerEventScope {
@@ -289,6 +308,12 @@ private suspend fun PointerInputScope.forwardPointer(
         while (true) {
             val event = awaitPointerEvent(PointerEventPass.Initial)
             val change = event.changes.first()
+            if (blocked()) {
+                pageHeld = 0
+                panning = false
+                event.changes.forEach { it.consume() }
+                continue
+            }
             val view = viewport()
             val c = callbacks()
             val live = interaction()
@@ -304,6 +329,7 @@ private suspend fun PointerInputScope.forwardPointer(
             val secondary = event.button == PointerButton.Secondary
             val middle = event.button == PointerButton.Tertiary
             val spacePan = event.button == PointerButton.Primary && spaceDown()
+            if (inside && event.type == PointerEventType.Enter && c.canGrabFocus()) focus.requestFocus()
             if (event.type == PointerEventType.Press) secondarySwallowed = false
             if (event.type == PointerEventType.Move && !event.changes.any { it.pressed }) pageHeld = 0
             when (event.type) {

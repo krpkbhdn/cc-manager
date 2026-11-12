@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
@@ -162,13 +163,13 @@ fun Modifier.menuSize(): Modifier = widthIn(min = menuWidth).width(IntrinsicSize
 /** Dropdown menu anchored to its parent composable, or opened at the offset [at] inside it; Esc or an outside click dismisses it. */
 @Composable
 fun PopupMenu(entries: List<MenuEntry>, onDismiss: () -> Unit, alignEnd: Boolean = false, at: IntOffset? = null) {
-    AnchoredPopup(onDismiss, alignEnd, Modifier.menuSize(), at) { MenuColumn(entries, onDismiss) }
+    AnchoredPopup(onDismiss, alignEnd, Modifier.menuSize(), at) { MenuColumn(entries, onDismiss = onDismiss) }
 }
 
 /** The scrolling list of [entries] inside a menu card; each selection first calls [onDismiss]. */
 @Composable
-fun MenuColumn(entries: List<MenuEntry>, onDismiss: () -> Unit) {
-    Column(Modifier.heightIn(max = menuMaxHeight).verticalScroll(rememberScrollState()).padding(Spacing.xs)) { entries.forEach { MenuItem(it, onDismiss) } }
+fun MenuColumn(entries: List<MenuEntry>, maxHeight: Dp = menuMaxHeight, onDismiss: () -> Unit) {
+    Column(Modifier.heightIn(max = maxHeight).verticalScroll(rememberScrollState()).padding(Spacing.xs)) { entries.forEach { MenuItem(it, onDismiss) } }
 }
 
 /**

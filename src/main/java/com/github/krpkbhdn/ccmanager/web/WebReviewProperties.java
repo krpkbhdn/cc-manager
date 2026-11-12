@@ -20,9 +20,12 @@ public record WebReviewProperties(@DefaultValue("600") int outerHtmlLimit,
                 "color", "background-color", "font-family", "font-size", "font-weight", "line-height", "opacity", "z-index", "overflow",
                 "flex-direction", "gap"}) List<String> computedKeys,
         @DefaultValue("5242880") long maxScreenshotBytes, @DefaultValue("200") int maxItemsPerRevision,
-        @DefaultValue("30d") Duration retention, @DefaultValue("3") int maxLiveBrowsers, @DefaultValue("10m") Duration idleBrowserTtl) {
+        @DefaultValue("30d") Duration retention, @DefaultValue("3") int maxLiveBrowsers, @DefaultValue("10m") Duration idleBrowserTtl,
+        @DefaultValue("20s") Duration screenshotTimeout) {
 
     private static final Duration DEFAULT_RETENTION = Duration.ofDays(30);
+    /** Also the default of the browser host when it is opened without the configured value. */
+    public static final Duration DEFAULT_SCREENSHOT_TIMEOUT =Duration.ofSeconds(20);
     private static final int DEFAULT_MAX_LIVE_BROWSERS = 3;
     private static final Duration DEFAULT_IDLE_BROWSER_TTL = Duration.ofMinutes(10);
 
@@ -34,12 +37,13 @@ public record WebReviewProperties(@DefaultValue("600") int outerHtmlLimit,
         positive("cc-manager.web-review.retention", retention);
         positive("cc-manager.web-review.max-live-browsers", maxLiveBrowsers);
         positive("cc-manager.web-review.idle-browser-ttl", idleBrowserTtl);
+        positive("cc-manager.web-review.screenshot-timeout", screenshotTimeout);
         computedKeys = List.copyOf(computedKeys);
     }
 
     /** The limits with the default retention and browser settings. */
     public WebReviewProperties(int outerHtmlLimit, List<String> computedKeys, long maxScreenshotBytes, int maxItemsPerRevision) {
         this(outerHtmlLimit, computedKeys, maxScreenshotBytes, maxItemsPerRevision, DEFAULT_RETENTION, DEFAULT_MAX_LIVE_BROWSERS,
-                DEFAULT_IDLE_BROWSER_TTL);
+                DEFAULT_IDLE_BROWSER_TTL, DEFAULT_SCREENSHOT_TIMEOUT);
     }
 }

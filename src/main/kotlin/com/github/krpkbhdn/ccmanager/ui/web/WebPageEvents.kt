@@ -56,7 +56,6 @@ internal class WebPageEvents(
         view.pendingFocus?.let { id ->
             view.pendingFocus = null
             if (view.visibleItems.any { it.id() == id }) view.host.runScript(InspectorBridge.focusAnnotation(id.toString()))
-            else view.layout?.let { layout -> view.visibleMarks.firstOrNull { it.id() == id }?.shape()?.let { view.host.runScript(jumpToShape(it, layout)) } }
         }
     }
 
@@ -87,7 +86,6 @@ internal class WebPageEvents(
             is InspectorMessage.AnnotationHover -> pinActions.onHover(view, message)
             InspectorMessage.AnnotationLeave -> pinActions.onLeave(view)
             is InspectorMessage.Editing -> view.pageEditing = message.on
-            is InspectorMessage.Scroll -> view.scroll = DocScroll(message.x, message.y, message.w, message.h)
             is InspectorMessage.AnnotationClick -> view.visibleItems.firstOrNull { it.id().toString() == message.id }?.let {
                 view.selectedItemId = it.id()
                 view.panelTab = WebPanelTab.ITEMS
@@ -120,7 +118,6 @@ internal class WebPageEvents(
         if (key != view.pageKey) {
             if (!view.draftDirty) view.clearDraft()
             view.selectedItemId = null
-            view.polygon.clear()
         }
         context.reset(view)
         view.itemPopover = null

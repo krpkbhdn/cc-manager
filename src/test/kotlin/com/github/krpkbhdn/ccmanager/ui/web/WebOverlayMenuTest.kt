@@ -65,6 +65,25 @@ class WebOverlayMenuTest {
     }
 
     @Test
+    fun combinedMenuListsEveryGroupUnderItsHeading() {
+        val entries = overlaySettingsEntries(all) {}
+
+        assertThat(entries.filter { !it.enabled }.map { it.label }).containsExactly("Inspect", "Spacing", "Audit", "Similar", "Contrast")
+        assertThat(entries.map { it.label }).contains("Outline all", "Margins", "Borders", "Misalignment", "Highlight similar elements", "Contrast check", "None")
+        assertThat(entries.first { it.label == "Margins" }.checked).isTrue()
+        assertThat(entries.first { it.label == "Paddings" }.checked).isFalse()
+    }
+
+    @Test
+    fun selectingACombinedMenuEntryChangesThatOptionOnly() {
+        var result = all
+        overlaySettingsEntries(all) { result = it }.first { it.label == "Paddings" }.onSelect()
+
+        assertThat(result.spacing).containsExactlyInAnyOrder(SpacingLayer.MARGIN, SpacingLayer.BORDERS, SpacingLayer.PADDING)
+        assertThat(result.copy(spacing = all.spacing)).isEqualTo(all)
+    }
+
+    @Test
     fun everyGroupHasMenuEntries() {
         OverlayGroup.entries.forEach { assertThat(groupEntries(it, all) {}).isNotEmpty() }
     }

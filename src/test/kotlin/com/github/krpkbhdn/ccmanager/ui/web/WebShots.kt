@@ -20,11 +20,7 @@ import com.github.krpkbhdn.ccmanager.ui.web.browser.BrowserFrame
 import com.github.krpkbhdn.ccmanager.ui.web.browser.FakePageHost
 import com.github.krpkbhdn.ccmanager.ui.web.browser.PageEvent
 import com.github.krpkbhdn.ccmanager.ui.web.browser.PageState
-import com.github.krpkbhdn.ccmanager.review.MarkDraft
-import com.github.krpkbhdn.ccmanager.review.MarkKind
-import com.github.krpkbhdn.ccmanager.review.MarkPoint
 import com.github.krpkbhdn.ccmanager.web.ElementAnchor
-import com.github.krpkbhdn.ccmanager.web.WebMarkShape
 import com.github.krpkbhdn.ccmanager.web.WebFeedbackWriter
 import com.github.krpkbhdn.ccmanager.web.WebItemStatus
 import com.github.krpkbhdn.ccmanager.web.WebReviewProperties
@@ -43,6 +39,7 @@ import org.jetbrains.skia.Font
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.RRect
 import org.jetbrains.skia.Surface
+import com.github.krpkbhdn.ccmanager.review.ReviewService
 import com.github.krpkbhdn.ccmanager.review.ReviewStatus
 import org.mockito.ArgumentMatchers.anyLong
 import org.mockito.Mockito.doAnswer
@@ -164,31 +161,11 @@ private val shots = listOf(
         rig.view.device = DeviceSelection.custom(2560, 1920).copy(zoom = DeviceZoom.Percent(50))
     }),
     Shot("web-locked", prepare = { rig -> rig.view.interaction = false }),
-    Shot("web-drawing", prepare = { rig -> rig.view.drawMode = true }),
-    Shot("web-marks", ownService = true, prepare = { rig ->
-        val marks = listOf(
-            "Group these two cards." to WebMarkShape(MarkKind.RECTANGLE, 250.0, 130.0, 500.0, 140.0),
-            "Help box should not overflow." to WebMarkShape(MarkKind.ELLIPSE, 770.0, 190.0, 220.0, 80.0),
-            "Empty state is missing here." to WebMarkShape(MarkKind.PIN, 400.0, 400.0, 0.0, 0.0),
-            "Footer needs more room." to WebMarkShape(MarkKind.FREEFORM, 250.0, 590.0, 330.0, 50.0, listOf(MarkPoint(250.0, 590.0), MarkPoint(580.0, 600.0), MarkPoint(560.0, 640.0), MarkPoint(260.0, 630.0))),
-        )
-        marks.forEach { (comment, shape) -> rig.service.addItem(PROJECT, PAGE_URL, "Settings", null, comment, emptyList(), null, shape) }
-        waitFor { rig.view.pageItems.size == 8 }
-        rig.view.scroll = DocScroll(0.0, 0.0, 939.0, 780.0)
-        rig.view.drawMode = true
-        rig.view.selectedItemId = rig.view.visibleMarks.first().id()
-        rig.view.panelTab = WebPanelTab.ITEMS
-    }),
-    Shot("web-mark-popover", prepare = { rig ->
-        rig.view.layout = PageViewport(939, 780)
-        rig.view.scroll = DocScroll(0.0, 0.0, 939.0, 780.0)
-        rig.view.markSpace = WebMarkSpace({ rig.view.layout }, { rig.view.scroll }, { 1f }, { _, _ -> }, { _, _ -> })
-        rig.view.drawMode = true
-        rig.state.addMark(rig.view, MarkDraft(MarkKind.RECTANGLE, 0.27, 0.17, 0.53, 0.18, ""))
-        rig.view.comment.setTextAndPlaceCursorAtEnd("Group these two cards.")
-    }),
-    Shot("web-overlay-menu", click = 595f to 19f),
-    Shot("web-device-menu", click = 840f to 19f),
+    Shot("web-overlay-settings", click = 826f to 19f),
+    Shot("web-device-menu", click = 485f to 19f),
+    Shot("web-screenshot-menu", click = 871f to 19f),
+    Shot("web-region-select", prepare = { rig -> rig.view.regionSelecting = true }),
+    Shot("web-capturing", prepare = { rig -> rig.view.shooting = true }),
     Shot("web-context-menu", prepare = { rig ->
         val layers = listOf(
             LiteTarget("button.save-settings-button", "button", "save", listOf("btn", "btn-primary"), null),
@@ -263,7 +240,7 @@ private fun render(shot: Shot, service: WebReviewService, dark: Boolean, width: 
     val availability = if (shot.unsupported) Availability.Unsupported("This Java runtime has no embedded browser (JetBrains Runtime with JCEF is required)") else Availability.Ready
     val shotService = shot.wrap(if (shot.ownService) seededService() else service)
     val prepareBrowser: (() -> Unit)? = if (shot.failStart) ({ error("JCEF did not initialize within 30 seconds") }) else null
-    val state = WebState(shotService, { host }, { _, _ -> }, { _, _, _, _ -> }, { LiveSessions(sessions = listOf(session("a1b2"), session("c3d4"))) }, scope, { errors += it }, { availability }, prepareBrowser)
+    val state = WebState(shotService, { host }, { _, _ -> }, { _, _, _, _ -> }, { LiveSessions(sessions = listOf(session("a1b2"), session("c3d4"))) }, scope, { errors += it }, mock(ReviewService::class.java), { _, _ -> }, { availability }, prepareBrowser)
     state.prepare()
     waitFor { state.browserReady || state.unsupportedReason() != null || state.browserFailure != null }
     val view = if (shot.unsupported || shot.failStart) null else state.view(PROJECT)

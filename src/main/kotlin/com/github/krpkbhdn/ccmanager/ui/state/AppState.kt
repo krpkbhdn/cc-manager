@@ -66,7 +66,7 @@ class AppState(
     private val backend: Backend,
     private val scope: CoroutineScope,
     settingsStore: UiSettingsStore = UiSettingsStore.inDataDir(backend.dataDir),
-    webHostFactory: () -> WebPageHost = { JcefPageHost.open(backend.dataDir) },
+    webHostFactory: () -> WebPageHost = { JcefPageHost.open(backend.dataDir, screenshotTimeout = backend.web.screenshotTimeout()) },
 ) {
     val settings: UiSettings get() = prefs.settings
     var paletteOpen by mutableStateOf(false)
@@ -183,7 +183,8 @@ class AppState(
     val web = WebState(
         backend.web, webHostFactory, { id, text -> queue.add(id, text) },
         { projectId, prompt, onNotStarted, onStarted -> sessions.launchTask(projectId, null, prompt, { onNotStarted() }, onStarted) },
-        { live }, scope, notifications::reportError, { JcefRuntime.availability() },
+        { live }, scope, notifications::reportError, backend.review, ::showCapturedReview,
+        { JcefRuntime.availability() },
         prepareBrowser = { JcefRuntime.start(backend.dataDir) },
     )
     val extensions = ExtensionStates(backend, scope, { confirm = it }, notifications, environment)
@@ -344,6 +345,13 @@ class AppState(
     fun select(projectId: Long, tab: ProjectTab) {
         if (tab == ProjectTab.Web && projects.find(projectId)?.group == true) return
         views[projectId] = viewOf(projectId).select(tab)
+    }
+
+    /** The only way the Review tab opens by itself: the user took the screenshot in the Web tab and is still there; otherwise just a notice. */
+    private fun showCapturedReview(projectId: Long, reviewId: Long) {
+        reviews.select(projectId, reviewId)
+        if (route == Route.Project(projectId) && viewOf(projectId).selected == ProjectTab.Web) select(projectId, ProjectTab.Review)
+        else notifications.toast(NotificationKind.INFO, "Screenshot added to Review", "Find it in the Review tab of ${projects.nameOf(projectId)}")
     }
 
     /** Opens the project's Git tab, on [view] when given, and returns its state. */

@@ -4,6 +4,7 @@ import com.github.krpkbhdn.ccmanager.workspace.ChangeListeners;
 import com.github.krpkbhdn.ccmanager.workspace.TreeDeleter;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -35,6 +36,14 @@ public class ReviewService {
     private static final Path DEFAULT_ROOT = Path.of(System.getProperty("java.io.tmpdir"), "cc-manager", "reviews");
     private static final Logger LOG = LoggerFactory.getLogger(ReviewService.class);
     private static final int MIN_FREEFORM_POINTS = 3;
+    /** The longest title a browser capture gets; the Web tab builds its titles to this limit. */
+    public static final int MAX_CAPTURE_TITLE = 120;
+    /** Folder under the root that holds the temporary files of captures in flight; the cleanup sweeps stale ones. */
+    public static final String CAPTURE_FOLDER = "captures";
+    /** The longest note a browser capture gets. */
+    public static final int MAX_CAPTURE_NOTE = 1000;
+    private static final String TOO_MANY_FOR_CLAUDE = "too many reviews are waiting in this project: ask the user to delete some in the Review tab";
+    private static final String TOO_MANY_FOR_USER = "Too many reviews are waiting in this project: delete some in the Review tab first.";
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final String SELECT = "SELECT id, project_id, ccm_session_id, title, note, status, created_at, settled_at FROM review";
     private static final DateTimeFormatter SQLITE_TIMESTAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneOffset.UTC);
@@ -65,12 +74,70 @@ public class ReviewService {
 
     /** @throws IllegalArgumentException for a blank title or images the store rejects */
     public Review submit(long projectId, String ccmSessionId, String title, String note, List<SubmittedImage> images) {
+        return submit(projectId, ccmSessionId, title, note, images, TOO_MANY_FOR_CLAUDE);
+    }
+
+    /** Hands a browser screenshot (PNG/JPEG bytes) to the Review tab; every image check of the store still applies. The page title is untrusted. */
+    public Review submitCapture(long projectId, String title, String note, byte[] image, String label) {
+        Path file = null;
+        try {
+            var captures = Files.createDirectories(root.resolve(CAPTURE_FOLDER));
+            file = Files.createTempFile(captures, "capture-", ".img");
+            Files.write(file, image);
+            var safeLabel = PromptText.oneLine(label == null ? "" : label);
+            return submit(projectId, null, capped(title, MAX_CAPTURE_TITLE), capped(note, MAX_CAPTURE_NOTE),
+                    List.of(new SubmittedImage(file, safeLabel.isEmpty() ? "screenshot" : safeLabel)), TOO_MANY_FOR_USER);
+        } catch (IOException e) {
+            LOG.warn("Could not store a screenshot: {}", e.getClass().getSimpleName());
+            throw new IllegalStateException("The screenshot could not be stored.");
+        } finally {
+            if (file != null) {
+                try {
+                    Files.deleteIfExists(file);
+                } catch (IOException e) {
+                    LOG.warn("Could not delete a temporary capture file.");
+                }
+            }
+        }
+    }
+
+    /** Removes capture files older than {@code cutoff}: leftovers of a crash between writing a capture and deleting it. */
+    public void deleteStaleCaptures(Instant cutoff) {
+        var captures = root.resolve(CAPTURE_FOLDER);
+        if (!Files.isDirectory(captures)) {
+            return;
+        }
+        try (var files = Files.list(captures)) {
+            for (var file : files.toList()) {
+                if (Files.getLastModifiedTime(file).toInstant().isBefore(cutoff)) {
+                    Files.deleteIfExists(file);
+                }
+            }
+        } catch (IOException e) {
+            LOG.warn("Could not sweep stale capture files: {}", e.getClass().getSimpleName());
+        }
+    }
+
+    /** What the browser-side capture planner may send: the same caps the store enforces. */
+    public CaptureLimits limits() {
+        return new CaptureLimits(properties.maxImageSide(), properties.maxImagePixels(), properties.maxImageBytes());
+    }
+
+    public record CaptureLimits(int maxSide, long maxPixels, long maxBytes) {
+    }
+
+    private static String capped(String text, int max) {
+        var line = PromptText.oneLine(text == null ? "" : text);
+        return line.length() <= max ? line : line.substring(0, max).strip();
+    }
+
+    private Review submit(long projectId, String ccmSessionId, String title, String note, List<SubmittedImage> images, String tooManyMessage) {
         if (title == null || title.isBlank()) {
             throw new IllegalArgumentException("The review needs a title.");
         }
         var id = transaction.execute(status -> {
             if (jdbc.sql("SELECT COUNT(*) FROM review WHERE project_id = ?").param(projectId).query(Integer.class).single() >= properties.maxReviewsPerProject()) {
-                throw new IllegalArgumentException("too many reviews are waiting in this project: ask the user to delete some in the Review tab");
+                throw new IllegalArgumentException(tooManyMessage);
             }
             return jdbc.sql("INSERT INTO review (project_id, ccm_session_id, title, note) VALUES (?, ?, ?, ?) RETURNING id")
                     .param(projectId).param(ccmSessionId).param(title.strip()).param(note == null ? "" : note).query(Long.class).single();

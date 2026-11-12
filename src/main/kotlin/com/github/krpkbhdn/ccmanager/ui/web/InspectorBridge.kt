@@ -47,9 +47,6 @@ object InspectorBridge {
 
     fun scrollBy(dx: Double, dy: Double): String = call("scrollBy", dx, dy)
 
-    /** Absolute document scroll; plain browser API, so it works before the inspector api is ready. */
-    fun scrollTo(x: Double, y: Double): String = "try{window.scrollTo(${literal(x)},${literal(y)})}catch(e){}"
-
     fun stackAt(x: Double, y: Double): String = call("stackAt", x, y)
 
     fun highlight(selector: String): String = call("highlight", selector)

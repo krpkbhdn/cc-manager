@@ -32,7 +32,7 @@ import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
-private val CUSTOM_FIELD_WIDTH = 84.dp
+private val CUSTOM_FIELD_WIDTH = 64.dp
 private val CUSTOM_FIELD_HEIGHT = 24.dp
 private const val DEFAULT_CUSTOM_WIDTH = 800
 private const val DEFAULT_CUSTOM_HEIGHT = 600

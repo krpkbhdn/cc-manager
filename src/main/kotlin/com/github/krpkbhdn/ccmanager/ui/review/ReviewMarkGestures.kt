@@ -56,7 +56,7 @@ internal fun draftOf(tool: ReviewTool, points: List<Offset>, viewport: Viewport,
 
 /** Wheel zoom around the cursor. */
 @OptIn(ExperimentalComposeUiApi::class)
-internal fun Modifier.wheelZoom(viewer: MarkSpace): Modifier = onPointerEvent(PointerEventType.Scroll) { event ->
+internal fun Modifier.wheelZoom(viewer: ReviewViewerState): Modifier = onPointerEvent(PointerEventType.Scroll) { event ->
     val change = event.changes.first()
     viewer.zoomAt(change.position.x, change.position.y, Viewport.zoomFactor(change.scrollDelta.y))
     change.consume()
@@ -75,7 +75,7 @@ private val panModifierIsMeta = System.getProperty("os.name").orEmpty().contains
 internal fun PointerKeyboardModifiers.isPanModifier(meta: Boolean = panModifierIsMeta): Boolean = if (meta) isMetaPressed else isCtrlPressed
 
 /** Press starts what [ReviewPointerModel.press] plans: pan (Ctrl, Cmd on macOS, with the left button, or the middle button), draw, move/resize/vertex edit of a mark, select; right button opens the context menu. */
-internal fun Modifier.markGestures(viewer: MarkSpace, actions: CanvasActions): Modifier = pointerInput(viewer) {
+internal fun Modifier.markGestures(viewer: ReviewViewerState, actions: CanvasActions): Modifier = pointerInput(viewer) {
     awaitEachGesture {
         val down = awaitAnyButtonDown()
         val viewport = viewer.viewport ?: return@awaitEachGesture
@@ -108,7 +108,7 @@ private suspend fun AwaitPointerEventScope.awaitAnyButtonDown(): PointerInputCha
 
 /** What one pointer gesture does on the canvas; the mark edits themselves are decided by [MarkGesture]. */
 private class GestureRun(
-    private val viewer: MarkSpace,
+    private val viewer: ReviewViewerState,
     private val actions: CanvasActions,
     private val start: Offset,
     viewport: Viewport,
@@ -203,10 +203,10 @@ private class GestureRun(
 }
 
 /** Normalised (0..1) image position of a screen point. */
-internal fun normalised(viewport: Viewport, viewer: MarkSpace, at: Offset): Pair<Float, Float> =
+internal fun normalised(viewport: Viewport, viewer: ReviewViewerState, at: Offset): Pair<Float, Float> =
     viewport.toImage(at.x, at.y).let { (x, y) -> Pair(x / viewer.imageW, y / viewer.imageH) }
 
-internal fun hitMark(marks: List<MarkDraft>, at: Offset, viewport: Viewport, viewer: MarkSpace): Int? {
+internal fun hitMark(marks: List<MarkDraft>, at: Offset, viewport: Viewport, viewer: ReviewViewerState): Int? {
     val (x, y) = normalised(viewport, viewer, at)
     return MarkGeometry.hitTest(marks, x, y, viewer.imageW, viewer.imageH, HIT_TOLERANCE_PX / viewport.scale)
 }

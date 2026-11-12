@@ -2,6 +2,8 @@ package com.github.krpkbhdn.ccmanager.ui.web
 
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
+import com.github.krpkbhdn.ccmanager.review.Review
+import com.github.krpkbhdn.ccmanager.review.ReviewService
 import com.github.krpkbhdn.ccmanager.review.ReviewStatus
 import com.github.krpkbhdn.ccmanager.ui.await
 import com.github.krpkbhdn.ccmanager.ui.state.LiveSessions
@@ -9,6 +11,9 @@ import com.github.krpkbhdn.ccmanager.ui.web.browser.Availability
 import com.github.krpkbhdn.ccmanager.ui.web.browser.FakePageHost
 import androidx.compose.ui.geometry.Offset
 import com.github.krpkbhdn.ccmanager.ui.web.browser.PageEvent
+import com.github.krpkbhdn.ccmanager.ui.web.browser.PageScroll
+import com.github.krpkbhdn.ccmanager.ui.web.browser.PageShot
+import com.github.krpkbhdn.ccmanager.ui.web.browser.ShotArea
 import com.github.krpkbhdn.ccmanager.ui.web.browser.PageState
 import com.github.krpkbhdn.ccmanager.web.BrowserLimits
 import com.github.krpkbhdn.ccmanager.web.ElementAnchor
@@ -48,12 +53,14 @@ class WebStateTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val service = mock(WebReviewService::class.java)
     private val host = FakePageHost()
+    private val reviews = mock(ReviewService::class.java)
+    private val opened = CopyOnWriteArrayList<Pair<Long, Long>>()
     private val errors = CopyOnWriteArrayList<String>()
     private val enqueued = CopyOnWriteArrayList<Pair<String, String>>()
     private val started = CopyOnWriteArrayList<String>()
     private var liveSessions = LiveSessions()
     private var availability: Availability = Availability.Ready
-    private val state = WebState(service, { host }, { id, text -> enqueued += id to text }, { _, prompt, _, onStarted -> started += prompt; onStarted("new-session") }, { liveSessions }, scope, { errors += it }, { availability })
+    private val state = WebState(service, { host }, { id, text -> enqueued += id to text }, { _, prompt, _, onStarted -> started += prompt; onStarted("new-session") }, { liveSessions }, scope, { errors += it }, reviews, { project, review -> opened += project to review }, { availability })
 
     init {
         `when`(service.subscribe(any())).thenReturn(Runnable { })
@@ -113,7 +120,7 @@ class WebStateTest {
     @Test
     fun `a supported runtime becomes ready and a failed start can be retried`() {
         var attempts = 0
-        val retrying = WebState(service, { host }, { _, _ -> }, { _, _, _, _ -> }, { liveSessions }, scope, { errors += it }, { Availability.Ready }, prepareBrowser = {
+        val retrying = WebState(service, { host }, { _, _ -> }, { _, _, _, _ -> }, { liveSessions }, scope, { errors += it }, reviews, { _, _ -> }, { Availability.Ready }, prepareBrowser = {
             if (attempts++ == 0) error("engine down")
         })
 
@@ -461,7 +468,7 @@ class WebStateTest {
         assertThat(host.closed).isTrue()
     }
 
-    private fun preparing(start: () -> Unit) = WebState(service, { host }, { _, _ -> }, { _, _, _, _ -> }, { liveSessions }, scope, { errors += it }, prepareBrowser = start)
+    private fun preparing(start: () -> Unit) = WebState(service, { host }, { _, _ -> }, { _, _, _, _ -> }, { liveSessions }, scope, { errors += it }, reviews, { _, _ -> }, prepareBrowser = start)
 
     @Test
     fun `the browser becomes ready after the engine started off the caller thread`() {
@@ -626,11 +633,9 @@ class WebStateTest {
 
         state.perform(view, WebAction.ToggleLock)
         emit("""{"type":"editing","on":true}""")
-        emit("""{"type":"scroll","x":1,"y":2,"w":300,"h":4000}""")
 
-        await { view.pageEditing && view.scroll != null }
+        await { view.pageEditing }
         assertThat(view.interaction).isFalse()
-        assertThat(view.scroll).isEqualTo(DocScroll(1.0, 2.0, 300.0, 4000.0))
         ready("http://localhost:3000/other")
         await { !view.pageEditing }
         state.perform(view, WebAction.ToggleLock)
@@ -638,7 +643,7 @@ class WebStateTest {
     }
 
     @Test
-    fun `sticky pick turns picking on and Esc steps leave sticky pick then drawing mode`() {
+    fun `sticky pick turns picking on and Esc leaves it`() {
         val view = openView()
         ready()
         await { view.pageKey != null }
@@ -646,18 +651,9 @@ class WebStateTest {
         state.perform(view, WebAction.StickyPick)
         assertThat(view.stickyPick).isTrue()
         assertThat(view.toggles.pick).isTrue()
-        state.perform(view, WebAction.ExitDrawing)
         state.perform(view, WebAction.StopPick)
         assertThat(view.stickyPick).isFalse()
         assertThat(view.toggles.pick).isFalse()
-
-        state.perform(view, WebAction.ToggleDrawing)
-        state.perform(view, WebAction.SelectTool(com.github.krpkbhdn.ccmanager.ui.review.ReviewTool.RECTANGLE))
-        state.perform(view, WebAction.DisarmTool)
-        assertThat(view.drawMode).isTrue()
-        assertThat(view.drawTool).isEqualTo(com.github.krpkbhdn.ccmanager.ui.review.ReviewTool.POINTER)
-        state.perform(view, WebAction.ToggleDrawing)
-        assertThat(view.drawMode).isFalse()
     }
 
     @Test
@@ -670,7 +666,7 @@ class WebStateTest {
 
         emit(pickJson())
 
-        await { view.picked != null }
+        await { view.picked != null && view.contextMenu != null }
         assertThat(view.toggles.pick).isTrue()
         assertThat(view.stickyPick).isTrue()
         assertThat(view.contextMenu!!.feedback).isTrue()
@@ -682,17 +678,11 @@ class WebStateTest {
     }
 
     @Test
-    fun `drawing mode and picking exclude each other and quick feedback needs a pointer position`() {
+    fun `quick feedback needs a pointer position`() {
         val view = openView()
         ready()
         await { view.pageKey != null }
 
-        state.perform(view, WebAction.TogglePick)
-        state.perform(view, WebAction.ToggleDrawing)
-        assertThat(view.toggles.pick).isFalse()
-        state.perform(view, WebAction.TogglePick)
-        assertThat(view.drawMode).isFalse()
-        assertThat(view.toggles.pick).isTrue()
         state.perform(view, WebAction.QuickFeedback)
 
         assertThat(errors).containsExactly(NO_POINTER_NOTICE)
@@ -742,11 +732,111 @@ class WebStateTest {
 
     @Test
     fun `a browser that fails to open is reported and never thrown`() {
-        val failing = WebState(service, { throw UnsatisfiedLinkError("no cef") }, { _, _ -> }, { _, _, _, _ -> }, { liveSessions }, scope, { errors += it })
+        val failing = WebState(service, { throw UnsatisfiedLinkError("no cef") }, { _, _ -> }, { _, _, _, _ -> }, { liveSessions }, scope, { errors += it }, reviews, { _, _ -> })
 
-        val opened = failing.open(1)
+        val failed = failing.open(1)
 
-        assertThat(opened).isNull()
+        assertThat(failed).isNull()
         assertThat(failing.browserFailure).isEqualTo("no cef")
+    }
+
+    private val captured = CopyOnWriteArrayList<List<Any?>>()
+
+    private fun readyToShoot(shot: PageShot? = PageShot(byteArrayOf(1), 10, 10, 10.0, 10.0, 1.0, false)): WebView {
+        `when`(reviews.limits()).thenReturn(ReviewService.CaptureLimits(1000, 1_000_000, 1_000_000))
+        `when`(reviews.submitCapture(anyLong(), anyString(), anyString(), any(ByteArray::class.java), anyString())).thenAnswer {
+            captured += it.arguments.toList()
+            Review(7, 1, null, "t", "n", ReviewStatus.PENDING, Instant.EPOCH, null)
+        }
+        host.page.value = PageState(url = "http://localhost:3000/app?x=1#top", title = "App")
+        host.screenshotResult = shot
+        return openView()
+    }
+
+    @Test
+    fun `a screenshot becomes a review and opens it`() {
+        val view = readyToShoot()
+
+        state.perform(view, WebAction.Screenshot(ShotArea.WholePage))
+
+        await { opened.isNotEmpty() }
+        assertThat(opened).containsExactly(1L to 7L)
+        assertThat(host.screenshotCalls).containsExactly(ShotArea.WholePage)
+        assertThat(captured.single()[1] as String).startsWith("App - Responsive - ")
+        assertThat(captured.single()[2] as String).startsWith("Captured by the user in the Web tab from http://localhost:3000/app, Responsive")
+        assertThat(captured.single()[4]).isEqualTo("Whole page")
+        await { !view.shooting }
+    }
+
+    @Test
+    fun `a failed capture or a refused review is reported and nothing opens`() {
+        val view = readyToShoot(shot = null)
+        state.perform(view, WebAction.Screenshot(ShotArea.Visible))
+        await { errors.isNotEmpty() && !view.shooting }
+
+        host.screenshotResult = PageShot(byteArrayOf(1), 10, 10, 10.0, 10.0, 1.0, false)
+        `when`(reviews.submitCapture(anyLong(), anyString(), anyString(), any(ByteArray::class.java), anyString())).thenThrow(IllegalArgumentException("Too big"))
+        state.perform(view, WebAction.Screenshot(ShotArea.Visible))
+
+        await { errors.contains("Too big") && !view.shooting }
+        assertThat(opened).isEmpty()
+    }
+
+    @Test
+    fun `no screenshot is taken on a blank page or while one is running`() {
+        val view = readyToShoot()
+        host.page.value = PageState(url = "about:blank")
+        state.perform(view, WebAction.Screenshot(ShotArea.Visible))
+        state.perform(view, WebAction.StartRegion)
+        host.page.value = PageState(url = "http://localhost:3000/")
+        view.shooting = true
+        state.perform(view, WebAction.Screenshot(ShotArea.Visible))
+
+        assertThat(host.screenshotCalls).isEmpty()
+        assertThat(view.regionSelecting).isFalse()
+    }
+
+    @Test
+    fun `a region replaces pick mode and the menu, and its selection is photographed`() {
+        val view = readyToShoot()
+        state.setToggles(view, view.toggles.togglePick())
+        view.contextMenu = ContextMenuState(1.0, 2.0, Offset.Zero, emptyList())
+        host.scroll = PageScroll(0.0, 250.0)
+
+        state.perform(view, WebAction.StartRegion)
+
+        assertThat(view.regionSelecting).isTrue()
+        assertThat(view.toggles.pick).isFalse()
+        assertThat(view.contextMenu).isNull()
+        await { view.regionScroll == PageScroll(0.0, 250.0) }
+        host.scroll = PageScroll(0.0, 900.0)
+        state.regionSelected(view, CssRect(10.0, 20.0, 30.0, 40.0))
+        await { opened.isNotEmpty() }
+        assertThat(view.regionSelecting).isFalse()
+        assertThat(host.screenshotCalls).containsExactly(ShotArea.Region(10.0, 20.0, 30.0, 40.0, PageScroll(0.0, 250.0)))
+        assertThat(captured.single()[4]).isEqualTo("Region")
+    }
+
+    @Test
+    fun `no screenshot is taken while the page is loading and the user is told`() {
+        val view = readyToShoot()
+        host.page.value = PageState(url = "http://localhost:3000/", loading = true)
+
+        state.perform(view, WebAction.Screenshot(ShotArea.Visible))
+        state.perform(view, WebAction.StartRegion)
+
+        assertThat(host.screenshotCalls).isEmpty()
+        assertThat(view.regionSelecting).isFalse()
+        assertThat(errors).hasSize(2).allMatch { it.contains("still loading") }
+    }
+
+    @Test
+    fun `cancelling the region overlay keeps the page untouched`() {
+        val view = readyToShoot()
+        state.perform(view, WebAction.StartRegion)
+        state.perform(view, WebAction.CancelRegion)
+
+        assertThat(view.regionSelecting).isFalse()
+        assertThat(host.screenshotCalls).isEmpty()
     }
 }

@@ -94,6 +94,91 @@ class ReviewServiceTest {
         assertThat(service.list(projectId)).hasSize(MAX_REVIEWS);
     }
 
+    private ReviewService realStoreService() {
+        var properties = new ReviewProperties(java.time.Duration.ofDays(7), java.time.Duration.ofHours(1), 20, 1_000_000, 8192, 36_000_000L, MAX_REVIEWS);
+        var dataSource = new DriverManagerDataSource("jdbc:sqlite:" + temp.resolve("test.db") + "?foreign_keys=on");
+        return new ReviewService(jdbc, new ReviewImageStore(properties), writer, new TransactionTemplate(new DataSourceTransactionManager(dataSource)),
+                properties, temp.resolve("reviews"));
+    }
+
+    private static byte[] png() throws Exception {
+        var out = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(4, 3, java.awt.image.BufferedImage.TYPE_INT_RGB), "png", out);
+        return out.toByteArray();
+    }
+
+    private long captureFilesLeft() throws Exception {
+        var captures = temp.resolve("reviews").resolve(ReviewService.CAPTURE_FOLDER);
+        try (var files = Files.list(captures)) {
+            return files.count();
+        }
+    }
+
+    @Test
+    void staleCaptureFilesAreSweptAndFreshOnesKept() throws Exception {
+        var captures = Files.createDirectories(temp.resolve("reviews").resolve(ReviewService.CAPTURE_FOLDER));
+        var stale = Files.writeString(captures.resolve("capture-old.img"), "x");
+        var fresh = Files.writeString(captures.resolve("capture-new.img"), "x");
+        Files.setLastModifiedTime(stale, java.nio.file.attribute.FileTime.from(Instant.now().minusSeconds(7200)));
+
+        service.deleteStaleCaptures(Instant.now().minusSeconds(3600));
+
+        assertThat(stale).doesNotExist();
+        assertThat(fresh).exists();
+    }
+
+    @Test
+    void aFailedCaptureStoreDoesNotLeakThePathInTheMessage() throws Exception {
+        Files.createDirectories(temp.resolve("reviews"));
+        Files.writeString(temp.resolve("reviews").resolve(ReviewService.CAPTURE_FOLDER), "a file where the folder should be");
+
+        assertThatThrownBy(() -> service.submitCapture(projectId, "t", "", new byte[] {1}, "l"))
+                .isInstanceOf(IllegalStateException.class).hasMessageNotContaining(temp.toString());
+    }
+
+    @Test
+    void submitCaptureStoresTheImageWithoutSessionAndRemovesTheTempFile() throws Exception {
+        var review = realStoreService().submitCapture(projectId, "Page", "note", png(), "Desktop");
+
+        assertThat(review.ccmSessionId()).isNull();
+        var images = service.images(review.id());
+        assertThat(images).extracting(ReviewImage::label, ReviewImage::width, ReviewImage::height).containsExactly(org.assertj.core.groups.Tuple.tuple("Desktop", 4, 3));
+        assertThat(service.imagePath(images.get(0))).exists();
+        assertThat(captureFilesLeft()).isZero();
+    }
+
+    @Test
+    void submitCaptureRejectsBytesThatAreNoImageAndLeavesNothingBehind() throws Exception {
+        assertThatThrownBy(() -> realStoreService().submitCapture(projectId, "Page", "", "not an image".getBytes(), "x"))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(service.list(projectId)).isEmpty();
+        assertThat(captureFilesLeft()).isZero();
+    }
+
+    @Test
+    void submitCaptureSanitisesAndCapsTheUntrustedTitleAndNote() {
+        var review = service.submitCapture(projectId, "evil\n‮title " + "a".repeat(300), "n\r\n" + "b".repeat(2000), new byte[] {1}, "l");
+
+        assertThat(review.title()).doesNotContain("\n", "‮").hasSize(120);
+        assertThat(review.note()).doesNotContain("\n").hasSize(1000);
+    }
+
+    @Test
+    void submitCaptureAtTheProjectCapAsksTheUser() {
+        for (int i = 0; i < MAX_REVIEWS; i++) {
+            submit("r" + i);
+        }
+
+        assertThatThrownBy(() -> service.submitCapture(projectId, "t", "", new byte[] {1}, "l")).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageStartingWith("Too many reviews");
+    }
+
+    @Test
+    void limitsExposeTheStoreCaps() {
+        assertThat(service.limits()).isEqualTo(new ReviewService.CaptureLimits(8192, 36_000_000L, 1024));
+    }
+
     @Test
     void failedCleanupDoesNotMaskTheOriginalFailure() {
         org.mockito.Mockito.doThrow(new IllegalArgumentException("bad")).when(store).store(any(), any());

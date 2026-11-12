@@ -76,16 +76,10 @@ class InspectorMessageTest {
     }
 
     @Test
-    fun parsesEditingAndBoundedScroll() {
+    fun parsesEditing() {
         assertThat(InspectorMessage.parse("""{"type":"editing","on":true}""")).isEqualTo(InspectorMessage.Editing(true))
         assertThat(InspectorMessage.parse("""{"type":"editing","on":"yes"}""")).isNull()
         assertThat(InspectorMessage.parse("""{"type":"editing"}""")).isNull()
-        assertThat(InspectorMessage.parse("""{"type":"scroll","x":5,"y":6.5,"w":1000,"h":2000}"""))
-            .isEqualTo(InspectorMessage.Scroll(5.0, 6.5, 1000.0, 2000.0))
-        assertThat(InspectorMessage.parse("""{"type":"scroll","x":1e300,"y":-1e300,"w":-5,"h":1e30}"""))
-            .isEqualTo(InspectorMessage.Scroll(1e6, -1e6, 0.0, 1e6))
-        assertThat(InspectorMessage.parse("""{"type":"scroll","x":"1","y":0,"w":0,"h":0}""")).isNull()
-        assertThat(InspectorMessage.parse("""{"type":"scroll","x":0,"y":0,"w":0}""")).isNull()
     }
 
     @Test

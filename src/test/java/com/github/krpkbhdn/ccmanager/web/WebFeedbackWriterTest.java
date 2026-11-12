@@ -134,4 +134,13 @@ class WebFeedbackWriterTest {
 
         assertThat(md).contains("viewport: `390x844 (iPhone 14, mobile)`").contains("viewport: `1280x720 (desktop)`");
     }
+
+    @Test
+    void skipsTheCodeSpanOfABlankSelector() throws IOException {
+        var item = new WebItem(1, 9, 5, 1, anchor("  ", null, ""), "", List.of(), WebItemStatus.OPEN, null, null);
+
+        var md = Files.readString(writer.write("shop", revision, List.of(page), List.of(item), temp.resolve("d")).markdown());
+
+        assertThat(md).contains("### 1\n").doesNotContain("``");
+    }
 }

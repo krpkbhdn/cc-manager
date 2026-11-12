@@ -34,7 +34,7 @@ class WebReviewRepository {
     private static final String REVISION_SELECT =
             "SELECT id, project_id, number, ccm_session_id, note, status, created_at, sent_at, settled_at FROM web_review_revision";
     private static final String ITEM_SELECT =
-            "SELECT i.id, i.revision_id, i.page_id, i.n, i.anchor_json, i.comment, i.style_changes_json, i.status, i.screenshot_file, i.viewport_width, i.viewport_height, i.device_name, i.device_category, i.shape_json FROM web_review_item i";
+            "SELECT i.id, i.revision_id, i.page_id, i.n, i.anchor_json, i.comment, i.style_changes_json, i.status, i.screenshot_file, i.viewport_width, i.viewport_height, i.device_name, i.device_category FROM web_review_item i";
 
     private final JdbcClient jdbc;
 
@@ -145,19 +145,15 @@ class WebReviewRepository {
     }
 
     WebItem insertItem(long projectId, long revisionId, long pageId, ElementAnchor anchor, String comment, List<StyleChange> changes,
-            WebViewport viewport, WebMarkShape shape) {
+            WebViewport viewport) {
         var n = jdbc.sql("SELECT COALESCE(MAX(i.n), 0) + 1 FROM web_review_item i JOIN web_review_revision r ON r.id = i.revision_id WHERE r.project_id = ?")
                 .param(projectId).query(Integer.class).single();
-        var id = jdbc.sql("INSERT INTO web_review_item (revision_id, page_id, n, anchor_json, comment, style_changes_json, viewport_width, viewport_height, device_name, device_category, shape_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id")
+        var id = jdbc.sql("INSERT INTO web_review_item (revision_id, page_id, n, anchor_json, comment, style_changes_json, viewport_width, viewport_height, device_name, device_category) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id")
                 .param(revisionId).param(pageId).param(n).param(JSON.writeValueAsString(anchor)).param(comment)
                 .param(JSON.writeValueAsString(changes)).param(viewport == null ? null : viewport.width())
                 .param(viewport == null ? null : viewport.height()).param(viewport == null ? null : viewport.deviceName())
-                .param(viewport == null ? null : viewport.category().name()).param(shape == null ? null : shape.toJson()).query(Long.class).single();
+                .param(viewport == null ? null : viewport.category().name()).query(Long.class).single();
         return findItem(id).orElseThrow();
-    }
-
-    void updateShape(long itemId, WebMarkShape shape) {
-        jdbc.sql("UPDATE web_review_item SET shape_json = ?, screenshot_file = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?").param(shape.toJson()).param(itemId).update();
     }
 
     void updateContent(long itemId, String comment, List<StyleChange> changes) {
@@ -206,8 +202,7 @@ class WebReviewRepository {
             return Optional.of(new WebItem(id, rs.getLong("revision_id"), rs.getLong("page_id"), rs.getInt("n"),
                     JSON.readValue(rs.getString("anchor_json"), ElementAnchor.class), rs.getString("comment"),
                     JSON.readValue(rs.getString("style_changes_json"), new TypeReference<List<StyleChange>>() { }),
-                    WebItemStatus.valueOf(rs.getString("status")), rs.getString("screenshot_file"), viewportOf(rs),
-                    rs.getString("shape_json") == null ? null : WebMarkShape.fromJson(rs.getString("shape_json"))));
+                    WebItemStatus.valueOf(rs.getString("status")), rs.getString("screenshot_file"), viewportOf(rs)));
         } catch (RuntimeException e) {
             LOG.warn("A stored web review item (id {}) could not be read and was skipped.", id);
             return Optional.empty();

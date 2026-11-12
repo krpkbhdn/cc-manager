@@ -24,6 +24,8 @@ public class ReviewCleanup extends ScheduledSweep {
     private static final Logger log = LoggerFactory.getLogger(ReviewCleanup.class);
     /** Folders younger than this are never treated as orphans: a writer may not have inserted its row yet. */
     public static final Duration ORPHAN_GRACE = Duration.ofMinutes(1);
+    /** A capture file older than this was left by a crash: a capture is written and deleted within seconds. */
+    public static final Duration STALE_CAPTURE_AGE = Duration.ofHours(1);
 
     private final ReviewService service;
     private final ReviewProperties properties;
@@ -45,6 +47,7 @@ public class ReviewCleanup extends ScheduledSweep {
     public void sweep() {
         try {
             service.deleteOlderThan(clock.instant().minus(properties.retention()));
+            service.deleteStaleCaptures(clock.instant().minus(STALE_CAPTURE_AGE));
             deleteOrphanFolders();
         } catch (RuntimeException | Error e) {
             log.error("Review cleanup failed: {}", e.getClass().getSimpleName());
@@ -58,7 +61,7 @@ public class ReviewCleanup extends ScheduledSweep {
         }
         Set<Long> known = service.knownIds();
         for (var folder : subFolders(root)) {
-            if (isOrphan(folder, known) && isOlderThanGrace(folder)) {
+            if (!isCaptureFolder(folder) && isOrphan(folder, known) && isOlderThanGrace(folder)) {
                 deleteQuietly(folder);
             }
         }
@@ -71,6 +74,10 @@ public class ReviewCleanup extends ScheduledSweep {
             log.debug("Could not list review folders: {}", e.getClass().getSimpleName());
             return List.of();
         }
+    }
+
+    private static boolean isCaptureFolder(Path folder) {
+        return folder.getFileName().toString().equals(ReviewService.CAPTURE_FOLDER);
     }
 
     private static boolean isOrphan(Path folder, Set<Long> known) {

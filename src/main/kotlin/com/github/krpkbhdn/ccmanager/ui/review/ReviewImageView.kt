@@ -116,7 +116,7 @@ fun ReviewImageView(viewer: ReviewViewerState, bitmap: ImageBitmap?, imageId: Lo
 
 private fun removeLastPoint(draft: PolygonDraft): Boolean = !draft.isEmpty && true.also { draft.removeLast() }
 
-private fun planAt(hover: Offset, viewer: MarkSpace, state: ReviewState, marks: List<MarkDraft>): PressPlan? {
+private fun planAt(hover: Offset, viewer: ReviewViewerState, state: ReviewState, marks: List<MarkDraft>): PressPlan? {
     val viewport = viewer.viewport ?: return null
     val (nx, ny) = normalised(viewport, viewer, hover)
     return ReviewPointerModel.press(state.effectiveTool, false, marks, state.selectedMark, nx, ny, viewer.imageW, viewer.imageH, HIT_TOLERANCE_PX / viewport.scale)
@@ -126,7 +126,7 @@ private fun planAt(hover: Offset, viewer: MarkSpace, state: ReviewState, marks: 
  * Esc cancels the running gesture first and Delete is ignored while one runs; both, like the letter keys, return false when they have nothing to do so
  * outer handlers still see them. Ctrl, Alt and the other modifiers are never consumed.
  */
-private fun handleKey(event: KeyEvent, state: ReviewState, imageId: Long, viewer: MarkSpace, active: ActiveGesture): Boolean {
+private fun handleKey(event: KeyEvent, state: ReviewState, imageId: Long, viewer: ReviewViewerState, active: ActiveGesture): Boolean {
     if (event.type != KeyEventType.KeyDown) return false
     val chorded = event.isCtrlPressed || event.isMetaPressed || event.isShiftPressed
     return when (ReviewPointerModel.keyAction(event.key, chorded)) {

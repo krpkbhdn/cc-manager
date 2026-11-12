@@ -89,12 +89,16 @@ class WebReviewEndToEndRealTest {
         return WebReviewService(jdbc, TransactionTemplate(DataSourceTransactionManager(dataSource)), properties, WebScreenshotStore(AppProperties(dir), properties), WebFeedbackWriter(properties))
     }
 
-    private fun state(service: WebReviewService): Pair<WebState, WebView> {
+    private fun state(
+        service: WebReviewService,
+        reviews: com.github.krpkbhdn.ccmanager.review.ReviewService = mock(com.github.krpkbhdn.ccmanager.review.ReviewService::class.java),
+        openReview: (Long, Long) -> Unit = { _, _ -> },
+    ): Pair<WebState, WebView> {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default).also { scopes += it }
         val state = WebState(
             service, { JcefPageHost.open(dir).also { it.resize(1000, 700, 1f); it.focus(true) } },
             { id, text -> enqueued += id to text }, { _, prompt, _, onStarted -> started += prompt; onStarted("new-session") },
-            { live }, scope, { errors += it },
+            { live }, scope, { errors += it }, reviews, openReview,
         )
         states += state
         val view = state.view(project)
@@ -167,6 +171,34 @@ class WebReviewEndToEndRealTest {
     }
 
     // ---------- (a)-(e) ----------
+
+    @Test
+    fun visible_capture_creates_an_unbound_review_in_the_project_and_opens_it() {
+        val service = service()
+        val props = com.github.krpkbhdn.ccmanager.review.ReviewProperties(Duration.ofDays(7), Duration.ofHours(1), 20, 20971520L, 8192, 36_000_000L, 50)
+        val dataSource = dataSources.getValue(dir)
+        val reviews = com.github.krpkbhdn.ccmanager.review.ReviewService(
+            JdbcClient.create(dataSource), com.github.krpkbhdn.ccmanager.review.ReviewImageStore(props),
+            com.github.krpkbhdn.ccmanager.review.ReviewFeedbackWriter(com.github.krpkbhdn.ccmanager.review.ReviewImageAnnotator()),
+            TransactionTemplate(DataSourceTransactionManager(dataSource)), props,
+        )
+        val opened = CopyOnWriteArrayList<Pair<Long, Long>>()
+        val (state, view) = state(service, reviews) { p, r -> opened += p to r }
+        openAndWaitReady(state, view, fixtureUrl())
+
+        state.perform(view, WebAction.Screenshot(com.github.krpkbhdn.ccmanager.ui.web.browser.ShotArea.Visible))
+        waitFor("review opened", 30_000) { opened.isNotEmpty() }
+
+        assertThat(errors).isEmpty()
+        assertThat(opened.single().first).isEqualTo(project)
+        val review = reviews.find(opened.single().second).orElseThrow()
+        assertThat(review.projectId()).isEqualTo(project)
+        assertThat(review.ccmSessionId()).isNull()
+        assertThat(review.status()).isEqualTo(ReviewStatus.PENDING)
+        val images = reviews.images(review.id())
+        assertThat(images).hasSize(1)
+        assertThat(images[0].width()).isPositive()
+    }
 
     @Test
     fun full_review_lifecycle_pick_item_pins_navigation_reload_and_restart() {

@@ -57,17 +57,7 @@ Object.keys(C.apis).forEach(function (name) {
 var debounce = 0;
 // force: navigation or load, where every pin is resolved again; a mutation only retries lost pins with backoff
 function reanchor(force) { (C.reanchor || schedule)(force === true); }
-var scrollQueued = false;
-function sendScroll() {
-  if (scrollQueued) return;
-  scrollQueued = true;
-  requestAnimationFrame(safe(function () {
-    scrollQueued = false;
-    var d = document.documentElement;
-    send({ type: 'scroll', x: W.scrollX, y: W.scrollY, w: d.scrollWidth, h: d.scrollHeight });
-  }));
-}
-function redraw() { schedule(); sendScroll(); }
+function redraw() { schedule(); }
 function reanchorLater() {
   clearTimeout(debounce);
   debounce = setTimeout(safe(function () { reanchor(false); }), 150);
@@ -125,4 +115,3 @@ if (document.readyState !== 'complete') W.addEventListener('load', navLater);
 
 C.mount();
 send({ type: 'ready', url: location.href, title: document.title });
-sendScroll();

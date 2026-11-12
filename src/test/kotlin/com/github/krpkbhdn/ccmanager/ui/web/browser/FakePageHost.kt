@@ -111,6 +111,18 @@ class FakePageHost : WebPageHost {
 
     override fun capture(xDip: Int, yDip: Int, widthDip: Int, heightDip: Int): ByteArray? = captureResult
 
+    var screenshotResult: PageShot? = null
+    val screenshotCalls = java.util.concurrent.CopyOnWriteArrayList<ShotArea>()
+
+    override fun screenshot(area: ShotArea, limits: ShotLimits): PageShot? {
+        screenshotCalls += area
+        return screenshotResult
+    }
+
+    var scroll: PageScroll? = PageScroll(0.0, 0.0)
+
+    override fun scrollOffset(): PageScroll? = scroll
+
     override fun close() {
         closed = true
     }

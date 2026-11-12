@@ -23,7 +23,6 @@ public class WebFeedbackWriter {
 
     private static final int MAX_FIELD_CHARS = 300;
     private static final int MAX_COMMENT_CHARS = 1000;
-    private static final int MAX_VERTICES_CHARS = 12_000;
     private static final String FENCE = "```";
     private static final String TRUNCATED = " ... [truncated]";
 
@@ -69,13 +68,6 @@ public class WebFeedbackWriter {
         md.append('\n');
         if (item.viewport() != null) {
             md.append("viewport: ").append(code(describe(item.viewport()), MAX_FIELD_CHARS)).append('\n');
-        }
-        if (item.shape() != null) {
-            md.append("shape: ").append(code(describe(item.shape(), item.viewport()), MAX_FIELD_CHARS)).append('\n');
-            if (!item.shape().points().isEmpty()) {
-                md.append("vertices: ").append(code(item.shape().points().stream().map(p -> number(p.x()) + "," + number(p.y()))
-                        .collect(Collectors.joining("; ")), MAX_VERTICES_CHARS)).append('\n');
-            }
         }
         if (!item.comment().isBlank()) {
             md.append("comment: ").append(code(item.comment(), MAX_COMMENT_CHARS)).append('\n');
@@ -126,16 +118,6 @@ public class WebFeedbackWriter {
         var category = viewport.category().name().toLowerCase(Locale.ROOT);
         var device = viewport.deviceName() == null || viewport.deviceName().isBlank() ? category : viewport.deviceName() + ", " + category;
         return viewport.width() + "x" + viewport.height() + " (" + device + ")";
-    }
-
-    private static String describe(WebMarkShape shape, WebViewport viewport) {
-        var device = viewport == null ? "" : ", device " + viewport.width() + " x " + viewport.height();
-        return "drawn " + shape.kind().name().toLowerCase(Locale.ROOT) + " at " + number(shape.x()) + "," + number(shape.y()) + " "
-                + number(shape.w()) + " x " + number(shape.h()) + " (document px" + device + ")";
-    }
-
-    private static String number(double value) {
-        return value == Math.rint(value) ? Long.toString((long) value) : String.format(Locale.ROOT, "%.1f", value);
     }
 
     private static String code(String text, int limit) {

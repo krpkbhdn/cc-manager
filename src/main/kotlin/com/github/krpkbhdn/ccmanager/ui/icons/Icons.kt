@@ -92,6 +92,7 @@ object Icons {
     val Server = lucide("server")
     val Plug = lucide("plug")
     val Settings = lucide("settings")
+    val Camera = lucide("camera")
     val Log = lucide("scroll-text")
     val Commit = lucide("git-commit-horizontal")
     val Merge = lucide("git-merge")

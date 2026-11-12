@@ -172,6 +172,103 @@ class JcefPageHostRealTest {
         assertThat(image.height).isEqualTo(50)
     }
 
+    private val shotLimits = ShotLimits(8192, 36_000_000, 20_000_000)
+
+    private fun shotOf(png: ByteArray) = Image.makeFromEncoded(png).let { image ->
+        org.jetbrains.skia.Bitmap.makeFromImage(image).also { image.close() }
+    }
+
+    private fun overlayAwareHost(url: String, density: Float): JcefPageHost = openHost(url).also {
+        it.resize(640, 480, density)
+        await("page painted") { it.frame.value != null && !it.page.value.loading && it.page.value.url == url }
+        it.runScript("var d=document.createElement('div');d.id='__ccm-root';d.style.cssText='position:fixed;left:0;top:0;width:100%;height:100%;background:#f0f';document.body.appendChild(d)")
+        Thread.sleep(300)
+    }
+
+    @Test
+    fun a_whole_page_shot_has_the_page_height_the_bottom_colour_and_no_overlay() {
+        val url = htmlFile("tall", "<html><body style=\"margin:0;height:4000px;background:#fff\"><div style=\"position:absolute;left:0;top:3900px;width:100%;height:100px;background:#00f\"></div><div style=\"position:absolute;left:0;top:100px;width:100%;height:50px;background:#f00\"></div><div style=\"position:absolute;left:0;top:1000px;width:100%;height:50px;background:#0a0\"></div></body></html>")
+        val tall = overlayAwareHost(url, 1f)
+        tall.runScript("window.scrollTo(0, 500)")
+        Thread.sleep(300)
+
+        val shot = tall.screenshot(ShotArea.WholePage, shotLimits)!!
+
+        assertThat(shot.heightPx).isEqualTo(4000)
+        assertThat(shot.widthPx).describedAs("viewport minus the 15px scrollbar").isEqualTo(625)
+        assertThat(shot.cut).isFalse()
+        val bitmap = shotOf(shot.bytes)
+        assertThat(bitmap.getColor(320, 3950)).isEqualTo(0xFF0000FF.toInt())
+        assertThat(bitmap.getColor(320, 125)).isEqualTo(0xFFFF0000.toInt())
+        assertThat(bitmap.getColor(320, 1025)).isEqualTo(0xFF00AA00.toInt())
+        assertThat(bitmap.getColor(320, 300)).isEqualTo(0xFFFFFFFF.toInt())
+        val restored = LinkedBlockingQueue<PageEvent>()
+        scope.launch(start = CoroutineStart.UNDISPATCHED) { tall.events.collect { restored.add(it) } }
+        tall.runScript("cefQuery({request:'state=' + getComputedStyle(document.getElementById('__ccm-root')).display + '/' + Math.round(window.scrollY)})")
+        val state = generateSequence { restored.poll(timeoutMillis, TimeUnit.MILLISECONDS) }
+            .firstOrNull { it is PageEvent.Inspector && it.json.startsWith("state=") } as PageEvent.Inspector
+        assertThat(state.json).isEqualTo("state=block/500")
+    }
+
+    @Test
+    fun a_whole_page_shot_of_a_wide_page_is_stitched_in_columns_without_a_blank_strip() {
+        val url = htmlFile("wide", "<html><body style=\"margin:0;width:2000px;height:300px;background:#fff\"><div style=\"position:absolute;left:50px;top:100px;width:50px;height:50px;background:#f00\"></div><div style=\"position:absolute;left:1000px;top:100px;width:50px;height:50px;background:#0a0\"></div><div style=\"position:absolute;left:1900px;top:100px;width:50px;height:50px;background:#00f\"></div></body></html>")
+        val wide = overlayAwareHost(url, 1f)
+        wide.runScript("window.scrollTo(300, 0)")
+        Thread.sleep(500)
+        assertThat(wide.scrollOffset()).isEqualTo(PageScroll(300.0, 0.0))
+
+        val shot = wide.screenshot(ShotArea.WholePage, shotLimits)!!
+
+        assertThat(shot.widthPx).isEqualTo(2000)
+        assertThat(shot.heightPx).describedAs("viewport minus the 15px horizontal scrollbar").isEqualTo(465)
+        val bitmap = shotOf(shot.bytes)
+        assertThat(bitmap.getColor(75, 125)).isEqualTo(0xFFFF0000.toInt())
+        assertThat(bitmap.getColor(1025, 125)).isEqualTo(0xFF00AA00.toInt())
+        assertThat(bitmap.getColor(1925, 125)).isEqualTo(0xFF0000FF.toInt())
+        assertThat(bitmap.getColor(1500, 125)).isEqualTo(0xFFFFFFFF.toInt())
+        assertThat(wide.scrollOffset()).describedAs("scroll restored").isEqualTo(PageScroll(300.0, 0.0))
+    }
+
+    @Test
+    fun a_shot_is_refused_while_the_page_is_loading() {
+        val release = java.util.concurrent.CountDownLatch(1)
+        val server = HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0)
+        server.createContext("/") { exchange ->
+            if (exchange.requestURI.path == "/hang.png") release.await(timeoutMillis, TimeUnit.MILLISECONDS)
+            val bytes = "<html><body>x<img src=\"/hang.png\"></body></html>".toByteArray()
+            exchange.sendResponseHeaders(200, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+        }
+        server.start()
+        try {
+            val loading = openHost("http://127.0.0.1:${server.address.port}/")
+            loading.resize(640, 480, 1f)
+            await("loading started") { loading.page.value.loading }
+
+            assertThat(loading.screenshot(ShotArea.Visible, shotLimits)).isNull()
+        } finally {
+            release.countDown()
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun a_region_shot_of_a_scrolled_page_clips_the_known_block_at_the_device_scale() {
+        val url = htmlFile("region", "<html><body style=\"margin:0;height:4000px;background:#fff\"><div style=\"position:absolute;left:100px;top:1100px;width:200px;height:80px;background:#0a0\"></div></body></html>")
+        val scrolled = overlayAwareHost(url, 2f)
+        scrolled.runScript("window.scrollTo(0, 1000)")
+        Thread.sleep(500)
+
+        val shot = scrolled.screenshot(ShotArea.Region(100.0, 100.0, 200.0, 80.0), shotLimits)!!
+
+        assertThat(shot.widthPx).isEqualTo(400)
+        assertThat(shot.heightPx).isEqualTo(160)
+        val bitmap = shotOf(shot.bytes)
+        assertThat(bitmap.getColor(200, 80)).isEqualTo(0xFF00AA00.toInt())
+        assertThat(bitmap.getColor(2, 2)).isEqualTo(0xFF00AA00.toInt())
+    }
+
     @Test
     fun refuses_to_load_script_urls() {
         assertThatThrownBy { host.load("javascript:alert(1)") }.isInstanceOf(IllegalArgumentException::class.java)

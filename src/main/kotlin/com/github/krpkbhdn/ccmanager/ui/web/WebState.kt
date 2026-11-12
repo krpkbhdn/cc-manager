@@ -8,15 +8,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
-import com.github.krpkbhdn.ccmanager.review.MarkDraft
+import com.github.krpkbhdn.ccmanager.review.ReviewService
 import com.github.krpkbhdn.ccmanager.review.ReviewStatus
-import com.github.krpkbhdn.ccmanager.ui.review.ReviewTool
 import com.github.krpkbhdn.ccmanager.ui.state.LiveSessions
 import com.github.krpkbhdn.ccmanager.ui.state.Refresher
 import com.github.krpkbhdn.ccmanager.ui.state.io
 import com.github.krpkbhdn.ccmanager.ui.state.runGuarded
 import com.github.krpkbhdn.ccmanager.ui.web.browser.Availability
 import com.github.krpkbhdn.ccmanager.ui.web.browser.NavigationPolicy
+import com.github.krpkbhdn.ccmanager.ui.web.browser.ShotArea
 import com.github.krpkbhdn.ccmanager.ui.web.browser.WebPageHost
 import com.github.krpkbhdn.ccmanager.web.WebItem
 import com.github.krpkbhdn.ccmanager.web.WebItemStatus
@@ -54,6 +54,8 @@ class WebState(
     private val live: () -> LiveSessions,
     private val scope: CoroutineScope,
     private val reportError: (String) -> Unit,
+    reviewService: ReviewService,
+    openReview: (projectId: Long, reviewId: Long) -> Unit,
     private val availability: () -> Availability = { Availability.Ready },
     private val prepareBrowser: (() -> Unit)? = null,
     clock: Clock = Clock.systemUTC(),
@@ -61,8 +63,8 @@ class WebState(
     private val drafts = WebDrafts(service, scope, reportError)
     private val context = WebContextActions(scope, notify = reportError) { view, target -> drafts.captureAtPick(view, target) }
     private val events = WebPageEvents(service, drafts, scope, reportError, context)
-    private val marks = WebMarks(service, scope, reportError, drafts)
     private val delivery = WebDelivery(service, enqueue, startSession, live, scope, reportError)
+    private val screenshots = WebScreenshots(reviewService, openReview, scope, reportError, clock)
 
     /** False until [prepare] has checked the runtime and started the engine: the engine reports its start on the UI thread, so it must not be awaited from there. */
     var browserReady by mutableStateOf(false)
@@ -219,7 +221,6 @@ class WebState(
             WebAction.TogglePick -> togglePick(view)
             WebAction.StickyPick -> stickyPick(view)
             WebAction.QuickFeedback -> context.openQuick(view)
-            WebAction.ToggleDrawing -> if (view.drawMode) exitDrawing(view) else enterDrawing(view)
             WebAction.ToggleOverlays -> setToggles(view, toggles.toggleMaster())
             is WebAction.ToggleGroup -> setToggles(view, toggles.toggleGroup(action.group))
             WebAction.ToggleLock -> view.interaction = !view.interaction
@@ -228,15 +229,30 @@ class WebState(
             WebAction.Zoom100 -> if (!view.device.responsive) view.device = view.device.copy(zoom = DeviceZoom.Percent(PERCENT_100))
             WebAction.ZoomIn -> zoomStep(1)
             WebAction.ZoomOut -> zoomStep(-1)
-            is WebAction.SelectTool -> view.drawTool = action.tool
-            WebAction.DeleteMark -> marks.deleteSelected(view, ::delete)
-            WebAction.Confirm -> marks.closePolygon(view)
             WebAction.CloseMenu -> closeMenu(view)
-            WebAction.CancelGesture -> cancelGesture(view)
-            WebAction.DisarmTool -> view.drawTool = ReviewTool.POINTER
             WebAction.StopPick -> stopPicking(view)
-            WebAction.ExitDrawing -> exitDrawing(view)
+            is WebAction.Screenshot -> screenshots.capture(view, action.area)
+            WebAction.StartRegion -> startRegion(view)
+            WebAction.CancelRegion -> view.regionSelecting = false
         }
+    }
+
+    fun canShoot(view: WebView) = screenshots.canShoot(view)
+
+    /** The region overlay replaces pick mode and any open menu, so the drag cannot hit either. */
+    private fun startRegion(view: WebView) {
+        if (!screenshots.canStart(view)) return
+        if (view.toggles.pick) stopPicking(view)
+        if (view.contextMenu != null) closeMenu(view)
+        view.regionScroll = null
+        view.regionSelecting = true
+        scope.launch { runGuarded(reportError) { view.regionScroll = io { view.host.scrollOffset() } } }
+    }
+
+    /** The region is relative to the viewport as it was when selected, so the scroll read at that time goes with it. */
+    fun regionSelected(view: WebView, rect: CssRect) {
+        view.regionSelecting = false
+        screenshots.capture(view, ShotArea.Region(rect.x, rect.y, rect.width, rect.height, view.regionScroll))
     }
 
     private fun togglePick(view: WebView) {
@@ -248,7 +264,6 @@ class WebState(
     }
 
     private fun startPicking(view: WebView, sticky: Boolean) {
-        if (view.drawMode) exitDrawing(view)
         setToggles(view, view.toggles.copy(pick = true))
         view.stickyPick = sticky && view.toggles.pick
     }
@@ -257,37 +272,12 @@ class WebState(
         setToggles(view, view.toggles.copy(pick = false))
     }
 
-    private fun enterDrawing(view: WebView) {
-        if (view.toggles.pick) stopPicking(view)
-        view.drawMode = true
-    }
-
-    private fun exitDrawing(view: WebView) {
-        view.drawMode = false
-        view.drawTool = ReviewTool.POINTER
-        view.polygon.clear()
-    }
-
-    private fun cancelGesture(view: WebView) {
-        view.polygon.clear()
-        if (view.draftShape != null) cancelDraft(view)
-    }
-
     /** Esc on a menu or popover: drops a late inspect answer with it, and a feedback popover takes its draft along, as its own Esc does. */
     private fun closeMenu(view: WebView) {
         val feedback = view.contextMenu?.feedback == true
         WebContextActions.dismiss(view)
         if (feedback) cancelDraft(view)
     }
-
-    /** A mark the user finished drawing: opens its comment popover. */
-    fun addMark(view: WebView, mark: MarkDraft) = marks.finish(view, mark)
-
-    /** Closes the freeform polygon being placed into a mark; false when it cannot be closed yet. */
-    fun closePolygon(view: WebView): Boolean = marks.closePolygon(view)
-
-    /** A moved or resized saved mark; saved after a short pause. */
-    fun editMark(view: WebView, item: WebItem, mark: MarkDraft) = marks.edit(view, item, mark)
 
     /** Right-click in the page: opens the layer menu at [canvasOffset] (px) for the page point. */
     fun openContextMenu(view: WebView, pagePoint: Offset, canvasOffset: Offset) = context.open(view, pagePoint.x.toDouble(), pagePoint.y.toDouble(), canvasOffset)
@@ -309,8 +299,7 @@ class WebState(
         view.selectedItemId = item.id()
         val page = pages(view.projectId).firstOrNull { it.id() == item.pageId() }
         if (page == null || page.pageKey() == view.pageKey) {
-            val shape = item.shape()
-            if (shape != null) marks.scrollTo(view, shape) else view.host.runScript(InspectorBridge.focusAnnotation(item.id().toString()))
+            view.host.runScript(InspectorBridge.focusAnnotation(item.id().toString()))
         } else {
             view.pendingFocus = item.id()
             view.host.load(page.lastUrl())
@@ -319,12 +308,9 @@ class WebState(
 
     fun setStatus(item: WebItem, status: WebItemStatus) = guarded { service.setStatus(item.id(), status) }
 
-    fun delete(item: WebItem) {
-        marks.discard(item.id())
-        guarded { service.deleteItem(item.id()) }
-    }
+    fun delete(item: WebItem) = guarded { service.deleteItem(item.id()) }
 
-    fun approve(revision: WebRevision) = marks.afterSaves { guarded { service.approve(revision.id()) } }
+    fun approve(revision: WebRevision) = guarded { service.approve(revision.id()) }
 
     fun startNextRevision(projectId: Long) = guarded { service.startNextRevision(projectId) }
 
@@ -332,9 +318,9 @@ class WebState(
         scope.launch { runGuarded(reportError) { io(work) } }
     }
 
-    fun send(revision: WebRevision) = marks.afterSaves { delivery.send(revision) }
+    fun send(revision: WebRevision) = delivery.send(revision)
 
-    fun sendTo(revision: WebRevision, ccmSessionId: String?) = marks.afterSaves { delivery.sendTo(revision, ccmSessionId) }
+    fun sendTo(revision: WebRevision, ccmSessionId: String?) = delivery.sendTo(revision, ccmSessionId)
 
     fun sendTarget(projectId: Long): WebSendTarget? = delivery.sendTarget(projectId)
 
