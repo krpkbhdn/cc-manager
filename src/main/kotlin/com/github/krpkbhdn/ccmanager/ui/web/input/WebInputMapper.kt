@@ -45,8 +45,18 @@ class WebInputMapper(
     private var lastPressX = 0
     private var lastPressY = 0
     private var clickCount = 0
+    private var lastX = 0
+    private var lastY = 0
+    private var pointed = false
+
+    private fun at(xDip: Int, yDip: Int) {
+        lastX = xDip
+        lastY = yDip
+        pointed = true
+    }
 
     fun press(xDip: Int, yDip: Int, button: Int, keys: Int, timeMillis: Long) {
+        at(xDip, yDip)
         val repeated = button == lastButton && timeMillis - lastPressMillis <= doubleClickMillis &&
             abs(xDip - lastPressX) <= clickSlopDip && abs(yDip - lastPressY) <= clickSlopDip
         clickCount = if (repeated) clickCount + 1 else 1
@@ -59,12 +69,14 @@ class WebInputMapper(
     }
 
     fun release(xDip: Int, yDip: Int, button: Int, keys: Int) {
+        at(xDip, yDip)
         val modifiers = keys or heldMask()
         held -= button
         sink.mouse(MouseEvent.MOUSE_RELEASED, xDip, yDip, button, if (button == lastButton) clickCount else 1, modifiers)
     }
 
     fun move(xDip: Int, yDip: Int, keys: Int) {
+        at(xDip, yDip)
         val dragging = held.firstOrNull()
         if (dragging == null) sink.mouse(MouseEvent.MOUSE_MOVED, xDip, yDip, MouseEvent.NOBUTTON, 0, keys)
         else sink.mouse(MouseEvent.MOUSE_DRAGGED, xDip, yDip, dragging, 0, keys or heldMask())
@@ -72,6 +84,13 @@ class WebInputMapper(
 
     fun exit(xDip: Int, yDip: Int) {
         sink.mouse(MouseEvent.MOUSE_EXITED, xDip, yDip, MouseEvent.NOBUTTON, 0, 0)
+    }
+
+    /** Releases every held button and sends one exit at the last pointer position, so the page drops its pressed and hover state; nothing when the pointer never touched the page. */
+    fun releaseAll() {
+        if (!pointed) return
+        held.toList().forEach { release(lastX, lastY, it, 0) }
+        exit(lastX, lastY)
     }
 
     /** One Compose notch (1.0, positive = down) scrolls [PIXELS_PER_NOTCH] page pixels. */

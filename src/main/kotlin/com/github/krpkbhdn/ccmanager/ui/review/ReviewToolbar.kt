@@ -19,11 +19,17 @@ private fun tooltipOf(tool: ReviewTool): String = "${toolName(tool)} (${toolHotk
 @Composable
 fun ReviewToolbar(viewer: ReviewViewerState, tool: ReviewTool, onTool: (ReviewTool) -> Unit, modifier: Modifier = Modifier) {
     Row(modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.xs), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-        ReviewTool.entries.forEach { IconButton(toolIcon(it), { onTool(it) }, tooltip = tooltipOf(it), active = it == tool) }
+        ReviewToolButtons(tool, onTool)
         Spacer(Modifier.weight(1f))
         IconButton(Icons.ZoomOut, { viewer.zoomOut() }, tooltip = "Zoom out")
         IconButton(Icons.ZoomIn, { viewer.zoomIn() }, tooltip = "Zoom in")
         IconButton(Icons.Maximize, { viewer.fit() }, tooltip = "Fit to view")
         AppButton("100%", { viewer.actualSize() }, variant = ButtonVariant.GHOST, compact = true, tooltip = "Actual size")
     }
+}
+
+/** The Pointer/Rectangle/Ellipse/Pin/Freeform buttons with their key hints; call inside a Row. */
+@Composable
+fun ReviewToolButtons(tool: ReviewTool, onTool: (ReviewTool) -> Unit) {
+    ReviewTool.entries.forEach { IconButton(toolIcon(it), { onTool(it) }, tooltip = tooltipOf(it), active = it == tool) }
 }

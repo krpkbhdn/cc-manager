@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.ui.web
 
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 
 class InspectorBridgeTest {
@@ -22,8 +23,16 @@ class InspectorBridgeTest {
     fun callsAreGuardedAndShaped() {
         assertThat(InspectorBridge.clearPreview()).isEqualTo("try{window.__ccm&&window.__ccm.clearPreview()}catch(e){}")
         assertThat(InspectorBridge.setOptions(InspectorToggles(pick = true)))
-            .contains("""{"pick":true,"showAll":false,"showBox":true,"showLabels":true,"similar":false,"spacing":[]}""")
+            .contains("""{"pick":true,"showAll":false,"showBox":true,"showLabels":true,"similar":false,"spacing":[],"contrast":true}""")
         assertThat(InspectorBridge.previewStyle("a", mapOf("color" to "red"))).contains("""{"selector":"a","props":{"color":"red"}}""")
+    }
+
+    @Test
+    fun pointerAndScrollCallsAreShapedAndKindIsWhitelisted() {
+        assertThat(InspectorBridge.pointer("move", 1.5, 2.0)).isEqualTo("""try{window.__ccm&&window.__ccm.pointer("move",1.5,2.0)}catch(e){}""")
+        assertThat(InspectorBridge.scrollBy(0.0, -40.0)).isEqualTo("try{window.__ccm&&window.__ccm.scrollBy(0.0,-40.0)}catch(e){}")
+        assertThatThrownBy { InspectorBridge.pointer(nasty, 0.0, 0.0) }.isInstanceOf(IllegalArgumentException::class.java)
+        assertThat(InspectorBridge.setOptions(InspectorToggles(contrast = false))).contains("\"contrast\":false")
     }
 
     @Test

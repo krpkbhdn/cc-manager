@@ -82,6 +82,13 @@ object StyleDiff {
 
 enum class SpacingLayer { MARGIN, PADDING, GAP, VALUES, BORDERS, PHANTOMS, MISALIGN }
 
+enum class OverlayGroup(val key: Char) { INSPECT('1'), SPACING('2'), AUDIT('3'), SIMILAR('4'), CONTRAST('5') }
+
+private val spacingGroupLayers = setOf(SpacingLayer.MARGIN, SpacingLayer.PADDING, SpacingLayer.GAP, SpacingLayer.VALUES)
+
+/**
+ * The sub-options are remembered values; [overlaysOn] and [off] only mask them in [effective], so they survive any off/on.
+ */
 data class InspectorToggles(
     val pick: Boolean = false,
     val showAll: Boolean = false,
@@ -89,7 +96,33 @@ data class InspectorToggles(
     val showLabels: Boolean = true,
     val similar: Boolean = false,
     val spacing: Set<SpacingLayer> = emptySet(),
+    val overlaysOn: Boolean = true,
+    val off: Set<OverlayGroup> = emptySet(),
+    val contrast: Boolean = true,
 ) {
+    fun isOn(group: OverlayGroup) = overlaysOn && group !in off
+
+    /** What the page gets: sub-options of groups that are off (all of them when the master is off) cleared. */
+    fun effective(): InspectorToggles = copy(
+        showAll = showAll && isOn(OverlayGroup.INSPECT),
+        showBox = showBox && isOn(OverlayGroup.INSPECT),
+        showLabels = showLabels && isOn(OverlayGroup.INSPECT),
+        similar = similar && isOn(OverlayGroup.SIMILAR),
+        contrast = contrast && isOn(OverlayGroup.CONTRAST),
+        spacing = spacing.filterTo(mutableSetOf()) { layer ->
+            isOn(if (layer in spacingGroupLayers) OverlayGroup.SPACING else OverlayGroup.AUDIT)
+        },
+    )
+
+    fun toggleMaster() = copy(overlaysOn = !overlaysOn)
+
+    /** Flips a group; while the master is off it turns the master and this group on. */
+    fun toggleGroup(group: OverlayGroup) = when {
+        !overlaysOn -> copy(overlaysOn = true, off = off - group)
+        group in off -> copy(off = off - group)
+        else -> copy(off = off + group)
+    }
+
     fun togglePick() = copy(pick = !pick)
     fun toggleShowAll() = copy(showAll = !showAll)
     fun toggleShowBox() = copy(showBox = !showBox)

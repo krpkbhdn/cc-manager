@@ -35,7 +35,7 @@ internal fun layerLabel(layer: LiteTarget): String =
 /** The page's right-click menu at the click spot: actions on the chosen layer and the list of layers under the point. */
 @Composable
 fun WebContextMenu(view: WebView, state: WebState) {
-    val menu = view.contextMenu?.takeIf { !it.feedback } ?: return
+    val menu = view.contextMenu?.takeIf { !it.feedback && !it.quick } ?: return
     val at = IntOffset(menu.canvasOffset.x.toInt(), menu.canvasOffset.y.toInt())
     val close = { WebContextActions.dismiss(view) }
     val layer = menu.items.getOrNull(menu.chosen)

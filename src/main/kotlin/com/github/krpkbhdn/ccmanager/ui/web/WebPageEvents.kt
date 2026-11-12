@@ -51,11 +51,12 @@ internal class WebPageEvents(
         val items = if (key == null) emptyList() else io { service.items(view.projectId, key) }
         if (pageKeyOf(view.host.page.value.url) != key) return
         view.pageItems = items
-        view.host.runScript(InspectorBridge.setOptions(view.toggles))
+        view.host.runScript(InspectorBridge.setOptions(view.toggles.effective()))
         pushPins(view)
         view.pendingFocus?.let { id ->
             view.pendingFocus = null
             if (view.visibleItems.any { it.id() == id }) view.host.runScript(InspectorBridge.focusAnnotation(id.toString()))
+            else view.layout?.let { layout -> view.visibleMarks.firstOrNull { it.id() == id }?.shape()?.let { view.host.runScript(jumpToShape(it, layout)) } }
         }
     }
 
@@ -68,8 +69,9 @@ internal class WebPageEvents(
             reportError(DRAFT_OPEN_MESSAGE)
             return
         }
+        if (!toggles.pick) view.stickyPick = false
         view.toggles = toggles
-        view.host.runScript(InspectorBridge.setOptions(toggles))
+        view.host.runScript(InspectorBridge.setOptions(toggles.effective()))
     }
 
     private suspend fun onInspector(view: WebView, message: InspectorMessage) {
@@ -77,23 +79,37 @@ internal class WebPageEvents(
             is InspectorMessage.Ready -> pageChanged(view, message.title)
             is InspectorMessage.Navigated -> pageChanged(view, message.title)
             is InspectorMessage.Hover -> if (view.toggles.pick) view.hovered = message.target
-            is InspectorMessage.Pick -> if (view.toggles.pick && !view.draftDirty) {
-                WebContextActions.clearSimilar(view)
-                view.beginDraft(message.target)
-                setToggles(view, view.toggles.copy(pick = false))
-                drafts.captureAtPick(view, message.target)
-            }
+            is InspectorMessage.Pick -> if (view.toggles.pick) onPick(view, message.target)
             InspectorMessage.PickCancel -> setToggles(view, view.toggles.copy(pick = false))
             is InspectorMessage.Stack -> context.onStack(view, message)
             is InspectorMessage.Inspect -> context.onInspect(view, message)
             is InspectorMessage.ModuleError -> LOG.debug("Inspector module {} reported an error", message.module)
             is InspectorMessage.AnnotationHover -> pinActions.onHover(view, message)
             InspectorMessage.AnnotationLeave -> pinActions.onLeave(view)
+            is InspectorMessage.Editing -> view.pageEditing = message.on
+            is InspectorMessage.Scroll -> view.scroll = DocScroll(message.x, message.y, message.w, message.h)
             is InspectorMessage.AnnotationClick -> view.visibleItems.firstOrNull { it.id().toString() == message.id }?.let {
                 view.selectedItemId = it.id()
                 view.panelTab = WebPanelTab.ITEMS
                 pinActions.emphasiseSelection(view)
             }
+        }
+    }
+
+    /** A pick ends pick mode, except sticky pick: it stays on and opens the feedback popover at the pointer. */
+    private fun onPick(view: WebView, target: ElementTarget) {
+        if (view.draftDirty) {
+            if (view.stickyPick) reportError(DRAFT_OPEN_MESSAGE)
+            return
+        }
+        WebContextActions.clearSimilar(view)
+        if (view.stickyPick) {
+            context.openFeedbackAt(view, target, view.lastPointer?.canvas ?: view.layoutCentre())
+            view.host.runScript(InspectorBridge.setOptions(view.toggles.effective()))
+        } else {
+            view.beginDraft(target)
+            setToggles(view, view.toggles.copy(pick = false))
+            drafts.captureAtPick(view, target)
         }
     }
 
@@ -104,6 +120,7 @@ internal class WebPageEvents(
         if (key != view.pageKey) {
             if (!view.draftDirty) view.clearDraft()
             view.selectedItemId = null
+            view.polygon.clear()
         }
         context.reset(view)
         view.itemPopover = null
@@ -112,6 +129,7 @@ internal class WebPageEvents(
         view.pageTitle = title
         view.pageKey = key
         view.hovered = null
+        view.pageEditing = false
         runGuarded(reportError) { refreshPage(view) }
     }
 }

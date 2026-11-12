@@ -71,7 +71,7 @@ class InspectorVisualQaRealTest {
     }
 
     private fun options(js: String) {
-        evaluate("window.__ccm.setOptions({pick:false,showAll:false,showBox:false,showLabels:false,similar:false,spacing:[], $js}) || 1")
+        evaluate("window.__ccm.setOptions({pick:false,showAll:false,showBox:false,showLabels:false,similar:false,spacing:[],contrast:false, $js}) || 1")
     }
 
     private fun shot(name: String) {

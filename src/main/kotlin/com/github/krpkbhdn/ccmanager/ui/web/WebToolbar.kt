@@ -10,11 +10,16 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.isShiftPressed
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.ui.components.AppTextField
 import com.github.krpkbhdn.ccmanager.ui.components.IconButton
+import com.github.krpkbhdn.ccmanager.ui.components.Label
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
+import com.github.krpkbhdn.ccmanager.ui.theme.Type
+import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
 private val fieldHeight = 30.dp
 private val addressMaxWidth = 320.dp
@@ -24,6 +29,7 @@ private val addressMaxWidth = 320.dp
 fun WebToolbar(view: WebView, state: WebState, modifier: Modifier = Modifier) {
     val page by view.host.page.collectAsState()
     val toggles = view.toggles
+    val window = LocalWindowInfo.current
     Row(
         modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
@@ -37,8 +43,16 @@ fun WebToolbar(view: WebView, state: WebState, modifier: Modifier = Modifier) {
             placeholder = "http://localhost:3000", icon = Icons.Globe, mono = true,
             onSubmit = { state.go(view, view.address.text.toString()) }, height = fieldHeight,
         )
-        IconButton(Icons.MousePointer, { state.setToggles(view, toggles.togglePick()) }, tooltip = "Pick element", active = toggles.pick)
-        IconButton(Icons.Copy, { state.setToggles(view, toggles.copy(similar = !toggles.similar)) }, tooltip = "Highlight similar elements", active = toggles.similar)
+        IconButton(
+            Icons.MousePointer, { state.perform(view, if (window.keyboardModifiers.isShiftPressed) WebAction.StickyPick else WebAction.TogglePick) },
+            tooltip = "Pick element (I) - Shift+click or Shift+I keeps picking", active = toggles.pick,
+        )
+        IconButton(
+            Icons.Hand, { state.perform(view, WebAction.ToggleLock) },
+            tooltip = "Lock page (L) - the page ignores the mouse, the inspector still works", active = !view.interaction,
+        )
+        if (!view.interaction) Label("Locked", color = colors.accent, style = Type.caption)
+        IconButton(Icons.PenTool, { state.perform(view, WebAction.ToggleDrawing) }, tooltip = "Draw marks (D)", active = view.drawMode)
         WebOverlayMenu(toggles) { state.setToggles(view, it) }
         WebDeviceControls(view.device) { view.device = it }
         IconButton(Icons.Terminal, { view.consoleOpen = !view.consoleOpen }, tooltip = "Console", active = view.consoleOpen)

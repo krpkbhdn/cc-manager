@@ -27,6 +27,7 @@ import com.github.krpkbhdn.ccmanager.ui.components.AppButton
 import com.github.krpkbhdn.ccmanager.ui.components.ButtonVariant
 import com.github.krpkbhdn.ccmanager.ui.components.Label
 import com.github.krpkbhdn.ccmanager.ui.components.card
+import com.github.krpkbhdn.ccmanager.ui.review.toolName
 import com.github.krpkbhdn.ccmanager.ui.theme.Radius
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
@@ -56,7 +57,7 @@ fun WebFeedbackPopover(view: WebView, state: WebState) {
                 .onKeyEvent { if (it.type == KeyEventType.KeyDown && it.key == Key.Escape) { cancel(); true } else false },
             verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
-            Label(target.selector, Modifier.fillMaxWidth(), color = colors.textTertiary, style = Type.monoSmall, tooltipWhenTruncated = true)
+            Label(view.draftShape?.let { toolName(it.kind.tool()) } ?: target.selector,Modifier.fillMaxWidth(), color = colors.textTertiary, style = Type.monoSmall, tooltipWhenTruncated = true)
             VoiceTextArea(view.comment, Modifier.fillMaxWidth(), placeholder = "What should change here?", focusRequester = focus, minLines = 2, maxLines = 5, onSubmit = save)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm, Alignment.End)) {
                 AppButton("Cancel", cancel, variant = ButtonVariant.GHOST, compact = true)

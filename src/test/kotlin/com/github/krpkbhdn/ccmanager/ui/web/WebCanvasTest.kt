@@ -33,8 +33,8 @@ class WebCanvasTest {
         scene?.close()
     }
 
-    private fun show(density: Float): ImageComposeScene =
-        ImageComposeScene(WIDTH, HEIGHT, Density(density)) { WebCanvas(host, PageViewport((WIDTH / density).toInt(), (HEIGHT / density).toInt()), Modifier) }.also {
+    private fun show(density: Float, interaction: Boolean = true): ImageComposeScene =
+        ImageComposeScene(WIDTH, HEIGHT, Density(density)) { WebCanvas(host, PageViewport((WIDTH / density).toInt(), (HEIGHT / density).toInt()), Modifier, interaction = interaction) }.also {
             scene = it
             frames(it, SETTLE_FRAMES)
         }
@@ -88,6 +88,32 @@ class WebCanvasTest {
         assertThat(host.mouseCalls).allSatisfy { assertThat(it.xDip).isEqualTo(50); assertThat(it.yDip).isEqualTo(30) }
         assertThat(host.scrollCalls.single().pixels).isEqualTo(100)
         assertThat(host.scrollCalls.single().xDip).isEqualTo(50)
+    }
+
+    @Test
+    fun `a locked canvas sends the page no mouse and drives the inspector instead`() {
+        val scene = show(density = 1f, interaction = false)
+        val at = Offset(100f, 60f)
+        host.mouseCalls.clear()
+
+        scene.sendPointerEvent(PointerEventType.Move, Offset(50f, 50f))
+        scene.sendPointerEvent(PointerEventType.Move, at)
+        scene.sendPointerEvent(PointerEventType.Move, at)
+        frames(scene, 3)
+        scene.sendPointerEvent(PointerEventType.Move, at)
+        frames(scene, 3)
+        scene.sendPointerEvent(
+            PointerEventType.Press, at, timeMillis = 10, buttons = PointerButtons(isPrimaryPressed = true), button = PointerButton.Primary,
+        )
+        scene.sendPointerEvent(PointerEventType.Release, at, timeMillis = 20, button = PointerButton.Primary)
+        scene.sendPointerEvent(PointerEventType.Scroll, at, Offset(0f, 1f), timeMillis = 30)
+        frames(scene, 3)
+
+        assertThat(host.mouseCalls).isEmpty()
+        assertThat(host.scrollCalls).isEmpty()
+        assertThat(host.scripts.filter { it.contains("pointer(\"move\",100.0,60.0)") }).describedAs(host.scripts.toString()).hasSize(1)
+        assertThat(host.scripts).anyMatch { it.contains("pointer(\"click\",100.0,60.0)") }
+        assertThat(host.scripts).anyMatch { it.contains("scrollBy(0.0,100.0)") }
     }
 
     @Test

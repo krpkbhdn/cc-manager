@@ -47,6 +47,8 @@ import com.github.krpkbhdn.ccmanager.ui.components.IconButton
 import com.github.krpkbhdn.ccmanager.ui.components.Label
 import com.github.krpkbhdn.ccmanager.ui.components.ThinScrollbar
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
+import com.github.krpkbhdn.ccmanager.ui.review.toolIcon
+import com.github.krpkbhdn.ccmanager.ui.review.toolName
 import com.github.krpkbhdn.ccmanager.ui.theme.Radius
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.Type
@@ -141,11 +143,17 @@ private fun ItemRow(item: WebItem, selected: Boolean, state: WebState, view: Web
             }
             Chip(item.status().name.lowercase().replaceFirstChar(Char::titlecase), tint)
             item.viewport()?.let { Chip(viewportLabel(it), colors.neutral) }
-            Label(item.anchor().tag().orEmpty(), Modifier.weight(1f), color = colors.textTertiary, style = Type.monoSmall)
+            val markTool = item.shape()?.kind?.tool()
+            if (markTool != null) {
+                Glyph(toolIcon(markTool), colors.textTertiary, size = 14.dp)
+                Label(toolName(markTool), Modifier.weight(1f), color = colors.textTertiary, style = Type.monoSmall)
+            } else {
+                Label(item.anchor().tag().orEmpty(), Modifier.weight(1f), color = colors.textTertiary, style = Type.monoSmall)
+            }
             ItemActions(item, state, view)
         }
         Label(item.comment().ifBlank { "No comment" }, color = if (item.comment().isBlank()) colors.textTertiary else colors.textPrimary, maxLines = 3)
-        Label(item.anchor().selector(), color = colors.textTertiary, style = Type.monoSmall, tooltipWhenTruncated = true)
+        if (item.shape() == null) Label(item.anchor().selector(), color = colors.textTertiary, style = Type.monoSmall, tooltipWhenTruncated = true)
     }
 }
 

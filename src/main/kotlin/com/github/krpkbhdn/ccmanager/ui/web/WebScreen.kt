@@ -59,9 +59,7 @@ fun WebScreen(projectId: Long, state: WebState, modifier: Modifier = Modifier) {
                 val pans = remember(projectId) { mutableStateMapOf<DeviceSelection, Offset>() }
                 val pan = pans[view.device.copy(zoom = DeviceZoom.Fit)] ?: Offset.Zero
                 val viewport = PageViewport.of(view.device, maxWidth.value.toDouble(), maxHeight.value.toDouble(), pan.x.toDouble(), pan.y.toDouble())
-                WebCanvas(
-                    view.host, viewport, Modifier.fillMaxSize(), device = view.device,
-                    onZoom = { cursor, notches ->
+                val zoomAt = { cursor: Offset, notches: Int ->
                         // Responsive has no zoom: the first zoom turns the canvas size into a custom device.
                         val availW = maxWidth.value.toDouble()
                         val availH = maxHeight.value.toDouble()
@@ -74,16 +72,25 @@ fun WebScreen(projectId: Long, state: WebState, modifier: Modifier = Modifier) {
                         pans.clear()
                         pans[zoomed.copy(zoom = DeviceZoom.Fit)] = PageViewport.panAfterZoom(zoomed, change, availW, availH)
                         view.device = zoomed
-                    },
-                    onPan = { dx, dy ->
-                        val key = view.device.copy(zoom = DeviceZoom.Fit)
-                        val next = viewport.panned(pans[key] ?: Offset.Zero, dx, dy)
-                        pans.clear()
-                        pans[key] = next
-                    },
+                }
+                val panBy = { dx: Double, dy: Double ->
+                    val key = view.device.copy(zoom = DeviceZoom.Fit)
+                    val next = viewport.panned(pans[key] ?: Offset.Zero, dx, dy)
+                    pans.clear()
+                    pans[key] = next
+                }
+                WebCanvas(
+                    view.host, viewport, Modifier.fillMaxSize(), device = view.device,
+                    onZoom = zoomAt,
+                    interaction = view.interaction,
+                    hotKeyModes = { view.hotKeyModes() },
+                    pageEditing = { view.pageEditing },
+                    onAction = { state.perform(view, it) { notches -> zoomAt(Offset(maxWidth.value / 2, maxHeight.value / 2), notches) } },
+                    onPointer = { page, canvas -> view.lastPointer = PointerSpot(page, canvas) },
+                    onPan = panBy,
                     onContextMenu = { page, canvas -> state.openContextMenu(view, page, canvas) },
                 )
-                WebPageOverlay(view, state, viewport)
+                WebPageOverlay(view, state, viewport, onZoom = zoomAt, onPan = panBy)
             }
             VerticalRule()
             WebSidePanel(projectId, view, state, Modifier.width(sidePanelWidth))

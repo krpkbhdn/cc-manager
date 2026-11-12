@@ -194,6 +194,68 @@ class InspectorPinsRealTest {
         assertThat(evaluate("window.__prevented").toString()).isEqualTo("[true,false]")
     }
 
+    private fun messagesAfter(script: String): List<JsonNode> {
+        events.clear()
+        host.runScript(script)
+        Thread.sleep(400)
+        return generateSequence { events.poll() }.filterIsInstance<PageEvent.Inspector>().map { json.readTree(it.json) }.toList()
+    }
+
+    @Test
+    fun pointer_api_drives_hover_pick_and_pins_without_real_mouse_events() {
+        evaluate("window.__ccm.setOptions({pick: true, showAll: false}) || 1")
+        evaluate("window.__ccm.setAnnotations(" + pins(Triple("a", 1, "open")) + ") || 1")
+
+        val moved = messagesAfter(InspectorBridge.pointer("move", 200.0, 150.0))
+        assertThat(moved.map { it["type"].asString() }).contains("hover")
+        assertThat(evaluate("document.getElementById('t').matches(':hover')").asBoolean()).isFalse()
+
+        val picked = messagesAfter(InspectorBridge.pointer("click", 200.0, 150.0))
+        assertThat(picked.map { it["type"].asString() }).contains("pick")
+
+        val onPin = messagesAfter(InspectorBridge.pointer("move", 100.0, 100.0))
+        assertThat(onPin.map { it["type"].asString() }).contains("annotationHover")
+        val pinClick = messagesAfter(InspectorBridge.pointer("click", 100.0, 100.0))
+        assertThat(pinClick.map { it["type"].asString() }).contains("annotationClick").doesNotContain("pick")
+        val left = messagesAfter(InspectorBridge.pointer("leave", 0.0, 0.0))
+        assertThat(left.map { it["type"].asString() }).contains("annotationLeave")
+
+        evaluate("window.__ccm.setOptions({pick: false}) || 1")
+        assertThat(messagesAfter(InspectorBridge.pointer("click", 200.0, 150.0)).map { it["type"].asString() }).doesNotContain("pick")
+        evaluate("window.__ccm.setAnnotations([]) || 1")
+    }
+
+    @Test
+    fun scroll_and_editing_messages_are_sent() {
+        evaluate("(document.body.style.height = '2000px', 1)")
+        try {
+            val scrolled = messagesAfter(InspectorBridge.scrollBy(0.0, 150.0))
+            val scroll = scrolled.last { it["type"].asString() == "scroll" }
+            assertThat(scroll["y"].asDouble()).isEqualTo(150.0)
+            assertThat(scroll["h"].asDouble()).isGreaterThanOrEqualTo(2000.0)
+            assertThat(editingMessages("focusin")).containsExactly(true)
+            assertThat(editingMessages("focusout")).containsExactly(false)
+        } finally {
+            evaluate("(document.body.style.height = '', scrollTo(0, 0), 1)")
+        }
+    }
+
+    @Test
+    fun only_real_text_entry_counts_as_editing() {
+        fun editingAfterFocusin(id: String) = messagesAfter("document.getElementById('$id').dispatchEvent(new FocusEvent('focusin', {bubbles: true, composed: true}))")
+            .filter { it["type"].asString() == "editing" }.map { it["on"].asBoolean() }
+        assertThat(editingAfterFocusin("f")).containsExactly(true)
+        assertThat(editingAfterFocusin("b")).containsExactly(false)
+        assertThat(editingAfterFocusin("c")).isEmpty()
+        assertThat(editingAfterFocusin("f")).containsExactly(true)
+        assertThat(editingMessages("focusout")).containsExactly(false)
+    }
+
+    /** Dispatched, not focused: an offscreen browser has no window focus, so a real focus() would not raise the events. */
+    private fun editingMessages(event: String): List<Boolean> =
+        messagesAfter("document.getElementById('f').dispatchEvent(new FocusEvent('$event', {bubbles: true, composed: true}))")
+            .filter { it["type"].asString() == "editing" }.map { it["on"].asBoolean() }
+
     private fun outlineIsPainted(density: Float) {
         host.resize(WIDTH, HEIGHT, density)
         Thread.sleep(500)
@@ -226,7 +288,7 @@ class InspectorPinsRealTest {
         const val OPEN_PIN = 0xF2B93B
         const val DONE_PIN = 0x3DD68C
         const val PAGE = """<!doctype html><meta charset=utf-8>
-<style>html,body{margin:0;background:#fff}#t{position:absolute;left:100px;top:100px;width:200px;height:100px;background:#fff}</style>
-<div id="t"></div><input id="f" style="position:absolute;left:400px;top:400px">"""
+<style>html,body{margin:0;background:#fff}#t{position:absolute;left:100px;top:100px;width:200px;height:100px;background:#fff}#t:hover{background:#f00}</style>
+<div id="t"></div><input id="f" style="position:absolute;left:400px;top:400px"><button id="b">b</button><input id="c" type="checkbox">"""
     }
 }

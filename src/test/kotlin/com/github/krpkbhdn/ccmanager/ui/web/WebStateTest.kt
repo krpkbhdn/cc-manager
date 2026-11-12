@@ -7,6 +7,7 @@ import com.github.krpkbhdn.ccmanager.ui.await
 import com.github.krpkbhdn.ccmanager.ui.state.LiveSessions
 import com.github.krpkbhdn.ccmanager.ui.web.browser.Availability
 import com.github.krpkbhdn.ccmanager.ui.web.browser.FakePageHost
+import androidx.compose.ui.geometry.Offset
 import com.github.krpkbhdn.ccmanager.ui.web.browser.PageEvent
 import com.github.krpkbhdn.ccmanager.ui.web.browser.PageState
 import com.github.krpkbhdn.ccmanager.web.BrowserLimits
@@ -615,6 +616,128 @@ class WebStateTest {
 
         await { state.sendTarget(1) != null }
         assertThat(state.sendTarget(2)).isNull()
+    }
+
+    @Test
+    fun `lock and editing flags follow actions and messages and editing resets on navigation`() {
+        val view = openView()
+        ready()
+        await { view.pageKey != null }
+
+        state.perform(view, WebAction.ToggleLock)
+        emit("""{"type":"editing","on":true}""")
+        emit("""{"type":"scroll","x":1,"y":2,"w":300,"h":4000}""")
+
+        await { view.pageEditing && view.scroll != null }
+        assertThat(view.interaction).isFalse()
+        assertThat(view.scroll).isEqualTo(DocScroll(1.0, 2.0, 300.0, 4000.0))
+        ready("http://localhost:3000/other")
+        await { !view.pageEditing }
+        state.perform(view, WebAction.ToggleLock)
+        assertThat(view.interaction).isTrue()
+    }
+
+    @Test
+    fun `sticky pick turns picking on and Esc steps leave sticky pick then drawing mode`() {
+        val view = openView()
+        ready()
+        await { view.pageKey != null }
+
+        state.perform(view, WebAction.StickyPick)
+        assertThat(view.stickyPick).isTrue()
+        assertThat(view.toggles.pick).isTrue()
+        state.perform(view, WebAction.ExitDrawing)
+        state.perform(view, WebAction.StopPick)
+        assertThat(view.stickyPick).isFalse()
+        assertThat(view.toggles.pick).isFalse()
+
+        state.perform(view, WebAction.ToggleDrawing)
+        state.perform(view, WebAction.SelectTool(com.github.krpkbhdn.ccmanager.ui.review.ReviewTool.RECTANGLE))
+        state.perform(view, WebAction.DisarmTool)
+        assertThat(view.drawMode).isTrue()
+        assertThat(view.drawTool).isEqualTo(com.github.krpkbhdn.ccmanager.ui.review.ReviewTool.POINTER)
+        state.perform(view, WebAction.ToggleDrawing)
+        assertThat(view.drawMode).isFalse()
+    }
+
+    @Test
+    fun `a sticky pick keeps picking on and opens the feedback popover at the pointer, a dirty draft refuses the next pick`() {
+        val view = openView()
+        ready()
+        await { view.pageKey != null }
+        view.lastPointer = PointerSpot(Offset(10f, 20f), Offset(111f, 222f))
+        state.perform(view, WebAction.StickyPick)
+
+        emit(pickJson())
+
+        await { view.picked != null }
+        assertThat(view.toggles.pick).isTrue()
+        assertThat(view.stickyPick).isTrue()
+        assertThat(view.contextMenu!!.feedback).isTrue()
+        assertThat(view.contextMenu!!.canvasOffset).isEqualTo(Offset(111f, 222f))
+        view.comment.setTextAndPlaceCursorAtEnd("typed")
+        emit(pickJson("other.target"))
+        await { errors.isNotEmpty() }
+        assertThat(view.picked!!.selector).isEqualTo("button.save")
+    }
+
+    @Test
+    fun `drawing mode and picking exclude each other and quick feedback needs a pointer position`() {
+        val view = openView()
+        ready()
+        await { view.pageKey != null }
+
+        state.perform(view, WebAction.TogglePick)
+        state.perform(view, WebAction.ToggleDrawing)
+        assertThat(view.toggles.pick).isFalse()
+        state.perform(view, WebAction.TogglePick)
+        assertThat(view.drawMode).isFalse()
+        assertThat(view.toggles.pick).isTrue()
+        state.perform(view, WebAction.QuickFeedback)
+
+        assertThat(errors).containsExactly(NO_POINTER_NOTICE)
+    }
+
+    @Test
+    fun `Esc on a quick feedback menu drops the pending inspect so a late answer starts no draft`() {
+        val view = openView()
+        ready()
+        await { view.pageKey != null }
+        state.requestInspect(view, "button.save", REASON_FEEDBACK)
+        view.contextMenu = ContextMenuState(0.0, 0.0, Offset.Zero, emptyList(), quick = true)
+
+        state.perform(view, WebAction.CloseMenu)
+        emit(pickJson().replace("\"type\":\"pick\"", "\"type\":\"inspect\",\"reason\":\"feedback\""))
+        emit("""{"type":"editing","on":true}""")
+        await { view.pageEditing }
+
+        assertThat(view.contextMenu).isNull()
+        assertThat(view.picked).isNull()
+    }
+
+    @Test
+    fun `Esc on a feedback popover takes its draft with it`() {
+        val view = openView()
+        view.beginDraft(ElementTarget("div.card", "", "div", "", emptyList(), "", "", null, null, emptyMap(), null, null, null, null))
+        view.contextMenu = ContextMenuState(0.0, 0.0, Offset.Zero, emptyList(), feedback = true)
+
+        state.perform(view, WebAction.CloseMenu)
+
+        assertThat(view.contextMenu).isNull()
+        assertThat(view.picked).isNull()
+    }
+
+    @Test
+    fun `a page pick cancel ends a sticky pick too`() {
+        val view = openView()
+        ready()
+        await { view.pageKey != null }
+        state.perform(view, WebAction.StickyPick)
+
+        emit("""{"type":"pickCancel"}""")
+
+        await { !view.toggles.pick }
+        assertThat(view.stickyPick).isFalse()
     }
 
     @Test

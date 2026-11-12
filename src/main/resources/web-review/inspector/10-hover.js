@@ -79,7 +79,7 @@ function drawLabel(ctx, el, r) {
 C.layer('hover', function (ctx) {
   tip.style.display = 'none';
   var el = state.hoverEl;
-  if (!el || !el.isConnected || !(opts.pick || opts.showBox || opts.showLabels)) return;
+  if (!el || !el.isConnected || !(opts.pick || opts.showBox || opts.showLabels || opts.contrast)) return;
   var r = el.getBoundingClientRect();
   if (opts.showBox) {
     var cs = getComputedStyle(el);
@@ -138,12 +138,20 @@ function sendHover() {
   lastHoverSent = Date.now(); lastHoverEl = el;
   send({ type: 'hover', target: describe(el) });
 }
-function tracksHover() { return opts.pick || opts.showBox || opts.showLabels || opts.similar; }
+function tracksHover() { return opts.pick || opts.showBox || opts.showLabels || opts.similar || opts.contrast; }
 function updateHover(x, y) {
   var el = deepElementAt(x, y);
   if (el !== state.hoverEl) { state.hoverEl = el; schedule('hover'); schedule('similar'); }
   if (opts.pick && !hoverTimer) sendHover();
 }
+/** Picks the element at the point (or the fallback when nothing is there); shared by the real click and the locked-page pointer api. */
+function pickAt(x, y, fallback) {
+  var el = deepElementAt(x, y) || fallback;
+  state.chosenSimilar = null;
+  C.schedule('similar');
+  if (el && el.nodeType === 1) send({ type: 'pick', target: describe(el) });
+}
+C.updateHover = updateHover; C.pickAt = pickAt; C.tracksHover = tracksHover;
 var SWALLOWED = ['mousedown', 'mouseup', 'click', 'dblclick', 'pointerdown', 'pointerup', 'touchstart', 'touchend', 'contextmenu'];
 // Moves and enters are swallowed in pick mode only so page hover menus do not fire; they never pick.
 var SWALLOWED_MOVES = ['pointermove', 'mouseover', 'pointerover', 'pointerenter', 'mouseenter'];
@@ -163,11 +171,8 @@ var onSwallowed = safe(function (e) {
   var t = e.type;
   if (t === 'click' || t === 'touchstart') {
     var pt = e.touches ? e.touches[0] : e;
-    var el = pt ? deepElementAt(pt.clientX, pt.clientY) : null;
-    if (!el && e.composedPath) el = e.composedPath()[0];
-    state.chosenSimilar = null;
-    C.schedule('similar');
-    if (el && el.nodeType === 1) send({ type: 'pick', target: describe(el) });
+    var fallback = e.composedPath ? e.composedPath()[0] : null;
+    if (pt) pickAt(pt.clientX, pt.clientY, fallback); else pickAt(-1, -1, fallback);
   }
 });
 var onKey = safe(function (e) {

@@ -15,7 +15,8 @@ class WebContextActionsTest {
     private val host = FakePageHost()
     private val view = WebView(1, host)
     private val scope = TestScope()
-    private val actions = WebContextActions(scope)
+    private val notices = mutableListOf<String>()
+    private val actions = WebContextActions(scope, notify = { notices += it })
     private val layer = LiteTarget("div.card", "div", "", listOf("card"), null)
 
     private fun stack(x: Double = 10.0, y: Double = 20.0) = InspectorMessage.Stack(x, y, listOf(layer))
@@ -116,6 +117,44 @@ class WebContextActionsTest {
         scope.advanceTimeBy(INSPECT_TIMEOUT_MILLIS + 1)
         scope.runCurrent()
         assertThat(view.contextMenu!!.notice).isNull()
+    }
+
+    @Test
+    fun quickFeedbackInspectsTheTopLayerAndOpensThePopover() {
+        view.lastPointer = PointerSpot(Offset(10f, 20f), Offset(5f, 6f))
+        actions.openQuick(view)
+        assertThat(host.scripts).contains(InspectorBridge.stackAt(10.0, 20.0))
+        actions.onStack(view, stack())
+        assertThat(host.scripts).contains(InspectorBridge.describeSelector("div.card", REASON_FEEDBACK))
+        actions.onInspect(view, inspect("feedback"))
+        assertThat(view.picked?.selector).isEqualTo("div.card")
+        assertThat(view.contextMenu!!.feedback).isTrue()
+        assertThat(view.contextMenu!!.canvasOffset).isEqualTo(Offset(5f, 6f))
+    }
+
+    @Test
+    fun quickFeedbackOnAnEmptyStackDismissesWithANotice() {
+        view.lastPointer = PointerSpot(Offset(10f, 20f), Offset.Zero)
+        actions.openQuick(view)
+        actions.onStack(view, InspectorMessage.Stack(10.0, 20.0, emptyList()))
+        assertThat(view.contextMenu).isNull()
+        assertThat(notices).containsExactly(NOTHING_HERE_NOTICE)
+    }
+
+    @Test
+    fun quickFeedbackWithoutAPointerOnlyNotifies() {
+        actions.openQuick(view)
+        assertThat(view.contextMenu).isNull()
+        assertThat(notices).containsExactly(NO_POINTER_NOTICE)
+        assertThat(host.scripts).isEmpty()
+    }
+
+    @Test
+    fun quickFeedbackStillIgnoresAnInspectWithoutAPendingRequest() {
+        view.lastPointer = PointerSpot(Offset(10f, 20f), Offset.Zero)
+        actions.openQuick(view)
+        actions.onInspect(view, inspect("feedback"))
+        assertThat(view.picked).isNull()
     }
 
     @Test

@@ -45,7 +45,7 @@ function send(msg) {
 
 // ---------- state and registry ----------
 // opts is a generic map: a module adds a toggle by listing a default in C.opts; setOptions keeps the type of the default.
-var opts = { pick: false, showAll: false, showBox: false, showLabels: false };
+var opts = { pick: false, showAll: false, showBox: false, showLabels: false, contrast: true };
 var state = { hoverEl: null };
 var layers = {};      // name -> {draw, canvas, raf}
 var tipFns = [];      // fn(el, rect) -> string | null

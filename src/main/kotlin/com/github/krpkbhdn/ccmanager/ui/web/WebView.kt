@@ -8,10 +8,16 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import com.github.krpkbhdn.ccmanager.review.MarkDraft
+import com.github.krpkbhdn.ccmanager.ui.review.MarkSpace
+import com.github.krpkbhdn.ccmanager.ui.review.PolygonDraft
+import com.github.krpkbhdn.ccmanager.ui.review.ReviewTool
 import com.github.krpkbhdn.ccmanager.ui.web.browser.WebPageHost
 import com.github.krpkbhdn.ccmanager.web.DeviceCategory
 import com.github.krpkbhdn.ccmanager.web.PageKey
 import com.github.krpkbhdn.ccmanager.web.WebItem
+import com.github.krpkbhdn.ccmanager.web.WebMarkShape
 import com.github.krpkbhdn.ccmanager.web.WebViewport
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.Job
@@ -34,7 +40,15 @@ internal class DraftSnapshot(
     val pageTitle: String,
     val shot: ByteArray?,
     val viewport: WebViewport?,
+    val shape: WebMarkShape?,
+    val crop: Rect?,
 )
+
+/** Document scroll position (x, y) and full size (w, h), CSS px. */
+data class DocScroll(val x: Double, val y: Double, val w: Double, val h: Double)
+
+/** A pointer position as the page point (CSS px) and the canvas offset (px). */
+data class PointerSpot(val page: Offset, val canvas: Offset)
 
 /** The pin under the pointer: its item id and the element's page rectangle. */
 data class ItemPopoverState(val itemId: String, val rect: Rect?)
@@ -56,6 +70,27 @@ class WebView(val projectId: Long, val host: WebPageHost) {
     var layout by mutableStateOf<PageViewport?>(null)
     var contextMenu by mutableStateOf<ContextMenuState?>(null)
     var itemPopover by mutableStateOf<ItemPopoverState?>(null)
+    /** False = page locked: the canvas sends no mouse or key input to the page, the inspector is driven by the host instead. */
+    var interaction by mutableStateOf(true)
+    /** The focused page element edits text (from the inspector); plain hotkeys stay out of the way. Reset on navigation. */
+    var pageEditing by mutableStateOf(false)
+    /** The page document's scroll offset and size in CSS px, as last reported by the inspector. */
+    var scroll by mutableStateOf<DocScroll?>(null)
+    /** Last pointer position over the canvas; written by WebCanvas on every move, not observable. */
+    var lastPointer: PointerSpot? = null
+    /** Picking stays on after an element is picked (set by the Shift+I key or Shift+click on Pick). */
+    var stickyPick by mutableStateOf(false)
+    /** Drawing mode: the pointer draws marks on the page instead of reaching it. */
+    var drawMode by mutableStateOf(false)
+    var drawTool by mutableStateOf(ReviewTool.POINTER)
+    /** The mark layer's view of the document, set by the overlay; where marks and the popover sit on the canvas. */
+    internal var markSpace: MarkSpace? = null
+    /** The finished mark that waits for its comment (the draft is then a shape, not an element), null otherwise. */
+    var draftShape by mutableStateOf<WebMarkShape?>(null)
+    /** The freeform polygon being placed point by point. */
+    internal val polygon = PolygonDraft()
+    /** Mark geometry the user changed that is not saved yet, so the mark does not jump back before the debounced save lands. */
+    val pendingMarks = mutableStateMapOf<Long, MarkDraft>()
     var picked by mutableStateOf<ElementTarget?>(null)
         private set
     var editingItem by mutableStateOf<WebItem?>(null)
@@ -90,12 +125,23 @@ class WebView(val projectId: Long, val host: WebPageHost) {
     /** PNG of the picked element taken at pick time, so it matches what the user saw even if the page scrolls before saving. */
     @Volatile internal var pickShot: ByteArray? = null
 
+    /** The document rectangle [pickShot] of a drawn shape shows. */
+    internal var shapeCrop: Rect? = null
+
     /** The viewport at pick time, so a device change before Save does not mislabel the item. */
     internal var pickViewport: WebViewport? = null
     private val consoleBuffer = ConsoleBuffer()
 
-    /** The items of the page that belong to the selected device scope; pins and the list show only these. */
-    val visibleItems: List<WebItem> get() = pageItems.visibleIn(device.scope)
+    /** The picked-element items of the page that belong to the selected device scope; these are the pins. */
+    val visibleItems: List<WebItem> get() = pageItems.filter { it.shape() == null }.visibleIn(device.scope)
+
+    /** The drawn marks of the page that belong to the selected device scope. */
+    val visibleMarks: List<WebItem> get() = pageItems.filter { it.shape() != null }.visibleIn(device.scope)
+
+    fun hotKeyModes() = HotKeyModes(interaction, drawMode, toggles.pick, contextMenu != null, draftShape != null || !polygon.isEmpty, drawMode && drawTool != ReviewTool.POINTER)
+
+    /** The middle of the page layout in canvas px, where a popover goes when nothing better is known. */
+    internal fun layoutCentre(): Offset = layout?.let { Offset(it.widthCss / 2f, it.heightCss / 2f) } ?: Offset.Zero
 
     fun currentViewport(): WebViewport? = layout?.let { WebViewport(it.widthCss, it.heightCss, device.preset?.name, device.scope ?: DeviceCategory.of(it.widthCss)) }
 
@@ -128,12 +174,14 @@ class WebView(val projectId: Long, val host: WebPageHost) {
     fun clearDraft() = replaceDraft(null, emptyMap(), "", null, "", "")
 
     internal fun snapshotDraft(): DraftSnapshot? =
-        picked?.let { DraftSnapshot(it, editingItem, edits.toMap(), comment.text.toString(), draftPageUrl, draftPageTitle, pickShot, pickViewport) }
+        picked?.let { DraftSnapshot(it, editingItem, edits.toMap(), comment.text.toString(), draftPageUrl, draftPageTitle, pickShot, pickViewport, draftShape, shapeCrop) }
 
     internal fun restoreDraft(draft: DraftSnapshot) {
         replaceDraft(draft.target, draft.edits, draft.comment, draft.editing, draft.pageUrl, draft.pageTitle)
         pickShot = draft.shot
         pickViewport = draft.viewport
+        draftShape = draft.shape
+        shapeCrop = draft.crop
     }
 
     private fun replaceDraft(target: ElementTarget?, values: Map<String, String>, text: String, item: WebItem?, url: String, title: String) {
@@ -143,6 +191,8 @@ class WebView(val projectId: Long, val host: WebPageHost) {
         picked = target
         pickShot = null
         pickViewport = null
+        draftShape = null
+        shapeCrop = null
         editingItem = item
         edits.clear()
         edits.putAll(values)

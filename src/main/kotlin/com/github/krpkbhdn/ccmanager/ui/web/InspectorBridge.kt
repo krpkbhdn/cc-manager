@@ -33,8 +33,22 @@ object InspectorBridge {
             "showLabels" to toggles.showLabels,
             "similar" to toggles.similar,
             "spacing" to toggles.spacing.map { it.name },
+            "contrast" to toggles.contrast,
         ),
     )
+
+    private val pointerKinds = setOf("move", "click", "leave")
+
+    /** Drives hover, pins and picking from the host while real input is not forwarded to the page; [kind] is move, click or leave. */
+    fun pointer(kind: String, x: Double, y: Double): String {
+        require(kind in pointerKinds) { "unknown pointer kind" }
+        return call("pointer", kind, x, y)
+    }
+
+    fun scrollBy(dx: Double, dy: Double): String = call("scrollBy", dx, dy)
+
+    /** Absolute document scroll; plain browser API, so it works before the inspector api is ready. */
+    fun scrollTo(x: Double, y: Double): String = "try{window.scrollTo(${literal(x)},${literal(y)})}catch(e){}"
 
     fun stackAt(x: Double, y: Double): String = call("stackAt", x, y)
 

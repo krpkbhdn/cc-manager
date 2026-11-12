@@ -44,6 +44,31 @@ C.layer('pins', function () {
   });
 }, true);
 
+/** Moves the pin hover to p (or none), sending leave for the old pin and hover for the new one. */
+function hoverPin(p) {
+  var id = p ? p.ann.id : null;
+  if (id === hoveredId) return;
+  if (hoveredId !== null) send({ type: 'annotationLeave' });
+  hoveredId = id;
+  if (p) send({ type: 'annotationHover', id: id, rect: p.rect });
+}
+/** The topmost visible pin under the point, from the pin nodes' rects (no real mouse needed). */
+function pinAt(x, y) {
+  for (var i = pins.length - 1; i >= 0; i--) {
+    var n = pins[i].node;
+    if (n.style.display === 'none') continue;
+    var r = n.getBoundingClientRect();
+    if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return pins[i];
+  }
+  return null;
+}
+C.pinPointer = function (kind, x, y) {
+  var p = kind === 'leave' ? null : pinAt(x, y);
+  if (kind === 'click') { if (p) send({ type: 'annotationClick', id: p.ann.id }); return !!p; }
+  hoverPin(p);
+  return !!p;
+};
+
 var RETRY_MIN_MS = 300, RETRY_MAX_MS = 10000;
 /** Resolves pin anchors: all of them when force, otherwise only the lost ones, each with its own doubling backoff. */
 C.reanchor = function (force) {
@@ -73,13 +98,8 @@ C.api('setAnnotations', function (list) {
     box.style.cssText = 'position:fixed;pointer-events:none;display:none;box-sizing:border-box';
     var p = { ann: ann, el: null, node: node, box: box, color: color, rect: null, retryAt: 0, retryDelay: 0 };
     node.addEventListener('click', function (e) { e.stopPropagation(); send({ type: 'annotationClick', id: ann.id }); });
-    node.addEventListener('mouseenter', function () {
-      hoveredId = ann.id;
-      send({ type: 'annotationHover', id: ann.id, rect: p.rect });
-    });
-    node.addEventListener('mouseleave', function () {
-      if (hoveredId === ann.id) { hoveredId = null; send({ type: 'annotationLeave' }); }
-    });
+    node.addEventListener('mouseenter', function () { hoverPin(p); });
+    node.addEventListener('mouseleave', function () { if (hoveredId === ann.id) hoverPin(null); });
     shadow.appendChild(box);
     shadow.appendChild(node);
     return p;

@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -59,6 +60,7 @@ import com.github.krpkbhdn.ccmanager.ui.web.input.WebInputSink
 import com.github.krpkbhdn.ccmanager.ui.web.input.keyModifierMask
 import androidx.compose.runtime.collectAsState
 import java.awt.Cursor
+import kotlinx.coroutines.channels.Channel
 import java.awt.event.MouseEvent
 import kotlin.math.roundToInt
 
@@ -78,7 +80,13 @@ fun WebCanvas(
     onPan: (dxDp: Double, dyDp: Double) -> Unit = { _, _ -> },
     onZoom: (cursorDp: Offset, notches: Int) -> Unit = { _, _ -> },
     onContextMenu: (pagePoint: Offset, canvasOffset: Offset) -> Unit = { _, _ -> },
+    interaction: Boolean = true,
+    hotKeyModes: () -> HotKeyModes = { HotKeyModes() },
+    pageEditing: () -> Boolean = { false },
+    onAction: (WebAction) -> Unit = {},
+    onPointer: (pagePoint: Offset, canvasOffset: Offset) -> Unit = { _, _ -> },
 ) {
+    val callbacks = CanvasCallbacks(onContextMenu, onPan, onZoom, onPointer, onAction, hotKeyModes, pageEditing)
     val density = LocalDensity.current.density
     val frame by host.frame.collectAsState()
     val popup by host.popup.collectAsState()
@@ -107,7 +115,7 @@ fun WebCanvas(
     Box(modifier.fillMaxSize().clipToBounds()) {
         Canvas(
             Modifier.fillMaxSize().onSizeChanged { size = it }.semantics { contentDescription = "Web page" }
-                .then(if (interactive) Modifier.inputHandling(host, density, viewport, focus, cursor, onContextMenu, onPan, onZoom) else Modifier),
+                .then(if (interactive) Modifier.inputHandling(host, density, viewport, focus, cursor, interaction, callbacks) else Modifier),
         ) {
             drawRect(if (device.responsive) colors.surface else colors.background)
             if (!device.responsive) {
@@ -156,32 +164,93 @@ private fun Modifier.inputHandling(
     viewport: PageViewport,
     focus: FocusRequester,
     cursor: Int,
-    onContextMenu: (Offset, Offset) -> Unit,
-    onPan: (Double, Double) -> Unit,
-    onZoom: (Offset, Int) -> Unit,
+    interaction: Boolean,
+    callbacks: CanvasCallbacks,
 ): Modifier {
     val mapper = remember(host) { WebInputMapper(host.asSink()) }
     val guard = remember { ShortcutGuard() }
+    val hotKeys = remember { HotKeyGuard() }
+    val locked = remember(host) { LockedPointer(host) }
     val currentViewport = rememberUpdatedState(viewport)
-    val currentContextMenu = rememberUpdatedState(onContextMenu)
-    val currentPan = rememberUpdatedState(onPan)
-    val currentZoom = rememberUpdatedState(onZoom)
+    val currentCallbacks = rememberUpdatedState(callbacks)
+    val currentInteraction = rememberUpdatedState(interaction)
     val spaceDown = remember { java.util.concurrent.atomic.AtomicBoolean() }
+    // A held button or hover state must not outlive the switch: CEF keeps :hover until it sees the pointer leave.
+    LaunchedEffect(interaction, mapper) {
+        if (!interaction) mapper.releaseAll()
+    }
+    LaunchedEffect(interaction, locked) {
+        if (!interaction) try { locked.run() } finally { locked.leave() }
+    }
     return focusRequester(focus)
         .onFocusChanged {
             host.focus(it.isFocused)
-            if (!it.isFocused) spaceDown.set(false)
+            if (!it.isFocused) {
+                spaceDown.set(false)
+                hotKeys.reset()
+            }
         }
         .onPreviewKeyEvent { event ->
             if (event.key == Key.Spacebar) spaceDown.set(event.type == KeyEventType.KeyDown)
-            forwardKey(host, guard, event)
+            val awt = awtEventOf(event)
+            val c = currentCallbacks.value
+            val outcome = awt?.let { hotKeys.onKey(it.id, it.keyCode, it.modifiersEx, c.hotKeyModes(), c.pageEditing()) }
+            val action = outcome?.action
+            when {
+                action != null -> { c.onAction(action); true }
+                outcome?.swallow == true -> true
+                !currentInteraction.value -> false
+                else -> forwardKey(host, guard, awt)
+            }
         }
         .focusable()
         .pointerHoverIcon(PointerIcon(Cursor.getPredefinedCursor(cursor)))
         // Keyed on stable values only: a restart mid-gesture would drop the pan and the held button.
         .pointerInput(mapper, density) {
-            forwardPointer(mapper, density, { currentViewport.value }, focus, { page, canvas -> currentContextMenu.value(page, canvas) }, { dx, dy -> currentPan.value(dx, dy) }, { c, n -> currentZoom.value(c, n) }, spaceDown::get)
+            forwardPointer(mapper, locked, density, { currentViewport.value }, focus, { currentCallbacks.value }, currentInteraction::value, spaceDown::get)
         }
+}
+
+private class CanvasCallbacks(
+    val onContextMenu: (Offset, Offset) -> Unit,
+    val onPan: (Double, Double) -> Unit,
+    val onZoom: (Offset, Int) -> Unit,
+    val onPointer: (Offset, Offset) -> Unit,
+    val onAction: (WebAction) -> Unit,
+    val hotKeyModes: () -> HotKeyModes,
+    val pageEditing: () -> Boolean,
+)
+
+/**
+ * Drives the inspector while real mouse input is not forwarded to the page: moves are conflated to one per frame and sent only
+ * when the CSS point changes.
+ */
+private class LockedPointer(private val host: WebPageHost) {
+    private val pending = java.util.concurrent.atomic.AtomicReference<IntOffset?>()
+    private val sent = java.util.concurrent.atomic.AtomicReference<IntOffset?>()
+    private val wake = Channel<Unit>(Channel.CONFLATED)
+
+    fun move(x: Int, y: Int) {
+        pending.set(IntOffset(x, y))
+        wake.trySend(Unit)
+    }
+
+    fun click(x: Int, y: Int) = host.runScript(InspectorBridge.pointer("click", x.toDouble(), y.toDouble()))
+
+    fun leave() {
+        pending.set(null)
+        if (sent.getAndSet(null) != null) host.runScript(InspectorBridge.pointer("leave", 0.0, 0.0))
+    }
+
+    fun scroll(dx: Double, dy: Double) = host.runScript(InspectorBridge.scrollBy(dx, dy))
+
+    suspend fun run() {
+        for (ignored in wake) {
+            withFrameNanos {}
+            val point = pending.getAndSet(null) ?: continue
+            if (sent.getAndSet(point) != point) host.runScript(InspectorBridge.pointer("move", point.x.toDouble(), point.y.toDouble()))
+        }
+    }
 }
 
 private fun WebPageHost.asSink() = object : WebInputSink {
@@ -191,8 +260,7 @@ private fun WebPageHost.asSink() = object : WebInputSink {
     override fun scrollBy(xDip: Int, yDip: Int, pixels: Int) = this@asSink.scrollBy(xDip, yDip, pixels)
 }
 
-private fun forwardKey(host: WebPageHost, guard: ShortcutGuard, event: KeyEvent): Boolean {
-    val awt = awtEventOf(event)
+private fun forwardKey(host: WebPageHost, guard: ShortcutGuard, awt: java.awt.event.KeyEvent?): Boolean {
     if (awt == null) {
         if (keyLookupWarned.compareAndSet(false, true)) log.warn("Cannot read the AWT key event behind a Compose key event; typing into the page will not work")
         return false
@@ -205,12 +273,12 @@ private fun forwardKey(host: WebPageHost, guard: ShortcutGuard, event: KeyEvent)
 @OptIn(ExperimentalComposeUiApi::class)
 private suspend fun PointerInputScope.forwardPointer(
     mapper: WebInputMapper,
+    locked: LockedPointer,
     density: Float,
     viewport: () -> PageViewport,
     focus: FocusRequester,
-    onContextMenu: (Offset, Offset) -> Unit,
-    onPan: (Double, Double) -> Unit,
-    onZoom: (Offset, Int) -> Unit,
+    callbacks: () -> CanvasCallbacks,
+    interaction: () -> Boolean,
     spaceDown: () -> Boolean,
 ) {
     awaitPointerEventScope {
@@ -222,6 +290,9 @@ private suspend fun PointerInputScope.forwardPointer(
             val event = awaitPointerEvent(PointerEventPass.Initial)
             val change = event.changes.first()
             val view = viewport()
+            val c = callbacks()
+            val live = interaction()
+            if (!live) pageHeld = 0
             val canvasDp = Offset(change.position.x / density, change.position.y / density)
             val page = view.toPage(canvasDp)
             val x = page.x.toInt()
@@ -243,11 +314,11 @@ private suspend fun PointerInputScope.forwardPointer(
                     focus.requestFocus()
                     if (secondary && !shift) {
                         secondarySwallowed = true
-                        onContextMenu(page, change.position)
-                    } else {
+                        c.onContextMenu(page, change.position)
+                    } else if (live) {
                         pageHeld++
                         mapper.press(x, y, awtButton(event), keys, change.uptimeMillis)
-                    }
+                    } else if (event.button == PointerButton.Primary) locked.click(x, y)
                 }
                 PointerEventType.Release ->
                     if (panning && (middle || event.button == PointerButton.Primary)) panning = false
@@ -256,16 +327,21 @@ private suspend fun PointerInputScope.forwardPointer(
                         pageHeld--
                         mapper.release(x, y, awtButton(event), keys)
                     }
-                PointerEventType.Move ->
+                PointerEventType.Move -> {
+                    if (inside) c.onPointer(page, change.position)
                     if (panning) {
-                        onPan((lastPan.x - canvasDp.x).toDouble(), (lastPan.y - canvasDp.y).toDouble())
+                        c.onPan((lastPan.x - canvasDp.x).toDouble(), (lastPan.y - canvasDp.y).toDouble())
                         lastPan = canvasDp
+                    } else if (!live) {
+                        if (inside) locked.move(x, y) else locked.leave()
                     } else if (inside || pageHeld > 0) mapper.move(x, y, keys)
-                PointerEventType.Exit -> mapper.exit(x, y)
+                }
+                PointerEventType.Exit -> if (live) mapper.exit(x, y) else locked.leave()
                 PointerEventType.Scroll ->
-                    if (event.keyboardModifiers.isCtrlPressed) onZoom(canvasDp, if (change.scrollDelta.y < 0) 1 else -1)
-                    else if (shift && inside && view.maxPanX > 0) onPan(change.scrollDelta.y * PAN_NOTCH_DP, change.scrollDelta.x * PAN_NOTCH_DP)
-                    else if (inside) mapper.wheel(x, y, change.scrollDelta.y)
+                    if (event.keyboardModifiers.isCtrlPressed) c.onZoom(canvasDp, if (change.scrollDelta.y < 0) 1 else -1)
+                    else if (shift && inside && view.maxPanX > 0) c.onPan(change.scrollDelta.y * PAN_NOTCH_DP, change.scrollDelta.x * PAN_NOTCH_DP)
+                    else if (inside && live) mapper.wheel(x, y, change.scrollDelta.y)
+                    else if (inside) locked.scroll(change.scrollDelta.x * WebInputMapper.PIXELS_PER_NOTCH.toDouble(), change.scrollDelta.y * WebInputMapper.PIXELS_PER_NOTCH.toDouble())
             }
             if (event.type == PointerEventType.Release && !event.changes.any { it.pressed }) pageHeld = 0
             change.consume()

@@ -31,6 +31,19 @@ C.api('describeAt', function (x, y) {
   var el = C.deepElementAt(x, y);
   return el ? C.describe(el) : null;
 });
+// Used while Kotlin does not forward real input (page locked), so no :hover fires; kind is validated here because the page can call __ccm too.
+C.api('pointer', function (kind, x, y) {
+  x = Number(x); y = Number(y);
+  if (!isFinite(x) || !isFinite(y)) return;
+  if (kind === 'leave') { C.pinPointer('leave', x, y); C.state.hoverEl = null; schedule(); }
+  else if (kind === 'move') { C.pinPointer('move', x, y); if (C.tracksHover()) C.updateHover(x, y); }
+  else if (kind === 'click') { if (!C.pinPointer('click', x, y) && C.opts.pick) C.pickAt(x, y, null); }
+});
+var MAX_SCROLL_STEP = 1e6;
+C.api('scrollBy', function (dx, dy) {
+  var clamp = function (v) { v = Number(v); return isFinite(v) ? Math.max(-MAX_SCROLL_STEP, Math.min(MAX_SCROLL_STEP, v)) : 0; };
+  W.scrollBy(clamp(dx), clamp(dy));
+});
 C.api('stats', function () { return JSON.parse(JSON.stringify(C.stats)); });
 C.api('resolveSelector', C.resolveSelector);   // additive: lets the host/tests resolve a selector string
 
@@ -44,7 +57,17 @@ Object.keys(C.apis).forEach(function (name) {
 var debounce = 0;
 // force: navigation or load, where every pin is resolved again; a mutation only retries lost pins with backoff
 function reanchor(force) { (C.reanchor || schedule)(force === true); }
-function redraw() { schedule(); }
+var scrollQueued = false;
+function sendScroll() {
+  if (scrollQueued) return;
+  scrollQueued = true;
+  requestAnimationFrame(safe(function () {
+    scrollQueued = false;
+    var d = document.documentElement;
+    send({ type: 'scroll', x: W.scrollX, y: W.scrollY, w: d.scrollWidth, h: d.scrollHeight });
+  }));
+}
+function redraw() { schedule(); sendScroll(); }
 function reanchorLater() {
   clearTimeout(debounce);
   debounce = setTimeout(safe(function () { reanchor(false); }), 150);
@@ -55,16 +78,42 @@ W.addEventListener('resize', safe(redraw), { passive: true });
 W.addEventListener('transitionend', safe(reanchorLater), true);
 
 // Holding Space pans the page; without this the browser would also page-scroll. The page still sees the event.
-var TEXT_TARGET = 'input,textarea,select,button,a[href],[contenteditable],[role=textbox]';
+// Space keeps its broader notion: buttons and links must still receive it.
+var SPACE_TARGET = 'input,textarea,select,button,a[href],[contenteditable],[role=textbox]';
 W.addEventListener('keydown', safe(function (e) {
   if (!e.isTrusted || (e.key !== ' ' && e.code !== 'Space')) return;
   var t = document.activeElement && document.activeElement.closest ? document.activeElement : e.target;
   var deep = e.composedPath ? e.composedPath()[0] : e.target;
-  if ([t, deep].some(function (n) { return n && n.closest && n.closest(TEXT_TARGET); })) return;
+  if ([t, deep].some(function (n) { return n && n.closest && n.closest(SPACE_TARGET); })) return;
   e.preventDefault();
 }), { capture: true, passive: false });
 
-function navigated() { C.state.chosenSimilar = null; send({ type: 'navigated', url: location.href, title: document.title }); reanchor(true); }
+// Hotkeys die only while the user really types: text inputs, textarea, contenteditable, textbox-like roles; buttons, links and select do not count.
+var TEXT_INPUT_TYPE = /^(text|search|email|url|tel|password|number|date|datetime-local|month|week|time)$/;
+var TEXT_ROLE = '[contenteditable]:not([contenteditable=false]),[role=textbox],[role=searchbox],[role=combobox]';
+function isTextEntry(n) {
+  if (!n || !n.closest) return false;
+  if (n.tagName === 'INPUT') return TEXT_INPUT_TYPE.test(n.type);
+  return n.tagName === 'TEXTAREA' || !!n.closest(TEXT_ROLE);
+}
+var EDITING_MIN_GAP_MS = 50;   // at most 20 messages a second
+var editing = false, sentEditing = false, editingSentAt = 0, editingTimer = 0;
+function emitEditing() {
+  editingSentAt = Date.now();
+  if (editing !== sentEditing) { sentEditing = editing; send({ type: 'editing', on: editing }); }
+}
+function setEditing(on) {
+  editing = on;
+  var wait = editingSentAt + EDITING_MIN_GAP_MS - Date.now();
+  if (wait <= 0) emitEditing();
+  else if (!editingTimer) editingTimer = setTimeout(safe(function () { editingTimer = 0; emitEditing(); }), wait);
+}
+W.addEventListener('focusin', safe(function (e) {
+  setEditing(isTextEntry(e.composedPath ? e.composedPath()[0] : e.target));
+}), true);
+W.addEventListener('focusout', safe(function () { setEditing(false); }), true);
+
+function navigated() { setEditing(false); C.state.chosenSimilar = null; send({ type: 'navigated', url: location.href, title: document.title }); reanchor(true); }
 var navLater = function () { setTimeout(safe(navigated), 0); };
 ['pushState', 'replaceState'].forEach(function (m) {
   var orig = history[m];
@@ -76,3 +125,4 @@ if (document.readyState !== 'complete') W.addEventListener('load', navLater);
 
 C.mount();
 send({ type: 'ready', url: location.href, title: document.title });
+sendScroll();

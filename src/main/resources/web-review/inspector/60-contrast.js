@@ -1,4 +1,5 @@
 /* Module 60: WCAG contrast of an element's text against its effective background. */
+var opts = C.opts;
 var LARGE_PX = 24, LARGE_BOLD_PX = 18.66, BOLD_WEIGHT = 700;
 var AA = 4.5, AA_LARGE = 3, AAA = 7, AAA_LARGE = 4.5;
 
@@ -50,7 +51,7 @@ function contrastOf(el) {
 }
 
 C.tipLine(function (el) {
-  var c = contrastOf(el);
+  var c = opts.contrast ? contrastOf(el) : null;
   return c ? 'Contrast ' + c.ratio + ' AA ' + (c.aa ? '✓' : '✗') + ' AAA ' + (c.aaa ? '✓' : '✗') : null;
 });
 C.onDescribe(function (el, target) { target.contrast = contrastOf(el); });
