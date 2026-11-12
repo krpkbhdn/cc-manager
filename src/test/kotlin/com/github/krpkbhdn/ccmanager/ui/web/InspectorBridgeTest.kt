@@ -30,7 +30,7 @@ class InspectorBridgeTest {
     @Test
     fun pointerAndScrollCallsAreShapedAndKindIsWhitelisted() {
         assertThat(InspectorBridge.pointer("move", 1.5, 2.0)).isEqualTo("""try{window.__ccm&&window.__ccm.pointer("move",1.5,2.0)}catch(e){}""")
-        assertThat(InspectorBridge.scrollBy(0.0, -40.0)).isEqualTo("try{window.__ccm&&window.__ccm.scrollBy(0.0,-40.0)}catch(e){}")
+        assertThat(InspectorBridge.scrollBy(0.0, -40.0, 5.0, 6.0)).isEqualTo("try{window.__ccm&&window.__ccm.scrollBy(0.0,-40.0,5.0,6.0)}catch(e){}")
         assertThatThrownBy { InspectorBridge.pointer(nasty, 0.0, 0.0) }.isInstanceOf(IllegalArgumentException::class.java)
         assertThat(InspectorBridge.setOptions(InspectorToggles(contrast = false))).contains("\"contrast\":false")
     }

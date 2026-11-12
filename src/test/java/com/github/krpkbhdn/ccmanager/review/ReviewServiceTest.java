@@ -95,7 +95,11 @@ class ReviewServiceTest {
     }
 
     private ReviewService realStoreService() {
-        var properties = new ReviewProperties(java.time.Duration.ofDays(7), java.time.Duration.ofHours(1), 20, 1_000_000, 8192, 36_000_000L, MAX_REVIEWS);
+        return realStoreService(20);
+    }
+
+    private ReviewService realStoreService(int maxImages) {
+        var properties = new ReviewProperties(java.time.Duration.ofDays(7), java.time.Duration.ofHours(1), maxImages, 1_000_000, 8192, 36_000_000L, 10);
         var dataSource = new DriverManagerDataSource("jdbc:sqlite:" + temp.resolve("test.db") + "?foreign_keys=on");
         return new ReviewService(jdbc, new ReviewImageStore(properties), writer, new TransactionTemplate(new DataSourceTransactionManager(dataSource)),
                 properties, temp.resolve("reviews"));
@@ -172,6 +176,88 @@ class ReviewServiceTest {
 
         assertThatThrownBy(() -> service.submitCapture(projectId, "t", "", new byte[] {1}, "l")).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageStartingWith("Too many reviews");
+    }
+
+    private long filesIn(Path folder) throws Exception {
+        try (var files = Files.list(folder)) {
+            return files.count();
+        }
+    }
+
+    @Test
+    void addCaptureAppendsAndKeepsBothFilesWithPositionsZeroAndOne() throws Exception {
+        var real = realStoreService();
+        var fired = new AtomicInteger();
+        real.subscribe(fired::incrementAndGet);
+        var review = real.submitCapture(projectId, "Page", "", png(), "first");
+
+        var after = real.addCapture(review.id(), projectId, png(), "second");
+
+        assertThat(after.id()).isEqualTo(review.id());
+        var images = real.images(review.id());
+        assertThat(images).extracting(ReviewImage::position, ReviewImage::label).containsExactly(
+                org.assertj.core.groups.Tuple.tuple(0, "first"), org.assertj.core.groups.Tuple.tuple(1, "second"));
+        assertThat(images).allSatisfy(image -> assertThat(real.imagePath(image)).exists());
+        assertThat(images.get(0).fileName()).isNotEqualTo(images.get(1).fileName());
+        assertThat(fired).hasValue(2);
+        assertThat(captureFilesLeft()).isZero();
+    }
+
+    @Test
+    void addCaptureIsRefusedForSettledMissingFullAndForeignReviewsAndLeavesNoFile() throws Exception {
+        var real = realStoreService(1);
+        jdbc.sql("INSERT INTO project (name, path, created_at) VALUES ('other', 'x', 'now')").update();
+        var otherProject = jdbc.sql("SELECT id FROM project WHERE name = 'other'").query(Long.class).single();
+        var full = real.submitCapture(projectId, "full", "", png(), "a");
+        var sent = real.submitCapture(projectId, "sent", "", png(), "a");
+        var approved = real.submitCapture(projectId, "approved", "", png(), "a");
+        var deleted = real.submitCapture(projectId, "deleted", "", png(), "a");
+        real.approve(approved.id());
+        jdbc.sql("UPDATE review SET status = 'SENT' WHERE id = ?").param(sent.id()).update();
+        real.delete(deleted.id());
+
+        assertRefused(() -> real.addCapture(full.id(), projectId, png(), "b"), ReviewService.Reason.FULL);
+        assertRefused(() -> real.addCapture(sent.id(), projectId, png(), "b"), ReviewService.Reason.SETTLED);
+        assertRefused(() -> real.addCapture(approved.id(), projectId, png(), "b"), ReviewService.Reason.SETTLED);
+        assertRefused(() -> real.addCapture(deleted.id(), projectId, png(), "b"), ReviewService.Reason.MISSING);
+        assertRefused(() -> real.addCapture(full.id(), otherProject, png(), "b"), ReviewService.Reason.MISSING);
+
+        assertThat(filesIn(real.directoryOf(full.id()))).isEqualTo(1);
+        assertThat(filesIn(real.directoryOf(sent.id()))).isEqualTo(1);
+        assertThat(real.directoryOf(deleted.id())).doesNotExist();
+        assertThat(captureFilesLeft()).isZero();
+    }
+
+    private static void assertRefused(org.assertj.core.api.ThrowableAssert.ThrowingCallable call, ReviewService.Reason reason) {
+        assertThatThrownBy(call).isInstanceOf(ReviewService.CaptureRefusedException.class)
+                .satisfies(e -> assertThat(((ReviewService.CaptureRefusedException) e).reason()).isEqualTo(reason));
+    }
+
+    @Test
+    void captureTargetsListPendingReviewsNewestFirstWithCounts() throws Exception {
+        var real = realStoreService(2);
+        var older = real.submitCapture(projectId, "older", "", png(), "a");
+        var newer = real.submitCapture(projectId, "newer", "", png(), "a");
+        real.addCapture(newer.id(), projectId, png(), "b");
+        var sent = real.submitCapture(projectId, "sent", "", png(), "a");
+        var approved = real.submitCapture(projectId, "approved", "", png(), "a");
+        jdbc.sql("UPDATE review SET status = 'SENT' WHERE id = ?").param(sent.id()).update();
+        real.approve(approved.id());
+
+        var targets = real.captureTargets(projectId);
+
+        assertThat(targets).extracting(ReviewService.CaptureTarget::id, ReviewService.CaptureTarget::images, ReviewService.CaptureTarget::maxImages,
+                ReviewService.CaptureTarget::full).containsExactly(
+                org.assertj.core.groups.Tuple.tuple(newer.id(), 2, 2, true), org.assertj.core.groups.Tuple.tuple(older.id(), 1, 2, false));
+        assertThat(targets.get(0).title()).isEqualTo("newer");
+        assertThat(real.captureTargets(projectId + 100)).isEmpty();
+    }
+
+    @Test
+    void submitCaptureCapsTheLabelLikeTheTitle() throws Exception {
+        var review = realStoreService().submitCapture(projectId, "t", "", png(), "l".repeat(300));
+
+        assertThat(service.images(review.id()).get(0).label()).hasSize(120);
     }
 
     @Test

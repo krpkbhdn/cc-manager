@@ -6,6 +6,7 @@ import com.github.krpkbhdn.ccmanager.review.Review
 import com.github.krpkbhdn.ccmanager.review.ReviewService
 import com.github.krpkbhdn.ccmanager.review.ReviewStatus
 import com.github.krpkbhdn.ccmanager.ui.await
+import com.github.krpkbhdn.ccmanager.ui.state.ConfirmRequest
 import com.github.krpkbhdn.ccmanager.ui.state.LiveSessions
 import com.github.krpkbhdn.ccmanager.ui.web.browser.Availability
 import com.github.krpkbhdn.ccmanager.ui.web.browser.FakePageHost
@@ -55,15 +56,17 @@ class WebStateTest {
     private val host = FakePageHost()
     private val reviews = mock(ReviewService::class.java)
     private val opened = CopyOnWriteArrayList<Pair<Long, Long>>()
+    private val confirms = CopyOnWriteArrayList<ConfirmRequest>()
     private val errors = CopyOnWriteArrayList<String>()
     private val enqueued = CopyOnWriteArrayList<Pair<String, String>>()
     private val started = CopyOnWriteArrayList<String>()
     private var liveSessions = LiveSessions()
     private var availability: Availability = Availability.Ready
-    private val state = WebState(service, { host }, { id, text -> enqueued += id to text }, { _, prompt, _, onStarted -> started += prompt; onStarted("new-session") }, { liveSessions }, scope, { errors += it }, reviews, { project, review -> opened += project to review }, { availability })
+    private val state = WebState(service, { host }, { id, text -> enqueued += id to text }, { _, prompt, _, onStarted -> started += prompt; onStarted("new-session") }, { liveSessions }, scope, { errors += it }, reviews, { project, review -> opened += project to review }, { confirms += it }, { availability })
 
     init {
         `when`(service.subscribe(any())).thenReturn(Runnable { })
+        `when`(reviews.subscribe(any())).thenReturn(Runnable { })
         `when`(service.browserLimits()).thenReturn(BrowserLimits(3, Duration.ofMinutes(10)))
     }
 
@@ -120,7 +123,7 @@ class WebStateTest {
     @Test
     fun `a supported runtime becomes ready and a failed start can be retried`() {
         var attempts = 0
-        val retrying = WebState(service, { host }, { _, _ -> }, { _, _, _, _ -> }, { liveSessions }, scope, { errors += it }, reviews, { _, _ -> }, { Availability.Ready }, prepareBrowser = {
+        val retrying = WebState(service, { host }, { _, _ -> }, { _, _, _, _ -> }, { liveSessions }, scope, { errors += it }, reviews, { _, _ -> }, { }, { Availability.Ready }, prepareBrowser = {
             if (attempts++ == 0) error("engine down")
         })
 
@@ -468,7 +471,7 @@ class WebStateTest {
         assertThat(host.closed).isTrue()
     }
 
-    private fun preparing(start: () -> Unit) = WebState(service, { host }, { _, _ -> }, { _, _, _, _ -> }, { liveSessions }, scope, { errors += it }, reviews, { _, _ -> }, prepareBrowser = start)
+    private fun preparing(start: () -> Unit) = WebState(service, { host }, { _, _ -> }, { _, _, _, _ -> }, { liveSessions }, scope, { errors += it }, reviews, { _, _ -> }, { }, prepareBrowser = start)
 
     @Test
     fun `the browser becomes ready after the engine started off the caller thread`() {
@@ -732,7 +735,7 @@ class WebStateTest {
 
     @Test
     fun `a browser that fails to open is reported and never thrown`() {
-        val failing = WebState(service, { throw UnsatisfiedLinkError("no cef") }, { _, _ -> }, { _, _, _, _ -> }, { liveSessions }, scope, { errors += it }, reviews, { _, _ -> })
+        val failing = WebState(service, { throw UnsatisfiedLinkError("no cef") }, { _, _ -> }, { _, _, _, _ -> }, { liveSessions }, scope, { errors += it }, reviews, { _, _ -> }, { })
 
         val failed = failing.open(1)
 
@@ -754,18 +757,91 @@ class WebStateTest {
     }
 
     @Test
-    fun `a screenshot becomes a review and opens it`() {
+    fun `the first screenshot creates a review and pins it without opening the Review tab`() {
         val view = readyToShoot()
 
         state.perform(view, WebAction.Screenshot(ShotArea.WholePage))
 
-        await { opened.isNotEmpty() }
+        await { opened.isNotEmpty() && !view.shooting }
         assertThat(opened).containsExactly(1L to 7L)
+        assertThat(state.pinnedReview(1)).isEqualTo(7L)
         assertThat(host.screenshotCalls).containsExactly(ShotArea.WholePage)
         assertThat(captured.single()[1] as String).startsWith("App - Responsive - ")
         assertThat(captured.single()[2] as String).startsWith("Captured by the user in the Web tab from http://localhost:3000/app, Responsive")
-        assertThat(captured.single()[4]).isEqualTo("Whole page")
-        await { !view.shooting }
+        assertThat(captured.single()[4]).isEqualTo("Whole page - http://localhost:3000/app?x=1#top")
+    }
+
+    @Test
+    fun `a second screenshot is added to the pinned review`() {
+        val view = readyToShoot()
+        state.perform(view, WebAction.Screenshot(ShotArea.Visible))
+        await { state.pinnedReview(1) == 7L && !view.shooting }
+
+        state.perform(view, WebAction.Screenshot(ShotArea.Visible))
+
+        await { opened.size == 2 && !view.shooting }
+        verify(reviews).addCapture(eq(7L), eq(1L), any(ByteArray::class.java), eq("Visible part - http://localhost:3000/app?x=1#top"))
+        verify(reviews, times(1)).submitCapture(anyLong(), anyString(), anyString(), any(ByteArray::class.java), anyString())
+        assertThat(opened).containsExactly(1L to 7L, 1L to 7L)
+    }
+
+    @Test
+    fun `clearing the pin makes the next screenshot a new review that is pinned`() {
+        val view = readyToShoot()
+        state.perform(view, WebAction.Screenshot(ShotArea.Visible))
+        await { state.pinnedReview(1) == 7L && !view.shooting }
+
+        state.unpin(1)
+        state.perform(view, WebAction.Screenshot(ShotArea.Visible))
+
+        await { captured.size == 2 && !view.shooting }
+        verify(reviews, never()).addCapture(anyLong(), anyLong(), any(ByteArray::class.java), anyString())
+        assertThat(state.pinnedReview(1)).isEqualTo(7L)
+    }
+
+    private fun refusal(reason: ReviewService.Reason, message: String): ReviewService.CaptureRefusedException {
+        val constructor = ReviewService.CaptureRefusedException::class.java.getDeclaredConstructor(ReviewService.Reason::class.java, String::class.java)
+        constructor.isAccessible = true
+        return constructor.newInstance(reason, message)
+    }
+
+    @Test
+    fun `a refused pinned review unpins and asks, and confirming creates a new review from the same bytes`() {
+        val view = readyToShoot(PageShot(byteArrayOf(5, 6), 10, 10, 10.0, 10.0, 1.0, false))
+        state.pin(1, 3)
+        val refused = refusal(ReviewService.Reason.FULL, "Review is full (20 of 20).")
+        `when`(reviews.addCapture(anyLong(), anyLong(), any(ByteArray::class.java), anyString())).thenThrow(refused)
+
+        state.perform(view, WebAction.Screenshot(ShotArea.Visible))
+
+        await { confirms.isNotEmpty() && !view.shooting }
+        assertThat(state.pinnedReview(1)).isNull()
+        assertThat(confirms.single().title).isEqualTo("Review is full")
+        assertThat(confirms.single().confirmLabel).isEqualTo("New review")
+        assertThat(confirms.single().destructive).isFalse()
+        assertThat(opened).isEmpty()
+
+        confirms.single().onConfirm()
+
+        await { captured.isNotEmpty() && opened.isNotEmpty() }
+        assertThat(captured.single()[3] as ByteArray).containsExactly(5, 6)
+        assertThat(state.pinnedReview(1)).isEqualTo(7L)
+        assertThat(opened).containsExactly(1L to 7L)
+    }
+
+    @Test
+    fun `a settled pinned review is reported as closed and dropping the question drops the shot`() {
+        val view = readyToShoot()
+        state.pin(1, 3)
+        val refused = refusal(ReviewService.Reason.SETTLED, "This review was already sent.")
+        `when`(reviews.addCapture(anyLong(), anyLong(), any(ByteArray::class.java), anyString())).thenThrow(refused)
+
+        state.perform(view, WebAction.Screenshot(ShotArea.Visible))
+
+        await { confirms.isNotEmpty() && !view.shooting }
+        assertThat(confirms.single().title).isEqualTo("Review was sent, approved or deleted")
+        verify(reviews, never()).submitCapture(anyLong(), anyString(), anyString(), any(ByteArray::class.java), anyString())
+        assertThat(opened).isEmpty()
     }
 
     @Test
@@ -814,7 +890,7 @@ class WebStateTest {
         await { opened.isNotEmpty() }
         assertThat(view.regionSelecting).isFalse()
         assertThat(host.screenshotCalls).containsExactly(ShotArea.Region(10.0, 20.0, 30.0, 40.0, PageScroll(0.0, 250.0)))
-        assertThat(captured.single()[4]).isEqualTo("Region")
+        assertThat(captured.single()[4] as String).startsWith("Region - http://localhost:3000/")
     }
 
     @Test

@@ -90,9 +90,49 @@ class ShotPlanTest {
     }
 
     @Test
+    fun a_container_whole_page_plan_covers_the_container_content_size() {
+        val container = ScrollContainer(200.0, 50.0, 800.0, 600.0)
+        val plan = ShotPlan.of(ShotArea.WholePage, PageMetrics(0.0, 0.0, 785, 3000, 1000, 700, 1.0, container), limits)
+
+        assertThat(plan.clip).isEqualTo(ShotPlan.Clip(0.0, 0.0, 785.0, 3000.0))
+        assertThat(plan.beyondViewport).isTrue()
+    }
+
+    @Test
+    fun a_container_inside_the_viewport_is_usable() {
+        assertThat(ScrollContainer(0.0, 56.0, 1000.0, 644.0).isUsableIn(1000, 700)).isTrue()
+    }
+
+    @Test
+    fun a_container_sticking_out_of_the_viewport_or_tiny_is_not_usable() {
+        assertThat(ScrollContainer(0.0, 0.0, 1000.0, 900.0).isUsableIn(1000, 700)).isFalse()
+        assertThat(ScrollContainer(-50.0, 0.0, 500.0, 500.0).isUsableIn(1000, 700)).isFalse()
+        assertThat(ScrollContainer(0.0, 0.0, 10.0, 500.0).isUsableIn(1000, 700)).isFalse()
+    }
+
+    @Test
     fun a_region_uses_the_scroll_of_its_selection_and_not_the_scroll_at_capture() {
         val plan = ShotPlan.of(ShotArea.Region(10.0, 20.0, 300.0, 200.0, PageScroll(0.0, 400.0)), metrics(height = 4000, scrollY = 1000.0), limits)
 
         assertThat(plan.clip).isEqualTo(ShotPlan.Clip(10.0, 420.0, 300.0, 200.0))
+    }
+
+    @Test
+    fun a_2560_wide_page_up_to_twelve_thousand_px_is_taken_untouched_with_the_default_limits() {
+        val defaults = ShotLimits(32_767, 64_000_000, 52_428_800)
+
+        for (dpr in listOf(1.0, 1.25)) {
+            val plan = ShotPlan.of(ShotArea.WholePage, PageMetrics(0.0, 0.0, 2560, 12_000, 2560, 1080, dpr), defaults)
+            assertThat(plan.scale).describedAs("dpr $dpr").isEqualTo(1.0)
+            assertThat(plan.cut).isFalse()
+        }
+    }
+
+    @Test
+    fun a_2560_wide_page_at_double_density_is_reduced_to_the_biggest_scale_that_fits() {
+        val plan = ShotPlan.of(ShotArea.WholePage, PageMetrics(0.0, 0.0, 2560, 12_000, 2560, 1080, 2.0), ShotLimits(32_767, 64_000_000, 52_428_800))
+
+        assertThat(plan.scale).isGreaterThan(0.7).isLessThan(0.75)
+        assertThat(plan.scale * 2).describedAs("still above device scale 1").isGreaterThan(1.0)
     }
 }

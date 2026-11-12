@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 import com.github.krpkbhdn.ccmanager.ui.components.AnchoredPopup
@@ -104,7 +105,7 @@ private fun SizeReadout(selection: DeviceSelection, onChange: (DeviceSelection) 
 }
 
 @Composable
-private fun DropdownChip(text: String, entries: List<MenuEntry>) {
+internal fun DropdownChip(text: String, entries: List<MenuEntry>, color: Color = colors.textPrimary) {
     var open by remember { mutableStateOf(false) }
     Box {
         Row(
@@ -112,7 +113,7 @@ private fun DropdownChip(text: String, entries: List<MenuEntry>) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Label(text, style = Type.smallMedium)
+            Label(text, color = color, style = Type.smallMedium)
             Glyph(Icons.ChevronDown, colors.textSecondary, size = 12.dp)
         }
         if (open) AnchoredPopup({ open = false }, modifier = Modifier.menuSize()) { MenuColumn(entries, onDismiss = { open = false }) }

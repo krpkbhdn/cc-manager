@@ -10,6 +10,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
 import com.github.krpkbhdn.ccmanager.review.ReviewService
 import com.github.krpkbhdn.ccmanager.review.ReviewStatus
+import com.github.krpkbhdn.ccmanager.ui.state.ConfirmRequest
 import com.github.krpkbhdn.ccmanager.ui.state.LiveSessions
 import com.github.krpkbhdn.ccmanager.ui.state.Refresher
 import com.github.krpkbhdn.ccmanager.ui.state.io
@@ -55,7 +56,8 @@ class WebState(
     private val scope: CoroutineScope,
     private val reportError: (String) -> Unit,
     reviewService: ReviewService,
-    openReview: (projectId: Long, reviewId: Long) -> Unit,
+    onCaptured: (projectId: Long, reviewId: Long) -> Unit,
+    confirm: (ConfirmRequest) -> Unit,
     private val availability: () -> Availability = { Availability.Ready },
     private val prepareBrowser: (() -> Unit)? = null,
     clock: Clock = Clock.systemUTC(),
@@ -64,7 +66,8 @@ class WebState(
     private val context = WebContextActions(scope, notify = reportError) { view, target -> drafts.captureAtPick(view, target) }
     private val events = WebPageEvents(service, drafts, scope, reportError, context)
     private val delivery = WebDelivery(service, enqueue, startSession, live, scope, reportError)
-    private val screenshots = WebScreenshots(reviewService, openReview, scope, reportError, clock)
+    private val targets = WebCaptureTargets(reviewService, scope, reportError)
+    private val screenshots = WebScreenshots(reviewService, targets, onCaptured, confirm, scope, reportError, clock)
 
     /** False until [prepare] has checked the runtime and started the engine: the engine reports its start on the UI thread, so it must not be awaited from there. */
     var browserReady by mutableStateOf(false)
@@ -123,6 +126,7 @@ class WebState(
     fun close() {
         if (subscription.isInitialized()) subscription.value.run()
         reload.close()
+        targets.close()
         sweeper?.cancel()
         pool.closeAll()
     }
@@ -238,6 +242,19 @@ class WebState(
     }
 
     fun canShoot(view: WebView) = screenshots.canShoot(view)
+
+    /** Reviews of the project a screenshot can join (pending, observable). */
+    fun captureTargets(projectId: Long) = targets.targets(projectId)
+
+    /** The review the next screenshot of the project joins, if one is pinned. */
+    fun pinnedReview(projectId: Long): Long? = targets.pinned[projectId]
+
+    fun pin(projectId: Long, reviewId: Long) = targets.pin(projectId, reviewId)
+
+    /** The next screenshot creates a new review. */
+    fun unpin(projectId: Long) = targets.unpin(projectId)
+
+    fun pinIsStale(projectId: Long) = targets.stale(projectId)
 
     /** The region overlay replaces pick mode and any open menu, so the drag cannot hit either. */
     private fun startRegion(view: WebView) {

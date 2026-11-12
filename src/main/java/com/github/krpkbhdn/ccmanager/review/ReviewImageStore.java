@@ -48,6 +48,11 @@ public class ReviewImageStore {
     }
 
     public List<StoredImage> store(Path directory, List<SubmittedImage> images) {
+        return store(directory, images, 1);
+    }
+
+    /** Names the files image-{firstNumber}.. so an append never overwrites a stored image. */
+    public List<StoredImage> store(Path directory, List<SubmittedImage> images, int firstNumber) {
         if (images == null || images.isEmpty()) {
             throw new IllegalArgumentException("no images submitted");
         }
@@ -63,7 +68,7 @@ public class ReviewImageStore {
             createSecureDirectory(directory);
             List<StoredImage> stored = new ArrayList<>();
             for (int i = 0; i < images.size(); i++) {
-                stored.add(copyAndValidate(i + 1, images.get(i), directory, created));
+                stored.add(copyAndValidate(firstNumber + i, images.get(i), directory, created));
             }
             return stored;
         } catch (IOException | RuntimeException e) {

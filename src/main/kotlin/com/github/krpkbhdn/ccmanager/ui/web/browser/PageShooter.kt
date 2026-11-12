@@ -1,8 +1,12 @@
 package com.github.krpkbhdn.ccmanager.ui.web.browser
 
 import org.jetbrains.skia.EncodedImageFormat
+import org.jetbrains.skia.FilterMipmap
+import org.jetbrains.skia.FilterMode
 import org.jetbrains.skia.Image
+import org.jetbrains.skia.MipmapMode
 import org.jetbrains.skia.Rect
+import org.jetbrains.skia.SamplingMode
 import org.jetbrains.skia.Surface
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.json.JsonMapper
@@ -20,6 +24,8 @@ import kotlin.math.roundToInt
  * is dropped when the page navigates meanwhile ([page] is compared with its state at the start).
  * A whole page is stitched from viewport shots in rows and columns: windowless CEF tiles the visible surface for captureBeyondViewport and
  * crashes on fromSurface=false (checked), so fixed elements repeat in every slice (shortcut: whole-page shots of such pages are approximate).
+ * When the document itself cannot scroll (an SPA), the biggest inner scroll container is stitched instead: its client rect from each slice, so
+ * the result is that container's full content without the page chrome around it.
  */
 class PageShooter(private val devTools: DevTools, private val timeout: Duration, private val page: () -> PageState) {
     private val json = JsonMapper()
@@ -84,9 +90,15 @@ class PageShooter(private val devTools: DevTools, private val timeout: Duration,
 
     private fun prepare(whole: Boolean, deadline: Long): PageMetrics {
         val value = evaluate(prepareScript(whole), deadline)
+        val viewWidth = value.path("vw").asInt()
+        val viewHeight = value.path("vh").asInt()
+        val c = value.path("c")
+        val container = ScrollContainer(c.path("x").asDouble(), c.path("y").asDouble(), c.path("w").asDouble(), c.path("h").asDouble())
+            .takeIf { c.isObject && it.isUsableIn(viewWidth, viewHeight) }
+        val sizeOf = if (container != null) c else value
         return PageMetrics(
-            value.path("sx").asDouble(), value.path("sy").asDouble(), value.path("sw").asInt(), value.path("sh").asInt(),
-            value.path("vw").asInt(), value.path("vh").asInt(), value.path("dpr").asDouble(),
+            value.path("sx").asDouble(), value.path("sy").asDouble(), sizeOf.path("sw").asInt(), sizeOf.path("sh").asInt(),
+            viewWidth, viewHeight, value.path("dpr").asDouble(), container,
         )
     }
 
@@ -103,25 +115,34 @@ class PageShooter(private val devTools: DevTools, private val timeout: Duration,
         return Base64.getDecoder().decode(json.readTree(response).path("data").asString())
     }
 
-    /** Viewport-sized slices drawn at their real scroll offset, scaled to the plan; a clamped last scroll just overdraws identical pixels. */
+    /**
+     * Viewport-sized slices drawn at their real scroll offset on whole pixels (a fractional offset would blur text) and, at scale 1, copied
+     * 1:1 without resampling; only a plan below 1 resamples, with a mipmapped linear filter. A clamped last scroll just overdraws identical pixels.
+     * Peak memory: the surface (4 bytes per output pixel, at most `maxPixels`) plus one viewport slice, then the PNG bytes of the snapshot.
+     */
     private fun stitch(plan: ShotPlan, metrics: PageMetrics, started: PageState, deadline: Long): Image {
         val clip = plan.clip!!
         val unit = plan.scale * metrics.dpr
+        val container = metrics.container
+        val sampling = if (plan.scale < 1.0) FilterMipmap(FilterMode.LINEAR, MipmapMode.LINEAR) else SamplingMode.DEFAULT
+        val stepWidth = container?.width ?: metrics.viewWidth.toDouble()
+        val stepHeight = container?.height ?: metrics.viewHeight.toDouble()
         return Surface.makeRasterN32Premul((clip.width * unit).roundToInt(), (clip.height * unit).roundToInt()).use { surface ->
             var top = 0.0
             while (top < clip.height) {
                 var left = 0.0
                 while (left < clip.width) {
                     ensureSamePage(started)
-                    val at = evaluate(scrollScript(left, top), deadline)
+                    val at = evaluate(scrollScript(left, top, container != null, top == 0.0 && left == 0.0, top + stepHeight >= clip.height), deadline)
                     Image.makeFromEncoded(viewportPng(VIEWPORT, deadline)).use { slice ->
-                        val src = Rect.makeXYWH(0f, 0f, slice.width.toFloat(), slice.height.toFloat())
-                        val dst = Rect.makeXYWH((at.path(0).asDouble() * unit).toFloat(), (at.path(1).asDouble() * unit).toFloat(), (slice.width * plan.scale).toFloat(), (slice.height * plan.scale).toFloat())
-                        surface.canvas.drawImageRect(slice, src, dst)
+                        val src = container?.let { Rect.makeXYWH((it.x * metrics.dpr).toFloat(), (it.y * metrics.dpr).toFloat(), (it.width * metrics.dpr).toFloat(), (it.height * metrics.dpr).toFloat()) }
+                            ?: Rect.makeXYWH(0f, 0f, slice.width.toFloat(), slice.height.toFloat())
+                        val dst = Rect.makeXYWH(Math.round(at.path(0).asDouble() * unit).toFloat(), Math.round(at.path(1).asDouble() * unit).toFloat(), (src.width * plan.scale).toFloat(), (src.height * plan.scale).toFloat())
+                        surface.canvas.drawImageRect(slice, src, dst, sampling, null, true)
                     }
-                    left += metrics.viewWidth
+                    left += stepWidth
                 }
-                top += metrics.viewHeight
+                top += stepHeight
             }
             surface.makeImageSnapshot()
         }
@@ -155,31 +176,101 @@ class PageShooter(private val devTools: DevTools, private val timeout: Duration,
     private companion object {
         val log = org.slf4j.LoggerFactory.getLogger(PageShooter::class.java)
         val VIEWPORT = ShotPlan(null, 1.0, false, false)
-        const val JPEG_QUALITY = 85
+        const val JPEG_QUALITY = 95
         const val RESTORE_TIMEOUT_SECONDS = 2L
+        const val MAX_SCANNED = 20_000
         const val NEXT_FRAMES = "await new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)));"
 
         /** Only a literal flag or number is spliced into the scripts; nothing page-controlled reaches them. A stale record only lends its saved overlay state. */
         fun prepareScript(whole: Boolean) = """
             (async () => {
+              $MAIN_SCROLLER
+              $FIXED_ELEMENTS
               const root = document.getElementById('__ccm-root');
               const old = window.__ccmShot;
               window.__ccmShot = {
                 sx: scrollX, sy: scrollY,
                 d: old ? old.d : (root ? root.style.getPropertyValue('display') : ''),
                 p: old ? old.p : (root ? root.style.getPropertyPriority('display') : ''),
+                el: old ? old.el : null, l: old ? old.l : 0, t: old ? old.t : 0,
+                fx: old && old.fx ? old.fx : ($whole ? fixedElements() : []),
               };
               if (root) root.style.setProperty('display', 'none', 'important');
               if ($whole) window.scrollTo({ left: 0, top: 0, behavior: 'instant' });
               $NEXT_FRAMES
               const e = document.documentElement, b = document.body;
-              return { sx: scrollX, sy: scrollY, sw: Math.max(e.scrollWidth, b ? b.scrollWidth : 0), sh: Math.max(e.scrollHeight, b ? b.scrollHeight : 0),
-                       vw: innerWidth, vh: innerHeight, dpr: devicePixelRatio };
+              const vo = getComputedStyle(e).overflowX !== 'visible' || !b ? getComputedStyle(e).overflowX : getComputedStyle(b).overflowX;
+              const clipsX = /hidden|clip/.test(vo);
+              const out = { sx: scrollX, sy: scrollY, sw: clipsX ? e.clientWidth : Math.max(e.scrollWidth, b ? b.scrollWidth : 0), sh: Math.max(e.scrollHeight, b ? b.scrollHeight : 0),
+                            vw: innerWidth, vh: innerHeight, dpr: devicePixelRatio };
+              const se = document.scrollingElement || e;
+              if ($whole && se.scrollHeight <= se.clientHeight + 1 && se.scrollWidth <= se.clientWidth + 1) {
+                const el = mainScroller();
+                if (el) {
+                  if (!window.__ccmShot.el) { window.__ccmShot.el = el; window.__ccmShot.l = el.scrollLeft; window.__ccmShot.t = el.scrollTop; }
+                  el.scrollTo({ left: 0, top: 0, behavior: 'instant' });
+                  $NEXT_FRAMES
+                  const r = el.getBoundingClientRect();
+                  const cs = getComputedStyle(el), scrolls = (v) => /auto|scroll|overlay/.test(v);
+                  out.c = { x: r.left + el.clientLeft, y: r.top + el.clientTop, w: el.clientWidth, h: el.clientHeight,
+                            sw: scrolls(cs.overflowX) ? el.scrollWidth : el.clientWidth, sh: scrolls(cs.overflowY) ? el.scrollHeight : el.clientHeight };
+                }
+              }
+              return out;
             })()
         """.trimIndent()
 
-        fun scrollScript(left: Double, top: Double) =
-            "(async () => { window.scrollTo({ left: ${ceil(left).toLong()}, top: ${ceil(top).toLong()}, behavior: 'instant' }); $NEXT_FRAMES return [scrollX, scrollY]; })()"
+        /** An SPA scrolls an inner element, not the document: the visible scrollable element with the biggest client area, then the biggest content. */
+        const val MAIN_SCROLLER = """
+            function mainScroller() {
+              let best = null, bestArea = 0, bestExtent = 0, seen = 0;
+              const walk = (node) => {
+                for (const el of node.querySelectorAll('*')) {
+                  if (++seen > $MAX_SCANNED) return;
+                  if (el.shadowRoot) walk(el.shadowRoot);
+                  const vert = el.scrollHeight > el.clientHeight + 1, horiz = el.scrollWidth > el.clientWidth + 1;
+                  if (!vert && !horiz) continue;
+                  const s = getComputedStyle(el);
+                  if (s.visibility === 'hidden' || !((vert && /auto|scroll|overlay/.test(s.overflowY)) || (horiz && /auto|scroll|overlay/.test(s.overflowX)))) continue;
+                  const area = el.clientWidth * el.clientHeight, extent = el.scrollWidth * el.scrollHeight;
+                  if (area > 0 && (area > bestArea || (area === bestArea && extent > bestExtent))) { best = el; bestArea = area; bestExtent = extent; }
+                }
+              }
+              walk(document);
+              return best;
+            }
+        """
+
+        /** Fixed and sticky elements with the half of the viewport they sit in and their own visibility, read before any is hidden. */
+        const val FIXED_ELEMENTS = """
+            function fixedElements() {
+              const out = []; let seen = 0;
+              const walk = (node) => {
+                for (const el of node.querySelectorAll('*')) {
+                  if (++seen > $MAX_SCANNED) return;
+                  if (el.shadowRoot) walk(el.shadowRoot);
+                  if (el.id === '__ccm-root') continue;
+                  const pos = getComputedStyle(el).position;
+                  if (pos !== 'fixed' && pos !== 'sticky') continue;
+                  const r = el.getBoundingClientRect();
+                  out.push({ el, top: r.top + r.height / 2 < innerHeight / 2, v: el.style.getPropertyValue('visibility'), p: el.style.getPropertyPriority('visibility') });
+                }
+              }
+              walk(document);
+              return out;
+            }
+        """
+
+        /** A fixed or sticky element is photographed once: top ones in the first slice, bottom ones in the last row, hidden elsewhere. */
+        fun scrollScript(left: Double, top: Double, container: Boolean, first: Boolean, lastRow: Boolean): String {
+            val target = if (container) "window.__ccmShot.el" else "window"
+            val read = if (container) "[el.scrollLeft, el.scrollTop]" else "[scrollX, scrollY]"
+            val firstColumn = left == 0.0
+            val showTop = first
+            val showBottom = lastRow && firstColumn
+            val fixed = "for (const f of window.__ccmShot.fx) f.el.style.setProperty('visibility', (f.top ? $showTop : $showBottom) ? f.v : 'hidden', (f.top ? $showTop : $showBottom) ? f.p : 'important');"
+            return "(async () => { $fixed const el = $target; el.scrollTo({ left: ${ceil(left).toLong()}, top: ${ceil(top).toLong()}, behavior: 'instant' }); $NEXT_FRAMES return $read; })()"
+        }
 
         const val RESTORE_SCRIPT = """
             (() => {
@@ -187,6 +278,8 @@ class PageShooter(private val devTools: DevTools, private val timeout: Duration,
               delete window.__ccmShot;
               const root = document.getElementById('__ccm-root');
               if (root) { if (s.d) root.style.setProperty('display', s.d, s.p); else root.style.removeProperty('display'); }
+              for (const f of s.fx || []) { if (f.v) f.el.style.setProperty('visibility', f.v, f.p); else f.el.style.removeProperty('visibility'); }
+              if (s.el) s.el.scrollTo({ left: s.l, top: s.t, behavior: 'instant' });
               window.scrollTo({ left: s.sx, top: s.sy, behavior: 'instant' });
             })()
         """

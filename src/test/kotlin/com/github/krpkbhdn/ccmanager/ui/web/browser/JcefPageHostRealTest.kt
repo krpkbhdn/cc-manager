@@ -172,7 +172,7 @@ class JcefPageHostRealTest {
         assertThat(image.height).isEqualTo(50)
     }
 
-    private val shotLimits = ShotLimits(8192, 36_000_000, 20_000_000)
+    private val shotLimits = ShotLimits(32_767, 64_000_000, 52_428_800)
 
     private fun shotOf(png: ByteArray) = Image.makeFromEncoded(png).let { image ->
         org.jetbrains.skia.Bitmap.makeFromImage(image).also { image.close() }
@@ -211,6 +211,100 @@ class JcefPageHostRealTest {
     }
 
     @Test
+    fun a_whole_page_shot_of_vh_sections_is_as_tall_as_the_page_at_every_density() {
+        val sections = listOf("#f00", "#0a0", "#00f").joinToString("") { "<section style=\"min-height:100vh;background:$it\"></section>" }
+        val url = htmlFile("vh", "<html><body style=\"margin:0\">$sections</body></html>")
+        for (density in listOf(1f, 2f, 1.5f)) {
+            val page = overlayAwareHost(url, density)
+
+            val shot = page.screenshot(ShotArea.WholePage, shotLimits)!!
+
+            assertThat(shot.cssHeight).describedAs("density $density: 3 x the 480px viewport").isEqualTo(1440.0)
+            assertThat(shot.heightPx).describedAs("density $density").isEqualTo(Math.round(1440 * density))
+            val bitmap = shotOf(shot.bytes)
+            assertThat(bitmap.getColor(10, (1400 * density).toInt())).describedAs("density $density: last section").isEqualTo(0xFF0000FF.toInt())
+        }
+    }
+
+    private fun valueOf(page: JcefPageHost, expression: String): String {
+        val seen = LinkedBlockingQueue<PageEvent>()
+        scope.launch(start = CoroutineStart.UNDISPATCHED) { page.events.collect { seen.add(it) } }
+        page.runScript("cefQuery({request:'val=' + ($expression)})")
+        val event = generateSequence { seen.poll(timeoutMillis, TimeUnit.MILLISECONDS) }
+            .firstOrNull { it is PageEvent.Inspector && it.json.startsWith("val=") } as PageEvent.Inspector
+        return event.json.removePrefix("val=")
+    }
+
+    @Test
+    fun a_whole_page_shot_shows_a_fixed_header_once_and_a_bottom_bar_in_the_last_slice() {
+        val url = htmlFile(
+            "fixed",
+            "<html><body style=\"margin:0;height:3000px;background:#fff\"><div id=\"h\" style=\"position:fixed;left:0;top:0;width:100%;height:60px;background:#f00\"></div>" +
+                "<div style=\"position:fixed;left:0;bottom:0;width:100%;height:60px;background:#0a0\"></div></body></html>",
+        )
+        val page = overlayAwareHost(url, 1f)
+
+        val shot = page.screenshot(ShotArea.WholePage, shotLimits)!!
+
+        assertThat(shot.heightPx).isEqualTo(3000)
+        val bitmap = shotOf(shot.bytes)
+        assertThat(bitmap.getColor(300, 30)).describedAs("header in the first slice").isEqualTo(0xFFFF0000.toInt())
+        for (y in listOf(510, 990, 1470, 1950)) assertThat(bitmap.getColor(300, y)).describedAs("no header at $y").isEqualTo(0xFFFFFFFF.toInt())
+        assertThat(bitmap.getColor(300, 2970)).describedAs("bottom bar at the end").isEqualTo(0xFF00AA00.toInt())
+        assertThat(bitmap.getColor(300, 470)).describedAs("no bottom bar in the first slice").isEqualTo(0xFFFFFFFF.toInt())
+        assertThat(valueOf(page, "getComputedStyle(document.getElementById('h')).visibility + '/' + document.getElementById('h').style.visibility"))
+            .describedAs("header visibility restored").isEqualTo("visible/")
+    }
+
+    @Test
+    fun an_spa_container_that_hides_horizontal_overflow_is_shot_at_its_visible_width() {
+        val url = htmlFile(
+            "spa-wide",
+            "<html><body style=\"margin:0;height:100%;overflow:hidden\"><div id=\"app\" style=\"position:absolute;inset:0;overflow-x:hidden;overflow-y:auto\"><div style=\"width:3000px;height:1600px;background:#0a0\"></div></div></body></html>",
+        )
+        val page = overlayAwareHost(url, 1f)
+        val visibleWidth = valueOf(page, "document.getElementById('app').clientWidth").toInt()
+
+        val shot = page.screenshot(ShotArea.WholePage, shotLimits)!!
+
+        assertThat(shot.widthPx).isEqualTo(visibleWidth)
+        assertThat(shot.heightPx).isEqualTo(1600)
+    }
+
+    @Test
+    fun a_plain_page_has_no_horizontal_overflow_with_the_inspector_active_and_after_a_resize() {
+        val url = htmlFile("plain", "<html><body style=\"margin:0\"><div style=\"height:2000px;background:#eee\"></div></body></html>")
+        val page = openHost(url)
+        page.resize(640, 480, 1f)
+        await("page painted") { page.frame.value != null && !page.page.value.loading && page.page.value.url == url }
+        Thread.sleep(300)
+        val overflow = "document.documentElement.scrollWidth - document.documentElement.clientWidth"
+
+        assertThat(valueOf(page, "window.__ccm ? 1 : 0")).describedAs("inspector injected").isEqualTo("1")
+        assertThat(valueOf(page, overflow)).isEqualTo("0")
+        for ((w, h, density) in listOf(Triple(803, 601, 1.25f), Triple(1153, 700, 1f), Triple(517, 333, 2f))) {
+            page.resize(w, h, density)
+            Thread.sleep(400)
+            assertThat(valueOf(page, overflow)).describedAs("$w x $h at $density").isEqualTo("0")
+        }
+    }
+
+    @Test
+    fun a_whole_page_shot_of_a_document_that_clips_a_wide_glow_keeps_the_visible_width_and_scroll() {
+        val url = htmlFile(
+            "glow",
+            "<html style=\"overflow-x:hidden\"><body style=\"margin:0;height:900px;background:#fff\"><div style=\"position:absolute;left:300px;top:100px;width:2000px;height:50px;background:#f0f\"></div></body></html>",
+        )
+        val page = overlayAwareHost(url, 1f)
+        val visibleWidth = valueOf(page, "document.documentElement.clientWidth").toInt()
+
+        val shot = page.screenshot(ShotArea.WholePage, shotLimits)!!
+
+        assertThat(shot.widthPx).isEqualTo(visibleWidth)
+        assertThat(valueOf(page, "window.scrollX")).isEqualTo("0")
+    }
+
+    @Test
     fun a_whole_page_shot_of_a_wide_page_is_stitched_in_columns_without_a_blank_strip() {
         val url = htmlFile("wide", "<html><body style=\"margin:0;width:2000px;height:300px;background:#fff\"><div style=\"position:absolute;left:50px;top:100px;width:50px;height:50px;background:#f00\"></div><div style=\"position:absolute;left:1000px;top:100px;width:50px;height:50px;background:#0a0\"></div><div style=\"position:absolute;left:1900px;top:100px;width:50px;height:50px;background:#00f\"></div></body></html>")
         val wide = overlayAwareHost(url, 1f)
@@ -228,6 +322,31 @@ class JcefPageHostRealTest {
         assertThat(bitmap.getColor(1925, 125)).isEqualTo(0xFF0000FF.toInt())
         assertThat(bitmap.getColor(1500, 125)).isEqualTo(0xFFFFFFFF.toInt())
         assertThat(wide.scrollOffset()).describedAs("scroll restored").isEqualTo(PageScroll(300.0, 0.0))
+    }
+
+    @Test
+    fun a_whole_page_shot_of_an_spa_stitches_the_inner_scroll_container_and_restores_its_scroll() {
+        val bands = listOf("#f00", "#0a0", "#00f", "#ff0").joinToString("") { "<div style=\"height:400px;background:$it\"></div>" }
+        val url = htmlFile("spa", "<html><body style=\"margin:0;height:100%;overflow:hidden\"><div style=\"position:absolute;left:0;top:0;width:100%;height:40px;background:#000\"></div><div id=\"app\" style=\"position:absolute;left:0;top:40px;right:0;bottom:0;overflow:auto\">$bands</div></body></html>")
+        val spa = overlayAwareHost(url, 1f)
+        spa.runScript("document.getElementById('app').scrollTop = 300")
+        Thread.sleep(300)
+
+        val shot = spa.screenshot(ShotArea.WholePage, shotLimits)!!
+
+        assertThat(shot.heightPx).describedAs("the container's full content").isEqualTo(1600)
+        assertThat(shot.cut).isFalse()
+        val bitmap = shotOf(shot.bytes)
+        assertThat(bitmap.getColor(300, 200)).isEqualTo(0xFFFF0000.toInt())
+        assertThat(bitmap.getColor(300, 600)).isEqualTo(0xFF00AA00.toInt())
+        assertThat(bitmap.getColor(300, 1000)).isEqualTo(0xFF0000FF.toInt())
+        assertThat(bitmap.getColor(300, 1400)).isEqualTo(0xFFFFFF00.toInt())
+        val restored = LinkedBlockingQueue<PageEvent>()
+        scope.launch(start = CoroutineStart.UNDISPATCHED) { spa.events.collect { restored.add(it) } }
+        spa.runScript("cefQuery({request:'state=' + document.getElementById('app').scrollTop})")
+        val state = generateSequence { restored.poll(timeoutMillis, TimeUnit.MILLISECONDS) }
+            .firstOrNull { it is PageEvent.Inspector && it.json.startsWith("state=") } as PageEvent.Inspector
+        assertThat(state.json).isEqualTo("state=300")
     }
 
     @Test
@@ -267,6 +386,28 @@ class JcefPageHostRealTest {
         val bitmap = shotOf(shot.bytes)
         assertThat(bitmap.getColor(200, 80)).isEqualTo(0xFF00AA00.toInt())
         assertThat(bitmap.getColor(2, 2)).isEqualTo(0xFF00AA00.toInt())
+    }
+
+    @Test
+    fun a_2560_wide_page_is_shot_without_scaling_and_one_pixel_stripes_stay_exact() {
+        val stripes = "repeating-linear-gradient(90deg,#000 0,#000 1px,#fff 1px,#fff 2px)"
+        val url = htmlFile("wide2560", "<html><body style=\"margin:0;overflow-x:hidden;height:3000px\"><div style=\"width:2560px;height:3000px;background:$stripes\"></div></body></html>")
+        val wide = openHost(url)
+        wide.resize(2560, 1080, 1f)
+        await("page painted") { wide.frame.value != null && !wide.page.value.loading && wide.page.value.url == url }
+        Thread.sleep(300)
+        val full = ShotLimits(32_767, 64_000_000, 52_428_800)
+
+        for (area in listOf(ShotArea.Visible, ShotArea.WholePage)) {
+            val shot = wide.screenshot(area, full)!!
+            val bitmap = shotOf(shot.bytes)
+
+            assertThat(shot.scale).describedAs("$area").isEqualTo(1.0)
+            assertThat(shot.widthPx).describedAs("$area width is at least the page width minus the scrollbar").isGreaterThanOrEqualTo(2540)
+            val row = (1..400).map { bitmap.getColor(it, 500) and 0xFFFFFF }
+            assertThat(row.toSet()).describedAs("$area stripes stay pure black and white").isSubsetOf(0x000000, 0xFFFFFF)
+            assertThat(row.zipWithNext().count { it.first != it.second }).describedAs("$area alternates every pixel").isGreaterThan(390)
+        }
     }
 
     @Test

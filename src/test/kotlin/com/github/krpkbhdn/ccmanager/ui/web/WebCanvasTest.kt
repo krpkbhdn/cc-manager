@@ -113,7 +113,7 @@ class WebCanvasTest {
         assertThat(host.scrollCalls).isEmpty()
         assertThat(host.scripts.filter { it.contains("pointer(\"move\",100.0,60.0)") }).describedAs(host.scripts.toString()).hasSize(1)
         assertThat(host.scripts).anyMatch { it.contains("pointer(\"click\",100.0,60.0)") }
-        assertThat(host.scripts).anyMatch { it.contains("scrollBy(0.0,100.0)") }
+        assertThat(host.scripts).anyMatch { it.contains("scrollBy(0.0,100.0,100.0,60.0)") }
     }
 
     @Test

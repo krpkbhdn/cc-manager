@@ -45,7 +45,8 @@ object InspectorBridge {
         return call("pointer", kind, x, y)
     }
 
-    fun scrollBy(dx: Double, dy: Double): String = call("scrollBy", dx, dy)
+    /** Scrolls the innermost scrollable element at page point ([x], [y]), the window when none can move. */
+    fun scrollBy(dx: Double, dy: Double, x: Double, y: Double): String = call("scrollBy", dx, dy, x, y)
 
     fun stackAt(x: Double, y: Double): String = call("stackAt", x, y)
 

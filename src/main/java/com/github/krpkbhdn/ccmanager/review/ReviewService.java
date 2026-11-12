@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,6 +57,8 @@ public class ReviewService {
     private final TransactionTemplate transaction;
     private final Path root;
     private final ChangeListeners listeners = new ChangeListeners("Review");
+    /** Serialises appending a capture against sending, approving and deleting, so no image lands in a settled review. */
+    private final ReentrantLock captureLock = new ReentrantLock();
 
     @Autowired
     public ReviewService(JdbcClient jdbc, ReviewImageStore imageStore, ReviewFeedbackWriter feedbackWriter, TransactionTemplate transaction,
@@ -79,14 +83,95 @@ public class ReviewService {
 
     /** Hands a browser screenshot (PNG/JPEG bytes) to the Review tab; every image check of the store still applies. The page title is untrusted. */
     public Review submitCapture(long projectId, String title, String note, byte[] image, String label) {
+        return withTempCapture(image, file -> submit(projectId, null, capped(title, MAX_CAPTURE_TITLE), capped(note, MAX_CAPTURE_NOTE),
+                List.of(captureImage(file, label)), TOO_MANY_FOR_USER));
+    }
+
+    /** Appends a browser screenshot to a PENDING review of the project; the review's image limit and the store's image checks apply. */
+    public Review addCapture(long reviewId, long projectId, byte[] image, String label) {
+        captureLock.lock();
+        try {
+            withTempCapture(image, file -> {
+                var lastPosition = transaction.execute(status -> openLastPosition(reviewId, projectId));
+                var stored = imageStore.store(directoryOf(reviewId), List.of(captureImage(file, label)), lastPosition + 2).get(0);
+                try {
+                    transaction.executeWithoutResult(status -> insertImage(reviewId, openLastPosition(reviewId, projectId) + 1, stored));
+                } catch (RuntimeException e) {
+                    try {
+                        Files.deleteIfExists(directoryOf(reviewId).resolve(stored.fileName()));
+                    } catch (IOException | RuntimeException cleanupFailure) {
+                        e.addSuppressed(cleanupFailure);
+                    }
+                    throw e;
+                }
+                return null;
+            });
+        } finally {
+            captureLock.unlock();
+        }
+        listeners.fire();
+        return find(reviewId).orElseThrow();
+    }
+
+    /** The PENDING reviews of the project, newest first, with how many screenshots each holds. */
+    public List<CaptureTarget> captureTargets(long projectId) {
+        var max = properties.maxImages();
+        return jdbc.sql("SELECT r.id, r.title, r.created_at, COUNT(i.id) AS images FROM review r LEFT JOIN review_image i ON i.review_id = r.id "
+                        + "WHERE r.project_id = ? AND r.status = 'PENDING' GROUP BY r.id ORDER BY r.id DESC")
+                .param(projectId).query((rs, row) -> new CaptureTarget(rs.getLong("id"), rs.getString("title"), instant(rs.getString("created_at")),
+                        rs.getInt("images"), max)).list();
+    }
+
+    public record CaptureTarget(long id, String title, Instant createdAt, int images, int maxImages) {
+        public boolean full() {
+            return images >= maxImages;
+        }
+    }
+
+    public enum Reason { FULL, SETTLED, MISSING }
+
+    public static class CaptureRefusedException extends IllegalStateException {
+        private final Reason reason;
+
+        CaptureRefusedException(Reason reason, String message) {
+            super(message);
+            this.reason = reason;
+        }
+
+        public Reason reason() {
+            return reason;
+        }
+    }
+
+    /** @return the highest image position of the review, -1 when it has none; refuses a missing, settled or full review */
+    private int openLastPosition(long reviewId, long projectId) {
+        var review = find(reviewId);
+        if (review.isEmpty() || review.get().projectId() != projectId) {
+            throw new CaptureRefusedException(Reason.MISSING, "This review no longer exists.");
+        }
+        if (review.get().status() != ReviewStatus.PENDING) {
+            throw new CaptureRefusedException(Reason.SETTLED, "This review was already sent or approved: start a new one.");
+        }
+        var row = jdbc.sql("SELECT COUNT(*), COALESCE(MAX(position), -1) FROM review_image WHERE review_id = ?").param(reviewId)
+                .query((rs, n) -> new int[] {rs.getInt(1), rs.getInt(2)}).single();
+        if (row[0] >= properties.maxImages()) {
+            throw new CaptureRefusedException(Reason.FULL, "This review already holds " + properties.maxImages() + " screenshots, the most it can take.");
+        }
+        return row[1];
+    }
+
+    private static SubmittedImage captureImage(Path file, String label) {
+        var safeLabel = capped(label, MAX_CAPTURE_TITLE);
+        return new SubmittedImage(file, safeLabel.isEmpty() ? "screenshot" : safeLabel);
+    }
+
+    private <T> T withTempCapture(byte[] image, Function<Path, T> action) {
         Path file = null;
         try {
             var captures = Files.createDirectories(root.resolve(CAPTURE_FOLDER));
             file = Files.createTempFile(captures, "capture-", ".img");
             Files.write(file, image);
-            var safeLabel = PromptText.oneLine(label == null ? "" : label);
-            return submit(projectId, null, capped(title, MAX_CAPTURE_TITLE), capped(note, MAX_CAPTURE_NOTE),
-                    List.of(new SubmittedImage(file, safeLabel.isEmpty() ? "screenshot" : safeLabel)), TOO_MANY_FOR_USER);
+            return action.apply(file);
         } catch (IOException e) {
             LOG.warn("Could not store a screenshot: {}", e.getClass().getSimpleName());
             throw new IllegalStateException("The screenshot could not be stored.");
@@ -266,23 +351,38 @@ public class ReviewService {
 
     /** Writes the feedback files, marks the review as sent and returns the prompt to type into the session. */
     public ReviewFeedback prepareFeedback(long reviewId) {
-        var review = find(reviewId).orElseThrow(() -> new IllegalArgumentException("Review not found: " + reviewId));
-        var images = images(reviewId);
-        var marksByImageId = new HashMap<Long, List<ReviewMark>>();
-        images.forEach(image -> marksByImageId.put(image.id(), marks(image.id())));
-        var feedback = feedbackWriter.write(review, images, Map.copyOf(marksByImageId), directoryOf(reviewId));
-        settle(reviewId, ReviewStatus.SENT);
-        return feedback;
+        captureLock.lock();
+        try {
+            var review = find(reviewId).orElseThrow(() -> new IllegalArgumentException("Review not found: " + reviewId));
+            var images = images(reviewId);
+            var marksByImageId = new HashMap<Long, List<ReviewMark>>();
+            images.forEach(image -> marksByImageId.put(image.id(), marks(image.id())));
+            var feedback = feedbackWriter.write(review, images, Map.copyOf(marksByImageId), directoryOf(reviewId));
+            settle(reviewId, ReviewStatus.SENT);
+            return feedback;
+        } finally {
+            captureLock.unlock();
+        }
     }
 
     public void approve(long reviewId) {
-        settle(reviewId, ReviewStatus.APPROVED);
+        captureLock.lock();
+        try {
+            settle(reviewId, ReviewStatus.APPROVED);
+        } finally {
+            captureLock.unlock();
+        }
     }
 
     public void delete(long reviewId) {
-        if (jdbc.sql("DELETE FROM review WHERE id = ?").param(reviewId).update() > 0) {
-            deleteFolder(directoryOf(reviewId));
-            listeners.fire();
+        captureLock.lock();
+        try {
+            if (jdbc.sql("DELETE FROM review WHERE id = ?").param(reviewId).update() > 0) {
+                deleteFolder(directoryOf(reviewId));
+                listeners.fire();
+            }
+        } finally {
+            captureLock.unlock();
         }
     }
 
@@ -311,10 +411,13 @@ public class ReviewService {
 
     private void insertImages(long reviewId, List<StoredImage> stored) {
         for (var position = 0; position < stored.size(); position++) {
-            var image = stored.get(position);
-            jdbc.sql("INSERT INTO review_image (review_id, position, label, file_name, width, height) VALUES (?, ?, ?, ?, ?, ?)")
-                    .param(reviewId).param(position).param(image.label()).param(image.fileName()).param(image.width()).param(image.height()).update();
+            insertImage(reviewId, position, stored.get(position));
         }
+    }
+
+    private void insertImage(long reviewId, int position, StoredImage image) {
+        jdbc.sql("INSERT INTO review_image (review_id, position, label, file_name, width, height) VALUES (?, ?, ?, ?, ?, ?)")
+                .param(reviewId).param(position).param(image.label()).param(image.fileName()).param(image.width()).param(image.height()).update();
     }
 
     private void settle(long reviewId, ReviewStatus status) {

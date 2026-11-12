@@ -38,6 +38,19 @@ class ReviewImageStoreTest {
     }
 
     @Test
+    void firstNumberKeepsTheImagesAlreadyStored() throws IOException {
+        Path png = image("a.png", "png", 8, 8);
+        var out = temp.resolve("append");
+
+        store.store(out, List.of(new SubmittedImage(png, null)));
+        var appended = store.store(out, List.of(new SubmittedImage(png, null)), 2);
+
+        assertThat(appended).extracting(StoredImage::fileName).containsExactly("image-2.png");
+        assertThat(out.resolve("image-1.png")).exists();
+        assertThat(out.resolve("image-2.png")).exists();
+    }
+
+    @Test
     void rejectsWindowsDeviceNamesOnlyOnWindows() {
         for (String path : List.of("C:\\dir\\NUL", "C:\\dir\\con.png", "C:/x/lpt1.txt/a.png", "C:\\Aux")) {
             assertThatThrownBy(() -> ReviewImageStore.requireLocalPath(path, true, "image 1: ")).isInstanceOf(IllegalArgumentException.class)
@@ -56,6 +69,17 @@ class ReviewImageStoreTest {
         assertThatThrownBy(() -> tight.store(temp.resolve("o1"), List.of(new SubmittedImage(png, null)))).hasMessage("image 1: image dimensions are out of range");
         assertThatThrownBy(() -> fewPixels.store(temp.resolve("o2"), List.of(new SubmittedImage(png, null)))).hasMessage("image 1: image dimensions are out of range");
         assertThat(temp.resolve("o1")).doesNotExist();
+    }
+
+    @Test
+    void storesA2560WideImageUntouchedWithTheDefaultLimits() throws IOException {
+        Path png = image("wide2560.png", "png", 2560, 1080);
+        var defaults = new ReviewImageStore(new ReviewProperties(Duration.ofDays(1), Duration.ofHours(1), 5, 52_428_800L, 32_767, 64_000_000L, 50));
+
+        var stored = defaults.store(temp.resolve("hd"), List.of(new SubmittedImage(png, null)));
+
+        assertThat(stored.get(0).width()).isEqualTo(2560);
+        assertThat(stored.get(0).height()).isEqualTo(1080);
     }
 
     @Test

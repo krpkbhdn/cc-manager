@@ -23,8 +23,27 @@ typealias ShotLimits = ReviewService.CaptureLimits
 /** A captured image; css sizes are of the photographed area, `scale` the factor applied on top of the device scale factor. */
 class PageShot(val bytes: ByteArray, val widthPx: Int, val heightPx: Int, val cssWidth: Double, val cssHeight: Double, val scale: Double, val cut: Boolean)
 
-/** Page geometry read right before the capture; sizes in CSS px. */
-data class PageMetrics(val scrollX: Double, val scrollY: Double, val scrollWidth: Int, val scrollHeight: Int, val viewWidth: Int, val viewHeight: Int, val dpr: Double)
+/** The client area of an inner scroll container, in viewport CSS px. */
+data class ScrollContainer(val x: Double, val y: Double, val width: Double, val height: Double) {
+    /** Fully inside the viewport and big enough that stepping through it is bounded. */
+    fun isUsableIn(viewWidth: Int, viewHeight: Int) =
+        width >= MIN_SIDE && height >= MIN_SIDE && x >= -TOLERANCE && y >= -TOLERANCE &&
+            x + width <= viewWidth + TOLERANCE && y + height <= viewHeight + TOLERANCE
+
+    private companion object {
+        const val MIN_SIDE = 40.0
+        const val TOLERANCE = 1.0
+    }
+}
+
+/**
+ * Page geometry read right before the capture; sizes in CSS px. With a [container] (an SPA whose document does not scroll) the scroll
+ * sizes are the container's content size and the whole-page shot is that content alone, page chrome around it is left out.
+ */
+data class PageMetrics(
+    val scrollX: Double, val scrollY: Double, val scrollWidth: Int, val scrollHeight: Int, val viewWidth: Int, val viewHeight: Int, val dpr: Double,
+    val container: ScrollContainer? = null,
+)
 
 /** The capture parameters for one area: pure, so the limits can be tested without a browser. `clip` is in document CSS px. */
 data class ShotPlan(val clip: Clip?, val scale: Double, val cut: Boolean, val beyondViewport: Boolean) {

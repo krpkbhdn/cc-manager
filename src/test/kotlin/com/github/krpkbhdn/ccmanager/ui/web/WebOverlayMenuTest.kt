@@ -69,7 +69,8 @@ class WebOverlayMenuTest {
         val entries = overlaySettingsEntries(all) {}
 
         assertThat(entries.filter { !it.enabled }.map { it.label }).containsExactly("Inspect", "Spacing", "Audit", "Similar", "Contrast")
-        assertThat(entries.map { it.label }).contains("Outline all", "Margins", "Borders", "Misalignment", "Highlight similar elements", "Contrast check", "None")
+        assertThat(entries.map { it.label }).contains("Outline all", "Margins", "Borders", "Misalignment", "Highlight similar elements", "Contrast check")
+        assertThat(entries.map { it.label }).doesNotContain("None")
         assertThat(entries.first { it.label == "Margins" }.checked).isTrue()
         assertThat(entries.first { it.label == "Paddings" }.checked).isFalse()
     }

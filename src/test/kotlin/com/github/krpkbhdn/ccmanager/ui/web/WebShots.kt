@@ -84,7 +84,7 @@ private val consoleLines = listOf(
 
 private class Rig(val state: WebState, val host: FakePageHost, val view: WebView, val service: WebReviewService)
 
-private class Shot(
+private class WebShot(
     val name: String,
     val unsupported: Boolean = false,
     val failStart: Boolean = false,
@@ -107,38 +107,38 @@ private fun Rig.pickWithComment(text: String) {
 }
 
 private val shots = listOf(
-    Shot("web-empty-inspector"),
-    Shot("web-picked", prepare = { rig ->
+    WebShot("web-empty-inspector"),
+    WebShot("web-picked", prepare = { rig ->
         rig.state.setToggles(rig.view, rig.view.toggles.togglePick())
         rig.pick()
         rig.state.editStyle(rig.view, "background-color", "rgb(22, 163, 74)")
         rig.state.editStyle(rig.view, "padding", "12px 24px")
         rig.view.comment.setTextAndPlaceCursorAtEnd("The primary action should use the success colour and be a little roomier.")
     }),
-    Shot("web-items", prepare = { rig ->
+    WebShot("web-items", prepare = { rig ->
         rig.view.panelTab = WebPanelTab.ITEMS
         rig.view.selectedItemId = rig.view.pageItems.first().id()
     }),
-    Shot("web-editing-item", prepare = { rig -> rig.state.editItem(rig.view, rig.view.pageItems.first()) }),
-    Shot("web-console", prepare = { rig ->
+    WebShot("web-editing-item", prepare = { rig -> rig.state.editItem(rig.view, rig.view.pageItems.first()) }),
+    WebShot("web-console", prepare = { rig ->
         consoleLines.forEach(rig.host::emitEvent)
         rig.view.consoleOpen = true
         waitFor { rig.view.consoleLines.size == 4 }
     }),
-    Shot("web-send-dialog", prepare = { rig -> rig.state.send(rig.state.revisions(PROJECT).first()); waitFor { rig.state.sendTarget(PROJECT) != null } }),
-    Shot("web-unsupported", unsupported = true),
-    Shot("web-draft-other-page", prepare = { rig ->
+    WebShot("web-send-dialog", prepare = { rig -> rig.state.send(rig.state.revisions(PROJECT).first()); waitFor { rig.state.sendTarget(PROJECT) != null } }),
+    WebShot("web-unsupported", unsupported = true),
+    WebShot("web-draft-other-page", prepare = { rig ->
         rig.pickWithComment("Make this button green.")
         rig.host.page.value = PageState("http://localhost:5173/billing/invoices", "Billing")
         rig.host.emitEvent(PageEvent.Inspector("""{"type":"ready","url":"http://localhost:5173/billing/invoices","title":"Billing"}"""))
         waitFor { rig.view.pageKey?.endsWith("/billing/invoices") == true }
     }),
-    Shot("web-next-revision", ownService = true, prepare = { rig ->
+    WebShot("web-next-revision", ownService = true, prepare = { rig ->
         rig.service.prepareFeedback(rig.pendingRevision().id())
         waitFor { rig.state.revisions(PROJECT).none { it.status() == ReviewStatus.PENDING } }
         rig.view.panelTab = WebPanelTab.ITEMS
     }),
-    Shot("web-sending", ownService = true, wrap = ::blockingFeedback, prepare = { rig ->
+    WebShot("web-sending", ownService = true, wrap = ::blockingFeedback, prepare = { rig ->
         val pending = rig.pendingRevision()
         rig.service.bindSession(pending.id(), "a1b2")
         waitFor { rig.state.revisions(PROJECT).first().ccmSessionId() == "a1b2" }
@@ -146,27 +146,27 @@ private val shots = listOf(
         waitFor { rig.state.isSending(pending.id()) }
         rig.view.panelTab = WebPanelTab.ITEMS
     }),
-    Shot("web-saving", prepare = { rig ->
+    WebShot("web-saving", prepare = { rig ->
         rig.pickWithComment("Make this button green.")
         rig.view.draftSaving = true
     }),
-    Shot("web-browser-failed", failStart = true),
-    Shot("web-spacing-on", prepare = { rig ->
+    WebShot("web-browser-failed", failStart = true),
+    WebShot("web-spacing-on", prepare = { rig ->
         rig.state.setToggles(rig.view, rig.view.toggles.copy(spacing = setOf(SpacingLayer.MARGIN, SpacingLayer.PADDING, SpacingLayer.VALUES), similar = true))
     }),
-    Shot("web-device-4k-50", prepare = { rig ->
+    WebShot("web-device-4k-50", prepare = { rig ->
         rig.view.device = DeviceSelection.of(DeviceSelection.presets.last()).copy(zoom = DeviceZoom.Percent(50))
     }),
-    Shot("web-device-custom", prepare = { rig ->
+    WebShot("web-device-custom", prepare = { rig ->
         rig.view.device = DeviceSelection.custom(2560, 1920).copy(zoom = DeviceZoom.Percent(50))
     }),
-    Shot("web-locked", prepare = { rig -> rig.view.interaction = false }),
-    Shot("web-overlay-settings", click = 826f to 19f),
-    Shot("web-device-menu", click = 485f to 19f),
-    Shot("web-screenshot-menu", click = 871f to 19f),
-    Shot("web-region-select", prepare = { rig -> rig.view.regionSelecting = true }),
-    Shot("web-capturing", prepare = { rig -> rig.view.shooting = true }),
-    Shot("web-context-menu", prepare = { rig ->
+    WebShot("web-locked", prepare = { rig -> rig.view.interaction = false }),
+    WebShot("web-overlay-settings", click = 826f to 19f),
+    WebShot("web-device-menu", click = 485f to 19f),
+    WebShot("web-screenshot-menu", click = 871f to 19f),
+    WebShot("web-region-select", prepare = { rig -> rig.view.regionSelecting = true }),
+    WebShot("web-capturing", prepare = { rig -> rig.view.shooting = true }),
+    WebShot("web-context-menu", prepare = { rig ->
         val layers = listOf(
             LiteTarget("button.save-settings-button", "button", "save", listOf("btn", "btn-primary"), null),
             LiteTarget("div.actions", "div", "", listOf("actions"), null),
@@ -174,12 +174,12 @@ private val shots = listOf(
         )
         rig.view.contextMenu = ContextMenuState(600.0, 320.0, Offset(600f, 320f), layers)
     }),
-    Shot("web-feedback-popover", prepare = { rig ->
+    WebShot("web-feedback-popover", prepare = { rig ->
         rig.pickWithComment("Make this button green.")
         rig.state.setToggles(rig.view, rig.view.toggles.copy(pick = false))
         rig.view.contextMenu = ContextMenuState(560.0, 300.0, Offset(560f, 300f), emptyList(), feedback = true)
     }),
-    Shot("web-item-popover", prepare = { rig ->
+    WebShot("web-item-popover", prepare = { rig ->
         val item = rig.view.pageItems.first { it.n() == 4 }
         rig.view.itemPopover = ItemPopoverState(item.id().toString(), Rect(560.0, 300.0, 160.0, 40.0))
     }),
@@ -233,14 +233,14 @@ private fun session(id: String) = mock(SessionSnapshot::class.java).also {
     `when`(it.title).thenReturn("Fix settings page ($id)")
 }
 
-private fun render(shot: Shot, service: WebReviewService, dark: Boolean, width: Int, height: Int, out: Path) {
+private fun render(shot: WebShot, service: WebReviewService, dark: Boolean, width: Int, height: Int, out: Path) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val errors = mutableListOf<String>()
     val host = FakePageHost()
     val availability = if (shot.unsupported) Availability.Unsupported("This Java runtime has no embedded browser (JetBrains Runtime with JCEF is required)") else Availability.Ready
     val shotService = shot.wrap(if (shot.ownService) seededService() else service)
     val prepareBrowser: (() -> Unit)? = if (shot.failStart) ({ error("JCEF did not initialize within 30 seconds") }) else null
-    val state = WebState(shotService, { host }, { _, _ -> }, { _, _, _, _ -> }, { LiveSessions(sessions = listOf(session("a1b2"), session("c3d4"))) }, scope, { errors += it }, mock(ReviewService::class.java), { _, _ -> }, { availability }, prepareBrowser)
+    val state = WebState(shotService, { host }, { _, _ -> }, { _, _, _, _ -> }, { LiveSessions(sessions = listOf(session("a1b2"), session("c3d4"))) }, scope, { errors += it }, mock(ReviewService::class.java), { _, _ -> }, { }, { availability }, prepareBrowser)
     state.prepare()
     waitFor { state.browserReady || state.unsupportedReason() != null || state.browserFailure != null }
     val view = if (shot.unsupported || shot.failStart) null else state.view(PROJECT)

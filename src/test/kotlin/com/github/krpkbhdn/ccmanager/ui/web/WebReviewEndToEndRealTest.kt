@@ -92,13 +92,14 @@ class WebReviewEndToEndRealTest {
     private fun state(
         service: WebReviewService,
         reviews: com.github.krpkbhdn.ccmanager.review.ReviewService = mock(com.github.krpkbhdn.ccmanager.review.ReviewService::class.java),
-        openReview: (Long, Long) -> Unit = { _, _ -> },
+        confirm: (com.github.krpkbhdn.ccmanager.ui.state.ConfirmRequest) -> Unit = { },
+        onCaptured: (Long, Long) -> Unit = { _, _ -> },
     ): Pair<WebState, WebView> {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default).also { scopes += it }
         val state = WebState(
             service, { JcefPageHost.open(dir).also { it.resize(1000, 700, 1f); it.focus(true) } },
             { id, text -> enqueued += id to text }, { _, prompt, _, onStarted -> started += prompt; onStarted("new-session") },
-            { live }, scope, { errors += it }, reviews, openReview,
+            { live }, scope, { errors += it }, reviews, onCaptured, confirm,
         )
         states += state
         val view = state.view(project)
@@ -191,6 +192,7 @@ class WebReviewEndToEndRealTest {
 
         assertThat(errors).isEmpty()
         assertThat(opened.single().first).isEqualTo(project)
+        assertThat(state.pinnedReview(project)).isEqualTo(opened.single().second)
         val review = reviews.find(opened.single().second).orElseThrow()
         assertThat(review.projectId()).isEqualTo(project)
         assertThat(review.ccmSessionId()).isNull()

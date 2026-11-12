@@ -67,6 +67,7 @@ fun WebToolbar(view: WebView, state: WebState, modifier: Modifier = Modifier) {
         WebOverlayMenu(toggles) { state.setToggles(view, it) }
         GroupDivider()
         WebScreenshotMenu(view, state, enabled = state.canShoot(view))
+        WebReviewTargetMenu(view.projectId, state)
         if (view.shooting) Label("Capturing...", color = colors.accent, style = Type.caption)
         GroupDivider()
         IconButton(Icons.Terminal, { view.consoleOpen = !view.consoleOpen }, tooltip = "Console", active = view.consoleOpen)

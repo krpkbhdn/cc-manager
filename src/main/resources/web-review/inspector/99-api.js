@@ -40,9 +40,28 @@ C.api('pointer', function (kind, x, y) {
   else if (kind === 'click') { if (!C.pinPointer('click', x, y) && C.opts.pick) C.pickAt(x, y, null); }
 });
 var MAX_SCROLL_STEP = 1e6;
-C.api('scrollBy', function (dx, dy) {
+function canScroll(overflow, delta, size, extent, pos) {
+  return delta !== 0 && /auto|scroll|overlay/.test(overflow) && extent > size + 1 && (delta > 0 ? pos + size < extent - 1 : pos > 0);
+}
+// A clipped (overflow hidden) axis is not user-scrollable even though script can move it: only the axes a wheel could move are applied.
+function wheelDeltas(el, dx, dy) {
+  var s = getComputedStyle(el);
+  return {
+    left: canScroll(s.overflowX, dx, el.clientWidth, el.scrollWidth, el.scrollLeft) ? dx : 0,
+    top: canScroll(s.overflowY, dy, el.clientHeight, el.scrollHeight, el.scrollTop) ? dy : 0,
+  };
+}
+C.api('scrollBy', function (dx, dy, x, y) {
   var clamp = function (v) { v = Number(v); return isFinite(v) ? Math.max(-MAX_SCROLL_STEP, Math.min(MAX_SCROLL_STEP, v)) : 0; };
-  W.scrollBy(clamp(dx), clamp(dy));
+  dx = clamp(dx); dy = clamp(dy);
+  var el = isFinite(Number(x)) && isFinite(Number(y)) ? C.deepElementAt(Number(x), Number(y)) : null;
+  for (; el && el !== document.body && el !== document.documentElement; el = el.assignedSlot || el.parentElement || (el.getRootNode && el.getRootNode().host)) {
+    var d = wheelDeltas(el, dx, dy);
+    if (d.left !== 0 || d.top !== 0) { el.scrollBy({ left: d.left, top: d.top, behavior: 'instant' }); return; }
+  }
+  var root = getComputedStyle(document.documentElement).overflowX;
+  if (root === 'visible' && document.body) root = getComputedStyle(document.body).overflowX;
+  W.scrollBy({ left: /hidden|clip/.test(root) ? 0 : dx, top: dy, behavior: 'instant' });   // a clipped axis is not user-scrollable
 });
 C.api('stats', function () { return JSON.parse(JSON.stringify(C.stats)); });
 C.api('resolveSelector', C.resolveSelector);   // additive: lets the host/tests resolve a selector string

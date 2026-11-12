@@ -37,6 +37,8 @@ private const val TIMEOUT_MILLIS = 10_000L
 
 private const val PAGE = """<!doctype html><html><body style="margin:0">
 <div id="box" style="position:absolute;left:20px;top:20px;width:100px;height:100px;background:#ccc"></div>
+<div id="inner" style="position:absolute;left:200px;top:20px;width:100px;height:100px;overflow:auto"><div style="height:1000px"></div></div>
+<div id="clip" style="position:absolute;left:20px;top:150px;width:150px;height:100px;overflow-x:hidden;overflow-y:auto"><div style="position:absolute;left:400px;top:0;width:600px;height:50px;background:#f0f"></div><div style="height:1000px"></div></div>
 <div style="height:3000px"></div>
 <script>window.__mouse = 0;
 ['mousemove','mousedown','mouseup','click','wheel'].forEach(function (t) { document.addEventListener(t, function () { window.__mouse++; }, true); });</script>
@@ -118,6 +120,46 @@ class LockedCanvasRealTest {
             val end = System.currentTimeMillis() + TIMEOUT_MILLIS
             while (evaluate("window.scrollY") == "0" && System.currentTimeMillis() < end) Thread.sleep(100)
             assertThat(evaluate("window.scrollY")).isNotEqualTo("0")
+        } finally {
+            scene.close()
+        }
+    }
+
+    @Test
+    fun a_locked_wheel_over_a_nested_scroller_scrolls_that_element() {
+        host.runScript("window.scrollTo(0, 0)")
+        assertThat(evaluate("window.scrollY")).isEqualTo("0")
+        val scene = ImageComposeScene(WIDTH, HEIGHT, Density(1f)) { WebCanvas(host, PageViewport(WIDTH, HEIGHT), Modifier, interaction = false) }
+        try {
+            frames(scene, 5)
+            scene.sendPointerEvent(PointerEventType.Scroll, Offset(250f, 60f), Offset(0f, 1f), timeMillis = 40)
+            frames(scene, 5)
+            val end = System.currentTimeMillis() + TIMEOUT_MILLIS
+            while (evaluate("document.querySelector('#inner').scrollTop") == "0" && System.currentTimeMillis() < end) Thread.sleep(100)
+            assertThat(evaluate("document.querySelector('#inner').scrollTop")).isNotEqualTo("0")
+        } finally {
+            scene.close()
+        }
+    }
+
+    @Test
+    fun a_locked_wheel_with_a_horizontal_delta_never_scrolls_a_clipped_axis_and_a_whole_page_shot_leaves_it_alone() {
+        host.runScript("window.scrollTo(0, 0)")
+        val scene = ImageComposeScene(WIDTH, HEIGHT, Density(1f)) { WebCanvas(host, PageViewport(WIDTH, HEIGHT), Modifier, interaction = false) }
+        try {
+            frames(scene, 5)
+            scene.sendPointerEvent(PointerEventType.Scroll, Offset(60f, 200f), Offset(3f, 1f), timeMillis = 40)
+            frames(scene, 5)
+            val end = System.currentTimeMillis() + TIMEOUT_MILLIS
+            while (evaluate("document.querySelector('#clip').scrollTop") == "0" && System.currentTimeMillis() < end) Thread.sleep(100)
+            assertThat(evaluate("document.querySelector('#clip').scrollTop")).isNotEqualTo("0")
+            assertThat(evaluate("document.querySelector('#clip').scrollLeft")).isEqualTo("0")
+            assertThat(evaluate("window.scrollX")).isEqualTo("0")
+
+            val shot = host.screenshot(com.github.krpkbhdn.ccmanager.ui.web.browser.ShotArea.WholePage, com.github.krpkbhdn.ccmanager.ui.web.browser.ShotLimits(8192, 36_000_000, 20_000_000))!!
+
+            assertThat(shot.widthPx.toString()).isEqualTo(evaluate("document.documentElement.clientWidth"))
+            assertThat(evaluate("document.querySelector('#clip').scrollLeft")).isEqualTo("0")
         } finally {
             scene.close()
         }

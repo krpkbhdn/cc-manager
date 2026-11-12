@@ -86,7 +86,6 @@ internal fun groupEntries(group: OverlayGroup, t: InspectorToggles, change: (Ins
             layer("Paddings", SpacingLayer.PADDING),
             layer("Gaps", SpacingLayer.GAP),
             layer("Values", SpacingLayer.VALUES),
-            MenuEntry("None", dividerAbove = true) { change(t.copy(spacing = t.spacing - spacingLayers - SpacingLayer.VALUES)) },
         )
         OverlayGroup.AUDIT -> listOf(
             layer("Borders", SpacingLayer.BORDERS),

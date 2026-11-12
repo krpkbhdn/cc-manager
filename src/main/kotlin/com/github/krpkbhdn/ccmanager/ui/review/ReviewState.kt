@@ -98,6 +98,7 @@ class ReviewState(
                 val gone = reviewsByProject[projectId].orEmpty().map { it.id } - fresh.map { it.id }.toSet()
                 reviewsByProject[projectId] = fresh
                 gone.forEach(::forgetReview)
+                fresh.map { it.id }.filter { it in imagesByReview }.forEach { id -> refreshImages(id) }
             }
         }
     }
@@ -189,6 +190,11 @@ class ReviewState(
         } finally {
             full.close()
         }
+    }
+
+    /** A screenshot added to an already shown review must appear, so loaded image lists are read again. */
+    private suspend fun refreshImages(reviewId: Long) {
+        runGuarded(reportError) { imagesByReview[reviewId] = io { service.images(reviewId) } }
     }
 
     private fun forgetReview(reviewId: Long) {

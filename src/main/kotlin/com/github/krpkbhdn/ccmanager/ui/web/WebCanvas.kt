@@ -260,7 +260,7 @@ private class LockedPointer(private val host: WebPageHost) {
         if (sent.getAndSet(null) != null) host.runScript(InspectorBridge.pointer("leave", 0.0, 0.0))
     }
 
-    fun scroll(dx: Double, dy: Double) = host.runScript(InspectorBridge.scrollBy(dx, dy))
+    fun scroll(dx: Double, dy: Double, x: Int, y: Int) = host.runScript(InspectorBridge.scrollBy(dx, dy, x.toDouble(), y.toDouble()))
 
     suspend fun run() {
         for (ignored in wake) {
@@ -367,7 +367,7 @@ private suspend fun PointerInputScope.forwardPointer(
                     if (event.keyboardModifiers.isCtrlPressed) c.onZoom(canvasDp, if (change.scrollDelta.y < 0) 1 else -1)
                     else if (shift && inside && view.maxPanX > 0) c.onPan(change.scrollDelta.y * PAN_NOTCH_DP, change.scrollDelta.x * PAN_NOTCH_DP)
                     else if (inside && live) mapper.wheel(x, y, change.scrollDelta.y)
-                    else if (inside) locked.scroll(change.scrollDelta.x * WebInputMapper.PIXELS_PER_NOTCH.toDouble(), change.scrollDelta.y * WebInputMapper.PIXELS_PER_NOTCH.toDouble())
+                    else if (inside) locked.scroll(change.scrollDelta.x * WebInputMapper.PIXELS_PER_NOTCH.toDouble(), change.scrollDelta.y * WebInputMapper.PIXELS_PER_NOTCH.toDouble(), x, y)
             }
             if (event.type == PointerEventType.Release && !event.changes.any { it.pressed }) pageHeld = 0
             change.consume()

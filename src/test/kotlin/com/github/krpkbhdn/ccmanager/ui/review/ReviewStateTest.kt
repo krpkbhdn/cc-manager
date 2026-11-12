@@ -5,6 +5,7 @@ import com.github.krpkbhdn.ccmanager.review.MarkDraft
 import com.github.krpkbhdn.ccmanager.review.MarkKind
 import com.github.krpkbhdn.ccmanager.review.Review
 import com.github.krpkbhdn.ccmanager.review.ReviewFeedback
+import com.github.krpkbhdn.ccmanager.review.ReviewImage
 import com.github.krpkbhdn.ccmanager.review.ReviewService
 import com.github.krpkbhdn.ccmanager.review.ReviewStatus
 import com.github.krpkbhdn.ccmanager.ui.await
@@ -54,6 +55,23 @@ class ReviewStateTest {
     }
 
     private fun feedback() = `when`(service.prepareFeedback(5)).thenReturn(ReviewFeedback(Path.of("review.md"), "Read review.md"))
+
+    @Test
+    fun `a screenshot added to a shown review appears after the next change notification`() {
+        var changed = Runnable { }
+        `when`(service.subscribe(org.mockito.ArgumentMatchers.any())).thenAnswer { changed = it.getArgument(0); Runnable { } }
+        `when`(service.list(1)).thenReturn(listOf(review(1, ReviewStatus.PENDING)))
+        val first = ReviewImage(10, 1, 0, "a", "a.png", 1, 1)
+        val second = ReviewImage(11, 1, 1, "b", "b.png", 1, 1)
+        `when`(service.images(1)).thenReturn(listOf(first), listOf(first, second))
+        state.start()
+        await { state.reviews(1).isNotEmpty() }
+        await { state.images(1).size == 1 }
+
+        changed.run()
+
+        await { state.images(1).size == 2 }
+    }
 
     @Test
     fun `the newest pending review is selected by default and counted`() {

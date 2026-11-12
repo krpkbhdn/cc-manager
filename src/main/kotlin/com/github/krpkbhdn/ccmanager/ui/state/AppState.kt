@@ -183,7 +183,7 @@ class AppState(
     val web = WebState(
         backend.web, webHostFactory, { id, text -> queue.add(id, text) },
         { projectId, prompt, onNotStarted, onStarted -> sessions.launchTask(projectId, null, prompt, { onNotStarted() }, onStarted) },
-        { live }, scope, notifications::reportError, backend.review, ::showCapturedReview,
+        { live }, scope, notifications::reportError, backend.review, { p, r -> reviews.select(p, r) }, { confirm = it },
         { JcefRuntime.availability() },
         prepareBrowser = { JcefRuntime.start(backend.dataDir) },
     )
@@ -347,12 +347,6 @@ class AppState(
         views[projectId] = viewOf(projectId).select(tab)
     }
 
-    /** The only way the Review tab opens by itself: the user took the screenshot in the Web tab and is still there; otherwise just a notice. */
-    private fun showCapturedReview(projectId: Long, reviewId: Long) {
-        reviews.select(projectId, reviewId)
-        if (route == Route.Project(projectId) && viewOf(projectId).selected == ProjectTab.Web) select(projectId, ProjectTab.Review)
-        else notifications.toast(NotificationKind.INFO, "Screenshot added to Review", "Find it in the Review tab of ${projects.nameOf(projectId)}")
-    }
 
     /** Opens the project's Git tab, on [view] when given, and returns its state. */
     fun openGit(projectId: Long, view: GitSubView? = null): GitState? {
