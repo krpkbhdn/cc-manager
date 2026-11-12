@@ -288,6 +288,9 @@ class GitToolsTest {
         try {
             java.nio.file.Files.createSymbolicLink(repo.resolve("link"), repo.resolve(".git"));
         } catch (UnsupportedOperationException | java.io.IOException | SecurityException e) {
+            if (System.getenv("CI") != null) {
+                org.junit.jupiter.api.Assertions.fail("symlinks not available on CI, the symlink guard would not run: " + e);
+            }
             org.junit.jupiter.api.Assumptions.abort("symlinks are not available: " + e);
         }
 

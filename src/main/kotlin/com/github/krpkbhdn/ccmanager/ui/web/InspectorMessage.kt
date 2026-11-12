@@ -153,15 +153,15 @@ private object InspectorMessageReader {
             tag = token(t, "tag", MAX_VALUE).orEmpty(),
             id = token(t, "id", MAX_VALUE).orEmpty(),
             classes = strings(t, "classes"),
-            text = text(t, "text", MAX_TEXT).orEmpty(),
-            outerHtml = text(t, "outerHtml", MAX_HTML).orEmpty(),
+            text = flat(t, "text", MAX_TEXT).orEmpty(),
+            outerHtml = flat(t, "outerHtml", MAX_HTML).orEmpty(),
             rect = rect(t, "rect"),
             viewportRect = rect(t, "viewportRect"),
             computed = computed(t),
             box = box(t),
             sourceHint = sourceHint(t),
-            frame = text(t, "frame", MAX_VALUE),
-            pageUrl = text(t, "pageUrl", MAX_URL),
+            frame = flat(t, "frame", MAX_VALUE),
+            pageUrl = flat(t, "pageUrl", MAX_URL),
             contrast = contrast(t),
             similarCount = similarCount(t),
             stableClasses = strings(t, "stableClasses"),
@@ -179,7 +179,12 @@ private object InspectorMessageReader {
     /** Selectors, ids and class names end up on the clipboard and in scripts, so a control or format character (a newline, a bidi mark, a zero-width space) rejects the message. */
     private fun token(node: JsonNode, name: String, max: Int): String? = text(node, name, max)?.also(::requireNoControl)
 
-    private fun requireNoControl(value: String) = require(value.none { it.isISOControl() || it.category == CharCategory.FORMAT || it == '\u2028' || it == '\u2029' })
+    /** Free text (visible text, markup, urls) keeps the message but turns every control or format character into a space, so a page cannot smuggle line breaks into a prompt. */
+    private fun flat(node: JsonNode, name: String, max: Int): String? = text(node, name, max)?.map { if (isControl(it)) ' ' else it }?.joinToString("")
+
+    private fun isControl(c: Char) = c.isISOControl() || c.category == CharCategory.FORMAT || c == '\u2028' || c == '\u2029'
+
+    private fun requireNoControl(value: String) = require(value.none(::isControl))
 
     /** Finite and clamped, so Infinity or a huge value never reaches layout. */
     private fun number(node: JsonNode, name: String): Double {

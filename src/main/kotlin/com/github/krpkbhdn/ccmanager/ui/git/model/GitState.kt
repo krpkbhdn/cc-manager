@@ -229,8 +229,11 @@ class GitState(
         val running = synchronized(jobLock) { job ?: run { job = GitJob(label); jobCount++; null } }
         if (running != null) return host.notify(NotificationKind.INFO, GIT_BUSY, "Wait for ${running.label.lowercase()} to finish")
         scope.launch {
-            val outcome = attempt(label, handle, { act(label, handle, refreshWorktrees, folderVanishes, onSuccess, call) }, call)
-            synchronized(jobLock) { job = null }
+            val outcome = try {
+                attempt(label, handle, { act(label, handle, refreshWorktrees, folderVanishes, onSuccess, call) }, call)
+            } finally {
+                synchronized(jobLock) { job = null }
+            }
             if (outcome == null || !folderVanishes) reloadAfterAct(refreshWorktrees)
             outcome?.let {
                 error = null

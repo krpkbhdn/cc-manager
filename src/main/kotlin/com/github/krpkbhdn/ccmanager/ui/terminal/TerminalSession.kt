@@ -20,6 +20,7 @@ import com.jediterm.terminal.emulator.mouse.MouseMode
 import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
 import com.github.krpkbhdn.ccmanager.ui.components.copyToClipboard
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -30,6 +31,7 @@ private const val MIN_CELL_DP = 6
 private const val MAX_CELL_DP = 20
 private const val ENTER_BYTE: Byte = 0x0D
 private const val CTRL_C_BYTE: Byte = 0x03
+private const val CTRL_V_BYTE: Byte = 0x16
 private const val SPACE_BYTE: Byte = 0x20
 private const val DELETE_BYTE: Byte = 0x7F
 private const val CTRL_C_CHAR = '\u0003'
@@ -59,6 +61,9 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
     var scrollShown by mutableFloatStateOf(0f)
         private set
     var focused by mutableStateOf(false)
+
+    // one thread keeps pastes in order and bounds the threads blocked on a slow clipboard
+    private val pasteExecutor = Executors.newSingleThreadExecutor { task -> Thread(task, "TerminalPaste").apply { isDaemon = true } }
 
     val focusRequester = FocusRequester()
     val frame: Long get() = frameState.longValue
@@ -184,13 +189,15 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
         return String(charArrayOf(high, char)).toByteArray(Charsets.UTF_8)
     }
 
-    /** False when the key should still reach the process: Ctrl+V with no text on the clipboard is an app's image paste. */
     private fun perform(command: TerminalCommand): Boolean {
         when (command) {
             is TerminalCommand.Zoom -> zoomBy(command.steps)
             TerminalCommand.ResetZoom -> cellDp = DEFAULT_CELL_DP
             TerminalCommand.Copy -> copySelection()
-            TerminalCommand.Paste -> return paste()
+            TerminalCommand.Paste -> {
+                scrollToBottom()
+                paste()
+            }
         }
         return true
     }
@@ -205,15 +212,17 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
         selection = null
     }
 
-    /** Pastes the clipboard text; false when it holds none. */
-    fun paste(): Boolean {
-        val clipboard = Toolkit.getDefaultToolkit().systemClipboard
-        val text = runCatching { clipboard.getData(DataFlavor.stringFlavor) as? String }.getOrNull().orEmpty()
-        if (text.isEmpty()) return false
-        scrollToBottom()
-        addToDraft(text.codePointCount(0, text.length))
-        emulator.write(pasteBytes(text, modes.bracketedPaste))
-        return true
+    /** Reads the clipboard off the UI thread (it can block) and pastes its text; with none, Ctrl+V goes to the process as an app's image paste. */
+    fun paste() {
+        runCatching {
+            pasteExecutor.execute {
+                val clipboard = Toolkit.getDefaultToolkit().systemClipboard
+                val text = runCatching { clipboard.getData(DataFlavor.stringFlavor) as? String }.getOrNull().orEmpty()
+                if (text.isEmpty()) return@execute emulator.write(byteArrayOf(CTRL_V_BYTE))
+                addToDraft(text.codePointCount(0, text.length))
+                emulator.write(pasteBytes(text, modes.bracketedPaste))
+            }
+        }
     }
 
     fun selectAll() {
@@ -261,5 +270,8 @@ internal class TerminalSession(connector: TtyConnector, scrollbackCap: Int = SCR
 
     fun screenText(): String = buffer.withLock { buffer.getScreenLines() }
 
-    fun close() = emulator.close()
+    fun close() {
+        pasteExecutor.shutdownNow()
+        emulator.close()
+    }
 }

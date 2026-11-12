@@ -17,7 +17,24 @@ final class SuggestionDescriber {
 
     static String describe(JsonNode suggestion) {
         var type = suggestion.path("type").asString("");
-        return BY_TYPE.getOrDefault(type, unknown -> "Apply " + (type.isEmpty() ? "permission update" : type)).apply(suggestion);
+        var describer = BY_TYPE.getOrDefault(type, SuggestionDescriber::describeUnknown);
+        return describer.apply(suggestion) + destinationOf(suggestion);
+    }
+
+    private static String describeUnknown(JsonNode suggestion) {
+        return "Apply permission update " + suggestion;
+    }
+
+    private static String destinationOf(JsonNode suggestion) {
+        var destination = suggestion.path("destination").asString("");
+        return switch (destination) {
+            case "" -> "";
+            case "userSettings" -> " (all your projects)";
+            case "projectSettings" -> " (this project, shared)";
+            case "localSettings" -> " (this project, only you)";
+            case "session" -> " (this session only)";
+            default -> " (" + destination + ")";
+        };
     }
 
     private static String describeMode(JsonNode suggestion) {

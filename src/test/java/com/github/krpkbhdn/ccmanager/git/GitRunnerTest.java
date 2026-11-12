@@ -71,6 +71,21 @@ class GitRunnerTest {
     }
 
     @Test
+    void hookCommandIsKilledAtTheSyncTimeout() throws Exception {
+        var shortSync = new GitProperties(Duration.ofMillis(300), Duration.ofMillis(300), Duration.ofMillis(300), 2000, 2000, 1048576);
+        var sandbox = GitCliSandbox.create(root, shortSync);
+        var hooks = java.nio.file.Files.createDirectory(root.resolve("hooks"));
+        java.nio.file.Files.writeString(hooks.resolve("pre-commit"), "#!/bin/sh\nsleep 20\n");
+        hooks.resolve("pre-commit").toFile().setExecutable(true);
+        var started = System.nanoTime();
+
+        assertThatThrownBy(() -> sandbox.runner.run(sandbox.repo, Duration.ofMillis(300), null, null,
+                List.of("-c", "core.hooksPath=" + hooks.toString().replace('\\', '/'), "commit", "--allow-empty", "-m", "slow")))
+                .isInstanceOfSatisfying(GitException.class, e -> assertThat(e.kind()).isEqualTo(Kind.TIMEOUT));
+        assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(10));
+    }
+
+    @Test
     void onlyHookRunningCommandsAreExemptFromTheKill() {
         assertThat(GitRunner.runsHooks(List.of("commit", "-m", "x"))).isTrue();
         assertThat(GitRunner.runsHooks(List.of("-c", "core.editor=true", "rebase", "--continue"))).isTrue();

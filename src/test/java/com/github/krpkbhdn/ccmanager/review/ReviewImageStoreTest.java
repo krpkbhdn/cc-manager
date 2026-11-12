@@ -89,6 +89,9 @@ class ReviewImageStoreTest {
         try {
             link = Files.createSymbolicLink(temp.resolve("link.png"), png);
         } catch (IOException | UnsupportedOperationException e) {
+            if (System.getenv("CI") != null) {
+                org.junit.jupiter.api.Assertions.fail("symlinks not available on CI, the symlink guard would not run: " + e);
+            }
             Assumptions.abort("symlinks not available");
             return;
         }
@@ -107,6 +110,9 @@ class ReviewImageStoreTest {
         try {
             link = Files.createSymbolicLink(temp.resolve("bad.png"), text);
         } catch (IOException | UnsupportedOperationException e) {
+            if (System.getenv("CI") != null) {
+                org.junit.jupiter.api.Assertions.fail("symlinks not available on CI, the symlink guard would not run: " + e);
+            }
             Assumptions.abort("symlinks not available");
             return;
         }
@@ -209,6 +215,9 @@ class ReviewImageStoreTest {
             goodLink = Files.createSymbolicLink(temp.resolve("good-link.png"), png);
             badLink = Files.createSymbolicLink(temp.resolve("bad-link.png"), text);
         } catch (IOException | UnsupportedOperationException e) {
+            if (System.getenv("CI") != null) {
+                org.junit.jupiter.api.Assertions.fail("symlinks not available on CI, the symlink guard would not run: " + e);
+            }
             Assumptions.abort("symlinks not available");
             return;
         }

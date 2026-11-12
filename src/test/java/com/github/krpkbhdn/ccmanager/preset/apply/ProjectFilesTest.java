@@ -64,6 +64,9 @@ class ProjectFilesTest {
         try {
             Files.createSymbolicLink(project.resolve("CLAUDE.md"), Path.of("AGENTS.md"));
         } catch (IOException | UnsupportedOperationException e) {
+            if (System.getenv("CI") != null) {
+                org.junit.jupiter.api.Assertions.fail("symlinks not available on CI, the symlink guard would not run: " + e);
+            }
             assumeThat(false).as("symlinks cannot be created here").isTrue();
         }
 
@@ -78,6 +81,9 @@ class ProjectFilesTest {
         try {
             Files.createSymbolicLink(project.resolve("link"), outside);
         } catch (IOException | UnsupportedOperationException e) {
+            if (System.getenv("CI") != null) {
+                org.junit.jupiter.api.Assertions.fail("symlinks not available on CI, the symlink guard would not run: " + e);
+            }
             assumeThat(false).as("symlinks cannot be created here").isTrue();
         }
 

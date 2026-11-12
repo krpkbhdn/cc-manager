@@ -14,12 +14,13 @@ object NavigationPolicy {
     }
 
     /**
-     * What a page may navigate to on its own (links, redirects, window.open): like [isAllowed], but a page that is
-     * not itself a local file may not reach local files. Sub-frames also need about:srcdoc, blob: and data: documents.
+     * What a page may navigate to on its own (links, redirects, window.open): like [isAllowed], but only a local page may open a local file
+     * (navigate to it or embed it); a web page never reaches one. Sub-frames also need about:srcdoc, blob: and data: documents.
      */
     fun isAllowedFromPage(url: String, pageUrl: String, mainFrame: Boolean = true): Boolean {
         if (!isAllowed(url)) return !mainFrame && schemeOf(url.trim()) in subFrameSchemes
-        return schemeOf(url.trim()) != FILE || schemeOf(pageUrl.trim()) == FILE
+        if (schemeOf(url.trim()) != FILE) return true
+        return schemeOf(pageUrl.trim()) == FILE
     }
 
     fun require(url: String): String {

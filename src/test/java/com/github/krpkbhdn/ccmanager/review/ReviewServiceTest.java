@@ -83,6 +83,33 @@ class ReviewServiceTest {
     }
 
     @Test
+    void submitCollapsesNewlinesInTheTitleSoItCannotForgeHeadings() {
+        var review = submit("Title\n\n## Image 9");
+
+        assertThat(review.title()).doesNotContain("\n").isEqualTo("Title\n\n## Image 9".replaceAll("\\s+", " "));
+    }
+
+    @Test
+    void submitStoresAnImageLabelOnOneLine() throws Exception {
+        var file = Files.write(temp.resolve("shot.png"), png());
+
+        var review = realStoreService().submit(projectId, "s1", "t", "", List.of(new SubmittedImage(file, "a\n## Image 9")));
+
+        assertThat(service.images(review.id())).extracting(ReviewImage::label).containsExactly("a ## Image 9");
+    }
+
+    @Test
+    void captureLargerThanTheByteLimitIsRefusedBeforeAnythingIsWritten() {
+        var tooBig = new byte[1025];
+
+        assertThatThrownBy(() -> service.submitCapture(projectId, "t", "", tooBig, "l")).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("1024");
+
+        assertThat(temp.resolve("reviews").resolve(ReviewService.CAPTURE_FOLDER)).doesNotExist();
+        assertThat(service.list(projectId)).isEmpty();
+    }
+
+    @Test
     void submitRejectsWhenTheProjectAlreadyHasTheMaximumOfReviews() {
         for (int i = 0; i < MAX_REVIEWS; i++) {
             submit("r" + i);

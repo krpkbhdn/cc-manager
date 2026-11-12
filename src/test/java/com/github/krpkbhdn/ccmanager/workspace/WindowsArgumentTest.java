@@ -49,6 +49,25 @@ class WindowsArgumentTest {
     }
 
     @Test
+    void quotedShimDirectoryAllowsAmpersandButNotPercent() {
+        var shim = "C:\\npm\\claude.cmd";
+
+        WindowsArgument.requireSafeDirectoryForBatchFile(shim, java.nio.file.Path.of("C:\\R&D\\app"));
+        WindowsArgument.requireSafeDirectoryForBatchFile("C:\\bin\\claude.exe", java.nio.file.Path.of("C:\\100%\\app"));
+        assertThatThrownBy(() -> WindowsArgument.requireSafeDirectoryForBatchFile(shim, java.nio.file.Path.of("C:\\100%\\app")))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void cmdShimPathIsCheckedToButParenthesesAreAllowed() {
+        WindowsArgument.requireSafeForBatchFile(List.of("C:\\Program Files (x86)\\npm\\claude.cmd", "--", "fix this!"));
+        assertThatThrownBy(() -> WindowsArgument.requireSafeForBatchFile(List.of("C:\\a&b\\claude.cmd", "--version")))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("path");
+        assertThatThrownBy(() -> WindowsArgument.requireSafeForBatchFile(List.of("C:\\%TEMP%\\claude.bat")))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     void commandLineAtTheWindowsLimitIsRejectedWithAClearMessage() {
         WindowsArgument.requireFitsCommandLine(new String[] {"x".repeat(32_000)});
 

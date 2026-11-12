@@ -35,7 +35,8 @@ internal class TerminalPainter(val fonts: TerminalFonts, private val paddingX: I
         val scroll = session.scrollShown
         val firstLine = -ceil(scroll).toInt()
         val lastLine = session.rows - 1 - floor(scroll).toInt()
-        val rows = session.buffer.withLock { Array(lastLine - firstLine + 1) { rowOf(session, firstLine + it, cursorFilled) } }
+        val snapshots = session.buffer.withLock { Array(lastLine - firstLine + 1) { snapshotOf(session, firstLine + it) } }
+        val rows = Array(snapshots.size) { styledRow(session, firstLine + it, snapshots[it], cursorFilled) }
         canvas.save()
         canvas.clipRect(Rect.makeXYWH(0f, paddingY.toFloat(), width.toFloat(), (height - 2 * paddingY).toFloat()), ClipMode.INTERSECT)
         fun topOf(index: Int) = paddingY + ((firstLine + index + scroll) * cellHeight).roundToInt()
@@ -45,10 +46,16 @@ internal class TerminalPainter(val fonts: TerminalFonts, private val paddingX: I
         canvas.restore()
     }
 
-    private fun rowOf(session: TerminalSession, line: Int, cursorFilled: Boolean): List<Run> {
-        if (line < -session.scrollbackLines || line >= session.rows) return emptyList()
+    /** Copies a line's runs out of the buffer; the only work done while holding the buffer lock. */
+    private fun snapshotOf(session: TerminalSession, line: Int): List<Run>? {
+        if (line < -session.scrollbackLines || line >= session.rows) return null
+        return runsOf(session.buffer.getLine(line), session.theme)
+    }
+
+    private fun styledRow(session: TerminalSession, line: Int, snapshot: List<Run>?, cursorFilled: Boolean): List<Run> {
+        if (snapshot == null) return emptyList()
         val theme = session.theme
-        var runs = runsOf(session.buffer.getLine(line), theme)
+        var runs: List<Run> = snapshot
         session.selection?.columnsIn(line, session.columns)?.let { columns ->
             runs = restyled(runs, columns) { it.copy(foreground = theme.foreground, background = theme.selection) }
         }

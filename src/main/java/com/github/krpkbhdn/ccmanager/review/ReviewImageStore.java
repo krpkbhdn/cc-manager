@@ -165,7 +165,12 @@ public class ReviewImageStore {
 
     /** Drops anything appended to the image (polyglot files): only the decoded pixels are kept. */
     private void reencode(Path file, String extension, String prefix) throws IOException {
-        BufferedImage pixels = ImageIO.read(file.toFile());
+        BufferedImage pixels;
+        try {
+            pixels = ImageIO.read(file.toFile());
+        } catch (OutOfMemoryError e) {
+            throw new IllegalArgumentException(prefix + "image is too large to decode");
+        }
         if (pixels == null) {
             throw new IllegalArgumentException(prefix + "image cannot be decoded");
         }
@@ -214,11 +219,11 @@ public class ReviewImageStore {
 
     private static String labelOf(SubmittedImage image) {
         if (image.label() != null && !image.label().isBlank()) {
-            return image.label();
+            return PromptText.oneLine(image.label());
         }
         String name = image.path().getFileName().toString();
         int dot = name.lastIndexOf('.');
-        return dot > 0 ? name.substring(0, dot) : name;
+        return PromptText.oneLine(dot > 0 ? name.substring(0, dot) : name);
     }
 
     private void createSecureDirectory(Path directory) throws IOException {

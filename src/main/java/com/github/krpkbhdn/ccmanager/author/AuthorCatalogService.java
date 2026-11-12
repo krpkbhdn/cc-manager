@@ -64,7 +64,7 @@ public class AuthorCatalogService {
         for (var item : items) {
             var outcome = installItem(item);
             outcomes.add(new ItemOutcome(item.id(), outcome));
-            if (!outcome.hasFailures()) {
+            if (!outcome.hasFailures() && outcome.needsAttention().isEmpty() && outcome.signInNeeded().isEmpty()) {
                 record(item, AuthorChoice.INSTALLED);
             }
         }

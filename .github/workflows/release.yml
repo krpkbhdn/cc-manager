@@ -4,13 +4,16 @@ on:
   push:
     tags: ["v*"]
 
+permissions:
+  contents: read
+
 jobs:
   windows-msi:
     runs-on: windows-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Check tag matches build version
         shell: bash
         run: |
@@ -27,8 +30,24 @@ jobs:
         run: |
           cd build/compose/binaries/main/msi
           for f in *.msi; do sha256sum "$f" | cut -d' ' -f1 > "$f.sha256"; done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msi
+          path: build/compose/binaries/main/msi/*
+          if-no-files-found: error
+
+  publish:
+    needs: windows-msi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: msi
+          path: msi
       - name: Publish release
-        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" build/compose/binaries/main/msi/* --title "${GITHUB_REF_NAME}" --generate-notes
+          GH_REPO: ${{ github.repository }}
+        run: gh release create "${GITHUB_REF_NAME}" msi/* --title "${GITHUB_REF_NAME}" --generate-notes

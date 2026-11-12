@@ -140,7 +140,7 @@ public class GitRunner {
             return collect(process, timeout, progress, stdin, args);
         } catch (InterruptedException e) {
             if (runsHooks(args)) {
-                finishWrite(process, timeout);
+                finishWrite(process, properties.syncTimeout());
             } else {
                 ProcessTree.kill(process);
             }
@@ -166,18 +166,17 @@ public class GitRunner {
         var stdoutTruncated = CommandRunner.drain(process.getInputStream(), stdout);
         var readers = CompletableFuture.allOf(stdoutTruncated, async(() -> readLines(process.getErrorStream(), progress, stderr, CommandRunner.MAX_OUTPUT_BYTES)));
         var stdinWritten = async(() -> writeAndClose(process, stdin));
-        if (runsHooks(args)) {
-            process.waitFor();
-        } else if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+        if (!process.waitFor((runsHooks(args) ? properties.syncTimeout() : timeout).toMillis(), TimeUnit.MILLISECONDS)) {
             ProcessTree.kill(process);
-            throw new GitException(Kind.TIMEOUT, "git " + GitFailure.subcommand(args) + " timed out", "");
+            throw new GitException(Kind.TIMEOUT, "git " + GitFailure.subcommand(args) + " timed out"
+                    + (runsHooks(args) ? "; a stale .git/index.lock or an interrupted operation may remain" : ""), "");
         }
         stdinWritten.join();
         CommandRunner.awaitReaders(process, readers);
         return new Result(process.exitValue(), stdout.toString(StandardCharsets.UTF_8), stderr.toString(), stdoutTruncated.getNow(false));
     }
 
-    /** Commands that run user hooks are never killed at the timeout (index.lock, half-switched tree); network and read commands are. */
+    /** Hook-running commands get the long sync timeout (killing mid-write leaves index.lock), but a hook blocked on input must not hold the thread forever. */
     static boolean runsHooks(List<String> args) {
         return HOOK_RUNNING.contains(GitFailure.subcommand(args));
     }

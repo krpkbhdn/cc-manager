@@ -127,6 +127,21 @@ class SecretFilterTest {
         assertThat(SecretFilter.maskCommandText("a SG.abcdefghijklmnop.qrstuvwxyzABCDEFG")).isEqualTo("a [redacted]");
     }
 
+    @Test
+    void transcriptMasksLongUnbrokenLowercaseAndDigitTokens() {
+        var lowercase = "k".repeat(20) + "q".repeat(25);
+        var digits = "7".repeat(45);
+        assertThat(SecretFilter.mask("out " + lowercase + " end")).isEqualTo("out [redacted] end");
+        assertThat(SecretFilter.mask("out " + digits + " end")).isEqualTo("out [redacted] end");
+        assertThat(SecretFilter.mask("branch " + "word-".repeat(10) + "word")).doesNotContain("[redacted]");
+    }
+
+    @Test
+    void commandTextKeepsLongLowercaseTokens() {
+        var text = "git show " + "a".repeat(40);
+        assertThat(SecretFilter.maskCommandText(text)).isEqualTo(text);
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"Authorization: token abc123def", "Authorization: ApiKey abc123def", "authorization=Basic abc123def", "Authorization: abc123def"})
     void anyAuthorizationSchemeIsMasked(String header) {

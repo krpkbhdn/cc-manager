@@ -1,6 +1,7 @@
 package com.github.krpkbhdn.ccmanager.claude.launch;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -66,6 +67,15 @@ class BackgroundAgentServiceTest {
         var agents = serviceWith(installed(script(json, 0))).list(temp);
 
         assertThat(agents).containsExactly(new BackgroundAgent("a1", "build", "running", "s"));
+    }
+
+    @Test
+    void cmdShimWithMetacharacterInTheFolderIsNotRunAndGivesNoAgents() throws IOException {
+        assumeTrue(WINDOWS);
+        var json = "[{\"id\":\"a1\",\"name\":\"build\",\"state\":\"running\",\"summary\":\"s\"}]";
+        var folder = Files.createDirectory(temp.resolve("100%done"));
+
+        assertThat(serviceWith(installed(script(json, 0))).list(folder)).isEmpty();
     }
 
     @Test

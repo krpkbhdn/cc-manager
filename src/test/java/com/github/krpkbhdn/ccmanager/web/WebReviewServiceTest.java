@@ -187,6 +187,30 @@ class WebReviewServiceTest {
     }
 
     @Test
+    void concurrentAddsGetDistinctNumbers() throws Exception {
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(3);
+        try {
+            var futures = java.util.stream.IntStream.range(0, 3).mapToObj(i -> pool.submit(() -> add("c" + i).n())).toList();
+            var numbers = new java.util.ArrayList<Integer>();
+            for (var future : futures) {
+                numbers.add(future.get());
+            }
+            assertThat(numbers).containsExactlyInAnyOrder(1, 2, 3);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void saveScreenshotAfterDeleteLeavesNoFile() {
+        var item = add("a");
+        service.deleteItem(item.id());
+
+        assertThatThrownBy(() -> service.saveScreenshot(item.id(), PNG)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(temp.resolve("web-review/" + projectId + "/" + item.revisionId() + "/item-1.png")).doesNotExist();
+    }
+
+    @Test
     void saveScreenshotRejectsNonPng() {
         var item = add("a");
 

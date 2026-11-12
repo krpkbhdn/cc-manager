@@ -45,14 +45,16 @@ class NavigationPolicyTest {
     }
 
     @Test
-    fun a_local_page_may_open_local_files_and_web_pages() {
+    fun a_local_page_may_embed_local_files_and_open_web_pages_and_navigate_to_local_files() {
         assertThat(NavigationPolicy.isAllowedFromPage("file:///C:/b.html", "file:///C:/a.html")).isTrue()
+        assertThat(NavigationPolicy.isAllowedFromPage("file:///C:/b.html", "file:///C:/a.html", mainFrame = false)).isTrue()
         assertThat(NavigationPolicy.isAllowedFromPage("https://x.dev/", "file:///C:/a.html")).isTrue()
     }
 
     @Test
     fun a_web_page_may_open_web_pages() {
         assertThat(NavigationPolicy.isAllowedFromPage("https://x.dev/", WEB)).isTrue()
+        assertThat(NavigationPolicy.isAllowedFromPage("https://x.dev/", "https://y.dev/")).isTrue()
     }
 
     @Test

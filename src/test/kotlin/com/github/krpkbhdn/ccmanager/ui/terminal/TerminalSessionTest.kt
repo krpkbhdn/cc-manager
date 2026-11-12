@@ -156,7 +156,9 @@ class TerminalSessionTest {
     fun aPastedDraftIsClearedByEnter() {
         Assumptions.assumeFalse(java.awt.GraphicsEnvironment.isHeadless())
         java.awt.Toolkit.getDefaultToolkit().systemClipboard.setContents(java.awt.datatransfer.StringSelection("pasted"), null)
-        assertThat(session.paste()).isTrue()
+        session.paste()
+        val deadline = System.nanoTime() + 5_000_000_000L
+        while (!session.draftMayExist && System.nanoTime() < deadline) Thread.sleep(10)
         assertThat(session.draftMayExist).isTrue()
         session.onKey(com.jediterm.core.input.KeyInputEvent(com.jediterm.core.input.KeyInputEvent.Type.PRESSED, java.awt.event.KeyEvent.VK_ENTER, '\r', 0))
         assertThat(session.draftMayExist).isFalse()

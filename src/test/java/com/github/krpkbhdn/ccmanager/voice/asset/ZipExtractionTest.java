@@ -42,17 +42,38 @@ class ZipExtractionTest {
     }
 
     @Test
+    void tooManyEntriesAreRejectedAndTheTargetStaysUntouched() throws IOException {
+        var target = dir.resolve("runtime");
+
+        assertThatThrownBy(() -> ZipExtraction.extract(zip("a.txt", "b.txt"), target, 1, 1000)).isInstanceOf(IOException.class).hasMessageContaining("entries");
+
+        assertThat(target).doesNotExist();
+        assertThat(dir.resolve("runtime.part")).doesNotExist();
+    }
+
+    @Test
+    void tooManyUnpackedBytesAreRejected() throws IOException {
+        var target = dir.resolve("runtime");
+
+        assertThatThrownBy(() -> ZipExtraction.extract(zip("a.txt", "b.txt"), target, 10, 1)).isInstanceOf(IOException.class).hasMessageContaining("larger");
+
+        assertThat(target).doesNotExist();
+    }
+
+    @Test
     void moveFailureIsReportedAfterRetries() {
         assertThatThrownBy(() -> ZipExtraction.moveIntoPlace(dir.resolve("missing"), dir.resolve("target"), 1))
                 .isInstanceOf(IOException.class).hasMessageContaining("5 attempts");
     }
 
-    private Path zip(String entryName) throws IOException {
+    private Path zip(String... entryNames) throws IOException {
         var zip = Files.createTempFile(dir, "a", ".zip");
         try (var out = new ZipOutputStream(Files.newOutputStream(zip))) {
-            out.putNextEntry(new ZipEntry(entryName));
-            out.write('x');
-            out.closeEntry();
+            for (var entryName : entryNames) {
+                out.putNextEntry(new ZipEntry(entryName));
+                out.write('x');
+                out.closeEntry();
+            }
         }
         return zip;
     }

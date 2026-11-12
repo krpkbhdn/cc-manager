@@ -65,7 +65,13 @@ class GitDiffTool extends GitTool {
                 text.append("--- ").append(changed).append(" (content omitted: looks like a secret file)\n");
                 continue;
             }
-            Stream.of(true, false).map(staged -> status.diff(repo, changed, staged)).forEach(diff -> append(text, diff));
+            var diffs = Stream.of(true, false).map(staged -> status.diff(repo, changed, staged)).toList();
+            var renamedFromSecret = diffs.stream().map(GitDiff.FileDiff::oldPath).anyMatch(old -> old != null && looksSecret(old));
+            if (renamedFromSecret) {
+                text.append("--- ").append(changed).append(" (content omitted: renamed from a secret file)\n");
+                continue;
+            }
+            diffs.forEach(diff -> append(text, diff));
             if (text.length() > MAX_CHARS) {
                 break;
             }

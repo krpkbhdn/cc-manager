@@ -87,7 +87,7 @@ public class GitStashService {
 
     /** Tracked changes of the entry (addressed by hash, positions shift), plus its untracked files (stored as the entry's third parent) as UNTRACKED. */
     public GitDiff show(Path repo, String hash) {
-        var ref = hash;
+        var ref = GitRevisions.requireNotOption(hash);
         var files = new ArrayList<>(parseDiff(git.out(repo, "diff", "--no-color", "--no-ext-diff", "-M", GitRunner.SRC_PREFIX, GitRunner.DST_PREFIX, ref + "^1", ref)));
         if (git.tryRun(repo, "rev-parse", "--verify", "--quiet", ref + "^3").ok()) {
             parseDiff(git.out(repo, "show", "--format=", "--no-color", "--no-ext-diff", "--root", GitRunner.SRC_PREFIX, GitRunner.DST_PREFIX, ref + "^3")).stream()

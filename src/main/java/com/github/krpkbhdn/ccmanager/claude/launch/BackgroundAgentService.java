@@ -39,7 +39,11 @@ public class BackgroundAgentService {
     }
 
     private String run(Path executable, Path directory) throws IOException {
-        var result = CommandRunner.run(List.of(executable.toString(), "agents", "--json", "--cwd", WindowsArgument.directoryArgument(executable.toString(), directory)), null, TIMEOUT);
+        var launcher = executable.toString();
+        WindowsArgument.requireSafeForBatchFile(List.of(launcher, "agents", "--json", "--cwd"));
+        WindowsArgument.requireSafeDirectoryForBatchFile(launcher, directory);
+        var command = List.of(launcher, "agents", "--json", "--cwd", WindowsArgument.directoryArgument(launcher, directory));
+        var result = CommandRunner.run(command, null, TIMEOUT);
         if (result.timedOut()) {
             log.debug("claude agents timed out");
             return "";

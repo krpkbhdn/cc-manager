@@ -4,9 +4,11 @@ import com.github.krpkbhdn.ccmanager.workspace.CommandRunner;
 import com.github.krpkbhdn.ccmanager.workspace.ProcessTree;
 import com.pty4j.PtyProcess;
 import com.pty4j.PtyProcessBuilder;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -24,6 +26,9 @@ final class PtyCommandRunner {
 
     private static final int COLUMNS = 1000;
     private static final int ROWS = 40;
+    private static final int READ_BUFFER_BYTES = 4096;
+    /** Output past this is drained and dropped; the whole text is cleaned on every chunk, so the cap also bounds that work. */
+    static final int MAX_RAW_CHARS = 1024 * 1024;
     private static final Duration READER_GRACE = Duration.ofSeconds(2);
     /** Moving the cursor to another line is what separates the lines of a terminal screen once the sequences are gone. */
     private static final Pattern CURSOR_TO_NEW_LINE = Pattern.compile("\\u001B\\[[0-9;]*[HfBEdJ]");
@@ -66,14 +71,26 @@ final class PtyCommandRunner {
         return TERMINAL_CONTROL.matcher(lines).replaceAll("").replaceAll("\n{2,}", "\n");
     }
 
-    private static void read(InputStream stream, StringBuilder output, Consumer<String> onOutput) {
-        var buffer = new byte[4096];
-        var raw = new ByteArrayOutputStream();
+    static void read(InputStream stream, StringBuilder output, Consumer<String> onOutput) {
+        var decoder = StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPLACE).onUnmappableCharacter(CodingErrorAction.REPLACE);
+        var bytes = ByteBuffer.allocate(READ_BUFFER_BYTES);
+        var chars = CharBuffer.allocate(READ_BUFFER_BYTES);
+        var raw = new StringBuilder();
         try (stream) {
             int count;
-            while ((count = stream.read(buffer)) > 0) {
-                raw.write(buffer, 0, count);
-                var text = clean(raw.toString(StandardCharsets.UTF_8));
+            while ((count = stream.read(bytes.array(), bytes.position(), bytes.remaining())) > 0) {
+                bytes.position(bytes.position() + count).flip();
+                decoder.decode(bytes, chars, false);
+                bytes.compact();
+                chars.flip();
+                int appended = Math.min(chars.remaining(), Math.max(0, MAX_RAW_CHARS - raw.length()));
+                raw.append(chars, 0, appended);
+                chars.clear();
+                if (appended == 0) {
+                    continue;
+                }
+                var text = clean(raw.toString());
                 synchronized (output) {
                     output.setLength(0);
                     output.append(text);

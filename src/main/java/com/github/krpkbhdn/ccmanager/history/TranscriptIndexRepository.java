@@ -20,7 +20,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class TranscriptIndexRepository {
 
     /** Indexing state of one transcript file; {@code sensitiveToolIds} is space separated. */
-    public record IndexedFile(long id, long indexedBytes, String sensitiveToolIds) {}
+    public record IndexedFile(long id, long indexedBytes, String sensitiveToolIds, long modifiedAt) {}
 
     public record EntryFile(long id, long entryCount) {}
 
@@ -54,9 +54,9 @@ public class TranscriptIndexRepository {
     }
 
     public Optional<IndexedFile> findFile(String path) {
-        return jdbc.sql("SELECT id, indexed_bytes, sensitive_tool_ids FROM transcript_file WHERE path = ?")
+        return jdbc.sql("SELECT id, indexed_bytes, sensitive_tool_ids, modified_at FROM transcript_file WHERE path = ?")
                 .param(path)
-                .query((rs, row) -> new IndexedFile(rs.getLong(1), rs.getLong(2), rs.getString(3)))
+                .query((rs, row) -> new IndexedFile(rs.getLong(1), rs.getLong(2), rs.getString(3), rs.getLong(4)))
                 .optional();
     }
 

@@ -109,18 +109,22 @@ public final class SecretFilter {
         if (strict) {
             masked = HEX_BLOB.matcher(masked).replaceAll(REDACTED);
         }
-        return LONG_BLOB.matcher(masked).replaceAll(blob -> looksLikeSecret(blob.group()) ? REDACTED : blob.group());
+        return LONG_BLOB.matcher(masked).replaceAll(blob -> looksLikeSecret(blob.group(), strict) ?REDACTED : blob.group());
     }
 
     public static boolean touchesSensitiveFile(String toolInputText) {
         return SENSITIVE_FILE.matcher(toolInputText).find();
     }
 
-    /** A random blob mixes digits with both letter cases; a path or identifier of plain words does not. */
-    private static boolean looksLikeSecret(String blob) {
+    /**
+     * A random blob mixes digits with both letter cases; in transcripts (strict) one unbroken token such as all lowercase
+     * or all digits counts too, while command text keeps its git SHAs. A path or a slug of separated words is let through.
+     */
+    private static boolean looksLikeSecret(String blob, boolean strict) {
         var mixed = blob.chars().anyMatch(Character::isDigit) && blob.chars().anyMatch(Character::isLowerCase)
                 && blob.chars().anyMatch(Character::isUpperCase);
-        return mixed && !isPath(blob);
+        var unbroken = strict && blob.chars().noneMatch(c -> c == '/' || c == '-' || c == '_');
+        return (mixed || unbroken) && !isPath(blob);
     }
 
     private static boolean isPath(String blob) {

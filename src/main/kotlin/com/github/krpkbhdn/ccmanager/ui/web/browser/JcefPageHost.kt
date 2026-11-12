@@ -44,6 +44,7 @@ import java.time.Duration
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * A windowless Chromium page behind [WebPageHost]. CEF calls the handlers on its own threads and they only write
@@ -79,7 +80,7 @@ class JcefPageHost(app: CefApp, url: String = "about:blank", private val screens
     private val loadLock = Any()
     private var created = false
     private var pendingUrl: String? = null
-    private val userNavigation = AtomicBoolean()
+    private val userNavigationDeadline = AtomicLong(NO_DEADLINE)
 
     private val eventSource = Canvas()
     private val client: CefClient = app.createClient()
@@ -102,15 +103,23 @@ class JcefPageHost(app: CefApp, url: String = "about:blank", private val screens
     /** A load before the native browser exists is silently dropped by CEF, so it waits for onAfterCreated. */
     override fun load(url: String) {
         val allowed = NavigationPolicy.require(url)
-        userNavigation.set(true)
+        markUserNavigation()
         synchronized(loadLock) {
             if (created) browser.loadURL(allowed) else pendingUrl = allowed
         }
     }
 
-    override fun back() = browser.also { userNavigation.set(true) }.goBack()
-    override fun forward() = browser.also { userNavigation.set(true) }.goForward()
-    override fun reload() = browser.also { userNavigation.set(true) }.reload()
+    override fun back() = browser.also { markUserNavigation() }.goBack()
+    override fun forward() = browser.also { markUserNavigation() }.goForward()
+    override fun reload() = browser.also { markUserNavigation() }.reload()
+    /** A same-document history step may fire no load event, so the mark expires on its own. */
+    private fun markUserNavigation() = userNavigationDeadline.set(System.nanoTime() + USER_NAVIGATION_WINDOW_NANOS)
+
+    private fun consumeUserNavigation(): Boolean {
+        val deadline = userNavigationDeadline.getAndSet(NO_DEADLINE)
+        return deadline != NO_DEADLINE && System.nanoTime() - deadline < 0
+    }
+
     override fun stop() = browser.stopLoad()
     override fun focus(focused: Boolean) = browser.setFocus(focused)
 
@@ -216,10 +225,13 @@ class JcefPageHost(app: CefApp, url: String = "about:blank", private val screens
             pageState.update { it.copy(loading = isLoading, canGoBack = canGoBack, canGoForward = canGoForward) }
 
         override fun onLoadEnd(b: CefBrowser, f: CefFrame, httpStatusCode: Int) {
-            if (f.isMain) f.executeJavaScript(INSPECTOR_BOOTSTRAP, f.url, 0)
+            if (!f.isMain) return
+            userNavigationDeadline.set(NO_DEADLINE)
+            f.executeJavaScript(INSPECTOR_BOOTSTRAP, f.url, 0)
         }
 
         override fun onLoadError(b: CefBrowser, f: CefFrame, errorCode: CefLoadHandler.ErrorCode, errorText: String, failedUrl: String) {
+            if (f.isMain) userNavigationDeadline.set(NO_DEADLINE)
             if (f.isMain && errorCode != CefLoadHandler.ErrorCode.ERR_ABORTED) emit(PageEvent.LoadFailed(failedUrl, errorText))
         }
     }
@@ -228,7 +240,7 @@ class JcefPageHost(app: CefApp, url: String = "about:blank", private val screens
     private fun navigationGuard() = object : CefRequestHandlerAdapter() {
         override fun onBeforeBrowse(b: CefBrowser, f: CefFrame, request: CefRequest, userGesture: Boolean, isRedirect: Boolean): Boolean {
             val url = request.url
-            val askedByUser = f.isMain && !isRedirect && userNavigation.getAndSet(false)
+            val askedByUser = f.isMain && !isRedirect && consumeUserNavigation()
             val allowed = if (askedByUser) NavigationPolicy.isAllowed(url) else NavigationPolicy.isAllowedFromPage(url, pageState.value.url, f.isMain)
             if (!allowed) log.warn("Blocked navigation to a {} URL", NavigationPolicy.schemeOf(url))
             return !allowed
@@ -290,6 +302,8 @@ class JcefPageHost(app: CefApp, url: String = "about:blank", private val screens
 
     companion object {
         private val log = LoggerFactory.getLogger(JcefPageHost::class.java)
+        private const val NO_DEADLINE = 0L
+        private val USER_NAVIGATION_WINDOW_NANOS = java.util.concurrent.TimeUnit.SECONDS.toNanos(5)
         private const val BLANK = "about:blank"
         private const val HIDDEN_FRAME_RATE = 1
         private const val VISIBLE_FRAME_RATE = 60

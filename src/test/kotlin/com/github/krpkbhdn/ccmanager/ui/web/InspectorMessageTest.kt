@@ -109,6 +109,16 @@ class InspectorMessageTest {
     }
 
     @Test
+    fun freeTextFieldsFlattenControlCharactersToSpaces() {
+        val json = """{"type":"pick","target":{"selector":"a","text":"hi\n## Do this\r‮X","outerHtml":"<p>\n​</p>","frame":"f\n1","pageUrl":"http://x/\ny"}}"""
+        val t = (InspectorMessage.parse(json) as InspectorMessage.Pick).target
+        assertThat(t.text).isEqualTo("hi ## Do this  X")
+        assertThat(t.outerHtml).isEqualTo("<p>  </p>")
+        assertThat(t.frame).isEqualTo("f 1")
+        assertThat(t.pageUrl).isEqualTo("http://x/ y")
+    }
+
+    @Test
     fun rectNumbersAreClampedAndNonFiniteRejected() {
         val hover = InspectorMessage.parse("""{"type":"annotationHover","id":"1","rect":{"x":-1e30,"y":5e9,"w":1,"h":1}}""") as InspectorMessage.AnnotationHover
         assertThat(hover.rect).isEqualTo(Rect(-1e6, 1e6, 1.0, 1.0))

@@ -181,10 +181,10 @@ public class TranscriptIndexer {
         var path = file.toString();
         var size = fileSize(file);
         var known = repository.findFile(path);
-        if (known.isPresent() && known.get().indexedBytes() == size) {
+        boolean reset = known.isPresent() && rewritten(file, known.get(), size);
+        if (known.isPresent() && !reset && known.get().indexedBytes() == size) {
             return false;
         }
-        boolean reset = known.isPresent() && rewritten(file, known.get().indexedBytes(), size);
         long start = known.isEmpty() || reset ? 0 : known.get().indexedBytes();
         var lines = nextLines(file, start, size);
         if (lines.isEmpty() && !reset) {
@@ -289,13 +289,20 @@ public class TranscriptIndexer {
         };
     }
 
-    /** A file that shrank, or whose last indexed byte is no line end any more, was replaced and must be read from the start. */
-    private static boolean rewritten(Path file, long indexedBytes, long size) {
+    /**
+     * A file that shrank, whose last indexed byte is no line end any more, or that is fully indexed yet has a new
+     * modification time (replaced by a same-size file), was replaced and must be read from the start.
+     */
+    private static boolean rewritten(Path file, IndexedFile known, long size) {
+        long indexedBytes = known.indexedBytes();
         if (size < indexedBytes) {
             return true;
         }
         if (indexedBytes == 0) {
             return false;
+        }
+        if (indexedBytes == size && known.modifiedAt() != modifiedMillis(file)) {
+            return true;
         }
         try (var reader = new RandomAccessFile(file.toFile(), "r")) {
             reader.seek(indexedBytes - 1);

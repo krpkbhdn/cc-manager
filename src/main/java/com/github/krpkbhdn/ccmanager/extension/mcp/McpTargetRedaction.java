@@ -20,7 +20,7 @@ public final class McpTargetRedaction {
     public static String redact(String target) {
         var text = target == null ? "" : target.strip();
         var first = text.split("\\s+", 2)[0];
-        return URL.matcher(first).matches() ? redactUrl(first) : first;
+        return URL.matcher(first).matches() ? redactUrl(first) : first.substring(Math.max(first.lastIndexOf('/'), first.lastIndexOf('\\')) + 1);
     }
 
     private static String redactUrl(String url) {

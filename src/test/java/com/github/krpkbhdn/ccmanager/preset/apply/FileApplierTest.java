@@ -116,6 +116,9 @@ class FileApplierTest {
         try {
             Files.createSymbolicLink(dir.resolve("link"), outside);
         } catch (Exception e) {
+            if (System.getenv("CI") != null) {
+                org.junit.jupiter.api.Assertions.fail("symlinks not available on CI, the symlink guard would not run: " + e);
+            }
             Assumptions.abort("symlinks not available");
         }
 

@@ -257,6 +257,22 @@ class TranscriptIndexerTest {
     }
 
     @Test
+    void fileReplacedByOneOfTheSameSizeIsReadAgain() throws Exception {
+        var file = fixture.transcript("p", "s1");
+        fixture.write(file, userLine("u1", "/w/app", "2026-01-01T10:00:00Z", "kiwi"));
+        var indexer = fixture.indexer(1000);
+        indexer.scan();
+
+        fixture.write(file, userLine("u1", "/w/app", "2026-01-01T10:00:00Z", "plum"));
+        java.nio.file.Files.setLastModifiedTime(file, java.nio.file.attribute.FileTime.fromMillis(
+                java.nio.file.Files.getLastModifiedTime(file).toMillis() + 5_000));
+        indexer.scan();
+
+        assertThat(hits("kiwi")).isZero();
+        assertThat(hits("plum")).isEqualTo(1);
+    }
+
+    @Test
     void entriesOfADeletedTranscriptAreForgotten() throws Exception {
         var file = fixture.transcript("p", "s1");
         fixture.write(file, userLine("u1", "/w/app", "2026-01-01T10:00:00Z", "kiwi"));

@@ -7,6 +7,9 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -20,6 +23,7 @@ public class VoiceAssetService {
     private static final String VOICE_DIRECTORY = "voice";
     private static final String DOWNLOAD_PREFIX = "download-";
     private static final String PARTIAL_SUFFIX = ".part";
+    private static final int HASH_BUFFER_BYTES = 1 << 20;
 
     private final Path root;
     private final VerifiedDownload downloads;
@@ -46,7 +50,10 @@ public class VoiceAssetService {
         var target = root.resolve(asset.relativePath());
         synchronized (locks.computeIfAbsent(asset.relativePath(), key -> new Object())) {
             if (Files.exists(target)) {
-                return target;
+                if (intact(asset, target)) {
+                    return target;
+                }
+                ZipExtraction.deleteRecursively(target);
             }
             beginInstall();
             try {
@@ -54,6 +61,26 @@ public class VoiceAssetService {
             } finally {
                 endInstall();
             }
+        }
+    }
+
+    /** Only a plain file can be re-hashed; an unpacked archive no longer matches the hash of its zip and was verified before extraction. */
+    private static boolean intact(VoiceAsset asset, Path target) throws IOException {
+        if (asset.archive()) {
+            return true;
+        }
+        if (!Files.isRegularFile(target) || Files.size(target) != asset.sizeBytes()) {
+            return false;
+        }
+        try (var in = Files.newInputStream(target)) {
+            var digest = MessageDigest.getInstance("SHA-256");
+            var buffer = new byte[HASH_BUFFER_BYTES];
+            for (int read; (read = in.read(buffer)) != -1; ) {
+                digest.update(buffer, 0, read);
+            }
+            return HexFormat.of().formatHex(digest.digest()).equalsIgnoreCase(asset.sha256());
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
         }
     }
 

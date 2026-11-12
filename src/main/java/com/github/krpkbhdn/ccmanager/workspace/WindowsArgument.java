@@ -31,13 +31,25 @@ public final class WindowsArgument {
         return name.endsWith(".cmd") || name.endsWith(".bat");
     }
 
-    /** cmd.exe runs a .cmd or .bat shim and ignores the quoting below, so its metacharacters would split the command line. */
+    /**
+     * cmd.exe runs a .cmd or .bat shim and ignores the quoting below, so its metacharacters would split the command line,
+     * in the shim path as well as in the arguments. Parentheses and "!" are not listed: they are inert outside blocks and
+     * delayed expansion, and would reject "Program Files (x86)" and ordinary prompts.
+     */
     public static void requireSafeForBatchFile(List<String> command) {
         if (!isBatchFile(command.getFirst())) {
             return;
         }
-        if (command.stream().skip(1).anyMatch(argument -> argument.chars().anyMatch(c -> CMD_METACHARACTERS.indexOf(c) >= 0))) {
-            throw new IllegalStateException("Claude is installed as a .cmd shim, which cannot take the characters & | < > ^ % or line breaks. "
+        if (command.stream().anyMatch(argument -> argument.chars().anyMatch(c -> CMD_METACHARACTERS.indexOf(c) >= 0))) {
+            throw new IllegalStateException("Claude is installed as a .cmd shim, which cannot take the characters & | < > ^ % or line breaks "
+                    + "in its path or arguments. Install the native claude.exe (irm https://claude.ai/install.ps1 | iex) to run this.");
+        }
+    }
+
+    /** A directory passed through {@link #directoryArgument} is quoted for a shim, so only "%" and line breaks can still split it. */
+    public static void requireSafeDirectoryForBatchFile(String launcher, Path directory) {
+        if (isBatchFile(launcher) && directory.toString().chars().anyMatch(c -> c == '%' || c == '\r' || c == '\n')) {
+            throw new IllegalStateException("Claude is installed as a .cmd shim, which cannot take the characters % or line breaks in a folder path. "
                     + "Install the native claude.exe (irm https://claude.ai/install.ps1 | iex) to run this.");
         }
     }

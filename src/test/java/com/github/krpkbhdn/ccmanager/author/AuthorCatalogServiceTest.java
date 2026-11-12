@@ -96,6 +96,24 @@ class AuthorCatalogServiceTest {
     }
 
     @Test
+    void itemNeedingAttentionIsNotRecorded() {
+        when(extensions.install(any(), any(), any())).thenReturn(new InstallOutcome(List.of(), List.of(), List.of("plugin x: confirm"), List.of(), List.of()));
+
+        service.install(List.of("plugin.ponytail"));
+
+        verify(decisions, never()).record(eq("plugin.ponytail"), any(), anyInt());
+    }
+
+    @Test
+    void itemNeedingSignInIsNotRecorded() {
+        when(extensions.install(any(), any(), any())).thenReturn(new InstallOutcome(List.of(), List.of(), List.of(), List.of(), List.of("server x")));
+
+        service.install(List.of("plugin.ponytail"));
+
+        verify(decisions, never()).record(eq("plugin.ponytail"), any(), anyInt());
+    }
+
+    @Test
     void teamIsInstalledByTheTeamsInstallerAndRecordedAtItsVersion() {
         when(teams.install(anyList())).thenReturn(installed("team Dev team"));
 

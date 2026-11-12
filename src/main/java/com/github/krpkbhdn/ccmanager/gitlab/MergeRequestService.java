@@ -41,7 +41,7 @@ public class MergeRequestService {
             }
             var merge = chosen.get();
             if (MergeRequestJson.isOpened(merge) && !MergeRequestJson.hasPipeline(merge)) {
-                var view = glab.run(directory, "mr", "view", merge.path("iid").asString(), "--output=json", "-R", repository);
+                var view = glab.run(directory, "mr", "view", Integer.toString(merge.path("iid").asInt()), "--output=json", "-R", repository);
                 if (!view.succeeded()) {
                     return PullRequestLookup.failure();
                 }

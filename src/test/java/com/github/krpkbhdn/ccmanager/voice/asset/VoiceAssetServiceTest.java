@@ -106,6 +106,20 @@ class VoiceAssetServiceTest {
     }
 
     @Test
+    void corruptedExistingFileIsDownloadedAgain() throws Exception {
+        var asset = asset("/model", MODEL, "models/m.bin", false);
+        var path = service.install(asset, progress -> { });
+        var corrupted = MODEL.clone();
+        corrupted[0] ^= 1;
+        Files.write(path, corrupted);
+
+        service.install(asset, progress -> { });
+
+        assertThat(path).hasBinaryContent(MODEL);
+        assertThat(requests).hasValue(2);
+    }
+
+    @Test
     void parallelInstallsOfTheSameAssetDownloadItOnce() throws Exception {
         var asset = asset("/runtime.zip", RUNTIME_ZIP, "runtime/cpu", true);
         var pool = java.util.concurrent.Executors.newFixedThreadPool(4);

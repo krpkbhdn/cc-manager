@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.locks.ReentrantLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -33,6 +34,7 @@ public class WebReviewService {
     private final WebScreenshotStore screenshots;
     private final WebFeedbackWriter feedbackWriter;
     private final ChangeListeners listeners = new ChangeListeners("Web review");
+    private final ReentrantLock itemLock = new ReentrantLock();
 
     public WebReviewService(JdbcClient jdbc, TransactionTemplate transaction, WebReviewProperties properties, WebScreenshotStore screenshots,
                             WebFeedbackWriter feedbackWriter) {
@@ -105,12 +107,18 @@ public class WebReviewService {
             WebViewport viewport) {
         requireContent(anchor, comment, changes);
         var pageKey = PageKey.of(url);
-        var item = transaction.execute(status -> {
-            var revision = repository.pendingOrNewRevision(projectId);
-            requireRoom(revision.id());
-            var page = repository.upsertPage(projectId, pageKey, url.strip(), title == null ? "" : title);
-            return repository.insertItem(projectId, revision.id(), page.id(), anchor, comment, changes, viewport);
-        });
+        WebItem item;
+        itemLock.lock();
+        try {
+            item = transaction.execute(status -> {
+                var revision = repository.pendingOrNewRevision(projectId);
+                requireRoom(revision.id());
+                var page = repository.upsertPage(projectId, pageKey, url.strip(), title == null ? "" : title);
+                return repository.insertItem(projectId, revision.id(), page.id(), anchor, comment, changes, viewport);
+            });
+        } finally {
+            itemLock.unlock();
+        }
         listeners.fire();
         return item;
     }
@@ -137,38 +145,60 @@ public class WebReviewService {
         if (status != WebItemStatus.OPEN && status != WebItemStatus.DISMISSED) {
             throw new IllegalStateException("An item becomes " + status + " only by sending or approving its revision.");
         }
-        var move = transaction.execute(s -> {
-            var ref = repository.itemRef(itemId).orElseThrow(() -> new IllegalArgumentException("Item not found: " + itemId));
-            if (ref.status() == status) {
-                return Optional.<ScreenshotMove>empty();
-            }
-            var revisionId = ref.revisionId();
-            Optional<ScreenshotMove> moved = Optional.empty();
-            if (status == WebItemStatus.OPEN && !repository.isPending(revisionId)) {
-                revisionId = repository.pendingOrNewRevision(ref.projectId()).id();
-                requireRoom(revisionId);
-                moved = Optional.of(new ScreenshotMove(ref, revisionId));
-            }
-            repository.moveAndSetStatus(itemId, status, revisionId);
-            return moved;
-        });
-        move.ifPresent(m -> bestEffort(() -> screenshots.move(m.ref().projectId(), m.ref().revisionId(), m.toRevisionId(), m.ref().n())));
+        itemLock.lock();
+        try {
+            var move = transaction.execute(s -> {
+                var ref = repository.itemRef(itemId).orElseThrow(() -> new IllegalArgumentException("Item not found: " + itemId));
+                if (ref.status() == status) {
+                    return Optional.<ScreenshotMove>empty();
+                }
+                var revisionId = ref.revisionId();
+                Optional<ScreenshotMove> moved = Optional.empty();
+                if (status == WebItemStatus.OPEN && !repository.isPending(revisionId)) {
+                    revisionId = repository.pendingOrNewRevision(ref.projectId()).id();
+                    requireRoom(revisionId);
+                    moved = Optional.of(new ScreenshotMove(ref, revisionId));
+                }
+                repository.moveAndSetStatus(itemId, status, revisionId);
+                return moved;
+            });
+            move.ifPresent(m -> bestEffort(() -> screenshots.move(m.ref().projectId(), m.ref().revisionId(), m.toRevisionId(), m.ref().n())));
+        } finally {
+            itemLock.unlock();
+        }
         listeners.fire();
     }
 
     public void deleteItem(long itemId) {
-        var ref = repository.itemRef(itemId);
-        if (ref.isPresent() && Boolean.TRUE.equals(transaction.execute(status -> repository.deleteItem(itemId)))) {
-            bestEffort(() -> screenshots.delete(ref.get().projectId(), ref.get().revisionId(), ref.get().n()));
+        var deleted = false;
+        itemLock.lock();
+        try {
+            var ref = repository.itemRef(itemId);
+            if (ref.isPresent() && Boolean.TRUE.equals(transaction.execute(status -> repository.deleteItem(itemId)))) {
+                bestEffort(() -> screenshots.delete(ref.get().projectId(), ref.get().revisionId(), ref.get().n()));
+                deleted = true;
+            }
+        } finally {
+            itemLock.unlock();
+        }
+        if (deleted) {
             listeners.fire();
         }
     }
 
-    /** @throws IllegalArgumentException when the bytes are not a PNG or too large, or the item is gone */
+    /**
+     * Held under the item lock so a concurrent delete cannot leave an orphan file or a stale image under a reused number.
+     * @throws IllegalArgumentException when the bytes are not a PNG or too large, or the item is gone
+     */
     public void saveScreenshot(long itemId, byte[] png) {
-        var ref = repository.itemRef(itemId).orElseThrow(() -> new IllegalArgumentException("Item not found: " + itemId));
-        var file = screenshots.save(ref.projectId(), ref.revisionId(), ref.n(), png);
-        repository.setScreenshot(itemId, file);
+        itemLock.lock();
+        try {
+            var ref = repository.itemRef(itemId).orElseThrow(() -> new IllegalArgumentException("Item not found: " + itemId));
+            var file = screenshots.save(ref.projectId(), ref.revisionId(), ref.n(), png);
+            repository.setScreenshot(itemId, file);
+        } finally {
+            itemLock.unlock();
+        }
         listeners.fire();
     }
 

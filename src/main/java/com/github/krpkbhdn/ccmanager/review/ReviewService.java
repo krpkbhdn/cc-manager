@@ -166,6 +166,9 @@ public class ReviewService {
     }
 
     private <T> T withTempCapture(byte[] image, Function<Path, T> action) {
+        if (image.length > properties.maxImageBytes()) {
+            throw new IllegalArgumentException("The screenshot is larger than " + properties.maxImageBytes() + " bytes.");
+        }
         Path file = null;
         try {
             var captures = Files.createDirectories(root.resolve(CAPTURE_FOLDER));
@@ -217,7 +220,8 @@ public class ReviewService {
     }
 
     private Review submit(long projectId, String ccmSessionId, String title, String note, List<SubmittedImage> images, String tooManyMessage) {
-        if (title == null || title.isBlank()) {
+        var oneLineTitle = title == null ? "" : PromptText.oneLine(title);
+        if (oneLineTitle.isEmpty()) {
             throw new IllegalArgumentException("The review needs a title.");
         }
         var id = transaction.execute(status -> {
@@ -225,7 +229,7 @@ public class ReviewService {
                 throw new IllegalArgumentException(tooManyMessage);
             }
             return jdbc.sql("INSERT INTO review (project_id, ccm_session_id, title, note) VALUES (?, ?, ?, ?) RETURNING id")
-                    .param(projectId).param(ccmSessionId).param(title.strip()).param(note == null ? "" : note).query(Long.class).single();
+                    .param(projectId).param(ccmSessionId).param(oneLineTitle).param(note == null ? "" : note).query(Long.class).single();
         });
         try {
             insertImages(id, imageStore.store(directoryOf(id), images));

@@ -64,7 +64,8 @@ class ProposalParserTest {
         assertThat(tool.toolName()).isEqualTo("Bash");
         assertThat(tool.toolInput().path("command").asString()).isEqualTo("npm test");
         assertThat(tool.suggestions()).extracting(PermissionProposal.Suggestion::description).containsExactly(
-                "Allow edits for this session", "Always allow `Bash(npm test:*)`", "Allow access to C:\\work, D:\\data");
+                "Allow edits for this session (this session only)", "Always allow `Bash(npm test:*)` (this project, only you)",
+                "Allow access to C:\\work, D:\\data (this session only)");
         assertThat(tool.suggestions().get(0).raw().path("mode").asString()).isEqualTo("acceptEdits");
     }
 
