@@ -53,3 +53,6 @@ jscpd-report/
 *.jks
 *.p12
 local.properties
+
+.playwright-mcp/
+ccm-shots/

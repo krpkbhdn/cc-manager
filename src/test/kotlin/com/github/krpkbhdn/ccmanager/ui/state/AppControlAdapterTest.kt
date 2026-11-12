@@ -127,4 +127,16 @@ class AppControlAdapterTest {
         assertThat(state.route).isEqualTo(Route.Project(id))
         state.dispose()
     }
+
+    @Test
+    fun `openProject web selects the web tab`() {
+        state.start()
+        com.github.krpkbhdn.ccmanager.ui.await { state.projects.all.isNotEmpty() }
+        val id = state.projects.all.first { !it.group }.id
+
+        adapter.openProject(id, "web")
+
+        assertThat(state.viewOf(id).selected).isEqualTo(ProjectTab.Web)
+        state.dispose()
+    }
 }

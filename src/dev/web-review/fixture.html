@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CCM review fixture</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding-top: 56px; font: 14px/1.4 system-ui, sans-serif; color: #222; background: #f6f7f9; }
+  header.top { position: fixed; top: 0; left: 0; right: 0; height: 56px; display: flex; align-items: center; gap: 12px;
+    padding: 0 16px; background: #1f2937; color: #fff; z-index: 100; }
+  header.top button { padding: 6px 12px; }
+  main { display: grid; grid-template-columns: 220px 1fr; gap: 16px; padding: 16px; }
+  aside.side { border: 2px solid #94a3b8; padding: 12px; margin: 8px; background: #fff; }
+  .content { display: flex; flex-direction: column; gap: 16px; }
+  #hero { margin: 12px; padding: 24px; border: 3px solid #2563eb; background: #dbeafe; }
+  .row { display: flex; gap: 12px; }
+  .card { flex: 1; margin: 6px; padding: 10px; border: 1px solid #cbd5e1; background: #fff; }
+  ul.items { list-style: none; margin: 0; padding: 0; }
+  ul.items li { padding: 6px 10px; border-bottom: 1px solid #e2e8f0; }
+  .scroller { height: 120px; overflow: auto; border: 1px solid #94a3b8; background: #fff; }
+  .scroller p { margin: 0; padding: 8px; }
+  .tilt { width: 180px; padding: 12px; background: #fde68a; transform: rotate(3deg); margin: 20px; }
+  iframe { width: 100%; height: 90px; border: 1px solid #94a3b8; background: #fff; }
+  .filler { height: 600px; background: linear-gradient(#f6f7f9, #e2e8f0); }
+</style>
+</head>
+<body>
+<header class="top">
+  <strong>Fixture</strong>
+  <button id="nav-btn">Go to route 2</button>
+  <button id="page-click-btn">Page click handler</button>
+  <span id="route">route 1</span>
+</header>
+<main>
+  <aside class="side"><nav aria-label="Primary"><a href="#a">Alpha</a> <a href="#b">Beta</a></nav></aside>
+  <div class="content" id="app"></div>
+</main>
+<script>
+  window.__pageClicks = 0;
+  document.addEventListener('click', function (e) {
+    if (e.target.closest && e.target.closest('#page-click-btn')) window.__pageClicks++;
+  });
+
+  class CcmCard extends HTMLElement {
+    connectedCallback() {
+      if (this.shadowRoot) return;
+      const root = this.attachShadow({ mode: 'open' });
+      root.innerHTML = '<style>.box{padding:10px;border:2px solid #7c3aed;margin:4px}</style>' +
+        '<div class="box"><span class="label">Shadow label</span> <button class="inner">Shadow button</button></div>';
+    }
+  }
+  customElements.define('ccm-card', CcmCard);
+
+  function render(route) {
+    const items = [1, 2, 3, 4].map(function (i) { return '<li>Item ' + i + '</li>'; }).join('');
+    const rows = Array.from({ length: 30 }, function (_, i) { return '<p>Scroll row ' + (i + 1) + '</p>'; }).join('');
+    document.getElementById('app').innerHTML =
+      '<section id="hero"><h1>Hero for route ' + route + '</h1><p class="lead">Lead paragraph</p></section>' +
+      '<div class="row"><div class="card"><h3>Card A</h3><button class="btn">Buy A</button></div>' +
+      '<div class="card"><h3>Card B</h3><button class="btn">Buy B</button></div>' +
+      '<div class="card"><h3>Card C</h3><button class="btn">Buy C</button></div></div>' +
+      '<ul class="items">' + items + '</ul>' +
+      '<ccm-card></ccm-card>' +
+      '<iframe srcdoc="&lt;body style=&quot;margin:8px&quot;&gt;&lt;p id=&quot;inframe&quot;&gt;Inside iframe&lt;/p&gt;&lt;/body&gt;"></iframe>' +
+      '<div class="scroller">' + rows + '</div>' +
+      '<div class="tilt">Transformed box</div>' +
+      '<div class="filler"></div>';
+  }
+  var route = 1;
+  render(route);
+  document.getElementById('nav-btn').addEventListener('click', function () {
+    route++;
+    history.pushState({ route: route }, '', '?route=' + route);
+    document.getElementById('route').textContent = 'route ' + route;
+    render(route);
+  });
+</script>
+</body>
+</html>

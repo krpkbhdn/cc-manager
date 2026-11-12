@@ -56,7 +56,7 @@ fun ReviewScreen(projectId: Long, state: ReviewState, modifier: Modifier = Modif
             ReviewWorkspace(review, image, state, Modifier.weight(1f))
         }
     }
-    state.sendTarget?.let { ReviewTargetDialog(it, { id -> state.sendTo(it.review, id) }, state::dismissSendTarget) }
+    state.sendTarget?.let { SessionTargetDialog(it.candidates, { id -> state.sendTo(it.review, id) }, state::dismissSendTarget) }
 }
 
 @Composable

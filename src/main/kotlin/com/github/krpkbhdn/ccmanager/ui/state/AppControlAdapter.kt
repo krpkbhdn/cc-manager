@@ -22,7 +22,8 @@ class AppControlAdapter(private val state: AppState, private val scope: Coroutin
             "git" -> ProjectTab.Git
             "run" -> ProjectTab.Run
             "review" -> ProjectTab.Review
-            else -> error("Unknown tab '$tab', expected sessions, git, run or review")
+            "web" -> ProjectTab.Web
+            else -> error("Unknown tab '$tab', expected sessions, git, run, review or web")
         }
         state.select(projectId, target)
         state.navigate(Route.Project(projectId))

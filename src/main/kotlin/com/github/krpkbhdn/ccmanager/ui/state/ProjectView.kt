@@ -22,6 +22,7 @@ sealed interface ProjectTab {
     data object Git : ProjectTab
     data object Run : ProjectTab
     data object Review : ProjectTab
+    data object Web : ProjectTab
     data object Activity : ProjectTab
 }
 
@@ -48,9 +49,10 @@ data class ProjectView(
         else -> copy(selected = tab)
     }
 
-    /** Session tabs in strip order, then shell tabs, Git, Run, Review and Activity. */
-    fun tabs(): List<ProjectTab> =
-        openSessions.map { ProjectTab.Session(it) } + openShells.map { ProjectTab.Shell(it) } + ProjectTab.Git + ProjectTab.Run + ProjectTab.Review + ProjectTab.Activity
+    /** Session tabs in strip order, then shell tabs, Git, Run, Review, Web (unless [withWeb] is false, as for groups) and Activity. */
+    fun tabs(withWeb: Boolean = true): List<ProjectTab> =
+        openSessions.map { ProjectTab.Session(it) } + openShells.map { ProjectTab.Shell(it) } + ProjectTab.Git + ProjectTab.Run + ProjectTab.Review +
+            listOfNotNull(ProjectTab.Web.takeIf { withWeb }) + ProjectTab.Activity
 
     fun closeShell(terminalId: String): ProjectView {
         if (terminalId !in openShells) return this
@@ -64,8 +66,8 @@ data class ProjectView(
     }
 
     /** Selects the tab [step] places away, wrapping around the strip. */
-    fun cycle(step: Int): ProjectView {
-        val tabs = tabs()
+    fun cycle(step: Int, withWeb: Boolean = true): ProjectView {
+        val tabs = tabs(withWeb)
         val current = tabs.indexOf(selected).coerceAtLeast(0)
         return select(tabs[Math.floorMod(current + step, tabs.size)])
     }

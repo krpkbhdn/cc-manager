@@ -15,7 +15,7 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration
 @EnableConfigurationProperties({AppProperties.class, DatabaseProperties.class})
-class DatabaseConfiguration {
+public class DatabaseConfiguration {
 
     @Bean
     DataSource dataSource(AppProperties properties, DatabaseProperties database) throws IOException {
@@ -23,7 +23,7 @@ class DatabaseConfiguration {
         return create(properties.dataDir().resolve("cc-manager.db"), database);
     }
 
-    static HikariDataSource create(Path file, DatabaseProperties database) {
+    public static HikariDataSource create(Path file, DatabaseProperties database) {
         var source = new HikariDataSource();
         source.setJdbcUrl("jdbc:sqlite:" + file + "?journal_mode=WAL&synchronous=NORMAL&foreign_keys=on&transaction_mode=IMMEDIATE"
                 + "&busy_timeout=" + database.busyTimeout().toMillis());

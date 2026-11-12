@@ -1,8 +1,7 @@
 package com.github.krpkbhdn.ccmanager.review;
 
+import com.github.krpkbhdn.ccmanager.workspace.ScheduledSweep;
 import com.github.krpkbhdn.ccmanager.workspace.TreeDeleter;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -10,9 +9,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,17 +19,15 @@ import org.springframework.stereotype.Component;
  * Removes reviews older than the retention and screenshot folders that no review row owns any more.
  */
 @Component
-public class ReviewCleanup {
+public class ReviewCleanup extends ScheduledSweep {
 
     private static final Logger log = LoggerFactory.getLogger(ReviewCleanup.class);
-    private static final Duration SHUTDOWN_WAIT = Duration.ofSeconds(5);
-    private static final Duration ORPHAN_GRACE = Duration.ofMinutes(1);
+    /** Folders younger than this are never treated as orphans: a writer may not have inserted its row yet. */
+    public static final Duration ORPHAN_GRACE = Duration.ofMinutes(1);
 
     private final ReviewService service;
     private final ReviewProperties properties;
     private final Clock clock;
-    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(
-            runnable -> Thread.ofVirtual().name("review-cleanup").unstarted(runnable));
 
     @Autowired
     public ReviewCleanup(ReviewService service, ReviewProperties properties) {
@@ -41,24 +35,13 @@ public class ReviewCleanup {
     }
 
     ReviewCleanup(ReviewService service, ReviewProperties properties, Clock clock) {
+        super("review-cleanup", properties.cleanupInterval());
         this.service = service;
         this.properties = properties;
         this.clock = clock;
     }
 
-    @PostConstruct
-    void start() {
-        scheduler.scheduleWithFixedDelay(this::sweep, 0, properties.cleanupInterval().toMillis(),
-                TimeUnit.MILLISECONDS);
-    }
-
-    @PreDestroy
-    void stop() throws InterruptedException {
-        scheduler.shutdownNow();
-        scheduler.awaitTermination(SHUTDOWN_WAIT.toSeconds(), TimeUnit.SECONDS);
-    }
-
-    /** Nothing escapes, because a scheduled task that throws is never run again. */
+    @Override
     public void sweep() {
         try {
             service.deleteOlderThan(clock.instant().minus(properties.retention()));

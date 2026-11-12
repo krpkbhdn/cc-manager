@@ -14,14 +14,14 @@ import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.theme.Spacing
 import com.github.krpkbhdn.ccmanager.ui.theme.colors
 
-/** Chooses which live session of the project receives the feedback; null from [onPick] means a new session. */
+/** Chooses which live session of the project receives a review's feedback; null from [onPick] means a new session. */
 @Composable
-fun ReviewTargetDialog(target: SendTarget, onPick: (String?) -> Unit, onDismiss: () -> Unit) {
+fun SessionTargetDialog(candidates: List<SessionChoice>, onPick: (String?) -> Unit, onDismiss: () -> Unit) {
     ModalHost(onDismiss) {
         DialogBody("Send to agent", Icons.Send, colors.accent) {
-            if (target.candidates.isNotEmpty()) Label("Send to a running session", color = colors.textSecondary)
+            if (candidates.isNotEmpty()) Label("Send to a running session", color = colors.textSecondary)
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                target.candidates.forEach { AppButton(it.label, { onPick(it.ccmSessionId) }, Modifier.fillMaxWidth(), icon = Icons.Bot) }
+                candidates.forEach { AppButton(it.label, { onPick(it.ccmSessionId) }, Modifier.fillMaxWidth(), icon = Icons.Bot) }
                 AppButton("New session", { onPick(null) }, Modifier.fillMaxWidth(), variant = ButtonVariant.PRIMARY, icon = Icons.Plus)
                 AppButton("Cancel", onDismiss, Modifier.fillMaxWidth(), variant = ButtonVariant.GHOST)
             }

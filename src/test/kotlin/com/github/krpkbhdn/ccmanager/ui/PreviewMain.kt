@@ -35,7 +35,7 @@ import kotlinx.coroutines.withContext
 private const val SETTLE_MILLIS = 1_600L
 
 /**
- * Dev preview with fake services. Flags: `--light` (default dark), `--many` (12 projects, long names), `--empty`, `--review` (sample visual review, Review tab selected),
+ * Dev preview with fake services. Flags: `--light` (default dark), `--many` (12 projects, long names), `--empty`, `--review` (sample visual review, Review tab selected), `--web` (real embedded browser on the bundled demo page src/dev/web-review/fixture.html with two seeded items, Web tab selected),
  * `--size=WxH`, `--shots` captures the main states into `--out=<dir>` with java.awt.Robot and exits; without
  * `--shots` the window stays open for manual inspection. `--real` boots the real stack instead (see RealMain).
  */
@@ -46,7 +46,7 @@ fun main(args: Array<String>) {
     application {
         val state = remember {
             AppState(world.backend(PreviewTerminal), CoroutineScope(SupervisorJob() + Dispatchers.Main), UiSettingsStore(null))
-                .also { it.updateSettings { s -> s.copy(assistantStartup = AssistantStartup.NEVER) }; if (flags.review) { ReviewPreviewData.seed(1); it.select(1, ProjectTab.Review) }; it.start(); it.prefs.setThemeMode(if (flags.dark) ThemeMode.DARK else ThemeMode.LIGHT) }
+                .also { it.updateSettings { s -> s.copy(assistantStartup = AssistantStartup.NEVER) }; if (flags.review) { ReviewPreviewData.seed(1); it.select(1, ProjectTab.Review) }; if (flags.web) { WebPreviewData.seed(1); it.select(1, ProjectTab.Web) }; it.start(); it.prefs.setThemeMode(if (flags.dark) ThemeMode.DARK else ThemeMode.LIGHT); if (flags.web) it.navigate(Route.Project(1)) }
         }
         val windowState = remember { WindowState(size = DpSize(flags.width.dp, flags.height.dp)) }
         val icon = remember { BitmapPainter(drawAppIcon(256).toComposeImageBitmap()) }
@@ -67,7 +67,7 @@ fun main(args: Array<String>) {
     }
 }
 
-private class PreviewFlags(val dark: Boolean, val shots: Boolean, val snap: Boolean, val many: Boolean, val empty: Boolean, val review: Boolean, val width: Int, val height: Int, val out: Path) {
+private class PreviewFlags(val dark: Boolean, val shots: Boolean, val snap: Boolean, val many: Boolean, val empty: Boolean, val review: Boolean, val web: Boolean, val width: Int, val height: Int, val out: Path) {
     companion object {
         fun parse(args: Array<String>): PreviewFlags {
             val size = args.firstOrNull { it.startsWith("--size=") }?.removePrefix("--size=")?.split('x')?.map { it.toInt() } ?: listOf(1280, 820)
@@ -78,6 +78,7 @@ private class PreviewFlags(val dark: Boolean, val shots: Boolean, val snap: Bool
                 many = "--many" in args,
                 empty = "--empty" in args,
                 review = "--review" in args,
+                web = "--web" in args,
                 width = size[0],
                 height = size[1],
                 out = Path.of(args.firstOrNull { it.startsWith("--out=") }?.removePrefix("--out=") ?: "build/preview"),

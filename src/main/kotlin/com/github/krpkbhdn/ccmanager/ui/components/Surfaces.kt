@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import com.github.krpkbhdn.ccmanager.ui.icons.Icons
 import com.github.krpkbhdn.ccmanager.ui.theme.Alpha
 import com.github.krpkbhdn.ccmanager.ui.theme.Motion
 import com.github.krpkbhdn.ccmanager.ui.theme.Radius
@@ -57,7 +58,8 @@ private val emptyIconBox = 52.dp
 private val emptyTextWidth = 420.dp
 private val menuWidth = 208.dp
 private val menuElevation = 16.dp
-private val menuMaxHeight = 420.dp
+private val menuMaxHeight = 520.dp
+private val checkSlotSize = 14.dp
 private val cardElevation = 10.dp
 private const val POPUP_GAP_PX = 6
 private const val POP_START_SCALE = 0.96f
@@ -132,6 +134,7 @@ data class MenuEntry(
     val danger: Boolean = false,
     val enabled: Boolean = true,
     val dividerAbove: Boolean = false,
+    val checked: Boolean? = null,
     val onSelect: () -> Unit,
 )
 
@@ -153,10 +156,13 @@ private fun atCursor(cursor: IntOffset, windowSize: IntSize, popupContentSize: I
     return IntOffset(left.coerceAtLeast(0), top.coerceAtLeast(0))
 }
 
+/** Content-based menu width with a minimum, so a menu hugs its entries instead of filling the popup window. */
+fun Modifier.menuSize(): Modifier = widthIn(min = menuWidth).width(IntrinsicSize.Max)
+
 /** Dropdown menu anchored to its parent composable, or opened at the offset [at] inside it; Esc or an outside click dismisses it. */
 @Composable
 fun PopupMenu(entries: List<MenuEntry>, onDismiss: () -> Unit, alignEnd: Boolean = false, at: IntOffset? = null) {
-    AnchoredPopup(onDismiss, alignEnd, Modifier.widthIn(min = menuWidth).width(IntrinsicSize.Max), at) { MenuColumn(entries, onDismiss) }
+    AnchoredPopup(onDismiss, alignEnd, Modifier.menuSize(), at) { MenuColumn(entries, onDismiss) }
 }
 
 /** The scrolling list of [entries] inside a menu card; each selection first calls [onDismiss]. */
@@ -189,12 +195,21 @@ fun AnchoredPopup(
     }
 }
 
+/** Fixed bordered box that holds the check, so a label never shifts when the entry is toggled. */
+@Composable
+private fun CheckSlot(checked: Boolean) {
+    Box(Modifier.size(checkSlotSize).border(hairline, colors.borderStrong, RoundedCornerShape(Radius.sm)), contentAlignment = Alignment.Center) {
+        if (checked) Glyph(Icons.Check, colors.textPrimary, size = checkSlotSize - 3.dp)
+    }
+}
+
 @Composable
 private fun MenuItem(entry: MenuEntry, onDismiss: () -> Unit) {
     val tint = if (entry.danger) colors.danger else colors.textPrimary
     if (entry.dividerAbove) HorizontalRule(Modifier.padding(vertical = Spacing.xs))
     Pressable({ onDismiss(); entry.onSelect() }, Modifier.fillMaxWidth().alpha(if (entry.enabled) 1f else Alpha.DISABLED), shape = RoundedCornerShape(Radius.sm), enabled = entry.enabled) {
         Row(Modifier.padding(horizontal = Spacing.md - 2.dp, vertical = Spacing.sm - 1.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md - 2.dp)) {
+            entry.checked?.let { CheckSlot(it) }
             entry.status?.let { StatusDot(it, size = 7.dp) }
             entry.icon?.let { Glyph(it, if (entry.danger) colors.danger else colors.textSecondary) }
             Label(entry.label, Modifier.weight(1f), color = tint, style = Type.body)

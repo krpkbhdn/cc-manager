@@ -8,7 +8,6 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
 /** Writes the annotated images and the review.md the agent reads, plus the one-line prompt that points at it. */
@@ -19,8 +18,6 @@ public class ReviewFeedbackWriter {
     private static final int MAX_LISTED_POINTS = 20;
     private static final double PERCENT = 100.0;
     private static final String MARKDOWN_FILE = "review.md";
-    /** Control characters, line and paragraph separators and bidi overrides: none may reach the one-line prompt typed into the terminal. */
-    private static final Pattern LINE_BREAKING_OR_HIDDEN = Pattern.compile("[\\p{Cc}\\p{Zl}\\p{Zp}\\u202A-\\u202E\\u2066-\\u2069]");
 
     private final ReviewImageAnnotator annotator;
 
@@ -113,15 +110,11 @@ public class ReviewFeedbackWriter {
     }
 
     static String prompt(Review review, Path markdown) {
-        String title = singleLine(review.title() == null ? "" : review.title());
+        String title = PromptText.oneLine(review.title() == null ? "" : review.title());
         if (title.length() > MAX_TITLE_CHARS) {
             title = title.substring(0, MAX_TITLE_CHARS).strip();
         }
-        return "Visual review #" + review.id() + " \"" + title + "\": read \"" + LINE_BREAKING_OR_HIDDEN.matcher(markdown.toString()).replaceAll(" ")
+        return "Visual review #" + review.id() + " \"" + title + "\": read \"" + PromptText.withoutHidden(markdown.toString())
                 + "\" and fix every numbered mark on every image, then submit new screenshots with submit_screenshots.";
-    }
-
-    private static String singleLine(String text) {
-        return LINE_BREAKING_OR_HIDDEN.matcher(text).replaceAll(" ").replaceAll(" {2,}", " ").strip();
     }
 }

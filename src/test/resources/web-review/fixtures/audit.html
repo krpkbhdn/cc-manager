@@ -1,0 +1,42 @@
+<!doctype html>
+<html><head><title>audit</title><style>
+* { box-sizing: border-box }
+body { margin: 0; padding: 8px; font: 12px sans-serif }
+[data-row] { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 10px }
+.card, .tile { width: 80px; height: 40px; padding: 4px }
+.tile { border: 2px solid #333 }
+.misitem, .gapitem, .evenitem { width: 60px; height: 30px; background: #9cf }
+</style></head><body>
+<div id="cards" data-row>
+  <div class="card" id="card-a" style="border:2px solid #333">A</div>
+  <div class="card" id="card-b">B</div>
+  <div class="card" id="card-c" style="border:2px solid #333">C</div>
+</div>
+<div id="tiles" data-row>
+  <div class="tile" id="tile-a">A</div>
+  <div class="tile" id="tile-b">B</div>
+  <div class="tile" id="tile-c">C</div>
+</div>
+<div id="phantoms" style="margin-bottom:10px">
+  <div id="phantom" style="width:50px;height:12px;margin:6px 10px"></div>
+  <div id="ghost" style="opacity:0;width:40px;height:20px">hidden</div>
+  <div id="solid" style="width:40px;height:20px;background:#ccc"></div>
+  <div id="nothing"></div>
+</div>
+<div id="misalign" data-row>
+  <div class="misitem" id="mis-a"></div>
+  <div class="misitem" id="mis-b" style="margin-top:2px"></div>
+  <div class="misitem" id="mis-c"></div>
+</div>
+<div id="gaps" data-row>
+  <div class="gapitem" id="gap-a" style="margin-right:0"></div>
+  <div class="gapitem" id="gap-b" style="margin-right:5px"></div>
+  <div class="gapitem" id="gap-c" style="margin-right:0"></div>
+  <div class="gapitem" id="gap-d"></div>
+</div>
+<div id="even" data-row>
+  <div class="evenitem" id="even-a"></div>
+  <div class="evenitem" id="even-b"></div>
+  <div class="evenitem" id="even-c"></div>
+</div>
+</body></html>

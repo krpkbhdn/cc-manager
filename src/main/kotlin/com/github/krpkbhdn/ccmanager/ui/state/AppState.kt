@@ -23,6 +23,10 @@ import com.github.krpkbhdn.ccmanager.ui.git.model.GitState
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
 import com.github.krpkbhdn.ccmanager.ui.history.SessionSearchState
 import com.github.krpkbhdn.ccmanager.ui.review.ReviewState
+import com.github.krpkbhdn.ccmanager.ui.web.WebState
+import com.github.krpkbhdn.ccmanager.ui.web.browser.JcefPageHost
+import com.github.krpkbhdn.ccmanager.ui.web.browser.WebPageHost
+import com.github.krpkbhdn.ccmanager.ui.web.browser.JcefRuntime
 import com.github.krpkbhdn.ccmanager.ui.sessions.SessionsTab
 import com.github.krpkbhdn.ccmanager.ui.prompts.PromptsState
 import com.github.krpkbhdn.ccmanager.claude.proposal.Proposal
@@ -62,6 +66,7 @@ class AppState(
     private val backend: Backend,
     private val scope: CoroutineScope,
     settingsStore: UiSettingsStore = UiSettingsStore.inDataDir(backend.dataDir),
+    webHostFactory: () -> WebPageHost = { JcefPageHost.open(backend.dataDir) },
 ) {
     val settings: UiSettings get() = prefs.settings
     var paletteOpen by mutableStateOf(false)
@@ -103,7 +108,7 @@ class AppState(
         requestConfirm = { confirm = it },
         showProject = { navigate(Route.Project(it)) },
         onRemoved = { if (route == Route.Project(it)) route = Route.Overview },
-        onLoaded = { forgetRemovedProjects(it); gits.loadNew(it); prefs.retainFoldedGroups(it) },
+        onLoaded = { forgetRemovedProjects(it); gits.loadNew(it); prefs.retainFoldedGroups(it); web.retain(it) },
         reportError = { title, message -> notifications.reportError(title, message) },
         reportActionError = { notifications.reportError(it) },
     )
@@ -174,6 +179,12 @@ class AppState(
         backend.review, { live }, { id, text -> queue.add(id, text) },
         { projectId, prompt, onNotStarted, onStarted -> sessions.launchTask(projectId, null, prompt, { onNotStarted() }, onStarted) },
         scope, notifications::reportError,
+    )
+    val web = WebState(
+        backend.web, webHostFactory, { id, text -> queue.add(id, text) },
+        { projectId, prompt, onNotStarted, onStarted -> sessions.launchTask(projectId, null, prompt, { onNotStarted() }, onStarted) },
+        { live }, scope, notifications::reportError, { JcefRuntime.availability() },
+        prepareBrowser = { JcefRuntime.start(backend.dataDir) },
     )
     val extensions = ExtensionStates(backend, scope, { confirm = it }, notifications, environment)
     val author = AuthorProfileState(
@@ -262,6 +273,7 @@ class AppState(
         prompts.dispose()
         sessionSearch.dispose()
         reviews.dispose()
+        web.close()
         queue.dispose()
         voice?.let { Thread(it::close, "voice-close").apply { isDaemon = true }.start() }
         runs.dispose()
@@ -330,6 +342,7 @@ class AppState(
         if (projectId == ClaudeLauncher.ASSISTANT_PROJECT_ID) Route.Assistant else Route.Project(projectId)
 
     fun select(projectId: Long, tab: ProjectTab) {
+        if (tab == ProjectTab.Web && projects.find(projectId)?.group == true) return
         views[projectId] = viewOf(projectId).select(tab)
     }
 

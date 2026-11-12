@@ -48,8 +48,8 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
             AppShortcut.NEW_SESSION -> handled { state.sessions.launch(project.id, LaunchMode.NEW) }
             AppShortcut.OPEN_TERMINAL -> state.shells.default != null && handled { state.shells.openDefault(project.id) }
             AppShortcut.CLOSE_SESSION -> closeSelectedTab(project.id, view.selected)
-            AppShortcut.NEXT_TAB -> handled { state.select(project.id, view.cycle(1).selected) }
-            AppShortcut.PREVIOUS_TAB -> handled { state.select(project.id, view.cycle(-1).selected) }
+            AppShortcut.NEXT_TAB -> handled { state.select(project.id, view.cycle(1, !project.group).selected) }
+            AppShortcut.PREVIOUS_TAB -> handled { state.select(project.id, view.cycle(-1, !project.group).selected) }
             AppShortcut.GIT_TAB -> handled { state.openGit(project.id) }
             AppShortcut.GIT_CHANGES -> handled { state.openGit(project.id, GitSubView.CHANGES) }
             AppShortcut.GIT_COMMIT -> handled { state.openGit(project.id)?.requestCommitFocus() }
@@ -58,6 +58,7 @@ class ShortcutActions(private val state: AppState, private val systemDark: () ->
             AppShortcut.PROJECT_SETTINGS -> handled { state.extensions.openProjectSettings(project) }
             AppShortcut.RUN -> state.runs.selectedOf(project.id)?.takeIf { !it.directoryMissing }?.let { entry -> handled { state.runs.run(entry.id) } } ?: false
             AppShortcut.REVIEW_TAB -> handled { state.select(project.id, ProjectTab.Review) }
+            AppShortcut.WEB_TAB -> handled { state.select(project.id, ProjectTab.Web) }
             AppShortcut.ACTIVITY_TAB -> handled { state.select(project.id, ProjectTab.Activity) }
             AppShortcut.CONTEXT_USAGE -> session != null && handled { state.contextSessionId = session }
             AppShortcut.FOCUS_TERMINAL -> session != null && handled { state.terminal.focus(session) }
@@ -106,5 +107,5 @@ private val OVERLAY_TOGGLES = setOf(AppShortcut.PALETTE, AppShortcut.SHORTCUT_SH
 
 private val PROJECT_ONLY = setOf(
     AppShortcut.OPEN_TERMINAL, AppShortcut.GIT_TAB, AppShortcut.GIT_CHANGES, AppShortcut.GIT_COMMIT,
-    AppShortcut.GIT_BRANCHES, AppShortcut.GIT_PUSH, AppShortcut.RUN, AppShortcut.REVIEW_TAB, AppShortcut.PROJECT_SETTINGS,
+    AppShortcut.GIT_BRANCHES, AppShortcut.GIT_PUSH, AppShortcut.RUN, AppShortcut.REVIEW_TAB, AppShortcut.WEB_TAB, AppShortcut.PROJECT_SETTINGS,
 )

@@ -1,0 +1,23 @@
+<!doctype html>
+<html><head><title>spacing</title><style>
+:root { --space: 18px }
+body { margin: 0; font-size: 16px }
+.row { height: 20px; background: #eee }
+#m { margin: 1rem; }
+#p { padding: 20px; }
+#g { display: flex; gap: 2em; font-size: 10px }
+#g span { width: 40px; height: 20px; background: #ccc }
+#pcw { width: 400px }
+#pc { padding-left: 10% }
+#v { padding-left: var(--space) }
+#calc { margin-left: calc(1rem + 3px) }
+</style></head><body>
+<div class="row" id="lead"></div>
+<div class="row" id="m"></div>
+<div class="row" id="p"></div>
+<div id="g"><span>a</span><span>b</span></div>
+<div id="pcw"><div class="row" id="pc"></div></div>
+<div class="row" id="v"></div>
+<div class="row" id="i" style="margin-top: 20px"></div>
+<div class="row" id="calc"></div>
+</body></html>

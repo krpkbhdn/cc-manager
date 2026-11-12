@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.ApplicationScope
 import androidx.compose.ui.window.Tray
 import com.github.krpkbhdn.ccmanager.ui.terminal.TerminalHost
+import com.github.krpkbhdn.ccmanager.ui.web.browser.JcefRuntime
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.WindowState
@@ -53,6 +54,12 @@ private const val WINDOW_TITLE = "Claude Code Manager"
 private const val UI_ERROR_TITLE = "Unexpected error"
 private const val TRAY_ICON_SIZE = 64
 private const val WINDOW_ICON_SIZE = 256
+private const val BROWSER_SHUTDOWN_MILLIS = 3_000L
+
+/** Disposes the embedded browser engine; a hung engine must not keep the app from exiting, so it gets a bounded wait on a daemon thread. */
+private fun shutdownBrowser() {
+    thread(name = "jcef-shutdown", isDaemon = true) { runCatching { JcefRuntime.shutdown() } }.join(BROWSER_SHUTDOWN_MILLIS)
+}
 
 /**
  * Shows the main window; [onShutdown] runs after the user confirmed quitting. [settingsStore] holds the remembered view state.
@@ -90,6 +97,7 @@ fun ApplicationScope.AppWindow(backend: Backend, onShutdown: () -> Unit, setting
                     disposeState()
                     state.reviews.awaitFinalFlush()
                     TerminalHost.closeAll()
+                    shutdownBrowser()
                     onShutdown()
                 } finally {
                     SwingUtilities.invokeLater { exitApplication() }

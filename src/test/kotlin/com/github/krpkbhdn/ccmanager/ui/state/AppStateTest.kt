@@ -11,6 +11,7 @@ import java.time.Instant
 import com.github.krpkbhdn.ccmanager.ui.PreviewWorld
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartup
 import com.github.krpkbhdn.ccmanager.ui.palette.paletteItems
+import com.github.krpkbhdn.ccmanager.ui.web.browser.FakePageHost
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +25,7 @@ import org.mockito.Mockito.`when`
 import org.mockito.Mockito.verify
 
 private const val PROJECT_ID = 1L
+private const val GONE_PROJECT_ID = 987654L
 
 class AppStateTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -43,7 +45,8 @@ class AppStateTest {
     }
     private val world = PreviewWorld()
     private val backend = world.backend(terminal)
-    private val state = AppState(backend, scope, UiSettingsStore(null))
+    private val webHosts = CopyOnWriteArrayList<FakePageHost>()
+    private val state = AppState(backend, scope, UiSettingsStore(null)) { FakePageHost().also { webHosts += it } }
 
     @BeforeEach
     fun start() {
@@ -76,6 +79,18 @@ class AppStateTest {
 
         verify(backend.projects).remove(PROJECT_ID)
         await { state.route == Route.Overview }
+    }
+
+    @Test
+    fun `a project list reload closes the web browser of a project that is gone and keeps the others`() {
+        state.web.view(PROJECT_ID)
+        state.web.view(GONE_PROJECT_ID)
+        assertThat(webHosts).hasSize(2)
+
+        backend.projects.rename(PROJECT_ID, "renamed")
+
+        await { webHosts[1].closed }
+        assertThat(webHosts[0].closed).isFalse()
     }
 
     @Test
@@ -148,5 +163,20 @@ class AppStateTest {
 
         state.navigate(Route.Project(group))
         assertThat(ids()).doesNotContain("show-review")
+    }
+
+    @Test
+    fun `the palette offers show-web-review in a project only`() {
+        fun ids() = paletteItems(state, false).map { it.id }
+        val project = state.projects.all.first { !it.group }.id
+        val group = state.projects.all.first { it.group }.id
+        assertThat(ids()).doesNotContain("show-web-review")
+
+        state.navigate(Route.Project(project))
+        paletteItems(state, false).first { it.id == "show-web-review" }.run()
+        assertThat(state.viewOf(project).selected).isEqualTo(ProjectTab.Web)
+
+        state.navigate(Route.Project(group))
+        assertThat(ids()).doesNotContain("show-web-review")
     }
 }

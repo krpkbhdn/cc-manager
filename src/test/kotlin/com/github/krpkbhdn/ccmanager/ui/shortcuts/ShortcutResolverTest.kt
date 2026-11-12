@@ -8,6 +8,7 @@ import java.awt.event.KeyEvent.VK_MINUS
 import java.awt.event.KeyEvent.VK_C
 import java.awt.event.KeyEvent.VK_ESCAPE
 import java.awt.event.KeyEvent.VK_F1
+import java.awt.event.KeyEvent.VK_F11
 import java.awt.event.KeyEvent.VK_J
 import java.awt.event.KeyEvent.VK_K
 import java.awt.event.KeyEvent.VK_L
@@ -112,6 +113,16 @@ class ShortcutResolverTest {
         assertThat(ShortcutResolver.resolve(cmdShift(VK_Z), mac = true, terminalFocused = false)).isEqualTo(AppShortcut.REVIEW_TAB)
         listOf(false, true).forEach { mac ->
             assertThat(AppShortcut.entries.filter { it.chords(mac).any { c -> c in AppShortcut.REVIEW_TAB.chords(mac) } }).containsExactly(AppShortcut.REVIEW_TAB)
+        }
+    }
+
+    @Test
+    fun `web review shortcut is alt f11 on both platforms, unique and resolves inside the terminal`() {
+        assertThat(AppShortcut.WEB_TAB.chords(false)).containsExactly(alt(VK_F11))
+        assertThat(AppShortcut.WEB_TAB.chords(true)).containsExactly(alt(VK_F11))
+        assertThat(windows(alt(VK_F11), terminal = true)).isEqualTo(AppShortcut.WEB_TAB)
+        listOf(false, true).forEach { mac ->
+            assertThat(AppShortcut.entries.filter { it.chords(mac).any { c -> c in AppShortcut.WEB_TAB.chords(mac) } }).containsExactly(AppShortcut.WEB_TAB)
         }
     }
 }

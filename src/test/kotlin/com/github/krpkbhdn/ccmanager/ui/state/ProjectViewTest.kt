@@ -28,10 +28,18 @@ class ProjectViewTest {
     }
 
     @Test
+    fun `tabs and cycling skip the web tab when it is disabled`() {
+        val view = ProjectView().select(ProjectTab.Review)
+
+        assertThat(view.tabs(withWeb = false)).doesNotContain(ProjectTab.Web).contains(ProjectTab.Review, ProjectTab.Activity)
+        assertThat(view.cycle(1, withWeb = false).selected).isEqualTo(ProjectTab.Activity)
+    }
+
+    @Test
     fun `cycling walks sessions then diff and activity and wraps`() {
         val view = ProjectView().openSession("a").openSession("b")
 
-        assertThat(view.tabs()).containsExactly(ProjectTab.Session("a"), ProjectTab.Session("b"), ProjectTab.Git, ProjectTab.Run, ProjectTab.Review, ProjectTab.Activity)
+        assertThat(view.tabs()).containsExactly(ProjectTab.Session("a"), ProjectTab.Session("b"), ProjectTab.Git, ProjectTab.Run, ProjectTab.Review, ProjectTab.Web, ProjectTab.Activity)
         assertThat(view.cycle(1).selected).isEqualTo(ProjectTab.Git)
         assertThat(view.cycle(-1).selected).isEqualTo(ProjectTab.Session("a"))
         assertThat(view.select(ProjectTab.Activity).cycle(1).selected).isEqualTo(ProjectTab.Session("a"))
@@ -64,7 +72,7 @@ class ProjectViewTest {
     fun `shell tabs sit between sessions and git and close to their neighbour`() {
         val view = ProjectView().openSession("a").openShell("s1").openShell("s2")
 
-        assertThat(view.tabs()).containsExactly(ProjectTab.Session("a"), ProjectTab.Shell("s1"), ProjectTab.Shell("s2"), ProjectTab.Git, ProjectTab.Run, ProjectTab.Review, ProjectTab.Activity)
+        assertThat(view.tabs()).containsExactly(ProjectTab.Session("a"), ProjectTab.Shell("s1"), ProjectTab.Shell("s2"), ProjectTab.Git, ProjectTab.Run, ProjectTab.Review, ProjectTab.Web, ProjectTab.Activity)
         assertThat(view.closeShell("s2").selected).isEqualTo(ProjectTab.Shell("s1"))
         assertThat(view.closeShell("s2").closeShell("s1").selected).isEqualTo(ProjectTab.Session("a"))
     }
@@ -98,10 +106,19 @@ class ProjectViewTest {
     fun `review tab sits after run and before activity and is reached by cycling`() {
         val view = ProjectView().select(ProjectTab.Run)
 
-        assertThat(view.tabs().takeLast(3)).containsExactly(ProjectTab.Run, ProjectTab.Review, ProjectTab.Activity)
+        assertThat(view.tabs().takeLast(4)).containsExactly(ProjectTab.Run, ProjectTab.Review, ProjectTab.Web, ProjectTab.Activity)
         assertThat(view.cycle(1).selected).isEqualTo(ProjectTab.Review)
-        assertThat(view.cycle(1).cycle(1).selected).isEqualTo(ProjectTab.Activity)
+        assertThat(view.cycle(1).cycle(1).selected).isEqualTo(ProjectTab.Web)
         assertThat(view.cycle(1).cycle(-1).selected).isEqualTo(ProjectTab.Run)
         assertThat(ProjectView().select(ProjectTab.Review).selected).isEqualTo(ProjectTab.Review)
+    }
+
+    @Test
+    fun `web tab sits after review and before activity and is reached by cycling`() {
+        val view = ProjectView().select(ProjectTab.Review)
+
+        assertThat(view.cycle(1).selected).isEqualTo(ProjectTab.Web)
+        assertThat(view.cycle(2).selected).isEqualTo(ProjectTab.Activity)
+        assertThat(ProjectView().select(ProjectTab.Web).selected).isEqualTo(ProjectTab.Web)
     }
 }

@@ -10,7 +10,7 @@ plugins {
 }
 
 group = "com.github.krpkbhdn"
-version = "2.0.0"
+version = "2.0.1"
 
 java {
     toolchain {
@@ -62,8 +62,28 @@ tasks.test {
     environment(claudeFullscreen)
     useJUnitPlatform()
     maxParallelForks = (Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, 4)
-    jvmArgs("--enable-native-access=ALL-UNNAMED", *awtOpens.toTypedArray())
+    // java.awt.event is opened only so the real-browser test can give synthetic key events the native rawCode CEF reads.
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-opens=java.desktop/java.awt.event=ALL-UNNAMED", *awtOpens.toTypedArray())
 }
+
+val jbrHome: Provider<File> = javaToolchains.launcherFor(java.toolchain).map { it.metadata.installationPath.asFile }
+
+val verifyJcefRuntime = tasks.register("verifyJcefRuntime") {
+    val release = jbrHome.map { File(it, "release") }
+    inputs.files(release)
+    doLast {
+        val file = release.get()
+        val text = if (file.isFile) file.readText() else ""
+        val isJcefFlavour = Regex("""IMPLEMENTOR_VERSION="[^"]*-jcef"|MODULES="[^"]*jcef""").containsMatchIn(text)
+        check(isJcefFlavour) {
+            "The build needs JetBrains Runtime with JCEF (jbrsdk_jcef), but the toolchain at ${file.parentFile} is not that flavour " +
+                "(its release file has neither an IMPLEMENTOR_VERSION ending in -jcef nor a jcef module). " +
+                "Fix: the Gradle toolchain must resolve a JetBrains Runtime with JCEF (Foojay distribution jbrsdk_jcef, JBR 25); " +
+                "if an older plain JBR was cached, delete ~/.gradle/jdks/jetbrains* and run the build again."
+        }
+    }
+}
+tasks.matching { it.name == "compileKotlin" || it.name == "compileTestKotlin" }.configureEach { dependsOn(verifyJcefRuntime) }
 
 // A linked worktree has a .git file (a clone has a directory); its runs must not touch the main installation's data.
 val isLinkedWorktree = layout.projectDirectory.file(".git").asFile.isFile
@@ -76,9 +96,25 @@ tasks.withType<JavaExec>().matching { it.name == "run" }.configureEach {
     }
 }
 
+// Tests, previews and shots get their own home, data dir and Claude config dir under build/, so they never touch ~/.cc-manager or ~/.claude.
+// Opt out with CCM_UNSANDBOXED, CCM_REAL_CLAUDE or CCM_SMOKE (those need the real claude login); runPreview --real keeps the real
+// claude config but gets a fresh data dir under build/.
+val sandboxHome = layout.buildDirectory.dir("sandbox-home").get().asFile.absolutePath
+val sandboxOptOuts = listOf("CCM_UNSANDBOXED", "CCM_REAL_CLAUDE", "CCM_SMOKE")
+val sandboxed = provider { sandboxOptOuts.none { providers.environmentVariable(it).isPresent } }
+val sandboxedTasks = setOf("runPreview", "gitShots", "reviewShots", "webShots")
+
+tasks.withType<Test>().configureEach {
+    if (sandboxed.get()) {
+        systemProperty("user.home", sandboxHome)
+        environment("CC_MANAGER_DATA_DIR", "$sandboxHome/.cc-manager")
+        environment("CLAUDE_CONFIG_DIR", "$sandboxHome/.claude")
+    }
+}
+
 tasks.register<JavaExec>("runPreview") {
     group = "application"
-    description = "Boots the UI with fake services (flags: --light, --shots, --out=<dir>)"
+    description = "Boots the UI with fake services (flags: --light, --shots, --out=<dir>, --review sample visual review, --web real browser on the demo page)"
     mainClass = "com.github.krpkbhdn.ccmanager.ui.PreviewMainKt"
     environment(claudeFullscreen)
     classpath = sourceSets["test"].runtimeClasspath
@@ -102,6 +138,34 @@ tasks.register<JavaExec>("reviewShots") {
     classpath = sourceSets["test"].runtimeClasspath
     javaLauncher = javaToolchains.launcherFor(java.toolchain)
     jvmArgs("--enable-native-access=ALL-UNNAMED", *awtOpens.toTypedArray())
+}
+
+tasks.register<JavaExec>("webShots") {
+    group = "application"
+    description = "Renders the Web review screen offscreen to PNGs (flags: --out=<dir> --dark|--light --size=WxH)"
+    mainClass = "com.github.krpkbhdn.ccmanager.ui.web.WebShotsKt"
+    classpath = sourceSets["test"].runtimeClasspath
+    javaLauncher = javaToolchains.launcherFor(java.toolchain)
+    jvmArgs("--enable-native-access=ALL-UNNAMED", *awtOpens.toTypedArray())
+}
+
+tasks.withType<JavaExec>().matching { it.name in sandboxedTasks }.configureEach {
+    if (sandboxed.get()) {
+        systemProperty("user.home", sandboxHome)
+        environment("CC_MANAGER_DATA_DIR", "$sandboxHome/.cc-manager")
+        environment("CLAUDE_CONFIG_DIR", "$sandboxHome/.claude")
+    }
+}
+
+tasks.named<JavaExec>("runPreview") {
+    doFirst {
+        if (args.orEmpty().contains("--real")) {
+            systemProperties.remove("user.home")
+            val ownConfigDir = System.getenv("CLAUDE_CONFIG_DIR")
+            if (ownConfigDir != null) environment("CLAUDE_CONFIG_DIR", ownConfigDir) else environment.remove("CLAUDE_CONFIG_DIR")
+            environment("CC_MANAGER_DATA_DIR", layout.buildDirectory.dir("preview-real-data").get().asFile.absolutePath)
+        }
+    }
 }
 
 compose.desktop {

@@ -148,6 +148,17 @@ class ShortcutActionsTest {
     }
 
     @Test
+    fun `web shortcut selects the web tab in a project`() {
+        runBlocking { state.projects.load() }
+        val id = state.projects.all.first { !it.group }.id
+        state.navigate(Route.Project(id))
+
+        assertThat(actions.perform(AppShortcut.WEB_TAB)).isTrue()
+
+        assertThat(state.viewOf(id).selected).isEqualTo(ProjectTab.Web)
+    }
+
+    @Test
     fun `review shortcut is ignored for a group`() {
         runBlocking { state.projects.load() }
         val id = state.projects.all.first { it.group }.id
