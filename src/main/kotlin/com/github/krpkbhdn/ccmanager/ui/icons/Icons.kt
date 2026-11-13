@@ -117,6 +117,7 @@ object Icons {
     val Square = lucide("square")
     val Circle = lucide("circle")
     val MapPin = lucide("map-pin")
+    val Star = lucide("star")
     val MousePointer = lucide("mouse-pointer-2")
     val PenTool = lucide("pen-tool")
     val ZoomIn = lucide("zoom-in")

@@ -99,7 +99,7 @@ class AppState(
     val backgroundAgents = mutableStateMapOf<Long, List<BackgroundAgent>>()
 
     val prefs = UiPreferences(settingsStore, scope, backend.sound, backend.usageAlerts, backend.usageDefaults) { notifications.reportError(it) }
-    val environment = ClaudeEnvironment(backend, scope) { notifications.reportError(it) }
+    val environment = ClaudeEnvironment(backend, scope, prefs) { notifications.reportError(it) }
     val projects: ProjectsState = ProjectsState(
         backend, scope,
         hasRunningSessions = { live.of(it).isNotEmpty() },

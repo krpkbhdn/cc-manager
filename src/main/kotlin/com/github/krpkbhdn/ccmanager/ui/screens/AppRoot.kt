@@ -48,6 +48,7 @@ import com.github.krpkbhdn.ccmanager.ui.components.ConfirmDialog
 import com.github.krpkbhdn.ccmanager.ui.components.DropOverlay
 import com.github.krpkbhdn.ccmanager.ui.components.IconButton
 import com.github.krpkbhdn.ccmanager.ui.components.RenameDialog
+import com.github.krpkbhdn.ccmanager.ui.ide.AddIdeDialog
 import com.github.krpkbhdn.ccmanager.ui.components.SkeletonBlock
 import com.github.krpkbhdn.ccmanager.ui.components.ToastHost
 import com.github.krpkbhdn.ccmanager.ui.components.trackInputModality
@@ -152,6 +153,7 @@ fun AppRoot(state: AppState, osName: String = System.getProperty("os.name"), mod
             if (state.assistantHelpOpen) AssistantHelpDialog(state.assistantTools) { state.assistantHelpOpen = false }
             state.confirm?.let { ConfirmDialog(it) { state.confirm = null } }
             state.projects.groupDialog?.let { key(it) { GroupDialog(it, state.projects) } }
+            if (state.environment.ideDialogOpen) AddIdeDialog(state.environment)
             state.projects.renaming?.let { RenameDialog(it, { name -> state.projects.rename(it.project, name) }, { state.projects.renaming = null }) }
             if (state.projects.pickerOpen) FolderPickerDialog(initial = null, dataDir = state.dataDir, onDismiss = { state.projects.pickerOpen = false }, onPicked = state.projects::addAt)
             if (dropTarget.hovering) DropOverlay()

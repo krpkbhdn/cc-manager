@@ -31,6 +31,7 @@ data class UiSettings(
     val doNotDisturb: Boolean = false,
     val minimizeToTray: Boolean = true,
     val lastShell: String? = null,
+    val defaultIdeId: String? = null,
     val groupSessionsByProject: Boolean = false,
     val assistantStartup: AssistantStartup = AssistantStartup.ASK,
     val uiScalePercent: Int = DEFAULT_SCALE_PERCENT,
@@ -74,6 +75,7 @@ private const val KEY_OS_ERROR = "notification.os.error"
 private const val KEY_DO_NOT_DISTURB = "notification.dnd"
 private const val KEY_MINIMIZE_TO_TRAY = "window.minimizeToTray"
 private const val KEY_LAST_SHELL = "shell.last"
+private const val KEY_DEFAULT_IDE = "ide.default"
 private const val KEY_GROUP_SESSIONS = "sessions.group"
 private const val KEY_ASSISTANT_STARTUP = "assistant.startup"
 private const val KEY_UI_SCALE = "scale.ui.percent"
@@ -124,6 +126,7 @@ class UiSettingsStore(private val file: Path?) {
             setProperty(KEY_DO_NOT_DISTURB, settings.doNotDisturb.toString())
             setProperty(KEY_MINIMIZE_TO_TRAY, settings.minimizeToTray.toString())
             settings.lastShell?.let { setProperty(KEY_LAST_SHELL, it) }
+            settings.defaultIdeId?.let { setProperty(KEY_DEFAULT_IDE, it) }
             setProperty(KEY_GROUP_SESSIONS, settings.groupSessionsByProject.toString())
             setProperty(KEY_ASSISTANT_STARTUP, settings.assistantStartup.name)
             setProperty(KEY_UI_SCALE, settings.uiScalePercent.toString())
@@ -168,6 +171,7 @@ class UiSettingsStore(private val file: Path?) {
             doNotDisturb = props.flag(KEY_DO_NOT_DISTURB, defaults.doNotDisturb),
             minimizeToTray = props.flag(KEY_MINIMIZE_TO_TRAY, defaults.minimizeToTray),
             lastShell = props.getProperty(KEY_LAST_SHELL),
+            defaultIdeId = props.getProperty(KEY_DEFAULT_IDE),
             groupSessionsByProject = props.flag(KEY_GROUP_SESSIONS, defaults.groupSessionsByProject),
             assistantStartup = AssistantStartup.entries.firstOrNull { it.name == props.getProperty(KEY_ASSISTANT_STARTUP) } ?: defaults.assistantStartup,
             uiScalePercent = props.scalePercent(KEY_UI_SCALE, UiSettings.UI_SCALE_RANGE, defaults.uiScalePercent),

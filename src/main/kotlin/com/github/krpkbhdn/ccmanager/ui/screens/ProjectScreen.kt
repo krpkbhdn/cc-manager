@@ -42,7 +42,11 @@ import com.github.krpkbhdn.ccmanager.ui.run.RunTab
 import com.github.krpkbhdn.ccmanager.ui.run.RunTabActions
 import com.github.krpkbhdn.ccmanager.ui.shortcuts.AppShortcut
 import com.github.krpkbhdn.ccmanager.ui.queue.QueueControl
+import com.github.krpkbhdn.ccmanager.ui.ide.IdeGlyph
 import com.github.krpkbhdn.ccmanager.ui.state.AppState
+import com.github.krpkbhdn.ccmanager.ui.state.ClaudeEnvironment
+import com.github.krpkbhdn.ccmanager.ui.state.IdeMenuActions
+import com.github.krpkbhdn.ccmanager.ui.state.ideMenuEntries
 import com.github.krpkbhdn.ccmanager.ui.git.GitSystemActions
 import com.github.krpkbhdn.ccmanager.ui.git.GitTab
 import com.github.krpkbhdn.ccmanager.ui.git.changes.ReviewTarget
@@ -86,7 +90,9 @@ fun ProjectScreen(state: AppState, project: Project, modifier: Modifier = Modifi
         ProjectHeader(
             project = project,
             status = state.live.statusOf(project.id),
-            ideAvailable = state.environment.ideAvailable,
+            defaultIde = state.environment.defaultIde,
+            defaultIdeIcon = state.environment.defaultIde?.let { state.environment.ideIcons[it.id] },
+            ideMenu = ideMenuEntries(state.environment.ides, state.environment.defaultIde, ideMenuActions(project, state.environment)) { ide -> { IdeGlyph(state.environment.ideIcons[ide.id]) } },
             launching = state.sessions.launching,
             gitSummary = gitState?.summary,
             actions = ProjectHeaderActions(
@@ -95,6 +101,7 @@ fun ProjectScreen(state: AppState, project: Project, modifier: Modifier = Modifi
                 onStartTaskFromTemplate = { state.tasks.quickStartProjectId = project.id },
                 onOpenFolder = { state.environment.openFolder(project) },
                 onOpenIde = { state.environment.openIde(project) },
+                onAddIde = { state.environment.ideDialogOpen = true },
                 onShowGit = { state.openGit(project.id) },
                 onShowChanges = { state.openGit(project.id, GitSubView.CHANGES) },
                 onOpenSettings = { state.extensions.openProjectSettings(project) },
@@ -179,6 +186,13 @@ private fun closeTab(state: AppState, projectId: Long, tab: ProjectTab) {
         else -> Unit
     }
 }
+
+private fun ideMenuActions(project: Project, environment: ClaudeEnvironment) = IdeMenuActions(
+    open = { environment.openInIde(it, project.path) },
+    makeDefault = environment::makeDefaultIde,
+    add = { environment.ideDialogOpen = true },
+    recheck = { environment.recheckIdes() },
+)
 
 private fun shellMenu(state: AppState, projectId: Long): List<MenuEntry> =
     state.shells.available.map { shell ->

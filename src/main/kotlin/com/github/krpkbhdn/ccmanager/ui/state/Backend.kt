@@ -48,6 +48,8 @@ import com.github.krpkbhdn.ccmanager.voice.asset.VoiceAssetService
 import com.github.krpkbhdn.ccmanager.voice.audio.Microphone
 import com.github.krpkbhdn.ccmanager.voice.device.DeviceService
 import com.github.krpkbhdn.ccmanager.workspace.DirectoryOpener
+import com.github.krpkbhdn.ccmanager.workspace.CustomIdeService
+import com.github.krpkbhdn.ccmanager.workspace.IdeDetector
 import com.github.krpkbhdn.ccmanager.workspace.IdeLauncher
 import java.nio.file.Path
 import org.springframework.context.ConfigurableApplicationContext
@@ -64,6 +66,8 @@ class Backend(
     val hooks: HookEventStore,
     val directories: DirectoryOpener,
     val ide: IdeLauncher,
+    val ideDetector: IdeDetector,
+    val customIdes: CustomIdeService,
     val git: GitBackend,
     val rateLimits: RateLimitService,
     val sessionUsage: SessionUsageService,
@@ -111,6 +115,8 @@ class Backend(
             hooks = context.getBean(HookEventStore::class.java),
             directories = context.getBean(DirectoryOpener::class.java),
             ide = context.getBean(IdeLauncher::class.java),
+            ideDetector = context.getBean(IdeDetector::class.java),
+            customIdes = context.getBean(CustomIdeService::class.java),
             git = GitBackend.from(context),
             rateLimits = context.getBean(RateLimitService::class.java),
             sessionUsage = context.getBean(SessionUsageService::class.java),

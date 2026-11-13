@@ -136,6 +136,8 @@ data class MenuEntry(
     val enabled: Boolean = true,
     val dividerAbove: Boolean = false,
     val checked: Boolean? = null,
+    val leading: (@Composable () -> Unit)? = null,
+    val trailing: (@Composable () -> Unit)? = null,
     val onSelect: () -> Unit,
 )
 
@@ -213,8 +215,10 @@ private fun MenuItem(entry: MenuEntry, onDismiss: () -> Unit) {
             entry.checked?.let { CheckSlot(it) }
             entry.status?.let { StatusDot(it, size = 7.dp) }
             entry.icon?.let { Glyph(it, if (entry.danger) colors.danger else colors.textSecondary) }
+            entry.leading?.invoke()
             Label(entry.label, Modifier.weight(1f), color = tint, style = Type.body)
             entry.hint?.let { Label(it, color = colors.textTertiary, style = Type.monoSmall) }
+            entry.trailing?.invoke()
         }
     }
 }

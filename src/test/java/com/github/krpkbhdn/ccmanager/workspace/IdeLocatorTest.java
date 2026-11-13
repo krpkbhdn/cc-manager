@@ -11,6 +11,10 @@ class IdeLocatorTest {
     private final IdeLocator locator = new IdeLocator();
     private final Path home = Path.of("/home/u");
 
+    private java.util.Optional<java.util.List<String>> find(HostEnvironment host) {
+        return locator.find(host, KnownIdes.ALL.getFirst());
+    }
+
     @Test
     void windowsPrefersNewestInstalledVersionIncludingCommunityNaming() {
         var programs = Path.of("C:\\Program Files\\JetBrains");
@@ -20,7 +24,7 @@ class IdeLocatorTest {
                 .withFile(programs.resolve("IntelliJ IDEA Community Edition 2025.1").resolve("bin/idea64.exe"))
                 .withFile(programs.resolve("IntelliJ IDEA 2025.2.3").resolve("bin/idea64.exe"));
 
-        assertThat(locator.find(host)).hasValueSatisfying(command ->
+        assertThat(find(host)).hasValueSatisfying(command ->
                 assertThat(command.getFirst()).contains("IntelliJ IDEA 2025.2.3"));
     }
 
@@ -31,7 +35,7 @@ class IdeLocatorTest {
                 .withEnv("LOCALAPPDATA", "C:\\Users\\u\\AppData\\Local")
                 .withFile(script);
 
-        assertThat(locator.find(host)).contains(java.util.List.of(script.toString()));
+        assertThat(find(host)).contains(java.util.List.of(script.toString()));
     }
 
     @Test
@@ -42,7 +46,7 @@ class IdeLocatorTest {
                 .withFile(onPath)
                 .withFile(Path.of("/snap/bin/intellij-idea-community"));
 
-        assertThat(locator.find(host)).contains(java.util.List.of(onPath.toString()));
+        assertThat(find(host)).contains(java.util.List.of(onPath.toString()));
     }
 
     @Test
@@ -50,7 +54,7 @@ class IdeLocatorTest {
         var host = new FakeHostEnvironment(OperatingSystem.MACOS, home)
                 .withDirectory(Path.of("/Applications/IntelliJ IDEA CE.app"));
 
-        assertThat(locator.find(host)).contains(java.util.List.of("open", "-a", "IntelliJ IDEA CE"));
+        assertThat(find(host)).contains(java.util.List.of("open", "-a", "IntelliJ IDEA CE"));
     }
 
     @Test
@@ -58,7 +62,7 @@ class IdeLocatorTest {
         var host = new FakeHostEnvironment(OperatingSystem.LINUX, home)
                 .withFile(Path.of("/opt/idea-IC-252/bin/idea.sh"));
 
-        assertThat(locator.find(host)).isPresent();
+        assertThat(find(host)).isPresent();
     }
 
     @Test
@@ -68,12 +72,12 @@ class IdeLocatorTest {
                 .withEnv("ProgramFiles", "C:\\Program Files")
                 .withFile(programFiles.resolve("IntelliJ IDEA 2025.2.3 20251010123456").resolve("bin/idea64.exe"));
 
-        assertThat(locator.find(host)).isPresent();
+        assertThat(find(host)).isPresent();
     }
 
     @Test
     void nothingFoundOnEmptyHost() {
-        assertThat(locator.find(new FakeHostEnvironment(OperatingSystem.LINUX, home))).isEmpty();
+        assertThat(find(new FakeHostEnvironment(OperatingSystem.LINUX, home))).isEmpty();
     }
 
     @Test
@@ -81,7 +85,7 @@ class IdeLocatorTest {
         var installed = Path.of("C:\\Program Files\\JetBrains");
         org.junit.jupiter.api.Assumptions.assumeTrue(java.nio.file.Files.isDirectory(installed));
 
-        System.out.println("Resolved IDEA launcher: " + locator.find(new SystemHostEnvironment()).orElse(null));
-        assertThat(locator.find(new SystemHostEnvironment())).isPresent();
+        System.out.println("Resolved IDEA launcher: " + find(new SystemHostEnvironment()).orElse(null));
+        assertThat(find(new SystemHostEnvironment())).isPresent();
     }
 }

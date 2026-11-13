@@ -26,7 +26,7 @@ import com.github.krpkbhdn.ccmanager.ui.theme.colors
 private val segmentHeight = 28.dp
 private val chevronWidth = 24.dp
 
-/** Compact secondary button with a chevron segment opening [menu], or runs [onChevron] instead when given; [label] may be null for an icon-only main segment. */
+/** Compact secondary button with a chevron segment opening [menu], or runs [onChevron] instead when given; [label] may be null for an icon-only main segment; [leading] replaces the icon of a labelled one. */
 @Composable
 fun SplitActionButton(
     label: String?,
@@ -38,13 +38,14 @@ fun SplitActionButton(
     enabled: Boolean = true,
     tooltip: String? = null,
     onChevron: (() -> Unit)? = null,
+    leading: (@Composable () -> Unit)? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val left = RoundedCornerShape(topStart = Radius.md, bottomStart = Radius.md)
     val right = RoundedCornerShape(topEnd = Radius.md, bottomEnd = Radius.md)
     Row(modifier.alpha(if (enabled) 1f else Alpha.DISABLED), verticalAlignment = Alignment.CenterVertically) {
         if (label != null) {
-            AppButton(label, onClick, icon = icon, enabled = enabled, loading = loading, compact = true, tooltip = tooltip, shape = left)
+            AppButton(label, onClick, icon = icon, enabled = enabled, loading = loading, compact = true, tooltip = tooltip, shape = left, leading = leading)
         } else {
             WithTooltip(tooltip) {
                 Pressable(onClick, Modifier.height(segmentHeight).width(segmentHeight + 2.dp).border(1.dp, colors.borderStrong, left), left, base = colors.surfaceRaised, hover = colors.surfaceHover, enabled = enabled && !loading) {

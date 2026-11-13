@@ -1,5 +1,7 @@
 package com.github.krpkbhdn.ccmanager.workspace;
 
+import com.github.krpkbhdn.ccmanager.workspace.HostEnvironment.OperatingSystem;
+import com.github.krpkbhdn.ccmanager.workspace.IdeDefinition.Location;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -7,79 +9,58 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
-/** Finds an IntelliJ IDEA launcher for the current OS and returns the command prefix; the directory is appended by the caller. */
+/** Finds the launcher of one known IDE for the current OS and returns the command prefix; the directory is appended by the caller. */
 @Component
 public class IdeLocator {
 
     private static final Pattern VERSION_PART = Pattern.compile("\\d{1,9}");
-    private static final String WINDOWS_DEFAULT_PROGRAM_FILES = "C:\\Program Files";
-    private static final String INSTALL_DIRECTORY_PREFIX = "IntelliJ IDEA";
-    private static final List<String> PATH_LAUNCHERS = List.of("idea", "idea64", "idea.cmd", "idea64.exe", "idea.sh");
-    private static final List<String> MAC_APPLICATIONS = List.of("IntelliJ IDEA", "IntelliJ IDEA CE");
-    private static final List<Path> LINUX_FIXED = List.of(
-            Path.of("/snap/bin/intellij-idea-ultimate"), Path.of("/snap/bin/intellij-idea-community"));
 
     /** A launcher is usable when probe exists; command is what to run (without the directory argument). */
     record Candidate(Path probe, List<String> command) {}
 
-    public Optional<List<String>> find(HostEnvironment host) {
-        return candidates(host).stream()
+    public Optional<List<String>> find(HostEnvironment host, IdeDefinition ide) {
+        return candidates(host, ide).stream()
                 .filter(candidate -> host.isFile(candidate.probe()) || host.isDirectory(candidate.probe()))
                 .map(Candidate::command)
                 .findFirst();
     }
 
-    List<Candidate> candidates(HostEnvironment host) {
+    List<Candidate> candidates(HostEnvironment host, IdeDefinition ide) {
         var result = new ArrayList<Candidate>();
-        host.pathCandidates(PATH_LAUNCHERS).forEach(path -> result.add(executable(path)));
-        switch (host.os()) {
-            case WINDOWS -> addWindows(host, result);
-            case MACOS -> addMac(host, result);
-            case LINUX -> addLinux(host, result);
+        host.pathCandidates(ide.pathLaunchers()).forEach(path -> result.add(executable(path)));
+        if (host.os() == OperatingSystem.MACOS) {
+            addMacApplications(host, ide, result);
+        }
+        for (var location : ide.locations().getOrDefault(host.os(), List.of())) {
+            addLocation(host, location, result);
         }
         return result;
     }
 
-    private static void addWindows(HostEnvironment host, List<Candidate> result) {
-        var localAppData = pathOf(host.env("LOCALAPPDATA"), host.home().resolve("AppData").resolve("Local"));
-        result.add(executable(localAppData.resolve("JetBrains").resolve("Toolbox").resolve("scripts").resolve("idea.cmd")));
-        var programFiles = pathOf(host.env("ProgramFiles"), Path.of(WINDOWS_DEFAULT_PROGRAM_FILES));
-        addInstalled(host, result, programFiles.resolve("JetBrains"), INSTALL_DIRECTORY_PREFIX, "bin/idea64.exe");
-        addInstalled(host, result, localAppData.resolve("Programs"), INSTALL_DIRECTORY_PREFIX, "bin/idea64.exe");
-    }
-
-    private static void addMac(HostEnvironment host, List<Candidate> result) {
+    private static void addMacApplications(HostEnvironment host, IdeDefinition ide, List<Candidate> result) {
         var applicationDirectories = List.of(Path.of("/Applications"), host.home().resolve("Applications"));
         for (var directory : applicationDirectories) {
-            for (var application : MAC_APPLICATIONS) {
+            for (var application : ide.macApplications()) {
                 result.add(new Candidate(directory.resolve(application + ".app"), List.of("open", "-a", application)));
             }
         }
-        result.add(executable(toolboxScript(host)));
     }
 
-    private static void addLinux(HostEnvironment host, List<Candidate> result) {
-        result.add(executable(toolboxScript(host)));
-        LINUX_FIXED.forEach(path -> result.add(executable(path)));
-        addInstalled(host, result, Path.of("/opt"), "idea", "bin/idea.sh");
+    private static void addLocation(HostEnvironment host, Location location, List<Candidate> result) {
+        var directories = List.of(location.root().resolve(host).resolve(location.parent()));
+        for (var prefix : location.directoryPrefixes()) {
+            directories = directories.stream().flatMap(parent -> newestFirst(host, parent, prefix)).toList();
+        }
+        directories.forEach(directory -> result.add(executable(directory.resolve(location.launcher()))));
     }
 
-    private static Path toolboxScript(HostEnvironment host) {
-        return host.home().resolve(".local").resolve("share").resolve("JetBrains").resolve("Toolbox").resolve("scripts").resolve("idea");
-    }
-
-    private static void addInstalled(HostEnvironment host, List<Candidate> result, Path parent, String prefix, String relativeLauncher) {
-        host.childDirectoriesStartingWith(parent, prefix).stream()
-                .sorted((left, right) -> compare(versionOf(right), versionOf(left)))
-                .forEach(dir -> result.add(executable(dir.resolve(relativeLauncher))));
+    private static java.util.stream.Stream<Path> newestFirst(HostEnvironment host, Path parent, String prefix) {
+        return host.childDirectoriesStartingWith(parent, prefix).stream()
+                .sorted((left, right) -> compare(versionOf(right), versionOf(left)));
     }
 
     private static Candidate executable(Path launcher) {
         return new Candidate(launcher, List.of(launcher.toString()));
-    }
-
-    private static Path pathOf(String value, Path fallback) {
-        return value == null || value.isBlank() ? fallback : Path.of(value);
     }
 
     /** Numeric parts of the directory name ("IntelliJ IDEA 2025.2.3" -> 2025.2.3) packed for comparison; a longer digit run (a build timestamp) is split so it cannot overflow. */

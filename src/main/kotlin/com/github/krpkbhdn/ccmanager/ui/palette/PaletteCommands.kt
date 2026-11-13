@@ -125,7 +125,8 @@ private fun contextActions(state: AppState, project: Project, here: String): Lis
 private fun projectOnlyActions(state: AppState, project: Project, here: String): List<PaletteItem> {
     return shellActions(state, project.id, here) + listOfNotNull(
         PaletteItem("open-folder", "Open folder", PaletteGroup.ACTIONS, here, Icons.FolderOpen) { state.environment.openFolder(project) },
-        PaletteItem("open-ide", "Open in IntelliJ IDEA", PaletteGroup.ACTIONS, here, Icons.Code) { state.environment.openIde(project) },
+        PaletteItem("open-ide", "Open in IDE", PaletteGroup.ACTIONS, here, Icons.Code) { state.environment.openIde(project) },
+        PaletteItem("add-ide", "Add IDE...", PaletteGroup.ACTIONS, here, Icons.Code) { state.environment.ideDialogOpen = true },
         PaletteItem("project-settings", "Project settings", PaletteGroup.ACTIONS, "$here: plugins, MCP servers, skills", Icons.Settings, shortcut = AppShortcut.PROJECT_SETTINGS) { state.extensions.openProjectSettings(project) },
         state.runs.selectedOf(project.id)?.let { runItem(state, it, here) },
         state.runs.selectedOf(project.id)?.takeIf { it.running }?.let { entry -> PaletteItem("stop-run", "Stop ${entry.name}", PaletteGroup.ACTIONS, here, Icons.Stop) { state.runs.stop(entry.id) } },

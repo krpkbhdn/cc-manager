@@ -70,6 +70,7 @@ fun AppButton(
     tooltip: String? = null,
     shape: RoundedCornerShape = RoundedCornerShape(Radius.md),
     trailing: (@Composable () -> Unit)? = null,
+    leading: (@Composable () -> Unit)? = null,
 ) {
     val look = lookOf(variant, enabled)
     val glow = if (look.glow) Modifier.shadow(glowElevation, shape, ambientColor = colors.accent.copy(alpha = GLOW_ALPHA), spotColor = colors.accent.copy(alpha = GLOW_ALPHA)) else Modifier
@@ -93,6 +94,7 @@ fun AppButton(
             ) {
                 when {
                     loading -> Spinner(size = iconSize, tint = look.text)
+                    leading != null -> leading()
                     icon != null -> Glyph(icon, look.text, size = iconSize)
                 }
                 Label(text, color = look.text, style = Type.bodyMedium)
