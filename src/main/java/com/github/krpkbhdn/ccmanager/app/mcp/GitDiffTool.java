@@ -4,6 +4,7 @@ import com.github.krpkbhdn.ccmanager.git.GitStatus;
 import com.github.krpkbhdn.ccmanager.git.GitStatusService;
 import com.github.krpkbhdn.ccmanager.git.SecretFiles;
 import com.github.krpkbhdn.ccmanager.project.ProjectService;
+import com.github.krpkbhdn.ccmanager.security.SecretFilter;
 import com.github.krpkbhdn.ccmanager.workspace.GitDiff;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -132,7 +133,7 @@ class GitDiffTool extends GitTool {
             text.append("binary file\n");
         }
         diff.lines().stream().filter(line -> line.kind() != GitDiff.LineKind.META)
-                .forEach(line -> text.append(prefix(line.kind())).append(line.text()).append('\n'));
+                .forEach(line -> text.append(prefix(line.kind())).append(SecretFilter.mask(line.text())).append('\n'));
     }
 
     private static String prefix(GitDiff.LineKind kind) {

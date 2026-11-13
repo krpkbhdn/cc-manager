@@ -30,6 +30,11 @@ final class StatusReducer {
     private StatusReducer() {}
 
     static SessionState reduce(SessionState state, HookEvent event) {
+        return reduce(state, event, false);
+    }
+
+    /** [otherActionHeld]: another proposal of this session is still waiting for the user, so a tool event must not clear the red. */
+    static SessionState reduce(SessionState state, HookEvent event, boolean otherActionHeld) {
         var observed = state.edit(draft -> observe(draft, event));
         var type = event.type();
         if (type == HookEventType.SUBAGENT_START) {
@@ -38,7 +43,7 @@ final class StatusReducer {
         if (type == HookEventType.SUBAGENT_STOP) {
             return withActivity(subagentStopped(observed, event), event);
         }
-        return event.fromSubagent() ? subagentEvent(observed, event) : withActivity(mainEvent(observed, event), event);
+        return event.fromSubagent() ? subagentEvent(observed, event) : withActivity(mainEvent(observed, event, otherActionHeld), event);
     }
 
     /** Esc fires no Stop, so the owner of the terminal reports the interrupt. */
@@ -66,7 +71,7 @@ final class StatusReducer {
         return ActivityFormatter.describe(event).map(text -> state.edit(draft -> draft.activity = text)).orElse(state);
     }
 
-    private static SessionState mainEvent(SessionState state, HookEvent event) {
+    private static SessionState mainEvent(SessionState state, HookEvent event, boolean otherActionHeld) {
         return switch (event.type()) {
             case SESSION_START -> sessionStarted(state, event);
             case USER_PROMPT_SUBMIT -> state.edit(draft -> {
@@ -74,10 +79,12 @@ final class StatusReducer {
                 draft.error = "";
                 draft.resolveAction();
             });
-            case PRE_TOOL_USE -> state.edit(draft -> preTool(draft, event));
+            case PRE_TOOL_USE -> state.edit(draft -> preTool(draft, event, otherActionHeld));
             case POST_TOOL_USE, POST_TOOL_USE_FAILURE, ELICITATION_RESULT -> state.edit(draft -> {
                 draft.turnOpen = true;
-                draft.resolveAction();
+                if (!otherActionHeld) {
+                    draft.resolveAction();
+                }
                 rememberBackgroundLaunch(draft, event);
             });
             case PERMISSION_REQUEST, ELICITATION -> state.edit(draft -> draft.requireAction());
@@ -114,9 +121,11 @@ final class StatusReducer {
         });
     }
 
-    private static void preTool(SessionState.Draft draft, HookEvent event) {
+    private static void preTool(SessionState.Draft draft, HookEvent event, boolean otherActionHeld) {
         draft.turnOpen = true;
-        draft.resolveAction();
+        if (!otherActionHeld) {
+            draft.resolveAction();
+        }
         if (USER_DECISION_TOOLS.contains(event.text("tool_name"))) {
             draft.requireAction();
         }

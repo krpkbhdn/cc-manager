@@ -24,6 +24,17 @@ class TranscriptServiceTest {
     }
 
     @Test
+    void titleOfAPathOutsideTheRootIsEmptyWithoutTouchingTheFile() throws Exception {
+        var root = Files.createDirectory(dir.resolve("projects"));
+        var outside = dir.resolve("outside.jsonl");
+        Files.writeString(outside, "{\"type\":\"ai-title\",\"aiTitle\":\"Secret\"}\n" + user("x") + "\n");
+
+        assertThat(service(root).title(outside.toString())).isEmpty();
+        assertThat(service(root).title(root.resolve("..").resolve("outside.jsonl").toString())).isEmpty();
+        assertThat(service(root).title("\\\\unreachable-host\\share\\t.jsonl")).isEmpty();
+    }
+
+    @Test
     void rendersPromptAssistantToolCallAndResultAndSkipsNoise() throws Exception {
         var file = dir.resolve("agent.jsonl");
         Files.writeString(file, String.join("\n",

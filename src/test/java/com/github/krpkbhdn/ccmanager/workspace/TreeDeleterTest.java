@@ -79,8 +79,8 @@ class TreeDeleterTest {
     private static void link(Path link, Path target) throws IOException, InterruptedException {
         if (System.getProperty("os.name").startsWith("Windows")) {
             var junction = new ProcessBuilder("cmd", "/c", "mklink", "/J", link.toString(), target.toString()).redirectErrorStream(true).start();
-            junction.getInputStream().readAllBytes();
-            assumeTrue(junction.waitFor() == 0);
+            var output = new String(junction.getInputStream().readAllBytes());
+            assertThat(junction.waitFor()).as("mklink /J failed: %s", output).isZero();
         } else {
             Files.createSymbolicLink(link, target);
         }

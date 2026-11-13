@@ -25,7 +25,7 @@ class FileApplier implements PresetComponentApplier {
         var resolved = ProjectFiles.resolve(projectDir, path);
         var state = ProjectFiles.compare(resolved, content(component));
         if (CodeExecutingPaths.matches(projectDir, resolved)) {
-            return PlannedChange.of(component, ChangeAction.NEEDS_CONFIRMATION, path + " runs code automatically, create it yourself after reviewing it")
+            return PlannedChange.of(component, ChangeAction.NEEDS_CONFIRMATION, CodeExecutingPaths.runsCode(path))
                     .withPreview(content(component));
         }
         var missingLines = missingIgnoreLines(component, projectDir);

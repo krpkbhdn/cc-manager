@@ -41,6 +41,9 @@ public class GitSyncService {
             args.add("--all");
         } else {
             GitRevisions.requireNotOption(remote);
+            if (!remoteNames(repo).contains(remote)) {
+                throw new GitException(Kind.OTHER, "Unknown remote: " + remote, "");
+            }
             args.add(remote);
         }
         network(repo, progress, args.toArray(String[]::new));
@@ -76,12 +79,16 @@ public class GitSyncService {
         git.run(repo, git.properties().syncTimeout(), progress, null, Arrays.asList(args));
     }
 
+    private List<String> remoteNames(Path repo) {
+        return git.out(repo, "remote").lines().map(String::strip).filter(name -> !name.isEmpty()).toList();
+    }
+
     private String remoteFor(Path repo, String branch) {
         var configured = git.tryRun(repo, "config", "branch." + branch + ".remote");
         if (configured.ok() && !configured.stdout().isBlank()) {
             return configured.stdout().strip();
         }
-        var remotes = git.out(repo, "remote").lines().map(String::strip).filter(name -> !name.isEmpty()).toList();
+        var remotes = remoteNames(repo);
         if (remotes.size() == 1) {
             return remotes.getFirst();
         }

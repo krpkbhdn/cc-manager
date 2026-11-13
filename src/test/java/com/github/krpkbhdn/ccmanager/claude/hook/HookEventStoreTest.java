@@ -102,6 +102,15 @@ class HookEventStoreTest {
     }
 
     @Test
+    void nonCommandFieldsAreMaskedStrictly() {
+        store.save(of("UserPromptSubmit", "{\"prompt\":\"DB_PASS=hunter2 and key 0123456789abcdef0123456789abcdef01234567\"}"));
+
+        var stored = jdbc.sql("SELECT payload FROM hook_event").query(String.class).single();
+
+        assertThat(stored).doesNotContain("hunter2", "0123456789abcdef");
+    }
+
+    @Test
     void aSecretCrossingTheCutLimitLeaksNothingBeyondTheKeptPrefix() {
         store.save(of("UserPromptSubmit", "{\"prompt\":\"aaaa password=hunter2secret\"}"));
         store.save(of("UserPromptSubmit", "{\"prompt\":\"aaaaaaaaaa password=hunter2secret\"}"));

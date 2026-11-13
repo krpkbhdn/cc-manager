@@ -17,16 +17,23 @@ internal class BitmapCache(private val scope: CoroutineScope, private val limit:
     private val failures = mutableStateMapOf<Long, Boolean>()
     private val order = ArrayDeque<Long>()
     private val loading = ConcurrentHashMap.newKeySet<Long>()
+    private val drops = ConcurrentHashMap<Long, Int>()
+
+    /** How often [drop] hit the id: a decode that started before a drop must not store its result. shortcut: one Int per dropped id is kept for good, ids are few. */
+    private fun generation(id: Long): Int = drops[id] ?: 0
 
     fun get(image: ReviewImage): ImageBitmap? {
         store[image.id]?.let { return it }
         if (failures.containsKey(image.id)) return null
-        if (loading.add(image.id)) scope.launch {
-            try {
-                val decoded = decodeOrNull(image)
-                if (decoded != null) put(image.id, decoded) else fail(image.id)
-            } finally {
-                loading.remove(image.id)
+        if (loading.add(image.id)) {
+            val generation = generation(image.id)
+            scope.launch {
+                try {
+                    val decoded = decodeOrNull(image)
+                    if (decoded != null) put(image.id, decoded, generation) else fail(image.id, generation)
+                } finally {
+                    loading.remove(image.id)
+                }
             }
         }
         return null
@@ -36,13 +43,15 @@ internal class BitmapCache(private val scope: CoroutineScope, private val limit:
 
     /** shortcut: past [MAX_FAILURES] all remembered failures are forgotten (a bad picture is retried once), no per-entry age. */
     @Synchronized
-    private fun fail(id: Long) {
+    private fun fail(id: Long, generation: Int) {
+        if (generation != generation(id)) return
         if (failures.size >= MAX_FAILURES) failures.clear()
         failures[id] = true
     }
 
     @Synchronized
     fun drop(id: Long) {
+        drops.merge(id, 1, Int::plus)
         store.remove(id)
         failures.remove(id)
         order.remove(id)
@@ -59,7 +68,8 @@ internal class BitmapCache(private val scope: CoroutineScope, private val limit:
     }
 
     @Synchronized
-    private fun put(id: Long, bitmap: ImageBitmap) {
+    private fun put(id: Long, bitmap: ImageBitmap, generation: Int) {
+        if (generation != generation(id)) return
         store[id] = bitmap
         order.remove(id)
         order.addLast(id)

@@ -242,6 +242,35 @@ class WebStateTest {
     }
 
     @Test
+    fun `a project that is gone loses its cached revisions and items`() {
+        `when`(service.revisions(1)).thenReturn(listOf(revision(6, ReviewStatus.PENDING)))
+        `when`(service.allItems(6)).thenReturn(listOf(item(1, revisionId = 6)))
+        state.revisions(1)
+        await { state.items(6).isNotEmpty() }
+
+        state.retain(listOf(2L))
+
+        assertThat(state.revisions(1)).isEmpty()
+        assertThat(state.items(6)).isEmpty()
+    }
+
+    @Test
+    fun `a revision that no longer exists loses its items after a reload`() {
+        var changed = Runnable { }
+        `when`(service.subscribe(org.mockito.ArgumentMatchers.any())).thenAnswer { changed = it.getArgument(0); Runnable { } }
+        `when`(service.revisions(1)).thenReturn(listOf(revision(6, ReviewStatus.PENDING), revision(5, ReviewStatus.SENT)), listOf(revision(6, ReviewStatus.PENDING)))
+        `when`(service.allItems(6)).thenReturn(listOf(item(1, revisionId = 6)))
+        `when`(service.allItems(5)).thenReturn(listOf(item(2)))
+        state.revisions(1)
+        await { state.items(5).isNotEmpty() }
+
+        changed.run()
+
+        await { state.items(5).isEmpty() }
+        assertThat(state.items(6)).isNotEmpty()
+    }
+
+    @Test
     fun `a second send while one is running queues the prompt once`() {
         liveSessions = LiveSessions(sessions = listOf(snapshot("s1")))
         val release = java.util.concurrent.CountDownLatch(1)

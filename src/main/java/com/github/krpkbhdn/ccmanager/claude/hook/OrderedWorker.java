@@ -6,6 +6,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 
 /** One thread and a bounded queue: a stalled consumer makes the newest work fail with RejectedExecutionException instead of growing memory. */
 final class OrderedWorker {
@@ -15,6 +16,7 @@ final class OrderedWorker {
     private static final Duration EXECUTOR_STOP_WAIT = Duration.ofSeconds(2);
 
     private final ThreadPoolExecutor executor;
+    private final ReentrantLock enqueueOrder = new ReentrantLock(true);
 
     OrderedWorker(String name, int maxQueued) {
         executor = new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(maxQueued),
@@ -22,11 +24,32 @@ final class OrderedWorker {
     }
 
     void execute(Runnable task) {
-        executor.execute(task);
+        enqueueOrder.lock();
+        try {
+            executor.execute(task);
+        } finally {
+            enqueueOrder.unlock();
+        }
     }
 
-    /** Waits (on the already answered request's virtual thread) for a slot in the same ordered queue, so order is kept and nothing is queued after stop. */
-    boolean executeWhenRoomFrees(Runnable task) {
+    /**
+     * Queues the task, waiting for room when the queue is full. The fair lock is held while waiting, so every later task
+     * (of any session) queues behind this one and order is kept.
+     * @return false when it could not be queued (stopped or no room within the wait)
+     */
+    boolean executeWaitingForRoom(Runnable task) {
+        enqueueOrder.lock();
+        try {
+            executor.execute(task);
+            return true;
+        } catch (RejectedExecutionException full) {
+            return waitForRoom(task);
+        } finally {
+            enqueueOrder.unlock();
+        }
+    }
+
+    private boolean waitForRoom(Runnable task) {
         var deadline = System.nanoTime() + CRITICAL_ENQUEUE_WAIT.toNanos();
         try {
             while (!executor.isShutdown() && System.nanoTime() < deadline) {

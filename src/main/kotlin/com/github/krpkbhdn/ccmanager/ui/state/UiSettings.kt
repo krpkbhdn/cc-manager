@@ -4,6 +4,7 @@ import com.github.krpkbhdn.ccmanager.git.GitMisc.PullMode
 import com.github.krpkbhdn.ccmanager.ui.assistant.AssistantStartup
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitPrefs
 import com.github.krpkbhdn.ccmanager.ui.git.model.GitSubView
+import com.github.krpkbhdn.ccmanager.ui.picker.writeAtomically
 import com.github.krpkbhdn.ccmanager.ui.theme.Scale
 import java.io.IOException
 import java.nio.file.Files
@@ -144,8 +145,8 @@ class UiSettingsStore(private val file: Path?) {
             settings.git.views.forEach { (projectId, view) -> setProperty(KEY_GIT_VIEW + projectId, view.name) }
         }
         try {
-            target.parent?.let(Files::createDirectories)
-            Files.newBufferedWriter(target).use { props.store(it, FILE_COMMENT) }
+            val text = java.io.StringWriter().also { props.store(it, FILE_COMMENT) }.toString()
+            writeAtomically(target.toAbsolutePath(), text)
         } catch (e: IOException) {
             // Preferences are best effort: losing them must never break the UI.
         }

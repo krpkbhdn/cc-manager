@@ -68,7 +68,7 @@ class InspectorMessageTest {
         assertThat(inspect.reason).isEqualTo("menu")
         assertThat(inspect.target.similarCount).isEqualTo(4)
         assertThat(inspect.target.stableClasses).containsExactly("save")
-        assertThat(inspect.target.contrast).isEqualTo(ContrastInfo(4.6, "#000", "#fff", false, aa = true, aaa = false))
+        assertThat(inspect.target.contrast).isEqualTo(ContrastReading(4.6, "#000", "#fff", false, aa = true, aaa = false))
         assertThat(InspectorMessage.parse("""{"type":"annotationHover","id":"a1","rect":{"x":1,"y":2,"w":3,"h":4}}"""))
             .isEqualTo(InspectorMessage.AnnotationHover("a1", Rect(1.0, 2.0, 3.0, 4.0)))
         assertThat(InspectorMessage.parse("""{"type":"annotationLeave"}""")).isEqualTo(InspectorMessage.AnnotationLeave)

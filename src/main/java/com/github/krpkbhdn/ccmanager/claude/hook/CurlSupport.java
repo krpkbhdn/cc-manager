@@ -31,13 +31,24 @@ public class CurlSupport {
         this.versionOutput = versionOutput;
     }
 
-    /** False for an older or unknown curl; the caller then sends no curl command rather than put the token into argv. */
+    /**
+     * False for an older or unknown curl; the caller then sends no curl command rather than put the token into argv.
+     * A curl that could not be run (null output: timeout, IOException) is not remembered, so a later call asks again.
+     */
     public boolean expandsEnvironment(String executable) {
-        return expandsByExecutable.computeIfAbsent(executable, this::detect);
+        var known = expandsByExecutable.get(executable);
+        if (known != null) {
+            return known;
+        }
+        var version = versionOutput.apply(executable);
+        var supported = detect(executable, version);
+        if (version != null) {
+            expandsByExecutable.put(executable, supported);
+        }
+        return supported;
     }
 
-    private boolean detect(String executable) {
-        var version = versionOutput.apply(executable);
+    private boolean detect(String executable, String version) {
         var matcher = VERSION.matcher(version == null ? "" : version);
         var supported = matcher.find() && atLeastMinimum(Integer.parseInt(matcher.group(1)), Integer.parseInt(matcher.group(2)));
         if (!supported) {
@@ -56,14 +67,14 @@ public class CurlSupport {
             var process = new ProcessBuilder(executable, "--version").redirectErrorStream(true).start();
             if (!process.waitFor(VERSION_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 process.destroyForcibly();
-                return "";
+                return null;
             }
             return new String(process.getInputStream().readAllBytes());
         } catch (IOException e) {
-            return "";
+            return null;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return "";
+            return null;
         }
     }
 }

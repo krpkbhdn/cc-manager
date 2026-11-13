@@ -74,6 +74,20 @@ class ReviewStateTest {
     }
 
     @Test
+    fun `a project that is gone loses its cached reviews and images`() {
+        `when`(service.list(1)).thenReturn(listOf(review(1, ReviewStatus.PENDING)))
+        `when`(service.images(1)).thenReturn(listOf(ReviewImage(10, 1, 0, "a", "a.png", 1, 1)))
+        state.start()
+        await { state.reviews(1).isNotEmpty() }
+        await { state.images(1).isNotEmpty() }
+
+        state.retain(listOf(2L))
+
+        assertThat(state.images(1)).isEmpty()
+        assertThat(state.selectedReview(1)).isNull()
+    }
+
+    @Test
     fun `the newest pending review is selected by default and counted`() {
         `when`(service.list(1)).thenReturn(listOf(review(1, ReviewStatus.PENDING), review(2, ReviewStatus.APPROVED), review(3, ReviewStatus.PENDING)))
         state.start()

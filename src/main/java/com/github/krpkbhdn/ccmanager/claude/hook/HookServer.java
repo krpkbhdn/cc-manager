@@ -210,20 +210,20 @@ public class HookServer implements SmartLifecycle {
             return;
         }
         exchange.sendResponseHeaders(OK, NO_RESPONSE_BODY);
-        try {
-            payload.ifPresent(parsed -> worker.execute(() -> consume(ccmSessionId, parsed, receivedAt, consumer)));
-        } catch (RejectedExecutionException e) {
-            if (payload.filter(this::endsAStatus).isPresent()) {
-                exchange.close();
-                enqueueWhenRoomFrees(ccmSessionId, payload.get(), receivedAt, consumer);
-            } else {
-                dropped("hook call", ccmSessionId);
-            }
-        }
+        exchange.close();
+        payload.ifPresent(parsed -> enqueue(ccmSessionId, parsed, receivedAt, consumer));
     }
 
-    private void enqueueWhenRoomFrees(String ccmSessionId, JsonNode payload, Instant receivedAt, BodyConsumer consumer) {
-        if (!worker.executeWhenRoomFrees(() -> consume(ccmSessionId, payload, receivedAt, consumer))) {
+    /** The worker's enqueue lock keeps order: while a status-ending event waits for room, later events queue behind it. */
+    private void enqueue(String ccmSessionId, JsonNode payload, Instant receivedAt, BodyConsumer consumer) {
+        Runnable task = () -> consume(ccmSessionId, payload, receivedAt, consumer);
+        try {
+            if (!endsAStatus(payload)) {
+                worker.execute(task);
+            } else if (!worker.executeWaitingForRoom(task)) {
+                dropped("hook call", ccmSessionId);
+            }
+        } catch (RejectedExecutionException e) {
             dropped("hook call", ccmSessionId);
         }
     }

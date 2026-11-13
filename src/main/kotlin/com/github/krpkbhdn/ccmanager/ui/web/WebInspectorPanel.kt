@@ -100,7 +100,7 @@ private fun TargetHeader(target: ElementTarget, view: WebView) {
 }
 
 @Composable
-private fun ContrastRow(contrast: ContrastInfo) {
+private fun ContrastRow(contrast: ContrastReading) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         ColorSwatch(contrast.fg)
         ColorSwatch(contrast.bg)

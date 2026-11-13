@@ -33,4 +33,18 @@ class FullMigrationTest {
                 .contains("description");
         assertThat(jdbc.sql("SELECT count(*) FROM team").query(Integer.class).single()).isPositive();
     }
+
+    @Test
+    void databaseWithRetiredVersion25InHistoryStillMigrates() {
+        var dataSource = new DriverManagerDataSource("jdbc:sqlite:" + temp.resolve("retired.db") + "?foreign_keys=on");
+        Flyway.configure().dataSource(dataSource).target("24").load().migrate();
+        var jdbc = JdbcClient.create(dataSource);
+        jdbc.sql("INSERT INTO flyway_schema_history (installed_rank, version, description, type, script, checksum, installed_by, execution_time, success)"
+                + " VALUES (25, '25', 'web review item shape', 'SQL', 'V25__web_review_item_shape.sql', 1, 'test', 1, 1)").update();
+
+        Flyway.configure().dataSource(dataSource).ignoreMigrationPatterns("*:missing").load().migrate();
+
+        assertThat(jdbc.sql("SELECT name FROM pragma_table_info('team')").query(String.class).list())
+                .doesNotContain("lead_role_id");
+    }
 }

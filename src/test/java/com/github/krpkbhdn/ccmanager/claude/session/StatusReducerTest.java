@@ -56,6 +56,19 @@ class StatusReducerTest {
     }
 
     @Test
+    void toolEventsKeepTheRedWhileAnotherProposalOfTheSessionIsStillHeld() {
+        apply("UserPromptSubmit", "{}");
+        apply("PermissionRequest", "{\"tool_name\":\"Bash\"}");
+
+        state = StatusReducer.reduce(state, of("PostToolUse", "{\"tool_name\":\"Read\",\"tool_use_id\":\"t2\"}"), true);
+        assertThat(state.toSnapshot().status()).isEqualTo(AgentStatus.NEEDS_ACTION);
+        state = StatusReducer.reduce(state, of("PreToolUse", "{\"tool_name\":\"Read\",\"tool_use_id\":\"t3\"}"), true);
+        assertThat(state.toSnapshot().status()).isEqualTo(AgentStatus.NEEDS_ACTION);
+
+        assertThat(apply("PostToolUse", "{\"tool_name\":\"Bash\",\"tool_use_id\":\"t1\"}").status()).isEqualTo(AgentStatus.WORKING);
+    }
+
+    @Test
     void permissionDeniedTurnEndsWithStop() {
         apply("UserPromptSubmit", "{}");
         apply("PermissionRequest", "{\"tool_name\":\"Bash\"}");

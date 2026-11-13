@@ -133,7 +133,7 @@ class HookSettingsWriterTest {
                 .path("hooks").get(0);
 
         assertThat(handler.path("type").asString()).isEqualTo("command");
-        assertThat(handler.path("command").asString()).isEqualTo("curl -s -m 3 -X POST -H 'Content-Type: application/json' "
+        assertThat(handler.path("command").asString()).isEqualTo("curl -s --noproxy '*' -m 3 -X POST -H 'Content-Type: application/json' "
                 + "--variable %CCM_HOOK_TOKEN --expand-header 'Authorization: Bearer {{CCM_HOOK_TOKEN}}' --data-binary '@-' '" + URL + "'");
         assertThat(handler.path("async").asBoolean()).isTrue();
     }
@@ -156,7 +156,7 @@ class HookSettingsWriterTest {
         var statusLine = mapper.readTree(Files.readString(writer.write("abc-1").settings())).path("statusLine");
 
         assertThat(statusLine.path("type").asString()).isEqualTo("command");
-        assertThat(statusLine.path("command").asString()).isEqualTo("curl -s -m 3 -X POST -H 'Content-Type: application/json' "
+        assertThat(statusLine.path("command").asString()).isEqualTo("curl -s --noproxy '*' -m 3 -X POST -H 'Content-Type: application/json' "
                 + "--variable %CCM_HOOK_TOKEN --expand-header 'Authorization: Bearer {{CCM_HOOK_TOKEN}}' --data-binary '@-' '" + STATUS_LINE_URL + "'");
     }
 
@@ -165,7 +165,7 @@ class HookSettingsWriterTest {
         var json = mapper.readTree(Files.readString(windowsWriter.write("abc-1").settings()));
 
         var handler = json.path("hooks").path("SessionStart").get(0).path("hooks").get(0);
-        assertThat(handler.path("command").asString()).isEqualTo("curl.exe -s -m 3 -X POST -H \"Content-Type: application/json\" "
+        assertThat(handler.path("command").asString()).isEqualTo("curl.exe -s --noproxy \"*\" -m 3 -X POST -H \"Content-Type: application/json\" "
                 + "--variable %CCM_HOOK_TOKEN --expand-header \"Authorization: Bearer {{CCM_HOOK_TOKEN}}\" --data-binary \"@-\" \"" + URL + "\"");
         assertThat(json.path("statusLine").path("command").asString()).startsWith("curl.exe ").contains("\"" + STATUS_LINE_URL + "\"")
                 .doesNotContain("$");

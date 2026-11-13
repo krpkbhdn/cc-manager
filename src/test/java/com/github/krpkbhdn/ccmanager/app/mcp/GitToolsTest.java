@@ -224,6 +224,17 @@ class GitToolsTest {
     }
 
     @Test
+    void diffMasksSecretsInChangedLines() {
+        var lines = List.of(new GitDiff.Line(GitDiff.LineKind.ADDED, "password: hunter2secret", null, 1));
+        when(status.diff(REPO, "application.yml", true)).thenReturn(new GitDiff.FileDiff("application.yml", null, GitDiff.ChangeType.MODIFIED, 1, 0, false, lines));
+        when(status.diff(REPO, "application.yml", false)).thenReturn(new GitDiff.FileDiff("application.yml", null, GitDiff.ChangeType.MODIFIED, 0, 0, false, List.of()));
+
+        var result = call(new GitDiffTool(projects, status, mapper), "{\"project\":7,\"path\":\"application.yml\"}");
+
+        assertThat(result).contains("application.yml", "+[redacted]").doesNotContain("hunter2secret");
+    }
+
+    @Test
     void diffIsTruncatedToTheLimit() {
         var lines = java.util.stream.IntStream.range(0, 5000).mapToObj(i -> new GitDiff.Line(GitDiff.LineKind.ADDED, "line " + i, null, i)).toList();
         when(status.diff(REPO, "a.txt", true)).thenReturn(new GitDiff.FileDiff("a.txt", null, GitDiff.ChangeType.ADDED, 5000, 0, false, lines));

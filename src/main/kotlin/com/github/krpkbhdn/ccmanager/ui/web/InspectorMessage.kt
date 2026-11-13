@@ -11,7 +11,7 @@ data class BoxModel(val margin: BoxEdges, val border: BoxEdges, val padding: Box
 
 data class SourceHint(val component: String?, val file: String?, val line: Int?)
 
-data class ContrastInfo(val ratio: Double, val fg: String, val bg: String, val large: Boolean, val aa: Boolean, val aaa: Boolean)
+data class ContrastReading(val ratio: Double, val fg: String, val bg: String, val large: Boolean, val aa: Boolean, val aaa: Boolean)
 
 /** One layer of the stack under a point: enough to list it and to find it again by selector. */
 data class LiteTarget(val selector: String, val tag: String, val id: String, val stableClasses: List<String>, val rect: Rect?)
@@ -31,7 +31,7 @@ data class ElementTarget(
     val sourceHint: SourceHint?,
     val frame: String?,
     val pageUrl: String?,
-    val contrast: ContrastInfo? = null,
+    val contrast: ContrastReading? = null,
     val similarCount: Int = 0,
     val stableClasses: List<String> = emptyList(),
 )
@@ -117,9 +117,9 @@ private object InspectorMessageReader {
         )
     }
 
-    private fun contrast(t: JsonNode): ContrastInfo? {
+    private fun contrast(t: JsonNode): ContrastReading? {
         val c = obj(t, "contrast") ?: return null
-        return ContrastInfo(number(c, "ratio"), text(c, "fg", MAX_VALUE).orEmpty(), text(c, "bg", MAX_VALUE).orEmpty(), flag(c, "large"), flag(c, "aa"), flag(c, "aaa"))
+        return ContrastReading(number(c, "ratio"), text(c, "fg", MAX_VALUE).orEmpty(), text(c, "bg", MAX_VALUE).orEmpty(), flag(c, "large"), flag(c, "aa"), flag(c, "aaa"))
     }
 
     private fun flag(node: JsonNode, name: String): Boolean {

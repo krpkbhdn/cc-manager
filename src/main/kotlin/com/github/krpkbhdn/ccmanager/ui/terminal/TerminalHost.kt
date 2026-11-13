@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import com.github.krpkbhdn.ccmanager.claude.launch.LaunchedSession
 import com.github.krpkbhdn.ccmanager.claude.session.SessionRegistry
 import com.github.krpkbhdn.ccmanager.shell.LaunchedShell
+import com.github.krpkbhdn.ccmanager.workspace.ProcessTree
 import com.pty4j.PtyProcess
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
@@ -40,7 +41,7 @@ object TerminalHost {
         synchronized(this) {
             var created = false
             terminals.computeIfAbsent(id) { created = true; createTerminal(id, label, process, isClaude) }
-            if (created) openedCount++ else if (terminals[id]?.process !== process) process.destroyForcibly()
+            if (created) openedCount++ else if (terminals[id]?.process !== process) ProcessTree.kill(process)
         }
     }
 

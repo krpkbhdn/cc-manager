@@ -7,8 +7,12 @@ import com.github.krpkbhdn.ccmanager.extension.mcp.McpStatus;
 import com.github.krpkbhdn.ccmanager.preset.PresetComponent;
 import com.github.krpkbhdn.ccmanager.preset.PresetComponentKind;
 import com.github.krpkbhdn.ccmanager.extension.mcp.McpHealth;
+import com.github.krpkbhdn.ccmanager.extension.mcp.McpTargetRedaction;
 import java.nio.file.Path;
 import java.util.List;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -19,6 +23,8 @@ import org.springframework.stereotype.Component;
 class McpServerApplier implements PresetComponentApplier {
 
     private static final Logger log = LoggerFactory.getLogger(McpServerApplier.class);
+
+    private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private final McpService mcp;
 
@@ -34,8 +40,47 @@ class McpServerApplier implements PresetComponentApplier {
     @Override
     public PlannedChange plan(PresetComponent component, Path projectDir) {
         var known = mcp.servers(projectDir).stream().map(McpServerConfig::name).anyMatch(component.name()::equals);
-        return known ? PlannedChange.of(component, ChangeAction.PRESENT, "MCP server already configured")
-                : PlannedChange.of(component, ChangeAction.INSTALL, "Written to .mcp.json in the project, which is usually committed: check it contains no secrets. Server: " + component.name());
+        if (known) {
+            return PlannedChange.of(component, ChangeAction.PRESENT, "MCP server already configured");
+        }
+        var config = config(component);
+        var stdio = !config.isObject() || config.hasNonNull("command");
+        var detail = stdio ? CodeExecutingPaths.runsCode("MCP server " + component.name() + " (starts a local command)")
+                : "Written to .mcp.json in the project, which is usually committed: check it contains no secrets. Server: " + component.name();
+        return PlannedChange.of(component, stdio ? ChangeAction.NEEDS_CONFIRMATION : ChangeAction.INSTALL, detail).withPreview(describe(config));
+    }
+
+    private static JsonNode config(PresetComponent component) {
+        var config = component.payload().path("config");
+        if (!config.isString()) {
+            return config;
+        }
+        try {
+            return JSON.readTree(config.asString());
+        } catch (JacksonException e) {
+            return config;
+        }
+    }
+
+    /** Shows command, args, url and the KEYS of env and headers; their values are never shown. */
+    private static String describe(JsonNode config) {
+        if (!config.isObject()) {
+            return "Config is not a JSON object, it is not shown";
+        }
+        var text = new StringBuilder();
+        for (var field : List.of("type", "command", "args", "url")) {
+            if (config.hasNonNull(field)) {
+                var value = config.path(field);
+                var shown = field.equals("url") ? McpTargetRedaction.redact(value.asString()) : value.isArray() ? String.join(" ", value.valueStream().map(JsonNode::asString).toList()) : value.asString();
+                text.append(field).append(": ").append(shown).append('\n');
+            }
+        }
+        for (var field : List.of("env", "headers")) {
+            if (config.path(field).isObject()) {
+                text.append(field).append(" keys: ").append(String.join(", ", config.path(field).propertyNames())).append(" (values hidden)\n");
+            }
+        }
+        return text.toString();
     }
 
     @Override

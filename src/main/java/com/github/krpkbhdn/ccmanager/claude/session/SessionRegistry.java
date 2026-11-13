@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiPredicate;
 import java.util.function.UnaryOperator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +31,7 @@ public class SessionRegistry {
 
     private final TranscriptService transcripts;
     private final Clock clock;
+    private volatile BiPredicate<String, HookEvent> heldProposal = (ccmSessionId, event) -> false;
 
     @Autowired
     public SessionRegistry(SessionProperties properties, TranscriptService transcripts) {
@@ -40,6 +42,11 @@ public class SessionRegistry {
         this.properties = properties;
         this.transcripts = transcripts;
         this.clock = clock;
+    }
+
+    /** The proposal holder says whether a session still waits for the user on a proposal that this event does not settle (set by it, as it depends on this registry). */
+    public void holdActionWhile(BiPredicate<String, HookEvent> proposalHeld) {
+        this.heldProposal = proposalHeld;
     }
 
     /** Creates a live session in IDLE state and returns its ccm id. */
@@ -73,7 +80,7 @@ public class SessionRegistry {
     public void on(HookEvent event) {
         var topic = topicAfter(event);
         update(event.ccmSessionId(), state -> {
-            var next = StatusReducer.reduce(state, event);
+            var next = StatusReducer.reduce(state, event, heldProposal.test(event.ccmSessionId(), event));
             return topic.map(next::withTopic).orElse(next);
         });
     }

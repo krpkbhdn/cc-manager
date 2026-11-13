@@ -20,6 +20,9 @@ import java.util.stream.Collectors;
 public final class ClaudeCommand {
 
     static final String ENV_TERM = "TERM";
+    /** Keeps the hook and MCP calls to the app's loopback server (bearer token inside) away from a configured proxy. */
+    private static final List<String> LOOPBACK_NO_PROXY_VARIABLES = List.of("NO_PROXY", "no_proxy");
+    private static final String LOOPBACK_HOSTS = "127.0.0.1,localhost";
     static final String ENV_COLORTERM = "COLORTERM";
     static final String ENV_SESSION = "CCM_SESSION";
     static final String ENV_ADDITIONAL_DIRECTORIES_CLAUDE_MD = "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD";
@@ -137,6 +140,7 @@ public final class ClaudeCommand {
         Map<String, String> env = terminalEnvironment(parent);
         env.put(ENV_SESSION, ccmSessionId);
         env.put(HookServer.SESSION_TOKEN_ENV, sessionToken);
+        LOOPBACK_NO_PROXY_VARIABLES.forEach(name -> env.merge(name, LOOPBACK_HOSTS, (existing, loopback) -> existing + "," + loopback));
         return env;
     }
 

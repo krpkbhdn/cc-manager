@@ -95,6 +95,7 @@ class ReviewState(
         watchedProjects.toList().forEach { projectId ->
             runGuarded(reportError) {
                 val fresh = io { service.list(projectId) }.sortedWith(compareByDescending<Review> { it.createdAt }.thenByDescending { it.id })
+                if (projectId !in watchedProjects) return@runGuarded
                 val gone = reviewsByProject[projectId].orEmpty().map { it.id } - fresh.map { it.id }.toSet()
                 reviewsByProject[projectId] = fresh
                 gone.forEach(::forgetReview)
@@ -120,6 +121,15 @@ class ReviewState(
     fun awaitFinalFlush() {
         val job = finalFlush ?: return
         runBlocking { withTimeoutOrNull(FINAL_FLUSH_TIMEOUT_MILLIS) { job.join() } }
+    }
+
+    /** Drops the reviews, images and decoded pictures of every project that is not in [existing]. */
+    fun retain(existing: Collection<Long>) {
+        (watchedProjects + reviewsByProject.keys - existing.toSet()).forEach { projectId ->
+            watchedProjects.remove(projectId)
+            reviewsByProject.remove(projectId)?.forEach { forgetReview(it.id) }
+            selection.remove(projectId)
+        }
     }
 
     fun reviews(projectId: Long): List<Review> {

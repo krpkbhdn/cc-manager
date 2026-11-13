@@ -63,6 +63,19 @@ class GitSyncServiceTest {
     }
 
     @Test
+    void fetchOfOneRemoteAcceptsOnlyConfiguredRemoteNames() {
+        prepare();
+        var url = root.resolve("origin.git").toString();
+
+        service.fetch(sandbox.repo, "origin", false, null);
+        var byUrl = failureOf(() -> service.fetch(sandbox.repo, url, false, null));
+        var byTransport = failureOf(() -> service.fetch(sandbox.repo, "ext::sh -c id", false, null));
+
+        assertThat(byUrl).hasMessageContaining("Unknown remote");
+        assertThat(byTransport).hasMessageContaining("Unknown remote");
+    }
+
+    @Test
     void pullFastForwardsAndMerges() {
         prepare();
         pushFromOther("r.txt", "r\n");

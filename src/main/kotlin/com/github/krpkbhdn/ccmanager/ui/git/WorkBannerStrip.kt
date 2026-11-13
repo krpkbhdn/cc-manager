@@ -39,7 +39,7 @@ private val stackedWidth = 640.dp
 fun WorkBannerStrip(banner: WorkBanner, git: GitState, work: WorkContextActions) {
     BoxWithConstraints(Modifier.fillMaxWidth().background(colors.accent.copy(alpha = Alpha.FAINT))) {
         val stacked = maxWidth < stackedWidth
-        val info = @Composable { rowModifier: Modifier -> BannerInfo(banner, work, rowModifier) }
+        val info = @Composable { rowModifier: Modifier -> BannerDetails(banner, work, rowModifier) }
         val actions = @Composable { BannerActions(banner, git, work) }
         val padding = Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.sm)
         if (stacked) {
@@ -57,7 +57,7 @@ fun WorkBannerStrip(banner: WorkBanner, git: GitState, work: WorkContextActions)
 }
 
 @Composable
-private fun BannerInfo(banner: WorkBanner, work: WorkContextActions, modifier: Modifier) {
+private fun BannerDetails(banner: WorkBanner, work: WorkContextActions, modifier: Modifier) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
         Glyph(Icons.FolderTree, colors.accent)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {

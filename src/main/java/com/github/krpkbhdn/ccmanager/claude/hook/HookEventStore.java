@@ -162,8 +162,8 @@ public class HookEventStore {
         payload.properties().stream()
                 .filter(field -> !field.getKey().equals(TOOL_RESPONSE))
                 .forEach(field -> copy.set(field.getKey(), field.getKey().equals(TOOL_INPUT)
-                        ? truncated(withoutUnreadFields(field.getValue()))
-                        : truncated(field.getValue())));
+                        ? truncated(withoutUnreadFields(field.getValue()), false)
+                        : truncated(field.getValue(), true)));
         return copy;
     }
 
@@ -175,27 +175,27 @@ public class HookEventStore {
         return kept;
     }
 
-    private JsonNode truncated(JsonNode node) {
+    private JsonNode truncated(JsonNode node, boolean strict) {
         if (node.isString()) {
-            return mapper.getNodeFactory().stringNode(maskedAndCut(node.asString()));
+            return mapper.getNodeFactory().stringNode(maskedAndCut(node.asString(), strict));
         }
         if (node.isObject()) {
             ObjectNode copy = mapper.createObjectNode();
-            node.properties().forEach(field -> copy.set(field.getKey(), truncated(field.getValue())));
+            node.properties().forEach(field -> copy.set(field.getKey(), truncated(field.getValue(), strict)));
             return copy;
         }
         if (node.isArray()) {
             ArrayNode copy = mapper.createArrayNode();
-            node.forEach(element -> copy.add(truncated(element)));
+            node.forEach(element -> copy.add(truncated(element, strict)));
             return copy;
         }
         return node;
     }
 
     /** A cut can split a secret the mask never saw whole, so after any cut the unfinished last token is dropped too. */
-    private String maskedAndCut(String value) {
+    private String maskedAndCut(String value, boolean strict) {
         var window = cut(value, properties.maxStoredTextLength() + MASK_LOOKAHEAD);
-        var masked = SecretFilter.maskCommandText(window);
+        var masked = strict ? SecretFilter.mask(window) : SecretFilter.maskCommandText(window);
         var kept = cut(masked, properties.maxStoredTextLength());
         var truncated = window.length() < value.length() || masked.length() > kept.length();
         return truncated ? withoutPartialTail(kept) : kept;

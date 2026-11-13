@@ -12,6 +12,13 @@ class ForgeRemoteTest {
     }
 
     @Test
+    fun `other github hosts keep the host in the repository`() {
+        assertThat(forgeRemote("https://github.evil.example/o/r")).isEqualTo(ForgeRemote(Forge.GITHUB, "github.evil.example", "github.evil.example/o/r"))
+        assertThat(forgeRemote("git@github.acme.com:o/r.git")).isEqualTo(ForgeRemote(Forge.GITHUB, "github.acme.com", "github.acme.com/o/r"))
+        assertThat(forgeRemote("https://GitHub.com/o/r")!!.repository).isEqualTo("o/r")
+    }
+
+    @Test
     fun `a github url needs exactly owner and name`() {
         assertThat(forgeRemote("https://github.com/owner")).isNull()
         assertThat(forgeRemote("https://github.com/a/b/c")).isNull()

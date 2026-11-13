@@ -55,10 +55,14 @@ private const val UI_ERROR_TITLE = "Unexpected error"
 private const val TRAY_ICON_SIZE = 64
 private const val WINDOW_ICON_SIZE = 256
 private const val BROWSER_SHUTDOWN_MILLIS = 3_000L
+private const val STATE_DISPOSE_MILLIS = 5_000L
 
-/** Disposes the embedded browser engine; a hung engine must not keep the app from exiting, so it gets a bounded wait on a daemon thread. */
-private fun shutdownBrowser() {
-    thread(name = "jcef-shutdown", isDaemon = true) { runCatching { JcefRuntime.shutdown() } }.join(BROWSER_SHUTDOWN_MILLIS)
+private val SHUTDOWN_LOG = LoggerFactory.getLogger("com.github.krpkbhdn.ccmanager.ui.AppShutdown")
+
+/** Runs one exit step so that its failure is logged and never skips the next; a hung step gets [limitMillis] on a daemon thread, then is left behind. */
+internal fun shutdownStep(name: String, limitMillis: Long? = null, step: () -> Unit) {
+    val guarded = { runCatching(step).onFailure { SHUTDOWN_LOG.warn("Shutdown step '{}' failed: {}: {}", name, it.javaClass.name, it.message) } }
+    if (limitMillis == null) guarded() else thread(name = "shutdown-$name", isDaemon = true) { guarded() }.join(limitMillis)
 }
 
 /**
@@ -94,11 +98,11 @@ fun ApplicationScope.AppWindow(backend: Backend, onShutdown: () -> Unit, setting
             visible = false
             thread(name = "AppShutdown") {
                 try {
-                    disposeState()
-                    state.reviews.awaitFinalFlush()
-                    TerminalHost.closeAll()
-                    shutdownBrowser()
-                    onShutdown()
+                    shutdownStep("terminals") { TerminalHost.closeAll() }
+                    shutdownStep("state", STATE_DISPOSE_MILLIS) { disposeState() }
+                    shutdownStep("reviews") { state.reviews.awaitFinalFlush() }
+                    shutdownStep("browser", BROWSER_SHUTDOWN_MILLIS) { JcefRuntime.shutdown() }
+                    shutdownStep("callback") { onShutdown() }
                 } finally {
                     SwingUtilities.invokeLater { exitApplication() }
                 }

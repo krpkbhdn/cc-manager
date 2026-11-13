@@ -46,7 +46,15 @@ class AgentApplierTest {
     }
 
     @Test
-    void identicalAgentIsPresent() throws Exception {
+    void newAgentDeclaringHooksNeedsConfirmation() throws Exception {
+        var plan = applier.plan(agent("a", "---\nname: a\nhooks:\n  PreToolUse: []\n---\nbody"), dir);
+
+        assertThat(plan.action()).isEqualTo(ChangeAction.NEEDS_CONFIRMATION);
+        assertThat(applier.plan(agent("b", "---\nname: b\n---\nhooks: in the body"), dir).action()).isEqualTo(ChangeAction.CREATE);
+    }
+
+    @Test
+    void identicalAgentIsPresent()throws Exception {
         applier.apply(agent("a", "x"), dir);
 
         assertThat(applier.plan(agent("a", "x"), dir).action()).isEqualTo(ChangeAction.PRESENT);

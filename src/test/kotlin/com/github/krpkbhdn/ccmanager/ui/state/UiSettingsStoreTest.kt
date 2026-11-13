@@ -23,6 +23,14 @@ class UiSettingsStoreTest {
     }
 
     @Test
+    fun `save leaves no temp file behind`(@TempDir dir: Path) {
+        val store = UiSettingsStore(dir.resolve("ui.properties"))
+        store.save(UiSettings(sidebarCollapsed = true))
+        store.save(UiSettings(sidebarCollapsed = false))
+        assertThat(Files.list(dir).use { it.map { p -> p.fileName.toString() }.toList() }).containsExactly("ui.properties")
+    }
+
+    @Test
     fun `folded sidebar sections and groups round trip and garbage ids are dropped`(@TempDir dir: Path) {
         val file = dir.resolve("ui.properties")
         val store = UiSettingsStore(file)

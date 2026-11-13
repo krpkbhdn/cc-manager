@@ -18,6 +18,7 @@ class TerminalHostTest {
         `when`(it.inputStream).thenReturn(PipedInputStream())
         `when`(it.outputStream).thenReturn(ByteArrayOutputStream())
         `when`(it.isAlive).thenReturn(true)
+        `when`(it.pid()).thenReturn(Long.MAX_VALUE)
     }
 
     @Test

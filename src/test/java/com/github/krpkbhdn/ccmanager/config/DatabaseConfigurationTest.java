@@ -1,9 +1,12 @@
 package com.github.krpkbhdn.ccmanager.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.zaxxer.hikari.HikariDataSource;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.concurrent.Executors;
@@ -50,6 +53,19 @@ class DatabaseConfigurationTest {
         assertThat(jdbc.sql("PRAGMA synchronous").query(Integer.class).single()).isEqualTo(1);
         assertThat(jdbc.sql("PRAGMA busy_timeout").query(Integer.class).single()).isEqualTo(30_000);
         assertThat(dataSource.getMaximumPoolSize()).isEqualTo(THREADS);
+    }
+
+    @Test
+    void createsDataDirOwnerOnlyAndTightensExistingOne() throws Exception {
+        assumeTrue(temp.getFileSystem().supportedFileAttributeViews().contains("posix"));
+        var created = temp.resolve("created");
+        DatabaseConfiguration.createOwnerOnly(created);
+        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(created))).isEqualTo("rwx------");
+
+        var existing = Files.createDirectory(temp.resolve("existing"));
+        Files.setPosixFilePermissions(existing, PosixFilePermissions.fromString("rwxr-xr-x"));
+        DatabaseConfiguration.createOwnerOnly(existing);
+        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(existing))).isEqualTo("rwx------");
     }
 
     @Test

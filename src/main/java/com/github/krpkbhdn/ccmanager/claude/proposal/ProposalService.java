@@ -33,6 +33,13 @@ public class ProposalService implements DecisionHolder {
         this.sessions = sessions;
         this.properties = properties;
         sessions.subscribe(this::releaseOfEndedOrInterruptedSessions);
+        sessions.holdActionWhile(this::holdsProposalNotSettledBy);
+    }
+
+    /** A parallel tool's event must not clear the session's red while another tool's permission dialog is still open. */
+    private boolean holdsProposalNotSettledBy(String ccmSessionId, HookEvent event) {
+        return held.values().stream().filter(pending -> !pending.forApp())
+                .anyMatch(pending -> pending.proposal().ccmSessionId().equals(ccmSessionId) && !pending.proposal().settledBy(event));
     }
 
     /**

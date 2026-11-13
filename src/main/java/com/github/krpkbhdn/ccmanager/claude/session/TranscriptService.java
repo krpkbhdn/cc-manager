@@ -104,7 +104,7 @@ public class TranscriptService {
 
     /** Latest user-given title, else the latest generated one; empty when the transcript has none. Keeps the last title found when the tail window no longer holds one. */
     public Optional<String> title(String transcriptPath) {
-        if (transcriptPath == null || transcriptPath.isBlank()) {
+        if (transcriptPath == null || transcriptPath.isBlank() || !isUnderProjectsRoot(transcriptPath)) {
             return Optional.empty();
         }
         var stamp = stampOf(transcriptPath);
@@ -129,6 +129,15 @@ public class TranscriptService {
     private record Titles(Optional<String> custom, Optional<String> generated) {
         Optional<String> best() {
             return custom.or(() -> generated);
+        }
+    }
+
+    /** Lexical check with no file access, so a UNC or hung network path from a hook payload cannot stall the hook worker. */
+    private boolean isUnderProjectsRoot(String transcriptPath) {
+        try {
+            return Path.of(transcriptPath).toAbsolutePath().normalize().startsWith(projectsRoot.toAbsolutePath().normalize());
+        } catch (RuntimeException e) {
+            return false;
         }
     }
 

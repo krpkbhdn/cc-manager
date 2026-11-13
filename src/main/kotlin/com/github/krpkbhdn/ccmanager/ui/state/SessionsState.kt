@@ -12,6 +12,7 @@ import com.github.krpkbhdn.ccmanager.claude.session.AgentStatus
 import com.github.krpkbhdn.ccmanager.claude.session.SessionSnapshot
 import com.github.krpkbhdn.ccmanager.team.Team
 import com.github.krpkbhdn.ccmanager.ui.git.model.sameFolder
+import com.github.krpkbhdn.ccmanager.workspace.ProcessTree
 import com.github.krpkbhdn.ccmanager.usage.SessionUsage
 import java.nio.file.Path
 import kotlinx.coroutines.CancellationException
@@ -120,10 +121,16 @@ class SessionsState(
                 runGuarded(onError) {
                     val session = io(start)
                     started = true
-                    onStarted(session.ccmSessionId())
-                    team?.let { sessionTeams[session.ccmSessionId()] = it }
-                    if (rememberTeam) lastTeams[projectId] = team
-                    openTab(session, projectId, directory)
+                    try {
+                        onStarted(session.ccmSessionId())
+                        team?.let { sessionTeams[session.ccmSessionId()] = it }
+                        if (rememberTeam) lastTeams[projectId] = team
+                        openTab(session, projectId, directory)
+                    } catch (e: Throwable) {
+                        ProcessTree.kill(session.process())
+                        backend.terminal.close(session.ccmSessionId())
+                        throw e
+                    }
                     if (show) showProject(projectId)
                 }
             } catch (e: Throwable) {

@@ -29,8 +29,10 @@ class SkillApplier implements PresetComponentApplier {
         if (!Files.exists(target)) {
             var preview = new StringBuilder();
             files.forEach((path, text) -> preview.append("--- ").append(path).append('\n').append(text).append('\n'));
-            return PlannedChange.of(component, ChangeAction.CREATE, "Create " + SKILLS + component.name() + " (" + files.size() + " file(s))")
-                    .withPreview(preview.toString());
+            var summary = SKILLS + component.name() + " (" + files.size() + " file(s))";
+            return CodeExecutingPaths.skillHasScripts(files.keySet())
+                    ? PlannedChange.of(component, ChangeAction.NEEDS_CONFIRMATION, CodeExecutingPaths.runsCode(summary + ", contains scripts")).withPreview(preview.toString())
+                    : PlannedChange.of(component, ChangeAction.CREATE, "Create " + summary).withPreview(preview.toString());
         }
         for (var file : files.entrySet()) {
             if (ProjectFiles.compare(target.resolve(file.getKey()), file.getValue()) != ProjectFiles.State.IDENTICAL) {

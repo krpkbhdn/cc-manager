@@ -19,11 +19,16 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
+import org.slf4j.LoggerFactory
 
 internal const val SCROLLBACK_LINES = 10_000
 private const val FRAME_MILLIS = 16L
 private const val CONNECTOR_RESIZE_MILLIS = 100L
 private const val WORKER_IDLE_SECONDS = 2L
+private const val EXIT_WAIT_MILLIS = 2_000L
+private const val EXIT_POLL_MILLIS = 20L
+
+private val LOG = LoggerFactory.getLogger(TerminalEmulator::class.java)
 
 /** Writes queued behind a child that does not read stdin; past this they are dropped instead of replayed as a burst. */
 private const val MAX_PENDING_WRITES = 1024
@@ -107,22 +112,35 @@ internal class TerminalEmulator(
         val dataStream = TtyBasedArrayDataStream(connector, null)
         val emulator = JediEmulator(dataStream, terminal)
         try {
-            while (emulator.hasNext()) emulator.next()
-        } catch (_: Exception) {
-            // the stream ends with an exception when the process closes its side
+            var reading = true
+            while (reading) {
+                try {
+                    while (emulator.hasNext()) emulator.next()
+                    reading = false
+                } catch (_: IOException) {
+                    reading = false
+                } catch (e: RuntimeException) {
+                    LOG.warn("Terminal output of {} failed to parse: {}: {}", connector.name, e.javaClass.name, e.message)
+                    reading = connector.isConnected
+                }
+            }
         } finally {
             terminal.disconnected()
             announceEnd()
-            runCatching { connector.close() }
         }
     }
 
+    /** The stream normally ends with the process; one that closed its side but stays alive keeps its connector. */
     private fun announceEnd() {
-        val exitCode = runCatching { connector.waitFor() }.getOrDefault(-1)
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(EXIT_WAIT_MILLIS)
+        while (connector.isConnected && System.nanoTime() < deadline) Thread.sleep(EXIT_POLL_MILLIS)
+        val dead = !connector.isConnected
+        val exitCode = if (dead) runCatching { connector.waitFor() }.getOrDefault(-1) else null
         terminal.carriageReturn()
         terminal.nextLine()
-        terminal.writeCharacters("[Session ended (exit code $exitCode)]")
+        terminal.writeCharacters(if (exitCode != null) "[Session ended (exit code $exitCode)]" else "[Output closed]")
         terminal.nextLine()
+        if (dead) runCatching { connector.close() }
     }
 
     private fun output() = object : TerminalOutputStream {

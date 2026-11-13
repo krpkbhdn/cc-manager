@@ -27,6 +27,31 @@ public final class CodeExecutingPaths {
         return fragment.propertyNames().stream().filter(EXECUTABLE_SETTINGS::contains).toList();
     }
 
+    /** Wording of the confirmation line for a component whose content runs code automatically. */
+    static String runsCode(String what) {
+        return what + " runs code automatically, create it yourself after reviewing it";
+    }
+
+    /** True when the agent file's frontmatter has a top-level {@code hooks:} key. */
+    static boolean agentDeclaresHooks(String content) {
+        var lines = content.strip().lines().toList();
+        if (lines.isEmpty() || !lines.get(0).strip().equals("---")) {
+            return false;
+        }
+        return lines.stream().skip(1).takeWhile(line -> !line.strip().equals("---")).anyMatch(line -> line.matches("hooks\\s*:.*"));
+    }
+
+    /** True when a skill holds anything but markdown and plain text files, since scripts next to it can be run by the skill. */
+    static boolean skillHasScripts(Iterable<String> relativePaths) {
+        for (var path : relativePaths) {
+            var name = path.toLowerCase(Locale.ROOT);
+            if (!name.endsWith(".md") && !name.endsWith(".txt")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** @param resolved the path {@link ProjectFiles#resolve} returned, so matching sees what is really written. */
     static boolean matches(Path projectDir, Path resolved) {
         var path = projectDir.toAbsolutePath().normalize().relativize(resolved).toString().replace('\\', '/').toLowerCase(Locale.ROOT);

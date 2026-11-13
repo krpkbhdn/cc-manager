@@ -27,6 +27,26 @@ class CurlSupportTest {
     }
 
     @Test
+    void aCurlThatCouldNotBeRunIsAskedAgainWhileATooOldOneIsRemembered() {
+        var calls = new AtomicInteger();
+        var support = new CurlSupport(executable -> calls.incrementAndGet() == 1 ? null : "curl 8.16.0");
+
+        assertThat(support.expandsEnvironment("curl")).isFalse();
+        assertThat(support.expandsEnvironment("curl")).isTrue();
+        assertThat(support.expandsEnvironment("curl")).isTrue();
+        assertThat(calls).hasValue(2);
+
+        var oldCalls = new AtomicInteger();
+        var old = new CurlSupport(executable -> {
+            oldCalls.incrementAndGet();
+            return "curl 7.81.0";
+        });
+        old.expandsEnvironment("curl");
+        old.expandsEnvironment("curl");
+        assertThat(oldCalls).hasValue(1);
+    }
+
+    @Test
     void theVersionIsAskedOnlyOncePerExecutable() {
         var calls = new AtomicInteger();
         var support = new CurlSupport(executable -> {

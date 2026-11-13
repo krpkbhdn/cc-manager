@@ -30,13 +30,13 @@ class SkillApplierTest {
 
     @Test
     void missingSkillIsCreatedWithAllItsFiles() throws Exception {
-        var component = skill("demo", "SKILL.md", "body", "scripts/run.sh", "echo");
+        var component = skill("demo", "SKILL.md", "body", "ref/notes.md", "echo");
 
         assertThat(applier.plan(component, dir).action()).isEqualTo(ChangeAction.CREATE);
         applier.apply(component, dir);
 
         assertThat(Files.readString(dir.resolve(".claude/skills/demo/SKILL.md"))).isEqualTo("body");
-        assertThat(Files.readString(dir.resolve(".claude/skills/demo/scripts/run.sh"))).isEqualTo("echo");
+        assertThat(Files.readString(dir.resolve(".claude/skills/demo/ref/notes.md"))).isEqualTo("echo");
     }
 
     @Test
@@ -49,7 +49,13 @@ class SkillApplierTest {
     }
 
     @Test
-    void identicalSkillIsPresent() throws Exception {
+    void skillWithScriptNeedsConfirmationButMarkdownOnlyIsPlain() throws Exception {
+        assertThat(applier.plan(skill("demo", "SKILL.md", "b", "scripts/run.sh", "echo"), dir).action()).isEqualTo(ChangeAction.NEEDS_CONFIRMATION);
+        assertThat(applier.plan(skill("demo", "SKILL.md", "b", "notes.txt", "t", "ref/x.md", "m"), dir).action()).isEqualTo(ChangeAction.CREATE);
+    }
+
+    @Test
+    void identicalSkillIsPresent()throws Exception {
         applier.apply(skill("demo", "SKILL.md", "body"), dir);
 
         assertThat(applier.plan(skill("demo", "SKILL.md", "body"), dir).action()).isEqualTo(ChangeAction.PRESENT);

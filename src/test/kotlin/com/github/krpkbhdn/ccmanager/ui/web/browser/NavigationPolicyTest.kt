@@ -45,16 +45,35 @@ class NavigationPolicyTest {
     }
 
     @Test
-    fun a_local_page_may_embed_local_files_and_open_web_pages_and_navigate_to_local_files() {
+    fun a_local_page_may_embed_local_files_and_navigate_to_local_files_but_not_the_internet() {
         assertThat(NavigationPolicy.isAllowedFromPage("file:///C:/b.html", "file:///C:/a.html")).isTrue()
         assertThat(NavigationPolicy.isAllowedFromPage("file:///C:/b.html", "file:///C:/a.html", mainFrame = false)).isTrue()
-        assertThat(NavigationPolicy.isAllowedFromPage("https://x.dev/", "file:///C:/a.html")).isTrue()
+        assertThat(NavigationPolicy.isAllowedFromPage("https://x.dev/", "file:///C:/a.html")).isFalse()
+        assertThat(NavigationPolicy.isAllowedFromPage("http://localhost:3000/", "file:///C:/a.html")).isTrue()
     }
 
     @Test
-    fun a_web_page_may_open_web_pages() {
-        assertThat(NavigationPolicy.isAllowedFromPage("https://x.dev/", WEB)).isTrue()
-        assertThat(NavigationPolicy.isAllowedFromPage("https://x.dev/", "https://y.dev/")).isTrue()
+    fun a_page_may_open_its_own_origin() {
+        assertThat(NavigationPolicy.isAllowedFromPage("https://EXAMPLE.com/other?x=1", WEB)).isTrue()
+        assertThat(NavigationPolicy.isAllowedFromPage("https://example.com:443/", WEB)).isTrue()
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["https://x.dev/", "http://example.com/", "https://example.com:8443/", "https://sub.example.com/", "https://example.com.evil.dev/", "https://example.com@evil.dev/", "http://8.8.8.8/", "http://172.32.0.1/", "http://11.0.0.1/", "http://999.1.1.1/"])
+    fun a_page_cannot_navigate_its_top_level_to_another_origin(url: String) {
+        assertThat(NavigationPolicy.isAllowedFromPage(url, WEB)).isFalse()
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["http://localhost:3000/", "http://127.0.0.1:8080/", "http://127.1.2.3/", "http://[::1]:5173/", "http://10.1.2.3/", "http://172.16.0.1/", "http://172.31.9.9/", "http://192.168.1.5/", "http://app.localhost/"])
+    fun a_page_may_open_loopback_and_private_network_hosts(url: String) {
+        assertThat(NavigationPolicy.isAllowedFromPage(url, WEB)).isTrue()
+    }
+
+    @Test
+    fun origin_of_drops_path_query_and_credentials() {
+        assertThat(NavigationPolicy.originOf("https://User:pw@Example.com:8443/a/b?token=1#f")).isEqualTo("https://example.com:8443")
+        assertThat(NavigationPolicy.originOf("javascript:alert(1)")).isNull()
     }
 
     @Test

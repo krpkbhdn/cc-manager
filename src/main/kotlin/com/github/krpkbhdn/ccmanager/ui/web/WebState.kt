@@ -86,6 +86,8 @@ class WebState(
         watchedProjects.toList().forEach { projectId ->
             runGuarded(reportError) {
                 val data = io { load(projectId) }
+                if (projectId !in watchedProjects) return@runGuarded
+                (revisionsByProject[projectId].orEmpty().map { it.id() } - data.items.keys).forEach(itemsByRevision::remove)
                 revisionsByProject[projectId] = data.revisions
                 pagesByProject[projectId] = data.pages
                 data.items.forEach { (revisionId, items) -> itemsByRevision[revisionId] = items }
@@ -134,11 +136,16 @@ class WebState(
     /** Closes the browser of a project that no longer exists. */
     fun forget(projectId: Long) {
         watchedProjects.remove(projectId)
+        revisionsByProject.remove(projectId)?.forEach { itemsByRevision.remove(it.id()) }
+        pagesByProject.remove(projectId)
         pool.close(projectId)
     }
 
-    /** Closes the browsers of every project that is not in [existing]. */
-    fun retain(existing: Collection<Long>) = pool.retain(existing)
+    /** Closes the browsers and drops the cached revisions of every project that is not in [existing]. */
+    fun retain(existing: Collection<Long>) {
+        (watchedProjects + revisionsByProject.keys - existing.toSet()).forEach(::forget)
+        pool.retain(existing)
+    }
 
     /** The browser of the project if one is open; observable, so a screen recomposes when it opens or closes. */
     fun liveView(projectId: Long): WebView? = pool.find(projectId)

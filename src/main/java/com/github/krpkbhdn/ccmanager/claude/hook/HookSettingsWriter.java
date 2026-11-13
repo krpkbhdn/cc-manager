@@ -239,7 +239,7 @@ public class HookSettingsWriter {
      * curl gets no curl command at all (SessionStart hook and statusLine are omitted): the token would land in curl's argv, and stdin is taken by the payload.
      */
     private String curlCommand(String url) {
-        var arguments = new ArrayList<>(List.of(curlExecutable(), "-s", "-m", String.valueOf(CURL_MAX_SECONDS), "-X", "POST",
+        var arguments = new ArrayList<>(List.of(curlExecutable(), "-s", "--noproxy", quoted("*"), "-m", String.valueOf(CURL_MAX_SECONDS), "-X", "POST",
                 "-H", quoted("Content-Type: application/json"),
                 "--variable", "%" + HookServer.SESSION_TOKEN_ENV, "--expand-header", quoted("Authorization: Bearer {{" + HookServer.SESSION_TOKEN_ENV + "}}")));
         arguments.addAll(List.of("--data-binary", quoted("@-"), quoted(url)));

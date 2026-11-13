@@ -18,8 +18,11 @@ class AgentApplier implements PresetComponentApplier {
     public PlannedChange plan(PresetComponent component, Path projectDir) throws IOException {
         var file = file(component, projectDir);
         var content = content(component);
+        var path = ".claude/agents/" + component.name() + ".md";
         return switch (ProjectFiles.compare(file, content)) {
-            case MISSING -> PlannedChange.of(component, ChangeAction.CREATE, "Create .claude/agents/" + component.name() + ".md").withPreview(content);
+            case MISSING -> CodeExecutingPaths.agentDeclaresHooks(content)
+                    ? PlannedChange.of(component, ChangeAction.NEEDS_CONFIRMATION, CodeExecutingPaths.runsCode(path + " (declares hooks)")).withPreview(content)
+                    : PlannedChange.of(component, ChangeAction.CREATE, "Create " + path).withPreview(content);
             case IDENTICAL -> PlannedChange.of(component, ChangeAction.PRESENT, "Agent already defined");
             case DIFFERENT -> PlannedChange.of(component, ChangeAction.CONFLICT, "An agent file with this name exists and differs, it is left unchanged");
         };

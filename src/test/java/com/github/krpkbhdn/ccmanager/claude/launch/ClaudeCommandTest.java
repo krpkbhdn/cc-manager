@@ -141,6 +141,15 @@ class ClaudeCommandTest {
     }
 
     @Test
+    void sessionEnvironmentBypassesProxiesForLoopbackWhileShellsAreLeftAlone() {
+        assertThat(ClaudeCommand.environment(Map.of(), "ccm-1", "t")).containsEntry("NO_PROXY", "127.0.0.1,localhost")
+                .containsEntry("no_proxy", "127.0.0.1,localhost");
+        assertThat(ClaudeCommand.environment(Map.of("NO_PROXY", "corp.example"), "ccm-1", "t"))
+                .containsEntry("NO_PROXY", "corp.example,127.0.0.1,localhost");
+        assertThat(ClaudeCommand.terminalEnvironment(Map.of())).doesNotContainKeys("NO_PROXY", "no_proxy");
+    }
+
+    @Test
     void assistantTokenIsOnlyInTheAssistantEnvironmentAndNeverInherited() {
         Map<String, String> parent = Map.of("CCM_ASSISTANT_TOKEN", "inherited");
 

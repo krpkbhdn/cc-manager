@@ -38,7 +38,24 @@ class McpServerApplierTest {
     }
 
     @Test
-    void applyNeverRunsTheHealthCheck() throws Exception {
+    void stdioServerNeedsConfirmationAndPreviewHidesEnvAndHeaderValues() {
+        var json = JsonMapper.builder().build();
+        var stdio = new PresetComponent(1, PresetComponentKind.MCP_SERVER, "s",
+                json.readTree("{\"config\":{\"command\":\"npx\",\"args\":[\"-y\",\"pkg\"],\"env\":{\"TOKEN\":\"sekret\"}}}"));
+        var remote = new PresetComponent(2, PresetComponentKind.MCP_SERVER, "r",
+                json.readTree("{\"config\":{\"type\":\"http\",\"url\":\"https://h.example/mcp\",\"headers\":{\"Authorization\":\"sekret\"}}}"));
+
+        var stdioPlan = applier.plan(stdio, DIR);
+        var remotePlan = applier.plan(remote, DIR);
+
+        assertThat(stdioPlan.action()).isEqualTo(ChangeAction.NEEDS_CONFIRMATION);
+        assertThat(stdioPlan.preview()).contains("command: npx", "args: -y pkg", "env keys: TOKEN").doesNotContain("sekret");
+        assertThat(remotePlan.action()).isEqualTo(ChangeAction.INSTALL);
+        assertThat(remotePlan.preview()).contains("headers keys: Authorization").doesNotContain("sekret");
+    }
+
+    @Test
+    void applyNeverRunsTheHealthCheck()throws Exception {
         var outcome = applier.apply(server(1, "a"), DIR);
 
         assertThat(outcome.status()).isEqualTo(OutcomeStatus.APPLIED);

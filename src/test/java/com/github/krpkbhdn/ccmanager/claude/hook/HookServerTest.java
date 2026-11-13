@@ -212,9 +212,35 @@ class HookServerTest {
 
         bounded.stop();
         release.countDown();
-        Thread.sleep(300);
 
-        assertThat(names).doesNotContain("Stop");
+        org.awaitility.Awaitility.await().during(Duration.ofMillis(300)).atMost(Duration.ofMillis(VERIFY_TIMEOUT_MS))
+                .untilAsserted(() -> assertThat(names).doesNotContain("Stop"));
+    }
+
+    @Test
+    void anEventOfTheSessionAfterAStatusEndingEventWaitingForRoomStaysBehindIt() throws Exception {
+        var bounded = boundedServer();
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var names = new java.util.concurrent.CopyOnWriteArrayList<String>();
+        org.mockito.Mockito.doAnswer(call -> {
+            names.add(call.<HookEvent>getArgument(0).text("hook_event_name"));
+            release.await();
+            return null;
+        }).when(publisher).publishEvent(any(HookEvent.class));
+        bounded.start();
+        try {
+            for (var name : new String[] {"PreToolUse", "PreToolUse", "PreToolUse", "PreToolUse", "Stop", "UserPromptSubmit"}) {
+                postWithAuthorization(bounded.hookUrl("sess-1"), "{\"hook_event_name\":\"" + name + "\"}",
+                        "Bearer " + bounded.sessionToken("sess-1"));
+            }
+            release.countDown();
+
+            org.awaitility.Awaitility.await().atMost(Duration.ofMillis(VERIFY_TIMEOUT_MS)).until(() -> names.contains("UserPromptSubmit"));
+            assertThat(names.indexOf("Stop")).isGreaterThanOrEqualTo(0).isLessThan(names.indexOf("UserPromptSubmit"));
+        } finally {
+            release.countDown();
+            bounded.stop();
+        }
     }
 
     private HookServer boundedServer() {
