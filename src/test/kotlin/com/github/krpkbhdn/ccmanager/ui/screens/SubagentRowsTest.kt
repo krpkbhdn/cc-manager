@@ -52,7 +52,7 @@ class SubagentRowsTest {
 
     private fun sessionCardHeight(status: AgentStatus, activity: String?, title: String? = "Fix login"): Int {
         val session = SessionSnapshot("s", 1, null, status, activity, null, null, title, start, start, emptyList(), 0, null)
-        val panelActions = AgentsPanelActions({}, {}, {}, { _, _ -> }, {})
+        val panelActions = AgentsPanelActions({}, {}, {}, {}, { _, _ -> }, {})
         var height = 0
         val scene = ImageComposeScene(300, 600, Density(1f)) {
             AppTheme(dark = true) {

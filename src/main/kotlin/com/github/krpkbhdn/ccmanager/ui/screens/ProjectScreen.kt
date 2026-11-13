@@ -125,6 +125,7 @@ fun ProjectScreen(state: AppState, project: Project, modifier: Modifier = Modifi
                     background = state.backgroundAgents[project.id],
                     actions = AgentsPanelActions(
                         onOpenSession = { state.select(project.id, ProjectTab.Session(it)) },
+                        onCloseSession = { state.sessions.requestClose(project.id, it) },
                         onRefreshBackground = { state.refreshBackgroundAgents(project.id) },
                         onAttach = { state.sessions.attach(project.id, it) },
                         onOpenAgent = state.agents::openLog,

@@ -47,6 +47,7 @@ import com.github.krpkbhdn.ccmanager.ui.components.StatusDot
 import com.github.krpkbhdn.ccmanager.ui.components.ThinScrollbar
 import com.github.krpkbhdn.ccmanager.ui.components.VerticalRule
 import com.github.krpkbhdn.ccmanager.ui.icons.Icons
+import com.github.krpkbhdn.ccmanager.ui.shortcuts.AppShortcut
 import com.github.krpkbhdn.ccmanager.ui.state.backgroundTasksLabel
 import com.github.krpkbhdn.ccmanager.ui.state.formatElapsed
 import com.github.krpkbhdn.ccmanager.ui.state.permissionModeLabel
@@ -69,6 +70,7 @@ private val skeletonRowHeight = 52.dp
 
 class AgentsPanelActions(
     val onOpenSession: (String) -> Unit,
+    val onCloseSession: (String) -> Unit,
     val onRefreshBackground: () -> Unit,
     val onAttach: (String) -> Unit,
     val onOpenAgent: (String, SubagentSnapshot) -> Unit,
@@ -138,6 +140,7 @@ internal fun SessionCard(session: SessionSnapshot, team: Team?, selected: Boolea
                 StatusDot(session.status, Modifier.padding(horizontal = Spacing.xs))
                 Label(sessionName(session), Modifier.weight(1f), style = Type.bodyMedium, tooltipWhenTruncated = true)
                 permissionModeLabel(session.permissionMode)?.let { Chip(it, modeTint(session.permissionMode)) }
+                IconButton(Icons.Close, { actions.onCloseSession(session.ccmSessionId) }, tint = colors.textTertiary, size = 20.dp, tooltip = "Close session", hint = AppShortcut.CLOSE_SESSION.hint())
             }
             session.title?.let { Label(it, color = colors.textSecondary, style = Type.small, maxLines = ACTIVITY_LINES, minLines = ACTIVITY_LINES, tooltipWhenTruncated = true) }
             MetaLine(session, now)
