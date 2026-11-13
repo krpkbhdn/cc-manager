@@ -29,11 +29,6 @@ import kotlin.math.abs
 
 private const val WHEEL_LINES_PER_NOTCH = 3f
 private const val AUTOSCROLL_MILLIS = 50L
-private const val MAC_WHEEL_SCALE = 0.3f
-
-internal fun wheelScale(osName: String): Float = if (osName.contains("mac", ignoreCase = true)) MAC_WHEEL_SCALE else 1f
-
-private val platformWheelScale = wheelScale(System.getProperty("os.name").orEmpty())
 
 /**
  * Mouse handling of a terminal view: reports clicks, drags and the wheel to applications that asked for them, and
@@ -53,16 +48,41 @@ internal fun Modifier.terminalPointer(
     }
 }
 
-/** Turns fractional scroll deltas (touchpads) into whole lines, keeping the remainder for the next event. */
+/**
+ * Turns scroll deltas into wheel reports. A report is one wheel click for the application, which scrolls several lines
+ * and speeds up on bursts, so fractional deltas (touchpads) are paced: the first event after a pause reports one line
+ * at once, later ones accumulate and report at most one line per [MIN_REPORT_MILLIS]. A notch (|delta| >= 1) reports
+ * its whole lines at once, up to [MAX_NOTCH_LINES].
+ */
 internal class WheelLines {
     private var pending = 0f
+    private var lastEventMillis = Long.MIN_VALUE / 2
+    private var lastReportMillis = Long.MIN_VALUE / 2
 
-    fun take(delta: Float): Int {
-        if (delta * pending < 0f) pending = 0f
+    fun take(delta: Float, nowMillis: Long = 0L): Int {
+        val idle = nowMillis - lastEventMillis > GESTURE_GAP_MILLIS
+        lastEventMillis = nowMillis
+        if (idle || delta * pending < 0f) pending = 0f
+        if (abs(delta) >= 1f) {
+            pending = 0f
+            return delta.toInt().coerceIn(-MAX_NOTCH_LINES, MAX_NOTCH_LINES)
+        }
+        if (idle) return report(delta, nowMillis)
         pending += delta
-        val whole = pending.toInt()
-        pending -= whole
-        return whole
+        if (abs(pending) < 1f || nowMillis - lastReportMillis < MIN_REPORT_MILLIS) return 0
+        return report(pending, nowMillis)
+    }
+
+    private fun report(direction: Float, nowMillis: Long): Int {
+        pending = 0f
+        lastReportMillis = nowMillis
+        return if (direction > 0f) 1 else -1
+    }
+
+    private companion object {
+        const val GESTURE_GAP_MILLIS = 150L
+        const val MIN_REPORT_MILLIS = 60L
+        const val MAX_NOTCH_LINES = 5
     }
 }
 
@@ -89,7 +109,7 @@ private class PointerGestures(
             PointerEventType.Press -> if (onPress(event, change.position, change.uptimeMillis)) change.consume()
             PointerEventType.Move, PointerEventType.Enter -> if (onMove(event, change.position)) change.consume()
             PointerEventType.Release -> if (onRelease(event, change.position)) change.consume()
-            PointerEventType.Scroll -> if (onWheel(event, change.position, change.scrollDelta.y)) change.consume()
+            PointerEventType.Scroll -> if (onWheel(event, change.position, change.scrollDelta.y, change.uptimeMillis)) change.consume()
         }
     }
 
@@ -126,13 +146,12 @@ private class PointerGestures(
         return report(MouseEvent.Type.RELEASED, event, point)
     }
 
-    private fun onWheel(event: PointerEvent, point: Offset, rawDelta: Float): Boolean {
-        if (rawDelta == 0f) return false
-        val delta = rawDelta * platformWheelScale
+    private fun onWheel(event: PointerEvent, point: Offset, delta: Float, timeMillis: Long): Boolean {
+        if (delta == 0f) return false
         val shift = event.keyboardModifiers.isShiftPressed
         if ((session.mouseReporting && !shift) || session.modes.alternateScreen) {
             val (column, row) = geometry.value.gridCellAt(point, session.columns, session.rows)
-            val whole = wheelLines.take(delta)
+            val whole = wheelLines.take(delta, timeMillis)
             if (whole == 0) return true
             val code = if (whole > 0) MouseButtonCodes.SCROLLUP else MouseButtonCodes.SCROLLDOWN
             return session.reportWheel(code, modifierFlags(event), abs(whole), column, row)
