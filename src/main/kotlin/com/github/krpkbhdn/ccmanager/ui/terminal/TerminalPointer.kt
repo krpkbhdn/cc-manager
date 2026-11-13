@@ -29,6 +29,11 @@ import kotlin.math.abs
 
 private const val WHEEL_LINES_PER_NOTCH = 3f
 private const val AUTOSCROLL_MILLIS = 50L
+private const val MAC_WHEEL_SCALE = 0.3f
+
+internal fun wheelScale(osName: String): Float = if (osName.contains("mac", ignoreCase = true)) MAC_WHEEL_SCALE else 1f
+
+private val platformWheelScale = wheelScale(System.getProperty("os.name").orEmpty())
 
 /**
  * Mouse handling of a terminal view: reports clicks, drags and the wheel to applications that asked for them, and
@@ -121,8 +126,9 @@ private class PointerGestures(
         return report(MouseEvent.Type.RELEASED, event, point)
     }
 
-    private fun onWheel(event: PointerEvent, point: Offset, delta: Float): Boolean {
-        if (delta == 0f) return false
+    private fun onWheel(event: PointerEvent, point: Offset, rawDelta: Float): Boolean {
+        if (rawDelta == 0f) return false
+        val delta = rawDelta * platformWheelScale
         val shift = event.keyboardModifiers.isShiftPressed
         if ((session.mouseReporting && !shift) || session.modes.alternateScreen) {
             val (column, row) = geometry.value.gridCellAt(point, session.columns, session.rows)

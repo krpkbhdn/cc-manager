@@ -141,6 +141,16 @@ class ClaudeCommandTest {
     }
 
     @Test
+    void environmentDropsInheritedTerminalIdentityAndForcesTruecolor() {
+        Map<String, String> parent = Map.of("TERM_PROGRAM", "Apple_Terminal", "TERM_PROGRAM_VERSION", "455", "ITERM_SESSION_ID", "w0",
+                "VTE_VERSION", "7000", "COLORTERM", "24bit");
+
+        assertThat(ClaudeCommand.environment(parent, "ccm-1", "t")).doesNotContainKeys("TERM_PROGRAM", "TERM_PROGRAM_VERSION", "ITERM_SESSION_ID", "VTE_VERSION")
+                .containsEntry("COLORTERM", "truecolor");
+        assertThat(ClaudeCommand.terminalEnvironment(parent)).doesNotContainKeys("TERM_PROGRAM", "TERM_PROGRAM_VERSION");
+    }
+
+    @Test
     void sessionEnvironmentBypassesProxiesForLoopbackWhileShellsAreLeftAlone() {
         assertThat(ClaudeCommand.environment(Map.of(), "ccm-1", "t")).containsEntry("NO_PROXY", "127.0.0.1,localhost")
                 .containsEntry("no_proxy", "127.0.0.1,localhost");

@@ -19,6 +19,13 @@ class WheelLinesTest {
     }
 
     @Test
+    fun macScrollsSlowerThanOtherSystems() {
+        assertThat(wheelScale("Mac OS X")).isLessThan(1f)
+        assertThat(wheelScale("Windows 11")).isEqualTo(1f)
+        assertThat(wheelScale("Linux")).isEqualTo(1f)
+    }
+
+    @Test
     fun reversingDirectionDropsTheRemainder() {
         wheel.take(0.75f)
         assertThat(wheel.take(-0.5f)).isEqualTo(0)
