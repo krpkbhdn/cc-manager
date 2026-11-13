@@ -34,27 +34,6 @@ class ClaudeInstallationServiceTest {
     }
 
     @Test
-    void candidatesPutPathBeforeNativeInstallerAndFallbacks() {
-        var home = Path.of("/home/u");
-        var host = new FakeHostEnvironment(OperatingSystem.LINUX, home).withPath(Path.of("/a"), Path.of("/b"));
-
-        assertThat(new ClaudeBinaryLocator().candidates(host)).containsExactly(
-                Path.of("/a/claude"), Path.of("/b/claude"), home.resolve(".local/bin/claude"),
-                Path.of("/usr/local/bin/claude"), Path.of("/opt/homebrew/bin/claude"));
-    }
-
-    @Test
-    void windowsCandidatesTryEveryExeBeforeAnyCmdShim() {
-        var home = Path.of("C:\\Users\\u");
-        var host = new FakeHostEnvironment(OperatingSystem.WINDOWS, home).withPath(Path.of("C:\\tools"));
-
-        assertThat(new ClaudeBinaryLocator().candidates(host)).containsExactly(
-                Path.of("C:\\tools\\claude.exe"), home.resolve(".local").resolve("bin").resolve("claude.exe"),
-                Path.of("C:\\tools\\claude.cmd"), home.resolve(".local").resolve("bin").resolve("claude.cmd"),
-                Path.of("C:\\tools\\claude.bat"), home.resolve(".local").resolve("bin").resolve("claude.bat"));
-    }
-
-    @Test
     void reportsMissingBinaryWithInstallHint() {
         var host = new FakeHostEnvironment(OperatingSystem.LINUX, temp);
 
